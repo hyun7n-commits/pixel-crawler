@@ -8,7 +8,7 @@ import { CHARACTERS } from '../data/characters.js';
 import { ITEMS } from '../data/items.js';
 import { SIGHT } from '../data/balance.js';
 import { T, TERRAIN, GASES, GAS_KEYS } from '../data/terrain.js';
-import { idx, inMap, WALL, STAIRS, DOOR, ORE } from '../core/dungeon.js';
+import { idx, inMap, WALL, STAIRS, DOOR, ORE, UPSTAIRS } from '../core/dungeon.js';
 import { WAKE_AT } from '../core/ai.js';
 import { BOMB_RANGE } from '../core/run.js';
 import { ORE_HITS } from '../data/balance.js';
@@ -173,6 +173,7 @@ export class DungeonScene extends Phaser.Scene {
       const spr = TERRAIN[ter]?.sprite;
       if (spr) add(`t_${spr}`, D.ter);
       if (t === STAIRS) add('t_stairs', D.ter);
+      if (t === UPSTAIRS) add('t_upStairs', D.ter);
       if (t === DOOR) this.doorImgs[i] = add(map.open[i] ? 't_doorOpen' : 't_door', D.ter);
       if (t === ORE) add('t_bigOre', D.ter);
     }

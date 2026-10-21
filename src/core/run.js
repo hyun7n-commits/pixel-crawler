@@ -11,7 +11,7 @@ import { T, DISCOVERIES, GOSSIP, SLEEP_TALK, FLOOR_HINTS } from '../data/terrain
 import { rnd, rint, pick, shuffle, cheb, josa, DIRS8 } from './util.js';
 import {
   createMap, carveRooms, carveArena, idx, inMap, passable, distMap, lineOfSight, computeFOV, diagBlocked,
-  FLOOR, STAIRS, ORE,
+  FLOOR, STAIRS, ORE, UPSTAIRS,
 } from './dungeon.js';
 import { decorate, decorateArena } from './decorate.js';
 import { enemyAct, rouse } from './ai.js';
@@ -37,6 +37,8 @@ export class Run {
     this.cause = '';        // what knocked you out, for the summary
     this.found = [];        // discoveries made this run
     this.told = {};         // one-time hints already shown
+    this.floors = {};       // floors you left, kept as they were so you can go back for what you missed
+    this.trail = [];        // your last steps on this floor; hunting enemies follow them
     this.startStats = JSON.parse(JSON.stringify(meta.stats));
     this.listeners = [];
     this.p = {
@@ -120,6 +122,12 @@ export class Run {
     this.overheard = false; // at most one overheard line per floor
     if (isBossFloor(this.floor)) this.genBossFloor();
     else this.genNormalFloor();
+    this.enterFloor();
+  }
+
+  enterFloor() {
+    this.telegraph = [];
+    this.trail = [{ x: this.p.x, y: this.p.y }];
     this.refreshDoors();
     computeFOV(this.map, this.p.x, this.p.y);
     this.emit('floor');
@@ -135,6 +143,8 @@ export class Run {
       if (d > best && d < 9999) { best = d; far = r; }
     }
     map.tiles[idx(far.cx, far.cy)] = STAIRS;
+    map.down = { x: far.cx, y: far.cy };
+    if (this.floor > 1) { map.tiles[idx(start.cx, start.cy)] = UPSTAIRS; map.up = { x: start.cx, y: start.cy }; }
     const zi = Math.floor((this.floor - 1) / B.FLOORS_PER_ZONE);
     const deco = decorate(map, rooms, { start: this.p, stairs: { x: far.cx, y: far.cy } });
     this.has = deco.has;
@@ -171,12 +181,14 @@ export class Run {
   genBossFloor() {
     const spots = carveArena(this.map);
     this.p.x = spots.start.x; this.p.y = spots.start.y;
+    this.map.up = { ...spots.start }; // the way back opens once the boss is down
     decorateArena(this.map, spots.room, (x, y) => cheb({ x, y }, spots.start) <= 1 || cheb({ x, y }, spots.boss) <= 1);
     const type = this.zone.boss;
     const b = this.spawnEnemy(type, spots.boss.x, spots.boss.y, B.bossScale(this.floor));
     b.state = 'hunt';
     this.boss = b;
     this.log(`${josa(ENEMIES[type].name, '이', '가')} 나타났다! ${ENEMIES[type].tip}`, 'warn');
+    this.log('쓰러뜨리기 전에는 위층으로 돌아갈 수 없다.');
   }
 
   spawnEnemy(type, x, y, scale = 1) {
@@ -194,14 +206,38 @@ export class Run {
     return e;
   }
 
-  descend() {
-    this.floor++;
-    this.meta.stats.maxFloor = Math.max(this.meta.stats.maxFloor, this.floor);
+  // dir = 1 down, -1 up. Floors you have been on come back exactly as you left them.
+  changeFloor(dir) {
+    this.floors[this.floor] = {
+      map: this.map, enemies: this.enemies.filter(e => e.hp > 0), pickups: this.pickups,
+      boss: this.boss, has: this.has, gasActive: this.gasActive, overheard: this.overheard,
+    };
+    this.floor += dir;
     this.p.burn = 0; this.p.sleep = 0;
-    this.genFloor();
+    const kept = this.floors[this.floor];
+    if (kept) {
+      delete this.floors[this.floor];
+      Object.assign(this, kept);
+      const at = dir > 0 ? this.map.up : this.map.down;
+      this.arriveAt(at.x, at.y);
+      this.enterFloor();
+    } else {
+      this.meta.stats.maxFloor = Math.max(this.meta.stats.maxFloor, this.floor);
+      this.genFloor();
+    }
     this.emit('banner', { text: isBossFloor(this.floor) ? `${this.floor}층 · 보스` : `${this.floor}층 · ${this.zone.name}` });
-    this.log(`${this.floor}층에 내려왔다.`);
+    this.log(dir > 0 ? `${this.floor}층에 내려왔다.` : `${this.floor}층으로 올라왔다.`);
     this.afterTurn();
+  }
+
+  // Puts you on a stair tile, nudging aside whoever is standing on it.
+  arriveAt(x, y) {
+    const e = this.enemyAt(x, y);
+    if (e) {
+      const spot = DIRS8.map(([dx, dy]) => ({ x: x + dx, y: y + dy })).find(q => this.canEnemyEnter(q.x, q.y));
+      if (spot) { e.x = spot.x; e.y = spot.y; }
+    }
+    this.p.x = x; this.p.y = y;
   }
 
   // ---------- player actions (return true if a turn was spent) ----------
@@ -232,9 +268,12 @@ export class Run {
     if (map.tiles[i] === ORE) return this.mineOre();
     if (!this.passable(nx, ny)) return false;
     p.x = nx; p.y = ny;
+    this.trail.push({ x: nx, y: ny });
+    if (this.trail.length > 40) this.trail.shift();
     onEnter(this, 'player', nx, ny);
     this.pickupAt(nx, ny);
-    if (map.tiles[i] === STAIRS) { this.descend(); return true; }
+    if (map.tiles[i] === STAIRS) { this.changeFloor(1); return true; }
+    if (map.tiles[i] === UPSTAIRS) { this.changeFloor(-1); return true; }
     this.endTurn();
     return true;
   }
@@ -352,8 +391,13 @@ export class Run {
       else {
         this.map.tiles[idx(e.x, e.y)] = STAIRS;
         this.map.ter[idx(e.x, e.y)] = T.NONE;
+        this.map.down = { x: e.x, y: e.y };
         this.emit('stairs', { x: e.x, y: e.y });
-        this.log('계단이 나타났다.', 'good');
+        const up = this.map.up;
+        this.map.tiles[idx(up.x, up.y)] = UPSTAIRS;
+        this.map.ter[idx(up.x, up.y)] = T.NONE;
+        this.emit('stairs', { x: up.x, y: up.y });
+        this.log('내려가는 계단이 나타나고, 위층으로 가는 길도 열렸다.', 'good');
       }
       this.addGold(30 * (this.floor / 3));
     } else if (Math.random() < B.GOLD_DROP_CHANCE) {

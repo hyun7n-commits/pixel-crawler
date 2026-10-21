@@ -3,7 +3,7 @@
 import { T, TERRAIN, TILE_INFO, GASES, GAS_KEYS } from '../data/terrain.js';
 import { ORE_HITS } from '../data/balance.js';
 import { ITEMS } from '../data/items.js';
-import { idx, inMap, STAIRS, DOOR, ORE } from '../core/dungeon.js';
+import { idx, inMap, STAIRS, DOOR, ORE, UPSTAIRS } from '../core/dungeon.js';
 
 const STATE = {
   sleep: '자는 중. 콧방울이 작아지면 곧 깬다',
@@ -37,6 +37,7 @@ export function describeTile(run, x, y) {
   }
   const t = map.tiles[i];
   if (t === STAIRS) lines.push(`${TILE_INFO.stairs.name}: ${TILE_INFO.stairs.tip}`);
+  if (t === UPSTAIRS) lines.push(`${TILE_INFO.upStairs.name}: ${TILE_INFO.upStairs.tip}`);
   if (t === DOOR) lines.push(`${TILE_INFO.door.name}: ${TILE_INFO.door.tip}`);
   if (t === ORE && map.ore) lines.push(`${TILE_INFO.bigOre.name} (${map.ore.hits}/${ORE_HITS}): ${TILE_INFO.bigOre.tip}`);
   const ter = map.ter[i];

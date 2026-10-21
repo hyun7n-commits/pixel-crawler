@@ -4,7 +4,7 @@
 import { DungeonScene } from './scenes/DungeonScene.js';
 import { Run } from './core/run.js';
 import { loadMeta, saveMeta } from './core/save.js';
-import { pathTo, idx, ORE } from './core/dungeon.js';
+import { pathTo, idx, ORE, isStairs } from './core/dungeon.js';
 import { cheb } from './core/util.js';
 import { T } from './data/terrain.js';
 import { Hud } from './ui/hud.js';
@@ -170,7 +170,10 @@ function onTileClick(x, y) {
 function walkTo(x, y) {
   const m = run.map, p = run.p;
   if (!run.passable(x, y) || !m.explored[idx(x, y)]) return [];
-  return pathTo(m, p.x, p.y, x, y, (tx, ty) => AVOID.has(m.ter[idx(tx, ty)]) || m.fire[idx(tx, ty)] > 0);
+  return pathTo(m, p.x, p.y, x, y,
+    (tx, ty) => AVOID.has(m.ter[idx(tx, ty)]) || m.fire[idx(tx, ty)] > 0,
+    // never change floors by walking over stairs on the way somewhere else
+    (tx, ty) => isStairs(m.tiles[idx(tx, ty)]));
 }
 
 // auto-walk one step at a time so enemies get their turns in between

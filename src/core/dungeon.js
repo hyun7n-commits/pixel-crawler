@@ -1,5 +1,5 @@
 // Map generation, path distances, line of sight and field of view.
-// Tiles: 0 = wall, 1 = floor, 2 = stairs, 3 = door, 4 = big ore (blocks walking, not sight).
+// Tiles: 0 = wall, 1 = floor, 2 = stairs down, 3 = door, 4 = big ore (blocks walking, not sight), 5 = stairs up.
 // Like Shattered Pixel Dungeon, rooms are walled boxes joined by one-tile corridors,
 // and a corridor only ever meets a room through a door. A door hides the room until
 // someone stands in it.
@@ -9,7 +9,8 @@ import { MAP_W as W, MAP_H as H, SIGHT } from '../data/balance.js';
 import { T } from '../data/terrain.js';
 import { rint, pick, shuffle, DIRS8 } from './util.js';
 
-export const WALL = 0, FLOOR = 1, STAIRS = 2, DOOR = 3, ORE = 4;
+export const WALL = 0, FLOOR = 1, STAIRS = 2, DOOR = 3, ORE = 4, UPSTAIRS = 5;
+export const isStairs = t => t === STAIRS || t === UPSTAIRS;
 
 export function createMap() {
   const n = W * H;
@@ -26,6 +27,7 @@ export function createMap() {
     doors: [],
     vents: [],
     ore: null,                    // the floor's big ore: { x, y, hits }
+    up: null, down: null,         // where the stairs are, for arriving from above or below
   };
 }
 

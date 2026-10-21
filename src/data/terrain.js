@@ -16,7 +16,8 @@ export const TERRAIN = {
 };
 
 export const TILE_INFO = {
-  stairs:  { name: '계단', tip: '아래층으로 내려간다.' },
+  stairs:  { name: '내려가는 계단', tip: '아래층으로 내려간다.' },
+  upStairs: { name: '올라가는 계단', tip: '위층으로 돌아간다. 지나온 층은 떠날 때 모습 그대로 남아 있다.' },
   door:    { name: '문', tip: '열기 전에는 안이 안 보인다.' },
   bigOre:  { name: '큰 광석', tip: '부딪혀서 캔다. 캘수록 소리가 커져서 적이 찾아온다.' },
   fire:    { name: '불', tip: '닿으면 몸에 불이 붙는다. 웅덩이에 들어가면 꺼진다.' },

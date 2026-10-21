@@ -107,9 +107,31 @@ function hunt(run, e, dm) {
   }
   const moves = d.fast ? 2 : 1;
   for (let i = 0; i < moves; i++) {
-    if (!stepToward(run, e, dm)) break;
+    if (!followTrail(run, e, dm) && !stepToward(run, e, dm)) break;
     if (cheb(e, p) === 1 || e.hp <= 0) break;
   }
+}
+
+// Like in Shattered Pixel Dungeon, a chaser walks in your footsteps, so backing away
+// keeps the gap the same and you can plan the next turn. It only leaves your trail
+// when the trail winds around and a straight route is clearly shorter.
+function followTrail(run, e, dm) {
+  const t = run.trail, last = t.length - 1, direct = dm[idx(e.x, e.y)];
+  let k = -1;
+  for (let j = last; j >= 0; j--) if (t[j].x === e.x && t[j].y === e.y) { k = j; break; }
+  let next = -1;
+  if (k >= 0) next = k + 1;
+  else {
+    // not on the trail yet: step onto the newest footprint within reach
+    for (let j = last - 1; j >= 0; j--) {
+      if (cheb(e, t[j]) === 1 && canStep(run, e, t[j].x, t[j].y)) { next = j; break; }
+    }
+  }
+  if (next < 0 || next >= last || last - next > direct + 1) return false;
+  const n = t[next];
+  if (!canStep(run, e, n.x, n.y)) return false;
+  moveEnemy(run, e, n.x, n.y);
+  return true;
 }
 
 function flee(run, e, dm, sees) {
