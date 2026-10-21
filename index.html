@@ -12,11 +12,12 @@
 <div id="app">
   <section id="hub" aria-label="마을"></section>
   <section id="game" hidden aria-label="던전">
-    <div id="stage"><div id="phaser"></div><div id="banner"></div></div>
+    <div id="stage"><div id="phaser"></div><div id="banner"></div><div id="tip" hidden></div></div>
     <aside id="side">
       <div class="hud-top"><div class="floor" id="floorLabel"></div><div class="gold-now" id="goldNow"></div></div>
       <div class="meter"><div class="meter-label"><span>체력</span><b id="hpText"></b></div><div class="bar" id="hpbar"><i></i></div></div>
       <div class="meter"><div class="meter-label"><span id="lvText"></span><span id="atkText"></span></div><div class="bar" id="xpbar"><i></i></div></div>
+      <div id="pstatus" aria-live="polite"></div>
       <div class="sec-title"><span>유물</span><span id="slotText"></span></div>
       <div class="relics" id="relics"></div>
       <div id="relicInfo">유물을 누르면 효과와 진화 조합이 보여요.</div>

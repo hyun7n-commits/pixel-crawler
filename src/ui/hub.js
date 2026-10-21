@@ -6,6 +6,7 @@ import { UPGRADES } from '../data/upgrades.js';
 import { RELICS, evolutionOf } from '../data/relics.js';
 import { freshMeta, saveMeta } from '../core/save.js';
 import { josa } from '../core/util.js';
+import { DISCOVERIES } from '../data/terrain.js';
 
 let tab = 'chars';
 
@@ -19,7 +20,7 @@ export function renderHub(ctx) {
   const inner = el('div', 'hub-inner');
 
   const head = el('div', 'hub-head');
-  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.2 · 9층 · 보스 3마리</small>'));
+  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.3 · 9층 · 보스 3마리 · 살아 있는 광산</small>'));
   const purse = el('div', 'purse');
   purse.append(icon('gold', 24), el('span', null, `${meta.gold}G`));
   head.append(purse);
@@ -38,8 +39,9 @@ export function renderHub(ctx) {
   if (tab === 'chars') {
     inner.append(el('div', 'howto',
       '<b>이동</b> 방향키·WASD 또는 가고 싶은 칸을 누르기 · <b>공격</b> 적에게 부딪히기 · <b>쉬기</b> 스페이스 · ' +
-      '적 머리 위 <b style="color:var(--danger)">!</b>는 다음 턴에 때린다는 뜻이에요. ' +
-      '레벨업과 보물 상자에서 유물을 골라 강해지고, 짝이 맞는 유물 두 개를 Lv3까지 올리면 진화해요.'));
+      '<b>폭탄</b> 2를 누르고 던질 곳 고르기 · 마우스를 올리면 무엇이든 한 줄 설명이 나와요.<br>' +
+      '적 코에 <b>콧방울</b>이 있으면 자는 중이에요. 작아지면 곧 깨요. 내 칸에 <b style="color:var(--danger)">빨간 발톱 자국</b>이 보이면 다음 턴에 맞아요. ' +
+      '버섯 덤불에 숨고, 불과 가스와 폭탄을 섞어 보세요. 새로운 조합을 찾으면 도감에 남아요.'));
     const grid = el('div', 'chars');
     for (const [id, c] of Object.entries(CHARACTERS)) {
       const owned = meta.chars[id];
@@ -108,6 +110,18 @@ export function renderHub(ctx) {
       g.append(s);
     }
     inner.append(g);
+    const book = el('div', 'shop');
+    const n = DISCOVERIES.filter(d => meta.found[d.id]).length;
+    book.append(el('h3', null, `발견 도감 (${n}/${DISCOVERIES.length})`));
+    for (const d of DISCOVERIES) {
+      const got = meta.found[d.id];
+      const row = el('div', 'row' + (got ? '' : ' unknown')), main = el('div', 'row-main');
+      main.append(el('span', 'row-name', got || d.basic ? d.combo : '???'),
+        el('span', 'row-sub', got ? d.result : d.basic ? '해 보면 알 수 있어요' : `소문: "${d.hint}"`));
+      row.append(main);
+      book.append(row);
+    }
+    inner.append(book);
     let armed = 0;
     const reset = button('btn', '기록 초기화', () => {
       if (Date.now() - armed < 3000) { const m = freshMeta(); saveMeta(m); setMeta(m); return; }

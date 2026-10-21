@@ -2,6 +2,7 @@
 
 import { $, el, button, icon } from './dom.js';
 import { RELICS, evolutionOf } from '../data/relics.js';
+import { DISCOVERIES } from '../data/terrain.js';
 
 export const modalOpen = () => !$('modal').hidden;
 
@@ -62,6 +63,7 @@ export function showChoice({ title, sub, run, opts, onPick, onReroll }) {
 export function showSummary({ won, run, newlyUnlockable, onClose }) {
   openSheet(sh => {
     sh.append(el('h2', null, won ? '던전을 정복했어요!' : '쓰러졌어요'));
+    if (!won && run.cause) sh.append(el('p', 'cause', `마지막 순간: ${run.cause}`));
     sh.append(el('p', null, won
       ? '뱀파이어 군주를 쓰러뜨렸어요. 보너스 골드 200을 받았어요.'
       : '모은 골드는 그대로 가져가요. 마을에서 강해진 다음 다시 도전하세요.'));
@@ -72,6 +74,10 @@ export function showSummary({ won, run, newlyUnlockable, onClose }) {
       sum.append(s);
     }
     sh.append(sum);
+    if (run.found.length) {
+      const names = run.found.map(id => DISCOVERIES.find(d => d.id === id)).map(d => `${d.combo} = ${d.result}`);
+      sh.append(el('div', 'unlock-note', `이번에 새로 발견한 것: ${names.join(' · ')}`));
+    }
     if (newlyUnlockable.length) {
       sh.append(el('div', 'unlock-note', `새 캐릭터 조건 달성: ${newlyUnlockable.join(', ')}. 마을에서 골드로 데려올 수 있어요.`));
     }

@@ -76,6 +76,10 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #phaser { position: absolute; inset: 0; }
 #banner { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); font-family: var(--font-display); font-size: clamp(22px, 4vw, 34px); color: var(--gold); text-shadow: 3px 3px 0 #000; pointer-events: none; white-space: nowrap; opacity: 0; transition: opacity .3s; }
 #banner.show { opacity: 1; }
+#tip { position: absolute; left: 10px; right: 10px; bottom: 10px; max-width: 560px; background: rgba(12,11,17,.92); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: 13px; line-height: 1.5; white-space: pre-line; pointer-events: none; color: var(--fg); }
+#pstatus { display: flex; flex-wrap: wrap; gap: 4px; min-height: 0; }
+#pstatus:empty { display: none; }
+#pstatus .chip { font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 3px; background: var(--panel-2); color: var(--gold); border: 1px solid var(--line); }
 #side { background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; padding: 12px; overflow-y: auto; min-height: 0; }
 .hud-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .floor { font-family: var(--font-display); font-size: 22px; }
@@ -102,6 +106,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .item { display: flex; flex-direction: column; align-items: center; gap: 2px; background: #0f0e15; border: 1px solid var(--line); border-radius: 5px; padding: 6px 2px; font-size: 11.5px; }
 .item canvas { width: 26px; height: 26px; }
 .item:disabled { opacity: .35; cursor: default; }
+.item.aiming { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); color: var(--gold); }
 .item kbd { font-size: 10px; color: var(--muted); font-family: inherit; }
 .actions { display: flex; gap: 6px; }
 .actions .btn { flex: 1; font-size: 13px; }
@@ -110,6 +115,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #log .warn { color: #ffb3b3; }
 #log .good { color: #c9f2a8; }
 #log .evo { color: var(--gold); }
+#log .hear { color: #b9c8ff; font-style: italic; }
 
 /* ---------- Modal ---------- */
 #modal { position: fixed; inset: 0; background: rgba(6,5,10,.78); display: grid; place-items: center; padding: 16px; z-index: 20; }
@@ -128,6 +134,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .sheet-foot { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
 .summary .stat b { font-size: 24px; }
+.sheet p.cause { color: var(--fg); }
+.row.unknown .row-name { color: var(--muted); letter-spacing: .1em; }
 .unlock-note { background: #2a2410; border: 1px solid #6a5a1c; color: var(--gold); padding: 10px 12px; border-radius: 6px; line-height: 1.5; }
 
 @media (max-width: 760px) {

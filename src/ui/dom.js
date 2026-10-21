@@ -18,9 +18,10 @@ export const button = (cls, html, onClick) => {
 
 // A pixel sprite as a crisp DOM canvas, sized with CSS.
 export function icon(name, size) {
+  const src = spriteForDom(name);
   const c = document.createElement('canvas');
-  c.width = 8; c.height = 8; c.className = 'pix';
-  c.getContext('2d').drawImage(spriteForDom(name), 0, 0);
+  c.width = src.width; c.height = src.height; c.className = 'pix';
+  c.getContext('2d').drawImage(src, 0, 0);
   if (size) { c.style.width = `${size}px`; c.style.height = `${size}px`; }
   return c;
 }

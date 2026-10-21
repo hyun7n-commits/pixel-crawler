@@ -11,6 +11,7 @@ export function freshMeta() {
     chars: { adv: true },
     sel: 'adv',
     stats: { kills: 0, maxFloor: 0, bosses: [], evos: 0, runs: 0, wins: 0, bestGold: 0 },
+    found: {},  // discovered combinations, see data/terrain.js
   };
 }
 
@@ -25,6 +26,7 @@ export function loadMeta() {
         stats: { ...f.stats, ...m.stats },
         chars: { ...f.chars, ...m.chars },
         relicUnlock: { ...m.relicUnlock },
+        found: { ...m.found },
       };
     }
   } catch (e) { /* storage blocked or corrupt: start fresh */ }

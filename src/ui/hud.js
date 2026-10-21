@@ -5,6 +5,7 @@ import { RELICS, MAX_SLOTS, evolutionOf } from '../data/relics.js';
 import { ITEMS } from '../data/items.js';
 import { LAST_FLOOR, xpToLevel } from '../data/balance.js';
 import { zoneOf, isBossFloor } from '../core/run.js';
+import { playerStatus } from './tip.js';
 
 export class Hud {
   constructor({ onUseItem }) {
@@ -12,6 +13,7 @@ export class Hud {
     this.selected = null;
     this.lines = [];
     this.bannerTimer = 0;
+    this.aiming = false;
   }
 
   reset() {
@@ -60,6 +62,9 @@ export class Hud {
     $('lvText').textContent = `Lv${p.lvl} · 경험치 ${p.xp}/${xpToLevel(p.lvl)}`;
     $('atkText').textContent = `공격 ${s.atk} · 방어 ${s.def}`;
     $('xpbar').firstElementChild.style.width = `${(p.xp / xpToLevel(p.lvl)) * 100}%`;
+    const st = playerStatus(p, run.playerHidden());
+    $('pstatus').innerHTML = '';
+    for (const t of st) $('pstatus').append(el('span', 'chip', t));
 
     const ids = Object.keys(p.relics);
     $('slotText').textContent = `${ids.length}/${MAX_SLOTS}`;
@@ -92,8 +97,9 @@ export class Hud {
     const items = $('items');
     items.innerHTML = '';
     for (const [id, d] of Object.entries(ITEMS)) {
-      const b = button('item', null, () => this.onUseItem(id));
-      b.append(icon(d.sprite), el('span', null, `${d.name} ×${p.items[id]}`), el('kbd', null, `키 ${d.key}`));
+      const aim = id === 'bomb' && this.aiming;
+      const b = button('item' + (aim ? ' aiming' : ''), null, () => this.onUseItem(id));
+      b.append(icon(d.sprite), el('span', null, aim ? '던질 곳 고르기…' : `${d.name} ×${p.items[id]}`), el('kbd', null, `키 ${d.key}`));
       b.title = d.desc;
       b.disabled = !p.items[id];
       items.append(b);
