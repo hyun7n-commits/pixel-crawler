@@ -307,12 +307,10 @@ export class DungeonScene extends Phaser.Scene {
       case 'puff': this.fx[d.kind].explode(30, center(d.x), center(d.y)); break;
       case 'steam': this.fx.steam.explode(14, center(d.x), center(d.y)); break;
       case 'shock': this.shock(d.tiles); break;
-      case 'mine':
-        this.bump(this.playerSprite, d.from, d);
-        this.fx.spark.explode(6 + d.hits * 3, center(d.x), center(d.y));
-        this.fx.rock.explode(4 + d.hits * 3, center(d.x), center(d.y));
-        this.cameras.main.shake(80 + d.hits * 30, 0.002 + d.hits * 0.0012);
-        this.noiseRing(d.x, d.y, d.r);
+      case 'mine': this.onMine(d); break;
+      case 'heard':
+        this.float(d.x, d.y + 1.7, `${d.list.length}마리가 들었다!`, '#ff7a7a', 250, 11);
+        this.heardMarks = d.list.map(e => ({ e, until: this.time.now + 2200 }));
         break;
       case 'say': this.say(d.who, d.text); break;
       case 'alert': {
@@ -472,6 +470,46 @@ export class DungeonScene extends Phaser.Scene {
     }
   }
 
+  // A swing at the big ore: everything gets a little bigger with each hit, and the last one pours out.
+  onMine(d) {
+    const cx = center(d.x), cy = center(d.y), last = d.last;
+    this.bump(this.playerSprite, d.from, d);
+    this.hitStop(last ? 140 : 35 + d.hits * 12);
+    this.fx.spark.explode((last ? 30 : 6) + d.hits * 3, cx, cy);
+    this.fx.rock.explode((last ? 24 : 4) + d.hits * 3, cx, cy);
+    this.cameras.main.shake(last ? 420 : 80 + d.hits * 35, last ? 0.014 : 0.002 + d.hits * 0.0014);
+    if (last) this.cameras.main.flash(160, 244, 207, 79);
+    this.noiseRing(d.x, d.y, d.r);
+    // the ore itself shudders
+    const img = (this.tileImgs[idx(d.x, d.y)] || []).find(im => im.texture.key === 't_bigOre');
+    if (img && !last) this.tweens.add({ targets: img, x: img.x + 1.5, duration: 30, yoyo: true, repeat: 2 + d.hits });
+    // gold chips spray out and fly into your pocket
+    const n = last ? 14 : 2 + d.hits;
+    for (let k = 0; k < n; k++) this.coinFly(cx, cy, last ? 2.2 : 1.2, k * (last ? 25 : 35));
+  }
+
+  coinFly(x, y, spread, delay) {
+    const c = this.add.image(x, y, 'gold').setScale(0.45).setDepth(D.fx);
+    const a = Math.random() * Math.PI * 2, dist = TILE * spread * (0.5 + Math.random() * 0.5);
+    const tx = x + Math.cos(a) * dist, ty = y + Math.sin(a) * dist * 0.6;
+    this.tweens.add({
+      targets: c, x: tx, duration: 260, delay, ease: 'Quad.out',
+      onUpdate: tw => { c.y = y + (ty - y) * tw.progress - Math.sin(tw.progress * Math.PI) * TILE * 0.9; },
+      onComplete: () => {
+        const p = this.playerSprite;
+        if (!p) { c.destroy(); return; }
+        this.tweens.add({ targets: c, x: p.x, y: p.y - TILE / 2, scale: 0.2, duration: 220, delay: 120, ease: 'Quad.in', onComplete: () => c.destroy() });
+      },
+    });
+  }
+
+  // a heartbeat of stillness so a heavy hit lands
+  hitStop(ms) {
+    this.tweens.timeScale = 0.05;
+    clearTimeout(this.hitStopTimer);
+    this.hitStopTimer = setTimeout(() => { this.tweens.timeScale = 1; }, ms);
+  }
+
   // How far a sound carries (a swing at the big ore, snoring): a ring that grows out to that distance.
   noiseRing(x, y, r, color = 0xf4cf4f) {
     const c = this.add.circle(center(x), center(y), TILE * (r + 0.5)).setStrokeStyle(1.5, color, 0.9).setDepth(D.fx).setScale(0.1);
@@ -535,6 +573,28 @@ export class DungeonScene extends Phaser.Scene {
       for (let k = 0; k < ORE_HITS; k++) {
         g.fillStyle(k < ore.hits ? 0xf4cf4f : 0x2c2536, 1);
         g.fillRect(x0 + 2 + k * 2.6, y0 - 3, 2, 2);
+      }
+      // a glint now and then, so it catches your eye from across the room
+      if (map.visible[idx(ore.x, ore.y)] && time > (this.nextGlint || 0)) {
+        this.nextGlint = time + 900 + Math.random() * 900;
+        this.fx.spark.explode(2, x0 + 3 + Math.random() * 10, y0 + 3 + Math.random() * 9);
+      }
+    }
+
+    // enemies that heard the ore but are out of sight: red arrows at the edge of the view
+    if (this.heardMarks?.length) {
+      const view = this.cameras.main.worldView, now = this.time.now;
+      this.heardMarks = this.heardMarks.filter(m => m.until > now && m.e.hp > 0);
+      for (const { e, until } of this.heardMarks) {
+        if (run.isVisible(e.x, e.y)) continue;
+        const ex = center(e.x), ey = center(e.y), px = center(p.x), py = center(p.y) - TILE / 2;
+        const ang = Math.atan2(ey - py, ex - px), pad = 10;
+        const ax = Phaser.Math.Clamp(ex, view.x + pad, view.right - pad), ay = Phaser.Math.Clamp(ey, view.y + pad, view.bottom - pad);
+        const a = Math.min(1, (until - now) / 500) * (0.65 + 0.35 * Math.sin(time / 90));
+        g.fillStyle(0xff5a5a, a);
+        g.fillTriangle(ax + Math.cos(ang) * 6, ay + Math.sin(ang) * 6,
+          ax + Math.cos(ang + 2.4) * 5, ay + Math.sin(ang + 2.4) * 5,
+          ax + Math.cos(ang - 2.4) * 5, ay + Math.sin(ang - 2.4) * 5);
       }
     }
 

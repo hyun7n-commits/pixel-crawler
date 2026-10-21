@@ -300,7 +300,7 @@ export class Run {
     const map = this.map, ore = map.ore, p = this.p;
     ore.hits++;
     const r = B.ORE_NOISE[ore.hits - 1];
-    this.emit('mine', { x: ore.x, y: ore.y, from: { x: p.x, y: p.y }, hits: ore.hits, r });
+    this.emit('mine', { x: ore.x, y: ore.y, from: { x: p.x, y: p.y }, hits: ore.hits, r, last: ore.hits >= B.ORE_HITS });
     for (const v of map.vents) addGas(this, v.x, v.y, 'mine', B.ORE_GAS);
     if (ore.hits < B.ORE_HITS) {
       this.addGold(Math.round(B.oreGold(this.floor) * this.stat().oreMult));
@@ -315,7 +315,11 @@ export class Run {
       this.discover('ore_jackpot');
       this.emit('tiles', { list: [i] });
     }
-    this.noise(ore.x, ore.y, r);
+    const heard = this.noise(ore.x, ore.y, r);
+    if (heard.length) {
+      this.emit('heard', { x: p.x, y: p.y, list: heard });
+      this.log(`${heard.length}마리가 소리를 듣고 깼다!`, 'warn');
+    }
     this.endTurn();
     return true;
   }
@@ -504,12 +508,18 @@ export class Run {
   }
 
   // Loud things wake sleepers nearby and draw wanderers over.
+  // Wakes and draws enemies within r. Returns the ones that heard it and are now coming to look.
   noise(x, y, r) {
     let woke = 0;
+    const heard = [];
     for (const e of this.enemies) {
-      if (e.hp > 0 && cheb(e, { x, y }) <= r && rouse(this, e, 'noise', x, y)) woke++;
+      if (e.hp <= 0 || cheb(e, { x, y }) > r) continue;
+      const before = e.state;
+      if (rouse(this, e, 'noise', x, y)) woke++;
+      if (e.state === 'search' && before !== 'search') heard.push(e);
     }
     if (woke) this.discover('noise_sleep');
+    return heard;
   }
 
   discover(id) {

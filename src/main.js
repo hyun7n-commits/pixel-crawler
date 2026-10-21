@@ -12,6 +12,7 @@ import { renderHub } from './ui/hub.js';
 import { showChoice, showSummary, modalOpen } from './ui/modal.js';
 import { describeTile } from './ui/tip.js';
 import { $ } from './ui/dom.js';
+import * as sfx from './audio/sfx.js';
 
 let meta = loadMeta();
 let run = null;
@@ -59,6 +60,7 @@ function showHub() {
 }
 
 function startRun() {
+  sfx.unlockAudio();
   $('hub').hidden = true;
   $('game').hidden = false;
   game.loop.wake();
@@ -74,6 +76,7 @@ function startRun() {
 }
 
 function onRunEvent(type, d) {
+  sfx.onRunEvent(type, d);
   if (type === 'log') hud.log(d.text, d.cls);
   if (type === 'banner') hud.banner(d.text);
   if (type === 'discover') hud.banner(`새 발견! ${d.d.combo}`);
@@ -135,6 +138,7 @@ document.addEventListener('keydown', ev => {
   if (KEYS[k]) { ev.preventDefault(); clearPath(); setAim(false); if (canAct()) run.step(...KEYS[k]); return; }
   if (k === ' ' || k === '.') { ev.preventDefault(); clearPath(); setAim(false); if (canAct()) run.wait(); return; }
   if (k === '2') { setAim(!aiming); return; }
+  if (k === 'm') { toggleSound(); return; }
   const item = { 1: 'potion', 3: 'map' }[k];
   if (item && canAct()) { clearPath(); setAim(false); run.useItem(item); }
 });
@@ -187,6 +191,14 @@ setInterval(() => {
 setInterval(() => {
   if (run && !run.over && !modalOpen() && run.queue.length === 0 && (run.p.sleep || run.p.stun)) run.passTurn();
 }, 380);
+
+// sound on/off, remembered between visits
+function showSoundState() { $('soundBtn').textContent = sfx.isMuted() ? '소리 끔' : '소리 켬'; }
+function toggleSound() { sfx.unlockAudio(); sfx.setMuted(!sfx.isMuted()); showSoundState(); }
+$('soundBtn').addEventListener('click', toggleSound);
+showSoundState();
+// browsers allow sound only after the first click or key press
+for (const ev of ['pointerdown', 'keydown']) document.addEventListener(ev, () => sfx.unlockAudio(), { once: true });
 
 $('waitBtn').addEventListener('click', () => { if (canAct()) { clearPath(); setAim(false); run.wait(); } });
 let quitArmed = 0;

@@ -20,7 +20,7 @@ export function renderHub(ctx) {
   const inner = el('div', 'hub-inner');
 
   const head = el('div', 'hub-head');
-  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.7 · 9층 · 보스 3마리 · 유물 26종과 전설 유물</small>'));
+  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.7.1 · 9층 · 보스 3마리 · 효과음과 광석 손맛</small>'));
   const purse = el('div', 'purse');
   purse.append(icon('gold', 24), el('span', null, `${meta.gold}G`));
   head.append(purse);

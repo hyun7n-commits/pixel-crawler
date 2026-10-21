@@ -1,0 +1,140 @@
+// Sound effects, made on the fly with the Web Audio API, so there are no sound files yet.
+// Each sound is a few short tones and noise bursts. Swap these for recorded sounds later
+// by changing SOUNDS only; the rest of the game just calls onRunEvent.
+
+const VOLUME = 0.4;
+const MUTE_KEY = 'pixel-crawler-muted';
+
+let ctx = null, out = null, noiseBuf = null;
+let muted = false;
+try { muted = localStorage.getItem(MUTE_KEY) === '1'; } catch (e) { /* storage blocked */ }
+
+export const isMuted = () => muted;
+export function setMuted(m) {
+  muted = m;
+  try { localStorage.setItem(MUTE_KEY, m ? '1' : '0'); } catch (e) { /* storage blocked */ }
+  if (out) out.gain.value = m ? 0 : VOLUME;
+}
+
+// Browsers only allow sound after a click or a key press, so call this from one.
+export function unlockAudio() {
+  if (!ctx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    ctx = new AC();
+    out = ctx.createGain();
+    out.gain.value = muted ? 0 : VOLUME;
+    const comp = ctx.createDynamicsCompressor(); // so stacked sounds never clip
+    out.connect(comp);
+    comp.connect(ctx.destination);
+    noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    const data = noiseBuf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  }
+  if (ctx.state === 'suspended') ctx.resume();
+}
+
+function envelope(g, t, vol, attack, dur) {
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+}
+
+// A pitched blip; `to` slides the pitch.
+function tone(freq, dur, { type = 'sine', vol = 0.3, to = null, delay = 0, attack = 0.005 } = {}) {
+  const t = ctx.currentTime + delay, o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t);
+  if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
+  envelope(g, t, vol, attack, dur);
+  o.connect(g);
+  g.connect(out);
+  o.start(t);
+  o.stop(t + dur + 0.02);
+}
+
+// A burst of filtered noise: cracks, thuds, rumbles; `to` sweeps the filter.
+function hiss(dur, { vol = 0.3, freq = 1000, to = null, type = 'bandpass', q = 1, delay = 0, attack = 0.003 } = {}) {
+  const t = ctx.currentTime + delay, s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+  s.buffer = noiseBuf;
+  s.loop = true;
+  f.type = type;
+  f.Q.value = q;
+  f.frequency.setValueAtTime(freq, t);
+  if (to) f.frequency.exponentialRampToValueAtTime(to, t + dur);
+  envelope(g, t, vol, attack, dur);
+  s.connect(f);
+  f.connect(g);
+  g.connect(out);
+  s.start(t, Math.random() * 0.5);
+  s.stop(t + dur + 0.02);
+}
+
+const chime = (notes, gap, vol = 0.13, dur = 0.18, delay = 0) =>
+  notes.forEach((f, i) => tone(f, dur, { type: 'triangle', vol, delay: delay + i * gap }));
+
+const SOUNDS = {
+  // the pick on the big ore: each swing rings higher and lands heavier
+  mine(hits) {
+    const up = 1 + hits * 0.18;
+    tone(1250 * up, 0.16, { type: 'triangle', vol: 0.22 });
+    tone(1870 * up, 0.1, { type: 'square', vol: 0.05 });
+    hiss(0.07, { vol: 0.35, freq: 4200, type: 'highpass' });
+    tone(140, 0.18 + hits * 0.05, { vol: 0.22 + hits * 0.07, to: 50 });
+    hiss(0.2 + hits * 0.07, { vol: 0.06 + hits * 0.05, freq: 500, to: 110, type: 'lowpass' });
+  },
+  // the last swing: the whole ore gives way and coins pour out
+  jackpot() {
+    hiss(1.0, { vol: 0.7, freq: 2600, to: 80, type: 'lowpass' });
+    tone(95, 0.9, { vol: 0.7, to: 32 });
+    chime([1319, 1568, 1976, 2637, 3136, 2637, 3136], 0.06, 0.12, 0.16, 0.3);
+  },
+  // a low two-note sting: something heard you
+  heard() {
+    tone(98, 0.24, { type: 'triangle', vol: 0.28, delay: 0.14 });
+    tone(92.5, 0.4, { type: 'triangle', vol: 0.28, delay: 0.38 });
+  },
+  hit() { hiss(0.06, { vol: 0.3, freq: 1500, q: 0.8 }); tone(180, 0.08, { vol: 0.25, to: 90 }); },
+  sneak() { hiss(0.14, { vol: 0.4, freq: 3200, to: 800, q: 0.7 }); tone(280, 0.16, { vol: 0.4, to: 60 }); },
+  hurt() { tone(230, 0.14, { type: 'square', vol: 0.1, to: 110 }); hiss(0.08, { vol: 0.2, freq: 700 }); },
+  kill() { tone(560, 0.13, { type: 'triangle', vol: 0.2, to: 150 }); },
+  gold() { tone(1568, 0.06, { type: 'triangle', vol: 0.1 }); tone(2093, 0.09, { type: 'triangle', vol: 0.1, delay: 0.05 }); },
+  chest() { chime([784, 988, 1175, 1568], 0.06, 0.14); },
+  boom() { hiss(0.8, { vol: 0.65, freq: 1800, to: 70, type: 'lowpass' }); tone(70, 0.6, { vol: 0.5, to: 28 }); },
+  alert() { tone(880, 0.05, { type: 'square', vol: 0.05 }); tone(1320, 0.07, { type: 'square', vol: 0.05, delay: 0.05 }); },
+  snore() { hiss(0.55, { vol: 0.14, freq: 320, to: 160, type: 'lowpass', attack: 0.25 }); },
+  zap() { tone(1400, 0.12, { type: 'sawtooth', vol: 0.06, to: 300 }); hiss(0.1, { vol: 0.15, freq: 5000, type: 'highpass' }); },
+  stairs() { hiss(0.45, { vol: 0.16, freq: 300, to: 1500, q: 2, attack: 0.08 }); },
+  dodge() { hiss(0.12, { vol: 0.12, freq: 2000, to: 4500, q: 2 }); },
+  puff() { hiss(0.35, { vol: 0.15, freq: 900, to: 300, q: 0.6, attack: 0.02 }); },
+  levelup() { chime([659, 784, 988, 1319], 0.07, 0.13); },
+  evolve() { chime([523, 659, 784, 1047, 1319, 1568], 0.08, 0.14, 0.3); },
+};
+
+export function play(name, ...args) {
+  if (!ctx || muted || ctx.state !== 'running') return;
+  try { SOUNDS[name]?.(...args); } catch (e) { /* never let a sound break the game */ }
+}
+
+// Which sound goes with which game event (see the emit calls in core/).
+export function onRunEvent(type, d) {
+  switch (type) {
+    case 'mine': play('mine', d.hits); if (d.last) play('jackpot'); break;
+    case 'heard': play('heard'); break;
+    case 'hit': if (d.kind !== 'sneak') play('hit'); break;
+    case 'sneak': play('sneak'); break;
+    case 'phit': play('hurt'); break;
+    case 'kill': play('kill'); break;
+    case 'pickup': play(d.type === 'chest' ? 'chest' : 'gold'); break;
+    case 'boom': case 'gasboom': play('boom'); break;
+    case 'alert': play('alert'); break;
+    case 'snore': play('snore'); break;
+    case 'zap': play('zap'); break;
+    case 'floor': play('stairs'); break;
+    case 'dodge': play('dodge'); break;
+    case 'puff': play('puff'); break;
+    case 'levelup': play('levelup'); break;
+    case 'evolve': play('evolve'); break;
+    default: break;
+  }
+}
