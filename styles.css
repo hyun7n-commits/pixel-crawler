@@ -19,7 +19,7 @@
 html, body { height: 100%; }
 [hidden] { display: none !important; }
 body {
-  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14px;
+  margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14px;
   overflow: hidden;
 }
 button { font: inherit; color: inherit; cursor: pointer; }
@@ -72,7 +72,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* ---------- Game ---------- */
 #game { flex: 1; display: grid; grid-template-columns: 1fr 290px; min-height: 0; }
 #stage { position: relative; min-width: 0; min-height: 0; background: #07060a; }
-#stage canvas { display: block; touch-action: manipulation; }
+#stage { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+#stage canvas { display: block; }
 #phaser { position: absolute; inset: 0; }
 #banner { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); font-family: var(--font-display); font-size: clamp(22px, 4vw, 34px); color: var(--gold); text-shadow: 3px 3px 0 #000; pointer-events: none; white-space: nowrap; opacity: 0; transition: opacity .3s; }
 #banner.show { opacity: 1; }
@@ -117,6 +118,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #log .good { color: #c9f2a8; }
 #log .evo { color: var(--gold); }
 #log .hear { color: #b9c8ff; font-style: italic; }
+/* phone-only parts: status bar, toolbar, floating log, bag sheet */
+#mtop, #mbar, #shade, #mlog, .bag-head { display: none; }
 
 /* ---------- Modal ---------- */
 #modal { position: fixed; inset: 0; background: rgba(6,5,10,.78); display: grid; place-items: center; padding: 16px; z-index: 20; }
@@ -140,12 +143,86 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .row.unknown .row-name { color: var(--muted); letter-spacing: .1em; }
 .unlock-note { background: #2a2410; border: 1px solid #6a5a1c; color: var(--gold); padding: 10px 12px; border-radius: 6px; line-height: 1.5; }
 
-@media (max-width: 760px) {
-  #game { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; }
-  #side { border-left: 0; border-top: 1px solid var(--line); max-height: 38vh; gap: 9px; padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); }
-  #log { display: none; }
+/* Phone (or any narrow window): the map takes the screen like SPD. A slim status bar on top,
+   a thumb toolbar below, and the side panel becomes a bag that slides up. */
+@media (max-width: 760px), (max-height: 520px) and (pointer: coarse) {
+  #game { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr) auto; }
+  #mtop {
+    display: flex; flex-direction: column; gap: 4px; background: var(--panel); border-bottom: 1px solid var(--line);
+    padding: max(6px, env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-right, 0px)) 6px max(10px, env(safe-area-inset-left, 0px));
+  }
+  .mt-row { display: flex; align-items: center; gap: 8px; min-height: 22px; }
+  #mFloor { font-family: var(--font-display); font-size: 18px; white-space: nowrap; }
+  #mFloor small { color: var(--muted); font-size: 13px; margin-left: 5px; }
+  #mStatus { flex: 1; display: flex; gap: 4px; min-width: 0; overflow: hidden; }
+  #mStatus .chip { font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: 3px; background: var(--panel-2); color: var(--gold); border: 1px solid var(--line); white-space: nowrap; }
+  #mGold { color: var(--gold); font-family: var(--font-display); font-weight: 400; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .mt-hp { position: relative; }
+  #mHp { height: 15px; border-radius: 3px; }
+  #mHp > i { background: var(--hp); transition: width .15s; }
+  #mHpText { position: absolute; inset: 0; display: grid; place-items: center; font-size: 11px; font-weight: 700; text-shadow: 1px 1px 0 #000; font-variant-numeric: tabular-nums; }
+  #mXp { height: 3px; border-radius: 2px; }
+  #mXp > i { background: var(--xp); transition: width .15s; }
+
+  #mbar {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; background: var(--panel); border-top: 1px solid var(--line);
+    padding: 6px max(8px, env(safe-area-inset-right, 0px)) max(6px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
+  }
+  .mb {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 52px; padding: 4px 2px;
+    background: #0f0e15; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; font-weight: 600; white-space: nowrap;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .mb canvas { width: 24px; height: 24px; }
+  .mb:active:not(:disabled) { background: var(--panel-2); transform: translateY(1px); }
+  .mb:disabled { opacity: .35; }
+  .mb.aiming { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); color: var(--gold); }
+
+  #mlog {
+    display: flex; flex-direction: column; gap: 1px; position: absolute; left: 8px; right: 8px; bottom: 8px; pointer-events: none;
+    font-size: 12.5px; line-height: 1.45; color: var(--fg); text-shadow: 1px 1px 0 #000, 0 0 4px #000;
+  }
+  #mlog div { animation: logfade 5s forwards; }
+  #mlog .warn { color: #ffb3b3; }
+  #mlog .good { color: #c9f2a8; }
+  #mlog .evo { color: var(--gold); }
+  #mlog .hear { color: #b9c8ff; }
+  #tip:not([hidden]) ~ #mlog { display: none; }
+  #tip { left: 8px; right: 8px; bottom: 8px; font-size: 13.5px; }
+
+  #side {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 16; max-height: min(82vh, 620px); gap: 10px;
+    border-left: 0; border-top: 1px solid var(--line); border-radius: 12px 12px 0 0; box-shadow: 0 -10px 30px rgba(0,0,0,.55);
+    padding: 10px max(14px, env(safe-area-inset-right, 0px)) max(14px, env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px));
+    transform: translateY(105%); visibility: hidden; transition: transform .18s ease-out, visibility 0s .18s;
+  }
+  .bag-open #side { transform: none; visibility: visible; transition: transform .18s ease-out; }
+  .bag-open #shade { display: block; position: fixed; inset: 0; z-index: 15; background: rgba(5,4,8,.6); }
+  .bag-head { display: flex; align-items: center; justify-content: space-between; }
+  .bag-head b { font-family: var(--font-display); font-weight: 400; font-size: 22px; }
+  .bag-head .btn { min-height: 38px; padding-inline: 16px; }
+  #side .actions .btn, #side .item { min-height: 44px; }
+  .item kbd { display: none; }
+  #log { min-height: 0; max-height: 150px; overflow-y: auto; flex: none; }
+
   .choices { grid-template-columns: 1fr; }
   .choice { flex-direction: row; text-align: left; align-items: center; }
   .choice > div { gap: 3px; align-items: flex-start; }
+}
+@keyframes logfade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+/* Phone on its side: the toolbar stands up on the right so the map keeps its height. */
+@media (max-height: 520px) and (pointer: coarse) and (orientation: landscape) {
+  #game { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr); }
+  #mtop { grid-column: 1; grid-row: 1; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 3px 12px; padding-top: max(4px, env(safe-area-inset-top, 0px)); padding-bottom: 4px; }
+  .mt-hp { flex: 1; min-width: 140px; }
+  #mXp { flex-basis: 100%; }
+  #stage { grid-column: 1; grid-row: 2; }
+  #mbar {
+    grid-column: 2; grid-row: 1 / span 2; width: 78px; grid-template-columns: 1fr; grid-template-rows: repeat(5, minmax(0, 1fr)); gap: 5px;
+    border-top: 0; border-left: 1px solid var(--line);
+    padding: max(6px, env(safe-area-inset-top, 0px)) max(6px, env(safe-area-inset-right, 0px)) max(6px, env(safe-area-inset-bottom, 0px)) 6px;
+  }
+  .mb { min-height: 0; gap: 1px; font-size: 11px; }
+  .mb canvas { width: 20px; height: 20px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

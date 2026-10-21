@@ -3,7 +3,7 @@
 import { T, TERRAIN, TILE_INFO, GASES, GAS_KEYS } from '../data/terrain.js';
 import { ORE_HITS } from '../data/balance.js';
 import { ITEMS } from '../data/items.js';
-import { idx, inMap, STAIRS, DOOR, ORE, UPSTAIRS } from '../core/dungeon.js';
+import { idx, inMap, STAIRS, DOOR, ORE, UPSTAIRS, WALL } from '../core/dungeon.js';
 
 const STATE = {
   sleep: '자는 중. 콧방울이 작아지면 곧 깬다',
@@ -22,7 +22,7 @@ export function playerStatus(p, hidden) {
   return s;
 }
 
-export function describeTile(run, x, y) {
+export function describeTile(run, x, y, always = false) {
   if (!inMap(x, y)) return '';
   const map = run.map, i = idx(x, y), p = run.p;
   if (!map.explored[i]) return '';
@@ -54,5 +54,7 @@ export function describeTile(run, x, y) {
     if (q.x !== x || q.y !== y) continue;
     lines.push(q.type === 'gold' ? `골드 ${q.amount}` : q.type === 'chest' ? '보물 상자: 열면 유물을 하나 고른다.' : `${ITEMS[q.type].name}: ${ITEMS[q.type].desc}`);
   }
+  // a long press on a phone should always answer with something
+  if (!lines.length && always) lines.push(t === WALL ? `${TILE_INFO.wall.name}: ${TILE_INFO.wall.tip}` : `${TILE_INFO.floor.name}: ${TILE_INFO.floor.tip}`);
   return lines.join('\n');
 }

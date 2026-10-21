@@ -417,6 +417,9 @@ export const SPR = {
   undying: ['.d....d.', '.rr..rr.', 'rrrrrrrr', 'rrwryrrr', 'rrryrrrr', '.rrrrrr.', 'd.rrrr.d', '...rr...'],
   goldstorm: ['..yyyy..', '.yoooyy.', 'yy....yy', '...yy...', '..yyyy..', '.oyoo...', '..oy....', '.o......'],
   heal: ['........', '...gg...', '...gg...', '.gggggg.', '.gggggg.', '...gg...', '...gg...', '........'],
+  // phone toolbar
+  rest: ['.nnnnnn.', '..kwwk..', '..kyyk..', '...ky...', '...kk...', '..kyyk..', '.nnnnnn.', '........'],
+  bag: ['..nnnn..', '.n....n.', '.nNNNNn.', 'nnnnnnnn', 'nnnyynnn', 'nnnnnnnn', 'NNNNNNNN', '........'],
 };
 
 // Floor features drawn on top of the floor tile (16x16, '.' shows the floor).

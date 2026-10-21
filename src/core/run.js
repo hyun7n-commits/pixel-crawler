@@ -10,7 +10,7 @@ import { ITEMS } from '../data/items.js';
 import { T, DISCOVERIES, GOSSIP, SLEEP_TALK, FLOOR_HINTS } from '../data/terrain.js';
 import { rnd, rint, pick, shuffle, cheb, josa, DIRS8 } from './util.js';
 import {
-  createMap, carveRooms, carveArena, idx, inMap, passable, distMap, lineOfSight, computeFOV, diagBlocked,
+  createMap, carveRooms, carveArena, idx, inMap, passable, distMap, lineOfSight, computeFOV,
   FLOOR, STAIRS, ORE, UPSTAIRS,
 } from './dungeon.js';
 import { decorate, decorateArena } from './decorate.js';
@@ -267,7 +267,6 @@ export class Run {
     if (!inMap(nx, ny)) return false;
     if (dx) p.face = Math.sign(dx);
     const e = this.enemyAt(nx, ny);
-    if (!e && diagBlocked(map, p.x, p.y, nx, ny)) return false;
     if (e) {
       this.emit('attack', { from: { x: p.x, y: p.y }, to: { x: nx, y: ny }, who: 'player' });
       this.playerAttack(e);

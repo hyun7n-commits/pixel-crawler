@@ -21,6 +21,8 @@ export const TILE_INFO = {
   door:    { name: '문', tip: '열기 전에는 안이 안 보인다.' },
   bigOre:  { name: '큰 광석', tip: '부딪혀서 캔다. 캘수록 소리가 커져서 적이 찾아온다.' },
   fire:    { name: '불', tip: '닿으면 몸에 불이 붙는다. 웅덩이에 들어가면 꺼진다.' },
+  floor:   { name: '바닥', tip: '아무것도 없다.' },
+  wall:    { name: '벽', tip: '지나갈 수 없다. 폭탄으로 부술 수 있다.' },
 };
 
 export const GASES = {

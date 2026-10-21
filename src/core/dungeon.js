@@ -44,9 +44,6 @@ export const opaque = (map, x, y) => {
   return t === WALL || (t === DOOR && !map.open[i]) || map.ter[i] === T.BRUSH;
 };
 export const isBorder = (x, y) => x <= 0 || y <= 0 || x >= W - 1 || y >= H - 1;
-// Nobody slips diagonally into or out of a doorway.
-export const diagBlocked = (map, fx, fy, tx, ty) =>
-  fx !== tx && fy !== ty && (map.tiles[idx(fx, fy)] === DOOR || map.tiles[idx(tx, ty)] === DOOR);
 
 // ---------- rooms and corridors ----------
 const GAP = 3; // between two rooms: wall, corridor, wall
@@ -220,7 +217,7 @@ export function distMap(map, sx, sy, opts = {}) {
     const [x, y] = q[h], d = dm[idx(x, y)];
     for (const [dx, dy] of DIRS8) {
       const nx = x + dx, ny = y + dy;
-      if (!passable(map, nx, ny) || diagBlocked(map, x, y, nx, ny)) continue;
+      if (!passable(map, nx, ny)) continue;
       if (opts.exploredOnly && !map.explored[idx(nx, ny)]) continue;
       if (dm[idx(nx, ny)] <= d + 1) continue;
       if (opts.block && opts.block(nx, ny)) continue;
@@ -243,10 +240,13 @@ export function pathTo(map, fx, fy, tx, ty, avoid, block) {
     const path = [];
     let x = fx, y = fy;
     while (!(x === tx && y === ty) && path.length < 200) {
-      let best = null, bd = dm[idx(x, y)];
+      // among equally short steps, take the one that keeps closest to a straight line
+      let best = null, bd = dm[idx(x, y)], be = Infinity;
       for (const [dx, dy] of DIRS8) {
         const nx = x + dx, ny = y + dy;
-        if (inMap(nx, ny) && dm[idx(nx, ny)] < bd && !diagBlocked(map, x, y, nx, ny)) { bd = dm[idx(nx, ny)]; best = [nx, ny]; }
+        if (!inMap(nx, ny)) continue;
+        const d = dm[idx(nx, ny)], e = (nx - tx) ** 2 + (ny - ty) ** 2;
+        if (d < bd || (best && d === bd && e < be)) { bd = d; be = e; best = [nx, ny]; }
       }
       if (!best) break;
       path.push(best);

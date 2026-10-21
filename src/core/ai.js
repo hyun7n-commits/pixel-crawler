@@ -5,7 +5,7 @@
 //   search - lost you, goes to where it last saw you and looks around
 //   flee   - badly hurt and running away (only enemies with `flees`)
 
-import { lineOfSight, distMap, idx, diagBlocked } from './dungeon.js';
+import { lineOfSight, distMap, idx } from './dungeon.js';
 import { SLEEP_MIN } from '../data/terrain.js';
 import { cheb, shuffle, josa, DIRS8 } from './util.js';
 import { onEnter } from './world.js';
@@ -209,7 +209,7 @@ function stepToward(run, e, dm) {
   return true;
 }
 
-const canStep = (run, e, x, y) => run.canEnemyEnter(x, y) && !diagBlocked(run.map, e.x, e.y, x, y);
+const canStep = (run, e, x, y) => run.canEnemyEnter(x, y);
 
 function moveEnemy(run, e, x, y) {
   e.face = x < e.x ? -1 : x > e.x ? 1 : e.face;

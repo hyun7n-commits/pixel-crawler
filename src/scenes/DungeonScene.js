@@ -67,33 +67,108 @@ export class DungeonScene extends Phaser.Scene {
     this.waterFrame = 0;
     this.lastEmber = 0;
 
+    // Touch works like Shattered Pixel Dungeon: tap a tile to act on it, hold to read about it,
+    // drag to look around, pinch (or the mouse wheel) to zoom. The mouse also shows tips on hover.
+    this.input.addPointer(1);
+    const cam = this.cameras.main;
     const tileOf = ptr => ({ x: Math.floor(ptr.worldX / TILE), y: Math.floor(ptr.worldY / TILE) });
+    const downs = () => this.input.manager.pointers.filter(q => q.isDown);
+    const spread = ([a, b]) => Math.hypot(a.x - b.x, a.y - b.y);
+    const g = { press: null, pinch: 0, hold: 0 };
+    const cancelPress = () => { clearTimeout(g.hold); g.press = null; };
     this.input.on('pointerdown', ptr => {
-      if (!this.run || !this.onTileClick) return;
-      const t = tileOf(ptr);
-      this.onTileClick(t.x, t.y);
+      if (!this.run) return;
+      const two = downs();
+      if (two.length >= 2) { cancelPress(); g.pinch = spread(two); g.pinchZoom = this.zoom; return; }
+      cancelPress();
+      g.press = { id: ptr.id, x: ptr.x, y: ptr.y, tile: tileOf(ptr), sx: cam.scrollX, sy: cam.scrollY, drag: false, held: false };
+      const press = g.press;
+      if (ptr.wasTouch) g.hold = setTimeout(() => {
+        if (g.press !== press || press.drag) return;
+        press.held = true;
+        this.onHold?.(press.tile.x, press.tile.y);
+      }, 380);
     });
     this.input.on('pointermove', ptr => {
       if (!this.run) return;
+      if (g.pinch) {
+        const two = downs();
+        if (two.length < 2) return;
+        // the map grows with the fingers: twice as far apart, twice as big
+        this.zoomBy(Math.round(g.pinchZoom * spread(two) / g.pinch) - this.zoom);
+        return;
+      }
+      const press = g.press;
+      if (press && ptr.isDown && press.id === ptr.id) {
+        if (!press.drag && Math.hypot(ptr.x - press.x, ptr.y - press.y) > 10 * this.dpr) {
+          press.drag = true;
+          clearTimeout(g.hold);
+          cam.stopFollow();
+        }
+        if (press.drag) this.lookAt(press.sx - (ptr.x - press.x) / cam.zoom, press.sy - (ptr.y - press.y) / cam.zoom);
+        return;
+      }
+      if (ptr.wasTouch) return;
       const t = tileOf(ptr);
       if (this.hover && this.hover.x === t.x && this.hover.y === t.y) return;
       this.hover = t;
       this.onHover?.(t.x, t.y);
     });
+    const release = ptr => {
+      if (g.pinch) { if (!downs().length) g.pinch = 0; return; }
+      const press = g.press;
+      if (!press || press.id !== ptr.id) return;
+      cancelPress();
+      if (!press.drag && !press.held && this.run) this.onTileClick?.(press.tile.x, press.tile.y);
+    };
+    this.input.on('pointerup', release);
+    this.input.on('pointerupoutside', ptr => { if (g.press?.id === ptr.id) cancelPress(); if (!downs().length) g.pinch = 0; });
+    this.input.on('wheel', (ptr, objs, dx, dy) => { if (this.run && dy) this.zoomBy(dy < 0 ? 1 : -1); });
     this.input.on('gameout', () => { this.hover = null; this.onHover?.(null, null); });
+    this.zoomBias = 0;
     this.scale.on('resize', () => this.fitZoom());
     this.fitZoom();
     this.onReady?.(this);
   }
 
+  // The canvas is drawn at the screen's real pixel density (main.js), so zoom is counted in
+  // device pixels per art pixel and always stays a whole number to keep the pixel art crisp.
+  get dpr() { return this.game.registry.get('dpr') || 1; }
+
   fitZoom() {
-    const { width, height } = this.scale.gameSize;
-    if (width < 16 || height < 16) return;
-    this.zoom = Math.max(2, Math.floor(Math.min(width / 15, height / 11) / TILE));
-    this.cameras.main.setZoom(this.zoom);
+    const r = this.dpr, w = this.scale.gameSize.width / r, h = this.scale.gameSize.height / r;
+    if (w < 16 || h < 16) return;
+    let tile = Math.min(w / 15, h / 11);                                   // whole rooms on a big screen
+    if (this.game.registry.get('touch')) tile = Math.max(tile, Math.min(w, h) / 10); // finger-sized on a phone
+    this.baseZoom = Math.max(1, Math.floor(Math.max(tile, 32) * r / TILE));
+    this.zoomBy(0);
   }
 
-  textRes() { return (this.zoom || 3) * (window.devicePixelRatio || 1); }
+  zoomBy(n) {
+    const r = this.dpr, lo = Math.max(1, Math.round(1.5 * r)), hi = Math.round(6 * r);
+    const z = Phaser.Math.Clamp(this.baseZoom + this.zoomBias + n, lo, hi);
+    this.zoomBias = z - this.baseZoom;
+    if (z === this.zoom) return;
+    this.zoom = z;
+    this.cameras.main.setZoom(z);
+  }
+
+  // Drag the view around without losing the map: the middle of the screen stays over the dungeon.
+  lookAt(sx, sy) {
+    const cam = this.cameras.main, map = this.run?.map;
+    if (!map) return;
+    const hw = cam.width / 2, hh = cam.height / 2;
+    cam.scrollX = Phaser.Math.Clamp(sx + hw, 0, map.w * TILE) - hw;
+    cam.scrollY = Phaser.Math.Clamp(sy + hh, 0, map.h * TILE) - hh;
+  }
+
+  // back to the hero, e.g. after looking around and then acting
+  follow() {
+    const cam = this.cameras.main;
+    if (this.playerSprite && !cam._follow) cam.startFollow(this.playerSprite, true, 0.25, 0.25, 0, TILE / 2);
+  }
+
+  textRes() { return this.zoom || 3; }
 
   // ---------- wiring ----------
   attach(run) {
@@ -277,7 +352,8 @@ export class DungeonScene extends Phaser.Scene {
     if (!this.run) return;
     switch (type) {
       case 'floor': this.buildFloor(); break;
-      case 'turn': case 'relics': this.sync(); break;
+      case 'turn': this.sync(); this.follow(); break;
+      case 'relics': this.sync(); break;
       case 'tiles': this.rebuildAround(d.list); break;
       case 'stairs': this.rebuildAround([idx(d.x, d.y)]); this.fx.spark.explode(16, center(d.x), center(d.y)); break;
       case 'attack': this.bump(this.spriteFor(d.who), d.from, d.to); break;

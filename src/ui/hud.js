@@ -1,4 +1,5 @@
 // Side panel during a run: floor, HP, XP, relics, consumables, message log.
+// On a phone the same panel is a bag sheet, with a slim status bar on top and a toolbar below.
 
 import { $, el, button, icon } from './dom.js';
 import { RELICS, MAX_SLOTS, evolutionOf, legendOf } from '../data/relics.js';
@@ -8,8 +9,10 @@ import { zoneOf, isBossFloor } from '../core/run.js';
 import { playerStatus } from './tip.js';
 
 export class Hud {
-  constructor({ onUseItem }) {
+  constructor({ onUseItem, onWait, onBag }) {
     this.onUseItem = onUseItem;
+    this.onWait = onWait;
+    this.onBag = onBag;
     this.selected = null;
     this.lines = [];
     this.bannerTimer = 0;
@@ -26,9 +29,16 @@ export class Hud {
     this.lines.push({ text, cls });
     if (this.lines.length > 40) this.lines.shift();
     this.renderLog();
+    // phone: the newest lines float over the map for a few seconds, like SPD's game log
+    const m = $('mlog');
+    const d = el('div', cls || '');
+    d.textContent = text;
+    m.append(d);
+    while (m.children.length > 3) m.firstElementChild.remove();
   }
 
   renderLog() {
+    if (!this.lines.length) $('mlog').innerHTML = '';
     const box = $('log');
     box.innerHTML = '';
     for (const m of this.lines.slice(-7)) {
@@ -72,6 +82,15 @@ export class Hud {
     $('pstatus').innerHTML = '';
     for (const t of st) $('pstatus').append(el('span', 'chip', t));
 
+    $('mFloor').innerHTML = `${run.floor}층<small>${isBossFloor(run.floor) ? '보스' : zoneOf(run.floor).name}</small>`;
+    $('mGold').textContent = `${run.gold}G`;
+    $('mHpText').textContent = `${Math.max(0, p.hp)} / ${s.maxHp}`;
+    $('mHp').firstElementChild.style.width = $('hpbar').firstElementChild.style.width;
+    $('mXp').firstElementChild.style.width = $('xpbar').firstElementChild.style.width;
+    $('mStatus').innerHTML = '';
+    for (const t of st) $('mStatus').append(el('span', 'chip', t));
+    this.renderBar(run);
+
     const ids = Object.keys(p.relics);
     $('slotText').textContent = `${ids.length}/${MAX_SLOTS}`;
     const box = $('relics');
@@ -110,5 +129,23 @@ export class Hud {
       b.disabled = !p.items[id];
       items.append(b);
     }
+  }
+
+  // phone toolbar: rest, the three consumables and the bag, big enough for a thumb
+  renderBar(run) {
+    const bar = $('mbar'), p = run.p;
+    bar.innerHTML = '';
+    const add = (cls, spr, label, onClick, disabled) => {
+      const b = button('mb' + (cls ? ` ${cls}` : ''), null, onClick);
+      b.append(icon(spr), el('span', null, label));
+      b.disabled = !!disabled;
+      bar.append(b);
+    };
+    add('', 'rest', '쉬기', this.onWait);
+    for (const [id, d] of Object.entries(ITEMS)) {
+      const aim = id === 'bomb' && this.aiming;
+      add(aim ? 'aiming' : '', d.sprite, aim ? '던질 곳' : `${d.name.replace('체력 ', '')} ${p.items[id]}`, () => this.onUseItem(id), !p.items[id]);
+    }
+    add('', 'bag', `가방 ${Object.keys(p.relics).length}/${MAX_SLOTS}`, this.onBag);
   }
 }

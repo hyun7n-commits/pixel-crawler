@@ -12,8 +12,16 @@
 <div id="app">
   <section id="hub" aria-label="마을"></section>
   <section id="game" hidden aria-label="던전">
-    <div id="stage"><div id="phaser"></div><div id="banner"></div><div id="tip" hidden></div></div>
+    <div id="mtop" aria-hidden="true">
+      <div class="mt-row"><span id="mFloor"></span><span id="mStatus"></span><b id="mGold"></b></div>
+      <div class="mt-hp"><div class="bar" id="mHp"><i></i></div><span id="mHpText"></span></div>
+      <div class="bar" id="mXp"><i></i></div>
+    </div>
+    <div id="stage"><div id="phaser"></div><div id="banner"></div><div id="tip" hidden></div><div id="mlog" aria-hidden="true"></div></div>
+    <div id="mbar" aria-label="행동"></div>
+    <div id="shade"></div>
     <aside id="side">
+      <div class="bag-head"><b>가방</b><button type="button" class="btn" id="bagClose">닫기</button></div>
       <div class="hud-top"><div class="floor" id="floorLabel"></div><div class="gold-now" id="goldNow"></div></div>
       <div class="meter"><div class="meter-label"><span>체력</span><b id="hpText"></b></div><div class="bar" id="hpbar"><i></i></div></div>
       <div class="meter"><div class="meter-label"><span id="lvText"></span><span id="atkText"></span></div><div class="bar" id="xpbar"><i></i></div></div>

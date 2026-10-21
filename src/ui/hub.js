@@ -8,6 +8,8 @@ import { freshMeta, saveMeta } from '../core/save.js';
 import { josa } from '../core/util.js';
 import { DISCOVERIES } from '../data/terrain.js';
 
+const TOUCH = window.matchMedia?.('(pointer: coarse)').matches;
+
 let tab = 'chars';
 
 export function renderHub(ctx) {
@@ -20,7 +22,7 @@ export function renderHub(ctx) {
   const inner = el('div', 'hub-inner');
 
   const head = el('div', 'hub-head');
-  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.7.1 · 9층 · 보스 3마리 · 효과음과 광석 손맛</small>'));
+  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.7.2 · 9층 · 보스 3마리 · 핸드폰 터치 조작</small>'));
   const purse = el('div', 'purse');
   purse.append(icon('gold', 24), el('span', null, `${meta.gold}G`));
   head.append(purse);
@@ -38,8 +40,11 @@ export function renderHub(ctx) {
 
   if (tab === 'chars') {
     inner.append(el('div', 'howto',
-      '<b>이동</b> 방향키·WASD 또는 가고 싶은 칸을 누르기 · <b>공격</b> 적에게 부딪히기 · <b>쉬기</b> 스페이스 · ' +
-      '<b>폭탄</b> 2를 누르고 던질 곳 고르기 · 마우스를 올리면 무엇이든 한 줄 설명이 나온다.<br>' +
+      (TOUCH
+        ? '<b>이동</b> 가고 싶은 칸을 톡 (대각선도 된다) · <b>공격</b> 적을 톡 · <b>쉬기</b> 나를 톡 · ' +
+          '<b>설명</b> 아무 칸이나 꾹 누르기 · <b>둘러보기</b> 끌어서 옮기고 두 손가락으로 확대 · 유물과 소모품은 <b>가방</b>에 있다.<br>'
+        : '<b>이동</b> 방향키·WASD (두 개를 같이 누르면 대각선) 또는 가고 싶은 칸을 클릭 · <b>공격</b> 적에게 부딪히거나 적을 클릭 · ' +
+          '<b>쉬기</b> 스페이스 · <b>폭탄</b> 2를 누르고 던질 곳 고르기 · 마우스를 올리면 무엇이든 한 줄 설명이 나온다. 휠로 확대, 끌어서 둘러보기.<br>') +
       '층마다 <b>큰 광석</b>이 하나 있다. 캘수록 골드가 나오지만 소리가 커져서 적이 몰려온다. ' +
       '<b>올라가는 계단</b>으로 지난 층에 돌아가 남은 것을 챙길 수 있다. 쫓아오는 적은 내 발자국을 그대로 밟는다. ' +
       '잠들면 코를 골아서 적이 몰려온다. <b>광석 거북</b>은 먼저 싸우지 않지만, 쓰러뜨리면 보물을 준다. ' +
