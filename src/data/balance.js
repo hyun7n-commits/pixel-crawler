@@ -19,4 +19,12 @@ export const GOLD_DROP_CHANCE = 0.4;
 export const VICTORY_BONUS = 200;
 
 export const POTION_HEAL = 0.6;
+
+// The big ore on each floor: how many swings it takes, how far each swing is heard,
+// how much mine gas the crack beside it puffs per swing, and what it pays.
+export const ORE_HITS = 5;
+export const ORE_NOISE = [3, 5, 7, 10, 14];
+export const ORE_GAS = 10;
+export const oreGold = floor => 3 + floor;
+export const oreJackpot = floor => 20 + 6 * floor;
 export const bombDamage = floor => 12 + 2 * floor;

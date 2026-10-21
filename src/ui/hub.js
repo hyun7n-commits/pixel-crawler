@@ -20,7 +20,7 @@ export function renderHub(ctx) {
   const inner = el('div', 'hub-inner');
 
   const head = el('div', 'hub-head');
-  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.3 · 9층 · 보스 3마리 · 살아 있는 광산</small>'));
+  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.4 · 9층 · 보스 3마리 · 문과 큰 광석</small>'));
   const purse = el('div', 'purse');
   purse.append(icon('gold', 24), el('span', null, `${meta.gold}G`));
   head.append(purse);
@@ -39,9 +39,9 @@ export function renderHub(ctx) {
   if (tab === 'chars') {
     inner.append(el('div', 'howto',
       '<b>이동</b> 방향키·WASD 또는 가고 싶은 칸을 누르기 · <b>공격</b> 적에게 부딪히기 · <b>쉬기</b> 스페이스 · ' +
-      '<b>폭탄</b> 2를 누르고 던질 곳 고르기 · 마우스를 올리면 무엇이든 한 줄 설명이 나와요.<br>' +
-      '적 코에 <b>콧방울</b>이 있으면 자는 중이에요. 작아지면 곧 깨요. 내 칸에 <b style="color:var(--danger)">빨간 발톱 자국</b>이 보이면 다음 턴에 맞아요. ' +
-      '버섯 덤불에 숨고, 불과 가스와 폭탄을 섞어 보세요. 새로운 조합을 찾으면 도감에 남아요.'));
+      '<b>폭탄</b> 2를 누르고 던질 곳 고르기 · 마우스를 올리면 무엇이든 한 줄 설명이 나온다.<br>' +
+      '층마다 <b>큰 광석</b>이 하나 있다. 캘수록 골드가 나오지만 소리가 커져서 적이 몰려온다. ' +
+      '적 코에 <b>콧방울</b>이 있으면 자는 중이다. 내 칸에 <b style="color:var(--danger)">빨간 발톱 자국</b>이 보이면 다음 턴에 맞는다.'));
     const grid = el('div', 'chars');
     for (const [id, c] of Object.entries(CHARACTERS)) {
       const owned = meta.chars[id];
@@ -117,7 +117,7 @@ export function renderHub(ctx) {
       const got = meta.found[d.id];
       const row = el('div', 'row' + (got ? '' : ' unknown')), main = el('div', 'row-main');
       main.append(el('span', 'row-name', got || d.basic ? d.combo : '???'),
-        el('span', 'row-sub', got ? d.result : d.basic ? '해 보면 알 수 있어요' : `소문: "${d.hint}"`));
+        el('span', 'row-sub', got ? d.result : d.basic ? '해 보면 알 수 있다' : `소문: "${d.hint}"`));
       row.append(main);
       book.append(row);
     }
@@ -126,7 +126,7 @@ export function renderHub(ctx) {
     const reset = button('btn', '기록 초기화', () => {
       if (Date.now() - armed < 3000) { const m = freshMeta(); saveMeta(m); setMeta(m); return; }
       armed = Date.now();
-      reset.textContent = '한 번 더 누르면 모든 진행이 지워져요';
+      reset.textContent = '한 번 더 누르면 모든 진행이 지워진다';
     });
     reset.style.alignSelf = 'flex-start';
     inner.append(reset);

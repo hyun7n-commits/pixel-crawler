@@ -4,7 +4,7 @@
 import { DungeonScene } from './scenes/DungeonScene.js';
 import { Run } from './core/run.js';
 import { loadMeta, saveMeta } from './core/save.js';
-import { pathTo, idx, WALL } from './core/dungeon.js';
+import { pathTo, idx, ORE } from './core/dungeon.js';
 import { cheb } from './core/util.js';
 import { T } from './data/terrain.js';
 import { Hud } from './ui/hud.js';
@@ -43,8 +43,8 @@ function showTip(h) {
   const tip = $('tip');
   let text = '';
   if (run && aiming) {
-    text = '폭탄을 던질 곳을 누르세요 · 취소: Esc 또는 폭탄 버튼';
-    if (h && run.canThrowAt(h.x, h.y) && cheb(h, run.p) <= 1) text += '\n바로 옆이라 나도 맞아요!';
+    text = '폭탄을 던질 곳을 고른다 · 취소: Esc 또는 폭탄 버튼';
+    if (h && run.canThrowAt(h.x, h.y) && cheb(h, run.p) <= 1) text += '\n바로 옆이라 나도 맞는다!';
   } else if (run && h) text = describeTile(run, h.x, h.y);
   tip.textContent = text;
   tip.hidden = !text;
@@ -92,7 +92,7 @@ function onRunEvent(type, d) {
 function afterTurn() {
   // stop walking when a new enemy comes into view or something holds you
   const seen = run.enemies.filter(e => run.isVisible(e.x, e.y)).length;
-  if (path.length && (seen > seenCount || run.p.stuck || run.p.sleep)) clearPath();
+  if (path.length && (seen > seenCount || run.p.sleep)) clearPath();
   seenCount = seen;
   if (aiming && !canAct()) setAim(false);
   hud.update(run);
@@ -106,7 +106,7 @@ function nextChoice() {
   setAim(false);
   const q = run.queue[0];
   const title = q.kind === 'level' ? `레벨 ${run.p.lvl}!` : '보물 상자';
-  const sub = q.kind === 'level' ? '최대 체력 +3. 유물을 하나 고르세요.' : '안에 든 유물 중 하나를 가져가세요.';
+  const sub = q.kind === 'level' ? '최대 체력 +3. 유물을 하나 고르자.' : '안에 든 유물 중 하나를 가져가자.';
   const open = () => showChoice({
     title, sub, run, opts: run.offers(),
     onPick: o => { run.choose(o); hud.update(run); nextChoice(); },
@@ -140,7 +140,7 @@ document.addEventListener('keydown', ev => {
 });
 
 // Click-walking steps around things you would rather not step on by accident.
-const AVOID = new Set([T.PIT, T.MUSH_SLEEP, T.MUSH_POISON, T.STICKY]);
+const AVOID = new Set([T.MUSH_SLEEP]);
 
 function onTileClick(x, y) {
   if (!canAct()) return;
@@ -151,18 +151,26 @@ function onTileClick(x, y) {
     return;
   }
   const e = run.enemyAt(x, y);
-  if (e && run.isVisible(x, y) && cheb(e, p) === 1) { clearPath(); run.step(x - p.x, y - p.y); return; }
+  if (e && run.isVisible(x, y) && run.touching(e, p)) { clearPath(); run.step(x - p.x, y - p.y); return; }
   if (x === p.x && y === p.y) { clearPath(); run.wait(); return; }
-  // bumping things next to you: carts, ore, rubble
-  if (cheb({ x, y }, p) === 1 && (run.cartAt(x, y) || (run.map.tiles[idx(x, y)] === WALL && run.map.ore[idx(x, y)]))) {
-    clearPath(); run.step(x - p.x, y - p.y); return;
-  }
-  if (!run.passable(x, y) || !run.map.explored[idx(x, y)]) return;
   const m = run.map;
-  path = pathTo(m, p.x, p.y, x, y,
-    (tx, ty) => AVOID.has(m.ter[idx(tx, ty)]) || m.fire[idx(tx, ty)] > 0,
-    (tx, ty) => !!run.cartAt(tx, ty));
+  // the big ore: swing at it when next to it, otherwise walk up to it
+  if (m.tiles[idx(x, y)] === ORE && m.explored[idx(x, y)]) {
+    clearPath();
+    if (cheb({ x, y }, p) === 1) { run.step(x - p.x, y - p.y); return; }
+    const near = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => walkTo(x + dx, y + dy)).filter(q => q.length);
+    if (near.length) { path = near.sort((a, b) => a.length - b.length)[0]; scene.path = path; }
+    return;
+  }
+  if (!run.passable(x, y) || !m.explored[idx(x, y)]) return;
+  path = walkTo(x, y);
   scene.path = path;
+}
+
+function walkTo(x, y) {
+  const m = run.map, p = run.p;
+  if (!run.passable(x, y) || !m.explored[idx(x, y)]) return [];
+  return pathTo(m, p.x, p.y, x, y, (tx, ty) => AVOID.has(m.ter[idx(tx, ty)]) || m.fire[idx(tx, ty)] > 0);
 }
 
 // auto-walk one step at a time so enemies get their turns in between
@@ -182,7 +190,7 @@ let quitArmed = 0;
 $('quitBtn').addEventListener('click', () => {
   if (!run || run.over || modalOpen()) return;
   const b = $('quitBtn');
-  if (Date.now() - quitArmed < 3000) { b.textContent = '포기하기'; run.cause = '스스로 돌아왔어요'; run.finish(false); return; }
+  if (Date.now() - quitArmed < 3000) { b.textContent = '포기하기'; run.cause = '스스로 돌아왔다'; run.finish(false); return; }
   quitArmed = Date.now();
   b.textContent = '한 번 더 누르면 포기';
   setTimeout(() => { b.textContent = '포기하기'; }, 3000);

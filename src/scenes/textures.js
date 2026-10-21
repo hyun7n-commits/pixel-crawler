@@ -88,15 +88,6 @@ function waterTile(z, frame) {
   return c;
 }
 
-function pitTile() {
-  const [c, g] = canvas();
-  g.fillStyle = '#05040a'; g.fillRect(1, 2, 14, 13);
-  g.fillStyle = '#120f1a'; g.fillRect(2, 2, 12, 3);
-  g.fillStyle = '#2a2433'; g.fillRect(1, 1, 14, 1); g.fillRect(0, 2, 1, 12); g.fillRect(15, 2, 1, 12);
-  g.fillStyle = '#4b5064'; g.fillRect(2, 0, 12, 1);
-  return c;
-}
-
 export function buildTextures(scene) {
   const tx = scene.textures;
   for (const [name, rows] of Object.entries(SPR)) if (!tx.exists(name)) tx.addCanvas(name, spriteCanvas(rows));
@@ -108,7 +99,6 @@ export function buildTextures(scene) {
     tx.addCanvas(`z${zi}_water0`, waterTile(z, 0));
     tx.addCanvas(`z${zi}_water1`, waterTile(z, 1));
   });
-  tx.addCanvas('pit', pitTile());
   const px = document.createElement('canvas');
   px.width = 1; px.height = 1;
   const g = px.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 1, 1);

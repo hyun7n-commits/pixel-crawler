@@ -5,18 +5,18 @@
 
 export const ENEMIES = {
   rat:      { name: '쥐',     sprite: 'rat',    hp: 4,  atk: 1, xp: 1, flees: true },
-  slime:    { name: '슬라임', sprite: 'slime',  hp: 9,  atk: 2, xp: 2, slow: true, tip: '느려서 두 턴에 한 번 움직여요.' },
+  slime:    { name: '슬라임', sprite: 'slime',  hp: 9,  atk: 2, xp: 2, slow: true, tip: '느려서 두 턴에 한 번 움직인다.' },
   goblin:   { name: '고블린', sprite: 'goblin', hp: 7,  atk: 2, xp: 3, flees: true },
-  bat:      { name: '박쥐',   sprite: 'bat',    hp: 6,  atk: 2, xp: 3, fast: true, flees: true, tip: '한 턴에 두 칸 움직여요.' },
+  bat:      { name: '박쥐',   sprite: 'bat',    hp: 6,  atk: 2, xp: 3, fast: true, flees: true, tip: '한 턴에 두 칸 움직인다.' },
   skel:     { name: '해골',   sprite: 'skel',   hp: 13, atk: 3, xp: 5 },
-  spider:   { name: '거미',   sprite: 'spider', hp: 7,  atk: 3, xp: 4, ranged: 5, tip: '조준선을 그은 다음 턴에 쏴요. 그 칸에서 벗어나면 피할 수 있어요.' },
+  spider:   { name: '거미',   sprite: 'spider', hp: 7,  atk: 3, xp: 4, ranged: 5, tip: '조준선을 그은 다음 턴에 쏜다. 그 칸에서 벗어나면 피할 수 있다.' },
   knight:   { name: '흑기사', sprite: 'knight', hp: 20, atk: 5, def: 1, xp: 8 },
-  wizard:   { name: '마법사', sprite: 'wizard', hp: 10, atk: 5, xp: 7, ranged: 6, tip: '조준선을 그은 다음 턴에 쏴요.' },
+  wizard:   { name: '마법사', sprite: 'wizard', hp: 10, atk: 5, xp: 7, ranged: 6, tip: '조준선을 그은 다음 턴에 쏜다.' },
   garg:     { name: '가고일', sprite: 'garg',   hp: 15, atk: 4, xp: 8, fast: true },
 
-  ratking:  { name: '왕쥐',          sprite: 'rat',  hp: 45,  atk: 3, xp: 20, boss: true, tip: '가끔 쥐를 불러내요.' },
-  skelking: { name: '해골 왕',       sprite: 'skel', hp: 80,  atk: 5, xp: 30, boss: true, tip: '붉게 표시된 칸을 내려쳐요. 칸 밖으로 피하세요.' },
-  lord:     { name: '뱀파이어 군주', sprite: 'vamp', hp: 120, atk: 6, xp: 40, boss: true, ranged: 7, tip: '순간이동한 뒤 조준해요. 때리면 체력을 빨아들여요.' },
+  ratking:  { name: '왕쥐',          sprite: 'rat',  hp: 45,  atk: 3, xp: 20, boss: true, tip: '가끔 쥐를 불러낸다.' },
+  skelking: { name: '해골 왕',       sprite: 'skel', hp: 80,  atk: 5, xp: 30, boss: true, tip: '붉게 표시된 칸을 내려친다. 칸 밖으로 피해야 한다.' },
+  lord:     { name: '뱀파이어 군주', sprite: 'vamp', hp: 120, atk: 6, xp: 40, boss: true, ranged: 7, tip: '순간이동한 뒤 조준한다. 때리면 체력을 빨아들인다.' },
 };
 
 // Three floors per zone; the third floor of each zone is the boss.

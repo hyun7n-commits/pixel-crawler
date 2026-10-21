@@ -1,9 +1,13 @@
-// Fills a freshly carved floor with features: brush, water, gas vents, rails, crystals, ore...
-// Every feature can show up on any floor for now, so all of them can be tried early.
+// Gives each room of a freshly carved floor one theme, so every feature is there for a reason:
+//   ore    - the floor's big ore, with a gas crack beside it (mining makes noise and leaks gas)
+//   garden - mushroom brush and sleep mushrooms; enemies here are fast asleep
+//   flood  - groundwater with a little brush around the edges
+//   plain  - nothing much, maybe a patch of brush
+// Corridors stay bare.
 
 import { T } from '../data/terrain.js';
-import { idx, inMap, FLOOR, WALL, CRYSTAL, ORE, isBorder } from './dungeon.js';
-import { rint, pick, shuffle } from './util.js';
+import { idx, inMap, FLOOR, ORE } from './dungeon.js';
+import { rint, pick } from './util.js';
 
 const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const free = (map, x, y) => inMap(x, y) && map.tiles[idx(x, y)] === FLOOR && map.ter[idx(x, y)] === T.NONE;
@@ -30,98 +34,64 @@ function blob(map, r, n, ter, keep) {
   return set.length;
 }
 
-// A tile whose 8 neighbours are all open floor, so blocking it never cuts a path.
-function openSpot(map, r, keep) {
-  const spots = roomTiles(r, 1).filter(([x, y]) => {
-    if (!free(map, x, y) || keep(x, y)) return false;
-    for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
-      const t = map.tiles[idx(x + i, y + j)];
-      if (t !== FLOOR || map.ter[idx(x + i, y + j)] === T.PIT) return false;
-    }
-    return true;
-  });
-  return spots.length ? pick(spots) : null;
+function sprinkle(map, r, n, ter, keep) {
+  for (let k = 0; k < n; k++) {
+    const c = pick(roomTiles(r).filter(([x, y]) => free(map, x, y) && !keep(x, y)));
+    if (c) map.ter[idx(...c)] = ter;
+  }
 }
 
-export function decorate(map, rooms, { start, stairs, zone, bossFloor }) {
-  const has = new Set(), carts = [];
+// Puts the big ore in the middle of a room, away from the walls so it never blocks a doorway.
+function placeOre(map, r, keep) {
+  const spots = roomTiles(r, 1).filter(([x, y]) => free(map, x, y) && !keep(x, y));
+  if (!spots.length) return false;
+  spots.sort((a, b) => (Math.abs(a[0] - r.cx) + Math.abs(a[1] - r.cy)) - (Math.abs(b[0] - r.cx) + Math.abs(b[1] - r.cy)));
+  const [x, y] = spots[0];
+  map.tiles[idx(x, y)] = ORE;
+  map.ore = { x, y, hits: 0 };
+  const crack = DIRS4.map(([dx, dy]) => [x + dx, y + dy]).find(([cx, cy]) => free(map, cx, cy) && !keep(cx, cy));
+  if (crack) {
+    map.ter[idx(...crack)] = T.VENT;
+    map.vents.push({ x: crack[0], y: crack[1] });
+  }
+  return true;
+}
+
+// Returns { has, themes }: what this floor contains (for overheard hints) and each room's theme.
+export function decorate(map, rooms, { start, stairs }) {
+  const has = new Set(), themes = [];
   const keep = (x, y) => (Math.abs(x - start.x) <= 1 && Math.abs(y - start.y) <= 1) || (x === stairs.x && y === stairs.y);
-  let vent = false, rail = false, pit = false;
+
+  // the ore goes in the biggest room that is neither the start nor the stairs room
+  const oreRoom = rooms.slice(1)
+    .filter(r => !inRoom(r, stairs.x, stairs.y))
+    .sort((a, b) => b.w * b.h - a.w * a.h)[0];
 
   rooms.forEach((r, i) => {
-    if (i === 0) { // the start room stays calm: at most a little brush
-      if (Math.random() < 0.5) blob(map, r, rint(3, 6), T.BRUSH, keep);
-      return;
-    }
-    const area = r.w * r.h;
-    if (!rail && Math.random() < 0.3 && (r.w >= 7 || r.h >= 6)) {
-      const horiz = r.w >= 7 && (r.h < 6 || Math.random() < 0.5);
-      const line = [];
-      if (horiz) { const y = rint(r.y + 1, r.y + r.h - 2); for (let x = r.x; x < r.x + r.w; x++) line.push([x, y]); }
-      else { const x = rint(r.x + 1, r.x + r.w - 2); for (let y = r.y; y < r.y + r.h; y++) line.push([x, y]); }
-      if (line.every(([x, y]) => free(map, x, y) && !keep(x, y))) {
-        for (const [x, y] of line) map.ter[idx(x, y)] = horiz ? T.RAIL_H : T.RAIL_V;
-        const [cx, cy] = Math.random() < 0.5 ? line[0] : line[line.length - 1];
-        carts.push({ x: cx, y: cy, axis: horiz ? 'h' : 'v', bomb: 0 });
-        rail = true; has.add('cart');
+    let theme = 'plain';
+    if (i === 0) {
+      if (Math.random() < 0.5) blob(map, r, rint(2, 4), T.BRUSH, keep);
+    } else if (r === oreRoom && placeOre(map, r, keep)) {
+      theme = 'ore';
+      if (Math.random() < 0.6) blob(map, r, rint(2, 4), T.BRUSH, keep);
+    } else {
+      const roll = Math.random();
+      if (roll < 0.35) {
+        theme = 'garden';
+        blob(map, r, Math.round(r.w * r.h * 0.45), T.BRUSH, keep);
+        sprinkle(map, r, rint(2, 3), T.MUSH_SLEEP, keep);
+      } else if (roll < 0.6) {
+        theme = 'flood';
+        blob(map, r, Math.round(r.w * r.h * 0.4), T.WATER, keep);
+        blob(map, r, rint(2, 4), T.BRUSH, keep);
+      } else if (Math.random() < 0.5) {
+        blob(map, r, rint(3, 6), T.BRUSH, keep);
       }
     }
-    if (Math.random() < (zone === 1 ? 0.45 : 0.15)) {
-      for (let n = rint(1, 2); n > 0; n--) {
-        const s = openSpot(map, r, keep);
-        if (s) { map.tiles[idx(...s)] = CRYSTAL; map.crystals.push({ x: s[0], y: s[1] }); has.add('crystal'); }
-      }
-    }
-    if (!pit && !bossFloor && Math.random() < 0.15) {
-      const s = openSpot(map, r, keep);
-      if (s) { map.ter[idx(...s)] = T.PIT; pit = true; has.add('pit'); }
-    }
-    if (!vent && Math.random() < 0.3) {
-      const s = openSpot(map, r, keep);
-      if (s) {
-        map.ter[idx(...s)] = T.VENT;
-        map.vents.push({ x: s[0], y: s[1] });
-        vent = true; has.add('vent');
-        for (let n = rint(1, 2); n > 0; n--) {
-          const c = pick(roomTiles(r).filter(([x, y]) => free(map, x, y) && !keep(x, y)));
-          if (c) { map.ter[idx(...c)] = T.CRACKED; has.add('cracked'); }
-        }
-      }
-    }
-    if (Math.random() < 0.25) {
-      for (let n = rint(1, 3); n > 0; n--) {
-        const c = pick(roomTiles(r).filter(([x, y]) => free(map, x, y) && !keep(x, y)));
-        if (c) map.ter[idx(...c)] = Math.random() < 0.5 ? T.MUSH_SLEEP : T.MUSH_POISON;
-      }
-    }
-    if (Math.random() < 0.3) blob(map, r, rint(3, 7), T.WATER, keep);
-    if (Math.random() < 0.15) blob(map, r, rint(2, 4), T.STICKY, keep);
-    if (Math.random() < 0.4) blob(map, r, Math.round(area * (0.25 + Math.random() * 0.3)), T.BRUSH, keep);
+    themes[i] = theme;
+    if (theme !== 'plain') has.add(theme);
   });
-
-  // wooden props along corridors
-  for (let i = 0; i < map.tiles.length; i++) {
-    if (map.room[i] === -1 && map.tiles[i] === FLOOR && map.ter[i] === T.NONE && Math.random() < 0.2) {
-      map.ter[i] = T.TIMBER; has.add('timber');
-    }
-  }
-  // a few loose ceilings anywhere but the start room
-  const floorTiles = [];
-  for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) {
-    if (free(map, x, y) && !keep(x, y) && map.room[idx(x, y)] !== 0) floorTiles.push([x, y]);
-  }
-  for (const [x, y] of shuffle(floorTiles).slice(0, rint(2, 4))) { map.ter[idx(x, y)] = T.CRACKED; has.add('cracked'); }
-
-  // shiny ore in walls next to the floor
-  const walls = [];
-  for (let y = 1; y < map.h - 1; y++) for (let x = 1; x < map.w - 1; x++) {
-    if (map.tiles[idx(x, y)] !== WALL || isBorder(x, y)) continue;
-    if (DIRS4.some(([dx, dy]) => map.tiles[idx(x + dx, y + dy)] === FLOOR)) walls.push([x, y]);
-  }
-  for (const [x, y] of shuffle(walls).slice(0, rint(6, 10))) {
-    map.ore[idx(x, y)] = ORE; map.dig[idx(x, y)] = 2; has.add('ore');
-  }
-  return { carts, has };
+  return { has, themes };
 }
 
 export function decorateArena(map, room, keep) {

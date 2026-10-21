@@ -5,9 +5,9 @@
 //   search - lost you, goes to where it last saw you and looks around
 //   flee   - badly hurt and running away (only enemies with `flees`)
 
-import { lineOfSight, distMap, idx } from './dungeon.js';
+import { lineOfSight, distMap, idx, diagBlocked } from './dungeon.js';
 import { SLEEP_MIN } from '../data/terrain.js';
-import { cheb, pick, shuffle, DIRS8 } from './util.js';
+import { cheb, shuffle, DIRS8 } from './util.js';
 import { onEnter } from './world.js';
 
 export const WAKE_AT = 10;
@@ -23,7 +23,6 @@ export function enemyAct(run, e, dmP) {
   const d = e.d, p = run.p;
   if (e.stun > 0) { e.stun--; return; }
   if (e.state === 'sleep') { sleepTick(run, e); return; }
-  if (e.stuck > 0) { e.stuck--; return; }
   if (d.slow) { e.skip = !e.skip; if (e.skip) return; }
   e.timer++;
   if (e.burn > 0 && !d.boss && Math.random() < 0.5) { randomStep(run, e); return; }
@@ -33,14 +32,13 @@ export function enemyAct(run, e, dmP) {
     e.last = { x: p.x, y: p.y };
     if (e.state === 'wander' || e.state === 'search') {
       e.state = 'hunt';
-      run.say(e, pick(['누구야!', '찾았다!', '거기 있었네!']));
+      run.say(e, '!');
       run.emit('alert', { enemy: e });
       return; // noticing takes its turn
     }
   }
   if (e.state === 'hunt' && d.flees && e.hp <= e.maxHp * 0.3) {
     e.state = 'flee';
-    run.say(e, '히익!');
   }
   if (e.state === 'flee') { flee(run, e, dmP, sees); return; }
   if (e.state === 'hunt') {
@@ -61,7 +59,7 @@ function sleepTick(run, e) {
     e.state = 'hunt';
     e.wake = 0;
     e.last = { x: run.p.x, y: run.p.y };
-    run.say(e, '누구야!');
+    run.say(e, '!');
     run.emit('alert', { enemy: e });
   }
 }
@@ -71,8 +69,8 @@ export function rouse(run, e, by, x, y) {
   if (e.state === 'sleep') {
     if (by !== 'hit' && run.map.gas.sleep[idx(e.x, e.y)] >= SLEEP_MIN) return false;
     e.wake = 0; e.doze = 0;
-    if (by === 'hit') { e.state = 'hunt'; e.last = { x: run.p.x, y: run.p.y }; run.say(e, '아야!'); }
-    else { e.state = 'search'; e.searchT = 0; e.last = { x, y }; run.say(e, '뭐야?'); }
+    if (by === 'hit') { e.state = 'hunt'; e.last = { x: run.p.x, y: run.p.y }; run.say(e, '!'); }
+    else { e.state = 'search'; e.searchT = 0; e.last = { x, y }; run.say(e, '?'); }
     run.emit('alert', { enemy: e });
     return true;
   }
@@ -93,7 +91,7 @@ function hunt(run, e, dm) {
       const hit = stillThere && dist <= d.ranged && lineOfSight(run.map, e.x, e.y, p.x, p.y);
       run.emit('shot', { from: { x: e.x, y: e.y }, to: e.aimAt || { x: p.x, y: p.y }, hit });
       if (hit) run.damagePlayer(e.atk, e, 'ranged');
-      else run.log(`${d.name}의 공격을 피했어요.`, 'good');
+      else run.log(`${d.name}의 공격을 피했다.`, 'good');
       return;
     }
     if (dist > 1 && dist <= d.ranged && lineOfSight(run.map, e.x, e.y, p.x, p.y) && Math.random() < 0.7) {
@@ -102,7 +100,7 @@ function hunt(run, e, dm) {
       return;
     }
   }
-  if (dist === 1) {
+  if (run.touching(e, p)) {
     run.emit('attack', { from: { x: e.x, y: e.y }, to: { x: p.x, y: p.y }, who: e });
     run.damagePlayer(e.atk, e, 'melee');
     return;
@@ -118,10 +116,11 @@ function flee(run, e, dm, sees) {
   let best = null, bd = dm[idx(e.x, e.y)];
   for (const [dx, dy] of shuffle(DIRS8.slice())) {
     const nx = e.x + dx, ny = e.y + dy;
-    if (run.canEnemyEnter(nx, ny) && dm[idx(nx, ny)] > bd && dm[idx(nx, ny)] < 9999) { bd = dm[idx(nx, ny)]; best = [nx, ny]; }
+    if (!canStep(run, e, nx, ny)) continue;
+    if (dm[idx(nx, ny)] > bd && dm[idx(nx, ny)] < 9999) { bd = dm[idx(nx, ny)]; best = [nx, ny]; }
   }
   if (best) { moveEnemy(run, e, ...best); }
-  else if (cheb(e, run.p) === 1) {
+  else if (run.touching(e, run.p)) {
     run.emit('attack', { from: { x: e.x, y: e.y }, to: { x: run.p.x, y: run.p.y }, who: e });
     run.damagePlayer(e.atk, e, 'melee');
   }
@@ -133,24 +132,24 @@ function search(run, e) {
   if (!last) { e.state = 'wander'; return; }
   if (e.x === last.x && e.y === last.y) {
     e.searchT++;
-    if (e.searchT === 1) run.say(e, '어디 갔지…');
+    if (e.searchT === 1) run.say(e, '?');
     if (e.searchT > 3) { e.state = 'wander'; e.target = null; }
     return;
   }
-  const dm = distMap(run.map, last.x, last.y, { block: run.enemyBlock });
+  const dm = distMap(run.map, last.x, last.y);
   if (!stepToward(run, e, dm) && ++e.searchT > 3) { e.state = 'wander'; e.target = null; }
 }
 
 function wander(run, e) {
   if (!e.target || (e.x === e.target.x && e.y === e.target.y) || Math.random() < 0.03) e.target = run.randomFloorTile();
-  const dm = distMap(run.map, e.target.x, e.target.y, { block: run.enemyBlock });
+  const dm = distMap(run.map, e.target.x, e.target.y);
   if (!stepToward(run, e, dm)) e.target = null;
   if (Math.random() < 0.02) { e.state = 'sleep'; e.wake = 0; }
 }
 
 function randomStep(run, e) {
   for (const [dx, dy] of shuffle(DIRS8.slice())) {
-    if (run.canEnemyEnter(e.x + dx, e.y + dy)) { moveEnemy(run, e, e.x + dx, e.y + dy); return; }
+    if (canStep(run, e, e.x + dx, e.y + dy)) { moveEnemy(run, e, e.x + dx, e.y + dy); return; }
   }
 }
 
@@ -158,13 +157,15 @@ function stepToward(run, e, dm) {
   let best = null, bd = dm[idx(e.x, e.y)];
   for (const [dx, dy] of shuffle(DIRS8.slice())) {
     const nx = e.x + dx, ny = e.y + dy;
-    if (!run.canEnemyEnter(nx, ny)) continue;
+    if (!canStep(run, e, nx, ny)) continue;
     if (dm[idx(nx, ny)] < bd) { bd = dm[idx(nx, ny)]; best = [nx, ny]; }
   }
   if (!best) return false;
   moveEnemy(run, e, ...best);
   return true;
 }
+
+const canStep = (run, e, x, y) => run.canEnemyEnter(x, y) && !diagBlocked(run.map, e.x, e.y, x, y);
 
 function moveEnemy(run, e, x, y) {
   e.face = x < e.x ? -1 : x > e.x ? 1 : e.face;

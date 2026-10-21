@@ -18,11 +18,12 @@ export const RELICS = {
 
   flamesword: { name: '불꽃의 검', evo: true, desc: () => '공격력 +8, 공격할 때마다 불꽃 피해 +5' },
   fortress:   { name: '가시 요새', evo: true, desc: () => '받는 피해 -5, 맞으면 때린 적에게 8 피해' },
-  bloodcrown: { name: '피의 왕관', evo: true, desc: () => '최대 체력 +10, 적을 쓰러뜨리면 체력 +10' },
-  goldbolt:   { name: '황금 번개', evo: true, desc: () => '3턴마다 적 3마리에게 번개 10, 쓰러뜨리면 골드 +3' },
+  bloodcrown: { name: '피의 왕관', evo: true, desc: () => '최대 체력 +30, 적을 쓰러뜨리면 체력 +10' },
+  goldbolt:   { name: '황금 번개', evo: true, desc: () => '3턴마다 적 3마리에게 번개 10, 얻는 골드 +150%' },
 };
 
-// When `a` and `b` are both at MAX_LEVEL, `a` turns into `id`. `b` stays.
+// When `a` and `b` are both at MAX_LEVEL, both are used up and become `id`, freeing a slot.
+// An evolved relic must beat its two ingredients together, since both are gone.
 export const EVOLUTIONS = [
   { id: 'flamesword', a: 'blade',  b: 'ring' },
   { id: 'fortress',   a: 'shield', b: 'thorns' },

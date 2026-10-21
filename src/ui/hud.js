@@ -91,7 +91,7 @@ export class Hud {
       info.innerHTML = `<b>${r.name}${r.evo ? ' (진화)' : ` Lv${p.relics[id]}`}</b> · ${r.desc(p.relics[id])}` +
         (ev ? `<br><span class="evo-line">${ev}</span>` : '');
     } else {
-      info.textContent = '유물을 누르면 효과와 진화 조합이 보여요.';
+      info.textContent = '유물을 누르면 효과와 진화 조합이 보인다.';
     }
 
     const items = $('items');

@@ -8,12 +8,13 @@ import { CHARACTERS } from '../data/characters.js';
 import { ITEMS } from '../data/items.js';
 import { SIGHT } from '../data/balance.js';
 import { T, TERRAIN, GASES, GAS_KEYS } from '../data/terrain.js';
-import { idx, inMap, WALL, STAIRS, CRYSTAL, ORE, RUBBLE } from '../core/dungeon.js';
+import { idx, inMap, WALL, STAIRS, DOOR, ORE } from '../core/dungeon.js';
 import { WAKE_AT } from '../core/ai.js';
 import { BOMB_RANGE } from '../core/run.js';
+import { ORE_HITS } from '../data/balance.js';
 import { cheb } from '../core/util.js';
 
-const D = { tiles: 0, ter: 1, fire: 2, gas: 3, telegraph: 4, pickups: 5, carts: 5.5, enemies: 6, player: 7, overlay: 8, fx: 9, bubble: 10, text: 11 };
+const D = { tiles: 0, ter: 1, fire: 2, gas: 3, telegraph: 4, pickups: 5, enemies: 6, player: 7, overlay: 8, fx: 9, bubble: 10, text: 11 };
 const center = v => v * TILE + TILE / 2;
 const foot = v => v * TILE + TILE;
 const hash = (x, y) => {
@@ -53,11 +54,10 @@ export class DungeonScene extends Phaser.Scene {
       heal: burst([0x8fd36a, 0xc9f2a8], { gravityY: -60, speed: { min: 6, max: 25 } }),
       magic: burst([0x9a5fd1, 0x6fe0e0], { gravityY: -25 }),
       dust: burst([0x7d8398, 0xb8bccb], { gravityY: 30, speed: { min: 10, max: 40 } }),
-      rock: burst([0x4b5064, 0x7d8398], { gravityY: 220, speed: { min: 20, max: 70 }, scale: { start: 2, end: 1 } }),
+      rock: burst([0x4b5064, 0x7d8398, 0xf4cf4f], { gravityY: 220, speed: { min: 20, max: 70 }, scale: { start: 2, end: 1 } }),
       gold: burst([0xf4cf4f, 0xf08c3a], { gravityY: 50 }),
       steam: burst([0xffffff, 0xc9c2b6], { gravityY: -50, speed: { min: 5, max: 20 }, alpha: { start: 0.8, end: 0 } }),
       sleep: burst([0xb58cf0, 0xd8c2ff], { gravityY: -10, speed: { min: 8, max: 30 }, alpha: { start: 0.8, end: 0 }, scale: { start: 2.5, end: 0 } }),
-      poison: burst([0x8fd35a, 0xb5e08a], { gravityY: -10, speed: { min: 8, max: 30 }, alpha: { start: 0.8, end: 0 }, scale: { start: 2.5, end: 0 } }),
     };
     this.gasGfx = this.add.graphics().setDepth(D.gas);
     this.fireGfx = this.add.graphics().setDepth(D.fire);
@@ -113,18 +113,15 @@ export class DungeonScene extends Phaser.Scene {
     (this.tileImgs || []).forEach(list => list && list.forEach(i => i.destroy()));
     Object.values(this.enemySprites || {}).forEach(s => { s.crown?.destroy(); s.destroy(); });
     Object.values(this.pickupSprites || {}).forEach(s => s.destroy());
-    Object.values(this.cartSprites || {}).forEach(s => s.destroy());
     this.bubbles.forEach(b => b.destroy());
     this.playerSprite?.destroy();
-    this.canary?.destroy();
     this.tileImgs = [];
     this.waterImgs = new Set();
     this.enemySprites = {};
     this.pickupSprites = {};
-    this.cartSprites = {};
+    this.doorImgs = {};
     this.bubbles = [];
     this.playerSprite = null;
-    this.canary = null;
   }
 
   get zi() { return Math.floor((this.run.floor - 1) / 3); }
@@ -134,7 +131,6 @@ export class DungeonScene extends Phaser.Scene {
     const run = this.run, map = run.map;
     for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) this.buildTile(x, y);
     this.playerSprite = this.makeActor(CHARACTERS[run.charId].sprite, run.p.x, run.p.y).setDepth(D.player);
-    this.canary = this.add.image(0, 0, 'canary').setOrigin(0.5, 1).setDepth(D.player + 0.1);
     this.cameras.main.startFollow(this.playerSprite, true, 0.25, 0.25, 0, TILE / 2);
     this.cameras.main.centerOn(center(run.p.x), foot(run.p.y) - TILE / 2);
     this.sync(true);
@@ -162,28 +158,23 @@ export class DungeonScene extends Phaser.Scene {
       imgs.push(img);
       return img;
     };
+    delete this.doorImgs[i];
     if (t === WALL) {
-      if (map.ore[i] === RUBBLE) {
-        add(this.floorKey(x, y));
-        add('t_rubble', D.ter);
-      } else {
-        let nearFloor = false;
-        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-          if (inMap(x + dx, y + dy) && map.tiles[idx(x + dx, y + dy)] !== WALL) nearFloor = true;
-        }
-        if (!nearFloor) { this.tileImgs[i] = null; return; }
-        const faceBelow = inMap(x, y + 1) && map.tiles[idx(x, y + 1)] !== WALL;
-        add(`z${zi}_${faceBelow ? 'face' : 'wall'}`);
-        if (map.ore[i] === ORE) add('t_ore', D.ter);
+      let nearFloor = false;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (inMap(x + dx, y + dy) && map.tiles[idx(x + dx, y + dy)] !== WALL) nearFloor = true;
       }
+      if (!nearFloor) { this.tileImgs[i] = null; return; }
+      const faceBelow = inMap(x, y + 1) && map.tiles[idx(x, y + 1)] !== WALL;
+      add(`z${zi}_${faceBelow ? 'face' : 'wall'}`);
     } else {
       if (ter === T.WATER) this.waterImgs.add(add(`z${zi}_water${this.waterFrame}`));
       else add(this.floorKey(x, y));
-      if (ter === T.PIT) add('pit', D.ter);
       const spr = TERRAIN[ter]?.sprite;
       if (spr) add(`t_${spr}`, D.ter);
       if (t === STAIRS) add('t_stairs', D.ter);
-      if (t === CRYSTAL) add('t_crystal', D.ter);
+      if (t === DOOR) this.doorImgs[i] = add(map.open[i] ? 't_doorOpen' : 't_door', D.ter);
+      if (t === ORE) add('t_bigOre', D.ter);
     }
     this.tileImgs[i] = imgs;
   }
@@ -208,6 +199,8 @@ export class DungeonScene extends Phaser.Scene {
     if (!run) return;
     const map = run.map, p = run.p;
     const dur = instant ? 0 : 90;
+
+    for (const [i, img] of Object.entries(this.doorImgs)) img.setTexture(map.open[i] ? 't_doorOpen' : 't_door');
 
     // fog of war with light falling off from the player
     for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) {
@@ -262,21 +255,6 @@ export class DungeonScene extends Phaser.Scene {
     for (const key of Object.keys(this.pickupSprites)) {
       if (!keep.has(key)) { this.pickupSprites[key].destroy(); delete this.pickupSprites[key]; }
     }
-
-    const carts = new Set();
-    for (const c of run.carts) {
-      carts.add(c.id);
-      let s = this.cartSprites[c.id];
-      if (!s) {
-        s = this.add.image(c.x * TILE, c.y * TILE, 'cart').setOrigin(0).setDepth(D.carts);
-        this.cartSprites[c.id] = s;
-      }
-      if (!s.rolling) s.setPosition(c.x * TILE, c.y * TILE);
-      s.setVisible(!!map.explored[idx(c.x, c.y)]);
-    }
-    for (const id of Object.keys(this.cartSprites)) {
-      if (!carts.has(+id)) { this.cartSprites[id].destroy(); delete this.cartSprites[id]; }
-    }
   }
 
   moveTo(sprite, x, y, dur) {
@@ -306,8 +284,8 @@ export class DungeonScene extends Phaser.Scene {
       case 'kill': this.onKill(d.enemy); break;
       case 'phit':
         this.flash(this.playerSprite);
-        this.cameras.main.shake(['slam', 'crush', 'bomb'].includes(d.kind) ? 220 : 110, ['slam', 'crush', 'bomb'].includes(d.kind) ? 0.012 : 0.005);
-        this.fx[d.kind === 'poison' ? 'poison' : 'blood'].explode(8, center(d.x), center(d.y));
+        this.cameras.main.shake(['slam', 'bomb'].includes(d.kind) ? 220 : 110, ['slam', 'bomb'].includes(d.kind) ? 0.012 : 0.005);
+        this.fx.blood.explode(8, center(d.x), center(d.y));
         this.float(d.x, d.y, `-${d.dmg}`, '#ff6b6b');
         break;
       case 'dodge': this.float(d.x, d.y, '회피', '#6fe0e0'); break;
@@ -319,24 +297,16 @@ export class DungeonScene extends Phaser.Scene {
       case 'throw': this.throwArc(d.from, d.to); break;
       case 'boom': this.explosion(d.x, d.y, d.r); break;
       case 'gasboom': this.gasBoom(d.tiles); break;
-      case 'collapse':
-        this.fx.rock.explode(16, center(d.x), d.y * TILE);
-        this.fx.dust.explode(20, center(d.x), center(d.y));
-        this.cameras.main.shake(200, 0.01);
-        break;
-      case 'cart': this.rollCart(d.id, d.path); break;
-      case 'cartgone': this.cartSprites[d.id]?.destroy(); delete this.cartSprites[d.id]; break;
       case 'puff': this.fx[d.kind].explode(30, center(d.x), center(d.y)); break;
       case 'steam': this.fx.steam.explode(14, center(d.x), center(d.y)); break;
-      case 'burnoff': this.fx.ember.explode(10, center(d.x), center(d.y)); break;
       case 'shock': this.shock(d.tiles); break;
-      case 'dig':
+      case 'mine':
         this.bump(this.playerSprite, d.from, d);
-        this.fx.spark.explode(8, center(d.x), center(d.y));
-        this.fx.dust.explode(6, center(d.x), center(d.y));
+        this.fx.spark.explode(6 + d.hits * 3, center(d.x), center(d.y));
+        this.fx.rock.explode(4 + d.hits * 3, center(d.x), center(d.y));
+        this.cameras.main.shake(80 + d.hits * 30, 0.002 + d.hits * 0.0012);
+        this.noiseRing(d.x, d.y, d.r);
         break;
-      case 'fall': this.cameras.main.shake(160, 0.008); break;
-      case 'canary': this.canaryUntil = this.time.now + (d.loud ? 1800 : 1100); break;
       case 'say': this.say(d.who, d.text); break;
       case 'alert': {
         const s = this.enemySprites[d.enemy.id];
@@ -368,9 +338,9 @@ export class DungeonScene extends Phaser.Scene {
   onHit(d) {
     const s = this.enemySprites[d.enemy.id];
     if (s) this.flash(s);
-    const color = { normal: '#ffffff', fire: '#f08c3a', bolt: '#f4cf4f', thorns: '#b8b8c8', poison: '#8fd35a', crush: '#b8bccb' }[d.kind] || '#ffffff';
+    const color = { normal: '#ffffff', fire: '#f08c3a', bolt: '#f4cf4f', thorns: '#b8b8c8' }[d.kind] || '#ffffff';
     const kind = d.enemy.d.sprite;
-    const fx = d.kind === 'fire' ? 'fire' : d.kind === 'bolt' ? 'spark' : d.kind === 'poison' ? 'poison' : kind === 'skel' ? 'bone' : kind === 'slime' ? 'slime' : 'blood';
+    const fx = d.kind === 'fire' ? 'fire' : d.kind === 'bolt' ? 'spark' : kind === 'skel' ? 'bone' : kind === 'slime' ? 'slime' : 'blood';
     if (this.run.isVisible(d.x, d.y)) {
       this.fx[fx].explode(d.kind === 'normal' ? 6 : 10, center(d.x), center(d.y));
       this.float(d.x, d.y, String(d.dmg), color, d.kind === 'normal' ? 0 : 120);
@@ -422,10 +392,12 @@ export class DungeonScene extends Phaser.Scene {
     if (!target || target.dying) return;
     if (who !== 'player' && !this.run.isVisible(who.x, who.y)) return;
     while (this.bubbles.length >= 2) this.bubbles.shift().destroy();
-    const b = this.add.text(target.x, target.y - 18, text, {
-      fontFamily: '"Do Hyeon", sans-serif', fontSize: '9px', color: '#1b1424', backgroundColor: '#f4f0e8',
-      padding: { x: 3, y: 1 },
-    }).setOrigin(0.5, 1).setDepth(D.bubble).setResolution(this.textRes());
+    // enemies only ever say "!" or "?": draw those as a bare mark, not a speech bubble
+    const mark = text === '!' || text === '?';
+    const style = mark
+      ? { fontFamily: '"Do Hyeon", sans-serif', fontSize: '13px', color: text === '!' ? '#ff5a4a' : '#f4cf4f', stroke: '#1b1424', strokeThickness: 3 }
+      : { fontFamily: '"Do Hyeon", sans-serif', fontSize: '9px', color: '#1b1424', backgroundColor: '#f4f0e8', padding: { x: 3, y: 1 } };
+    const b = this.add.text(target.x, target.y - 18, text, style).setOrigin(0.5, 1).setDepth(D.bubble).setResolution(this.textRes());
     b.target = target;
     b.until = this.time.now + 1500;
     this.bubbles.push(b);
@@ -492,17 +464,11 @@ export class DungeonScene extends Phaser.Scene {
     }
   }
 
-  rollCart(id, path) {
-    const s = this.cartSprites[id];
-    if (!s) return;
-    s.rolling = true;
-    this.tweens.killTweensOf(s);
-    this.tweens.chain({
-      targets: s,
-      tweens: path.map(t => ({ x: t.x * TILE, y: t.y * TILE, duration: 55, ease: 'Linear' })),
-      onComplete: () => { s.rolling = false; },
-    });
-    this.cameras.main.shake(path.length * 55, 0.003);
+  // How far a swing at the big ore is heard: a ring that grows out to that distance.
+  noiseRing(x, y, r) {
+    const c = this.add.circle(center(x), center(y), TILE * (r + 0.5)).setStrokeStyle(1.5, 0xf4cf4f, 0.9).setDepth(D.fx).setScale(0.1);
+    this.tweens.add({ targets: c, scale: 1, duration: 260 + r * 40, ease: 'Quad.out' });
+    this.tweens.add({ targets: c, alpha: 0, delay: 200 + r * 40, duration: 300, onComplete: () => c.destroy() });
   }
 
   // ---------- per-frame drawing ----------
@@ -551,12 +517,17 @@ export class DungeonScene extends Phaser.Scene {
     this.pathGfx.fillStyle(0x8fd36a, 0.55);
     for (const [x, y] of this.path) this.pathGfx.fillRect(x * TILE + 6, y * TILE + 6, 4, 4);
 
-    // loaded mine carts: one red pip per turn left
-    for (const c of run.carts) {
-      const s = this.cartSprites[c.id];
-      if (!c.bomb || !s?.visible) continue;
-      g.fillStyle(0xff4646, Math.sin(time / 90) > 0 ? 1 : 0.4);
-      for (let k = 0; k < c.bomb; k++) g.fillRect(s.x + 4 + k * 3, s.y + 1, 2, 2);
+    // the big ore: cracks and pips show how many swings it has taken
+    const ore = map.ore;
+    if (ore && map.explored[idx(ore.x, ore.y)]) {
+      const x0 = ore.x * TILE, y0 = ore.y * TILE;
+      g.lineStyle(1, 0x1b1424, 0.9);
+      const cracks = [[8, 2, 6, 7], [6, 7, 9, 11], [3, 9, 6, 7], [9, 11, 12, 13], [10, 4, 12, 8]];
+      for (let k = 0; k < ore.hits; k++) g.lineBetween(x0 + cracks[k][0], y0 + cracks[k][1], x0 + cracks[k][2], y0 + cracks[k][3]);
+      for (let k = 0; k < ORE_HITS; k++) {
+        g.fillStyle(k < ore.hits ? 0xf4cf4f : 0x2c2536, 1);
+        g.fillRect(x0 + 2 + k * 2.6, y0 - 3, 2, 2);
+      }
     }
 
     let claw = false;
@@ -595,9 +566,6 @@ export class DungeonScene extends Phaser.Scene {
     this.pose(ps, p, p.face < 0, time);
     ps.setAlpha(run.playerHidden() ? 0.6 : 1);
     this.drawStatus(g, ps, p, ps.y - TILE - ps.hop, p.face < 0 ? -1 : 1, time);
-    const flap = this.canaryUntil > time;
-    this.canary.setPosition(ps.x - (p.face < 0 ? -5 : 5), ps.y - 13 - ps.hop - (flap ? Math.abs(Math.sin(time / 60)) * 3 : 0))
-      .setFlipX(p.face < 0).setScale(1, flap ? 0.8 + 0.2 * Math.abs(Math.sin(time / 50)) : 1);
 
     // speech bubbles follow their speaker
     this.bubbles = this.bubbles.filter(b => {
@@ -623,7 +591,6 @@ export class DungeonScene extends Phaser.Scene {
     s.setOrigin(0.5, 1 + hop / TILE);
     if (time < s.flashUntil) return;
     let tint = who.d?.boss ? 0xffb0b0 : 0xffffff;
-    if (who.poisoned) tint = 0xa8e8a0;
     if (who.burn > 0) tint = 0xffc890;
     if (who.sleep || who.state === 'sleep') tint = 0xc4c4dc;
     s.setTint(tint);
@@ -652,10 +619,6 @@ export class DungeonScene extends Phaser.Scene {
       }
     }
     if (who.burn > 0) this.drawFlame(g, s.x - dir * 2, s.y - (s.hop || 0) - 2, 0.7, time, who.id || 7);
-    if (who.stuck > 0) {
-      g.fillStyle(0xb5e08a, 0.9);
-      g.fillRect(s.x - 5, s.y - 2, 10, 2); g.fillRect(s.x - 3, s.y, 2, 2); g.fillRect(s.x + 2, s.y, 1, 3);
-    }
   }
 
   drawFlame(g, x, y, k, time, seed) {

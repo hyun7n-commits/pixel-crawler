@@ -1,12 +1,12 @@
-// The living dungeon: fire, gas, explosions, collapsing ceilings and what happens when you step on things.
+// The living dungeon: fire, gas, explosions and what happens when you step on things.
 // Like run.js these are pure rules. They change the run and emit events for the scene to draw.
 
-import { T, TERRAIN, GAS_KEYS, SLEEP_MIN, POISON_MIN, MINE_MIN, isMushroom } from '../data/terrain.js';
-import { idx, inMap, passable, isBorder, WALL, FLOOR, ORE, RUBBLE } from './dungeon.js';
-import { rint, DIRS8 } from './util.js';
+import { T, TERRAIN, GAS_KEYS, SLEEP_MIN, MINE_MIN } from '../data/terrain.js';
+import { idx, inMap, passable, isBorder, WALL, FLOOR, DOOR } from './dungeon.js';
+import { DIRS8 } from './util.js';
 
 const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-const GAS_DECAY = { sleep: 0.9, poison: 0.9, mine: 0.97 };
+const GAS_DECAY = { sleep: 0.9, mine: 0.97 };
 
 // 'player', an enemy, or null
 export function whoAt(run, x, y) {
@@ -28,18 +28,12 @@ export function onEnter(run, who, x, y) {
   if (ter === T.WATER && b.burn > 0) {
     b.burn = 0;
     run.emit('steam', { x, y });
-    if (who === 'player') { run.log('웅덩이에 뛰어들어 불을 껐어요.', 'good'); run.discover('water_fire'); }
-    else run.say(who, '휴…');
+    if (who === 'player') { run.log('웅덩이에 뛰어들어 불을 껐다.', 'good'); run.discover('water_fire'); }
   }
-  if (isMushroom(ter)) burstMushroom(run, x, y);
-  if (ter === T.STICKY) {
-    b.stuck = 1;
-    if (who === 'player') run.log('끈적이를 밟았어요! 한 턴 붙잡혀요.', 'warn');
-    else run.say(who, '끈적!');
-  }
+  if (ter === T.MUSH_SLEEP) burstMushroom(run, x, y);
   if (who === 'player' && ter === T.BRUSH && !run.told.brush) {
     run.told.brush = true;
-    run.log('버섯 덤불 속에 숨었어요. 멀리 있는 적은 나를 못 봐요.', 'good');
+    run.log('버섯 덤불 속에 숨었다. 멀리 있는 적은 나를 못 본다.', 'good');
   }
 }
 
@@ -50,8 +44,7 @@ export function setBurn(run, who, n) {
   const was = b.burn > 0;
   b.burn = Math.max(b.burn || 0, n);
   if (was) return;
-  if (who === 'player') { run.say('player', '앗 뜨거!'); run.log('몸에 불이 붙었어요! 웅덩이에 들어가면 꺼져요.', 'warn'); }
-  else run.say(who, '앗뜨뜨!');
+  if (who === 'player') { run.say('player', '앗 뜨거!'); run.log('몸에 불이 붙었다! 웅덩이에 들어가면 꺼진다.', 'warn'); }
 }
 
 // Sets a tile alight. `flash` makes even bare floor burn for a moment (explosions).
@@ -60,9 +53,8 @@ export function ignite(run, x, y, flash = false) {
   const map = run.map, i = idx(x, y);
   if (!passable(map, x, y) || map.ter[i] === T.WATER) return;
   if (map.gas.mine[i] >= MINE_MIN) gasExplode(run, x, y);
-  burnPoison(run, x, y);
   const ter = map.ter[i];
-  if (isMushroom(ter)) { burstMushroom(run, x, y); return; }
+  if (ter === T.MUSH_SLEEP) { burstMushroom(run, x, y); return; }
   const burn = TERRAIN[ter]?.burn || 0;
   if (burn) map.fire[i] = Math.max(map.fire[i], burn);
   else if (flash) map.fire[i] = Math.max(map.fire[i], 1);
@@ -71,23 +63,8 @@ export function ignite(run, x, y, flash = false) {
   if (w) setBurn(run, w, 3);
 }
 
-function burnPoison(run, x, y) {
-  const g = run.map.gas.poison;
-  let gone = 0;
-  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
-    if (!inMap(x + i, y + j)) continue;
-    const k = idx(x + i, y + j);
-    gone += g[k];
-    g[k] = 0;
-  }
-  if (gone > 2) {
-    run.emit('burnoff', { x, y });
-    if (run.isVisible(x, y)) run.discover('fire_poison');
-  }
-}
-
 function fireTick(run) {
-  const map = run.map, spread = new Set(), ended = [];
+  const map = run.map, spread = new Set(), changed = [];
   for (let i = 0; i < map.fire.length; i++) {
     if (!map.fire[i]) continue;
     const x = i % map.w, y = (i / map.w) | 0;
@@ -101,17 +78,7 @@ function fireTick(run) {
       if (map.gas.mine[j] >= MINE_MIN) spread.add(j);
       else if (TERRAIN[map.ter[j]]?.burn && Math.random() < 0.45) spread.add(j);
     }
-    if (map.gas.poison[i] > 0) burnPoison(run, x, y);
-    if (--map.fire[i] === 0) ended.push(i);
-  }
-  const changed = [];
-  for (const i of ended) {
-    const x = i % map.w, y = (i / map.w) | 0;
-    if (map.ter[i] === T.BRUSH) { map.ter[i] = T.ASH; changed.push(i); }
-    else if (map.ter[i] === T.TIMBER) {
-      if (run.isVisible(x, y)) run.discover('fire_timber');
-      collapse(run, x, y);
-    }
+    if (--map.fire[i] === 0 && map.ter[i] === T.BRUSH) { map.ter[i] = T.ASH; changed.push(i); }
   }
   for (const j of spread) {
     const x = j % map.w, y = (j / map.w) | 0;
@@ -130,15 +97,12 @@ export function addGas(run, x, y, kind, amount) {
 
 export function burstMushroom(run, x, y) {
   const map = run.map, i = idx(x, y);
-  const kind = map.ter[i] === T.MUSH_SLEEP ? 'sleep' : 'poison';
   map.ter[i] = T.NONE;
-  addGas(run, x, y, kind, 40);
-  for (const [dx, dy] of DIRS4) addGas(run, x + dx, y + dy, kind, 20);
-  run.emit('puff', { x, y, kind });
+  addGas(run, x, y, 'sleep', 40);
+  for (const [dx, dy] of DIRS4) addGas(run, x + dx, y + dy, 'sleep', 20);
+  run.emit('puff', { x, y, kind: 'sleep' });
   run.emit('tiles', { list: [i] });
-  if (run.isVisible(x, y)) {
-    run.log(kind === 'sleep' ? '졸음 버섯이 터졌어요! 보라 가스를 마시면 잠들어요.' : '독 버섯이 터졌어요! 초록 가스는 몸에 해로워요.', 'warn');
-  }
+  if (run.isVisible(x, y)) run.log('졸음 버섯이 터졌다! 보라 가스를 마시면 잠든다.', 'warn');
 }
 
 function diffuse(map, kind) {
@@ -158,17 +122,10 @@ function diffuse(map, kind) {
   return any;
 }
 
-// Vents leak mine gas a little every turn. Also used to pre-fill rooms when a floor is made.
 export function gasTick(run) {
-  const map = run.map;
-  for (const v of map.vents) {
-    const i = idx(v.x, v.y);
-    if (v.rest > 0) { v.rest--; continue; } // a vent that just blew up stays quiet for a while
-    if (map.ter[i] === T.VENT && map.tiles[i] === FLOOR) map.gas.mine[i] = Math.min(40, map.gas.mine[i] + 4);
-  }
-  if (!run.gasActive && !map.vents.length) return;
+  if (!run.gasActive) return;
   let any = false;
-  for (const k of GAS_KEYS) any = diffuse(map, k) || any;
+  for (const k of GAS_KEYS) any = diffuse(run.map, k) || any;
   run.gasActive = any;
 }
 
@@ -187,24 +144,15 @@ export function gasExplode(run, sx, sy) {
     }
   }
   for (const t of tiles) g[idx(t.x, t.y)] = 0;
-  for (const v of map.vents) if (seen.has(idx(v.x, v.y)) || Math.abs(v.x - sx) + Math.abs(v.y - sy) <= 3) v.rest = 25;
   run.emit('gasboom', { tiles, x: sx, y: sy });
   const dmg = 8 + 2 * run.floor;
-  for (const t of tiles) damageAt(run, t.x, t.y, dmg, '광산 가스 폭발에 휘말렸어요', 'fire');
+  for (const t of tiles) damageAt(run, t.x, t.y, dmg, '광산 가스 폭발에 휘말렸다', 'fire');
   for (const t of tiles) ignite(run, t.x, t.y, true);
-  for (const t of tiles) {
-    for (const [dx, dy] of [[0, 0], ...DIRS4]) {
-      if (inMap(t.x + dx, t.y + dy) && map.ter[idx(t.x + dx, t.y + dy)] === T.CRACKED) {
-        collapse(run, t.x + dx, t.y + dy);
-        run.discover('bomb_ceiling');
-      }
-    }
-  }
   run.noise(sx, sy, 12);
   if (tiles.length > 1 || run.isVisible(sx, sy)) run.discover('fire_mine');
 }
 
-// ---------- explosions and collapses ----------
+// ---------- explosions ----------
 export function explosion(run, x, y, r, { dmg, cause, selfMult = 0.5 }) {
   const map = run.map, changed = [];
   let broke = false;
@@ -215,81 +163,26 @@ export function explosion(run, x, y, r, { dmg, cause, selfMult = 0.5 }) {
     const w = whoAt(run, tx, ty);
     if (w === 'player') run.hurtPlayer(Math.max(1, Math.round(dmg * selfMult)), cause, 'bomb');
     else if (w) run.hurt(w, dmg, 'fire');
-    if (map.tiles[idx(tx, ty)] === WALL && !isBorder(tx, ty)) {
+    const t = map.tiles[idx(tx, ty)];
+    if ((t === WALL && !isBorder(tx, ty)) || t === DOOR) {
       breakWall(run, tx, ty);
       changed.push(idx(tx, ty));
-      broke = true;
+      broke = broke || t === WALL;
     }
   }
   for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) ignite(run, x + i, y + j, true);
-  for (let j = -r - 1; j <= r + 1; j++) for (let i = -r - 1; i <= r + 1; i++) {
-    if (inMap(x + i, y + j) && map.ter[idx(x + i, y + j)] === T.CRACKED) {
-      collapse(run, x + i, y + j);
-      run.discover('bomb_ceiling');
-    }
-  }
   if (broke) run.discover('bomb_wall');
   if (changed.length) run.emit('tiles', { list: changed });
   run.noise(x, y, 9);
 }
 
+// Blows a hole in a wall or a door.
 export function breakWall(run, x, y) {
   const map = run.map, i = idx(x, y);
-  if (map.ore[i] === ORE) {
-    const amount = (Math.floor((run.floor - 1) / 3) + 1) * rint(6, 12);
-    run.pickups.push({ x, y, type: 'gold', amount });
-    run.log('반짝돌이 쏟아졌어요!', 'good');
-  }
+  if (map.tiles[i] === DOOR) map.doors = map.doors.filter(d => d.x !== x || d.y !== y);
   map.tiles[i] = FLOOR;
-  map.ore[i] = 0;
-  map.dig[i] = 0;
+  map.open[i] = 0;
   map.ter[i] = T.NONE;
-}
-
-// The ceiling over (x, y) comes down: the tile turns into a rock pile that can be dug out.
-export function collapse(run, x, y) {
-  const map = run.map, i = idx(x, y);
-  if (map.tiles[i] !== FLOOR) return;
-  map.tiles[i] = WALL;
-  map.ore[i] = RUBBLE;
-  map.dig[i] = 2;
-  map.ter[i] = T.NONE;
-  map.fire[i] = 0;
-  for (const k of GAS_KEYS) map.gas[k][i] = 0;
-  run.carts = run.carts.filter(c => !(c.x === x && c.y === y));
-  for (const q of run.pickups.filter(q => q.x === x && q.y === y)) {
-    const s = nearestFree(run, x, y);
-    if (s) { q.x = s.x; q.y = s.y; }
-  }
-  const w = whoAt(run, x, y), dmg = 10 + 2 * run.floor;
-  run.emit('collapse', { x, y });
-  if (w) {
-    const s = nearestFree(run, x, y);
-    const b = body(run, w);
-    if (s) { b.x = s.x; b.y = s.y; }
-    if (w === 'player') { run.hurtPlayer(dmg, '무너진 천장에 깔렸어요', 'crush'); run.p.stun = 1; }
-    else { run.hurt(w, dmg, 'crush'); if (w.hp > 0) { w.stun = 2; run.say(w, '으악!'); } }
-  }
-  const list = [i];
-  for (const [dx, dy] of DIRS8) if (inMap(x + dx, y + dy)) list.push(idx(x + dx, y + dy));
-  run.emit('tiles', { list });
-  run.noise(x, y, 8);
-}
-
-export function nearestFree(run, x, y) {
-  const seen = new Set([idx(x, y)]), q = [[x, y]];
-  for (let h = 0; h < q.length && h < 200; h++) {
-    const [cx, cy] = q[h];
-    for (const [dx, dy] of DIRS8) {
-      const nx = cx + dx, ny = cy + dy, j = idx(nx, ny);
-      if (!inMap(nx, ny) || seen.has(j)) continue;
-      seen.add(j);
-      if (!passable(run.map, nx, ny)) continue;
-      if (!whoAt(run, nx, ny) && !run.cartAt(nx, ny) && run.map.ter[j] !== T.PIT) return { x: nx, y: ny };
-      q.push([nx, ny]);
-    }
-  }
-  return null;
 }
 
 // All water tiles connected to (x, y)
@@ -310,9 +203,6 @@ export function envTick(run) {
   gasTick(run);
   fireTick(run);
   for (const who of ['player', ...run.enemies.filter(e => e.hp > 0)]) creatureTick(run, who);
-  for (const c of run.carts.slice()) {
-    if (c.bomb > 0 && --c.bomb === 0) run.cartBlast(c);
-  }
 }
 
 function creatureTick(run, who) {
@@ -322,29 +212,23 @@ function creatureTick(run, who) {
 
   if (map.gas.sleep[i] >= SLEEP_MIN) {
     if (who === 'player') {
-      if (!run.p.sleep) { run.say('player', '하암…'); run.log('졸음 가스를 마셔서 잠들었어요…', 'warn'); }
-      run.p.sleep = 2;
+      // a hit wakes you for one turn, enough to stumble out of the cloud
+      if (run.p.wokeAt !== run.turn) {
+        if (!run.p.sleep) { run.say('player', '하암…'); run.log('졸음 가스를 마셔서 잠들었다…', 'warn'); }
+        run.p.sleep = 2;
+      }
     } else if (who.state !== 'sleep') {
       who.state = 'sleep'; who.wake = 0; who.doze = 2; who.aim = false;
-      run.say(who, '하암…');
+      if (run.isVisible(b.x, b.y)) run.discover('sleep_enemy');
     } else who.doze = 2;
   } else if (who === 'player' && run.p.sleep > 0 && --run.p.sleep === 0) {
-    run.log('잠에서 깼어요.', 'good');
+    run.log('잠에서 깼다.', 'good');
   }
-
-  const pg = map.gas.poison[i];
-  if (pg >= POISON_MIN) {
-    const dmg = 1 + Math.floor(pg / 15);
-    b.poisoned = 2;
-    if (who === 'player') run.hurtPlayer(dmg, '독 가스를 너무 마셨어요', 'poison');
-    else run.hurt(who, dmg, 'poison');
-  } else if (b.poisoned) b.poisoned--;
-  if (b.hp <= 0) return;
 
   if (b.burn > 0) {
     if (map.ter[i] === T.WATER) { b.burn = 0; return; }
     const dmg = 2 + Math.floor(run.floor / 3);
-    if (who === 'player') run.hurtPlayer(dmg, '불에 타 버렸어요', 'burn');
+    if (who === 'player') run.hurtPlayer(dmg, '불에 타 버렸다', 'burn');
     else run.hurt(who, dmg, 'fire');
     if (TERRAIN[map.ter[i]]?.burn && !map.fire[i]) ignite(run, b.x, b.y);
     b.burn--;
