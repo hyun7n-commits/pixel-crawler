@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>픽셀 던전 크롤러</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <section id="hub" aria-label="마을"></section>
+  <section id="game" hidden aria-label="던전">
+    <div id="stage"><div id="phaser"></div><div id="banner"></div></div>
+    <aside id="side">
+      <div class="hud-top"><div class="floor" id="floorLabel"></div><div class="gold-now" id="goldNow"></div></div>
+      <div class="meter"><div class="meter-label"><span>체력</span><b id="hpText"></b></div><div class="bar" id="hpbar"><i></i></div></div>
+      <div class="meter"><div class="meter-label"><span id="lvText"></span><span id="atkText"></span></div><div class="bar" id="xpbar"><i></i></div></div>
+      <div class="sec-title"><span>유물</span><span id="slotText"></span></div>
+      <div class="relics" id="relics"></div>
+      <div id="relicInfo">유물을 누르면 효과와 진화 조합이 보여요.</div>
+      <div class="sec-title"><span>소모품</span></div>
+      <div class="items" id="items"></div>
+      <div class="actions"><button type="button" class="btn" id="waitBtn">한 턴 쉬기</button><button type="button" class="btn" id="quitBtn">포기하기</button></div>
+      <div id="log" aria-live="polite"></div>
+    </aside>
+  </section>
+  <div id="modal" hidden></div>
+</div>
+<script src="vendor/phaser.min.js"></script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
