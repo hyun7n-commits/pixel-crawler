@@ -126,6 +126,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .choice { background: #0f0e15; border: 2px solid var(--line); border-radius: 6px; padding: 12px 10px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; min-width: 0; }
 .choice:hover, .choice:focus-visible { border-color: var(--accent); }
 .choice canvas { width: 48px; height: 48px; }
+.choice > div { display: flex; flex-direction: column; align-items: center; gap: 5px; word-break: keep-all; }
 .choice .nm { font-family: var(--font-display); font-size: 19px; }
 .choice .tag { font-size: 11.5px; font-weight: 700; padding: 1px 7px; border-radius: 3px; background: var(--panel-2); color: var(--accent); }
 .choice .tag.new { background: var(--accent); color: var(--accent-ink); }
@@ -144,6 +145,6 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   #log { display: none; }
   .choices { grid-template-columns: 1fr; }
   .choice { flex-direction: row; text-align: left; align-items: center; }
-  .choice > div { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+  .choice > div { gap: 3px; align-items: flex-start; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
