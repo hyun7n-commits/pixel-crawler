@@ -3,6 +3,7 @@
 import { T, TERRAIN, TILE_INFO, GASES, GAS_KEYS } from '../data/terrain.js';
 import { ORE_HITS } from '../data/balance.js';
 import { ITEMS } from '../data/items.js';
+import { ORES } from '../data/ores.js';
 import { idx, inMap, STAIRS, DOOR, ORE, UPSTAIRS, WALL } from '../core/dungeon.js';
 
 const STATE = {
@@ -39,7 +40,7 @@ export function describeTile(run, x, y, always = false) {
   if (t === STAIRS) lines.push(`${TILE_INFO.stairs.name}: ${TILE_INFO.stairs.tip}`);
   if (t === UPSTAIRS) lines.push(`${TILE_INFO.upStairs.name}: ${TILE_INFO.upStairs.tip}`);
   if (t === DOOR) lines.push(`${TILE_INFO.door.name}: ${TILE_INFO.door.tip}`);
-  if (t === ORE && map.ore) lines.push(`${TILE_INFO.bigOre.name} (${map.ore.hits}/${ORE_HITS}): ${TILE_INFO.bigOre.tip}`);
+  if (t === ORE && map.ore) lines.push(`큰 ${ORES[map.ore.tier].name} 광석 (${map.ore.hits}/${ORE_HITS}): ${TILE_INFO.bigOre.tip}`);
   const ter = map.ter[i];
   if (ter !== T.NONE && TERRAIN[ter]) lines.push(`${TERRAIN[ter].name}: ${TERRAIN[ter].tip}`);
   if (map.fire[i] && map.visible[i]) lines.push(`${TILE_INFO.fire.name}: ${TILE_INFO.fire.tip}`);

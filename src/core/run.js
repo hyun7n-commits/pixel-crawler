@@ -7,6 +7,7 @@ import { RELICS, EVOLUTIONS, LEGENDS, MAX_LEVEL, MAX_SLOTS } from '../data/relic
 import { CHARACTERS } from '../data/characters.js';
 import { ENEMIES, ZONES } from '../data/enemies.js';
 import { ITEMS } from '../data/items.js';
+import { ORES } from '../data/ores.js';
 import { T, DISCOVERIES, GOSSIP, SLEEP_TALK, FLOOR_HINTS } from '../data/terrain.js';
 import { rnd, rint, pick, shuffle, cheb, josa, DIRS8 } from './util.js';
 import {
@@ -71,6 +72,7 @@ export class Run {
       sneak: rl.shadow ? 4 : 2 + 0.5 * lv('boots'),           // damage multiplier on a surprise attack
       sight: B.SIGHT + lv('lantern'),
       oreMult: rl.goldrush || rl.goldstorm ? 3 : 1 + 0.5 * lv('pick'),
+      oreRise: rl.goldrush || rl.goldstorm ? 0.25 : 0.05 * lv('pick'),   // extra chance a swing finds a better grade
       magnet: rl.goldstorm ? 5 : rl.goldrush ? 4 : rl.magnet ? rl.magnet + 1 : 0,
     };
   }
@@ -154,6 +156,7 @@ export class Run {
     const zi = Math.floor((this.floor - 1) / B.FLOORS_PER_ZONE);
     const deco = decorate(map, rooms, { start: this.p, stairs: { x: far.cx, y: far.cy } });
     this.has = deco.has;
+    if (map.ore) map.ore.tier = Math.min(ORES.length - 1, zi + (Math.random() < B.ORE_START_BONUS ? 1 : 0));
 
     // a free spot in a room other than the start; returns the spot and its room
     const free = () => {
@@ -293,24 +296,38 @@ export class Run {
     return true;
   }
 
-  // Bump the big ore to mine it. Every swing pays a little, is louder than the last
-  // and makes the crack beside it puff mine gas. The last swing breaks it wide open.
+  // Bump the big ore to mine it. Every swing pays a little more than the last, is louder,
+  // and makes the crack beside it puff mine gas. A swing may crack into a better grade
+  // underneath, or hit a bonanza. The last swing breaks it wide open.
   mineOre() {
-    const map = this.map, ore = map.ore, p = this.p;
+    const map = this.map, ore = map.ore, p = this.p, s = this.stat();
     ore.hits++;
-    const r = B.ORE_NOISE[ore.hits - 1];
-    this.emit('mine', { x: ore.x, y: ore.y, from: { x: p.x, y: p.y }, hits: ore.hits, r, last: ore.hits >= B.ORE_HITS });
+    const k = ore.hits - 1, last = ore.hits >= B.ORE_HITS, top = ORES.length - 1;
+    if (ore.hits === 1) this.meetOre(ore.tier);
+    const nugget = !last && Math.random() < B.ORE_NUGGET[k];
+    const above = Math.max(0, ore.tier - Math.floor((this.floor - 1) / B.FLOORS_PER_ZONE));
+    const rise = B.ORE_RISE[k] * B.ORE_RISE_DECAY ** above + s.oreRise;
+    const rose = !last && ore.tier < top && (nugget || Math.random() < rise);
+    if (rose) { ore.tier++; this.meetOre(ore.tier); }
+    const g = ORES[ore.tier];
+    const r = B.ORE_NOISE[k] + (nugget ? 2 : 0);
+    let gold;
+    if (!last) gold = Math.round(B.oreGold(this.floor) * g.mult * B.ORE_SWING[k] * s.oreMult * (nugget ? B.ORE_NUGGET_MULT : 1));
+    this.emit('mine', { x: ore.x, y: ore.y, from: { x: p.x, y: p.y }, hits: ore.hits, r, last, tier: ore.tier, rose, nugget });
     for (const v of map.vents) addGas(this, v.x, v.y, 'mine', B.ORE_GAS);
-    if (ore.hits < B.ORE_HITS) {
-      this.addGold(Math.round(B.oreGold(this.floor) * this.stat().oreMult));
-      this.log(`캉! 광석 조각이 떨어졌다. (${ore.hits}/${B.ORE_HITS})`);
+    if (!last) {
+      this.addGold(gold);
+      if (nugget) this.log(`노다지! ${g.name} 덩어리가 와르르 쏟아졌다!`, 'good');
+      else if (rose) this.log(`쩡! 속에서 ${josa(g.name, '이', '가')} 비친다! (${ore.hits}/${B.ORE_HITS})`, 'good');
+      else this.log(`캉! ${g.name} 조각이 떨어졌다. (${ore.hits}/${B.ORE_HITS})`);
     } else {
       const i = idx(ore.x, ore.y);
       map.tiles[i] = FLOOR;
       map.ore = null;
-      this.pickups.push({ x: ore.x, y: ore.y, type: 'gold', amount: Math.round(B.oreJackpot(this.floor) * this.stat().oreMult) });
+      this.meta.ores[g.id] = (this.meta.ores[g.id] || 0) + 1;
+      this.pickups.push({ x: ore.x, y: ore.y, type: 'gold', amount: Math.round(B.oreJackpot(this.floor) * g.mult * s.oreMult) });
       this.pickups.push({ x: ore.x, y: ore.y, type: 'chest' });
-      this.log('쩌억! 큰 광석이 통째로 쏟아졌다!', 'good');
+      this.log(`쩌억! 큰 ${g.name} 광석이 통째로 쏟아졌다!`, 'good');
       this.discover('ore_jackpot');
       this.emit('tiles', { list: [i] });
     }
@@ -519,6 +536,14 @@ export class Run {
     }
     if (woke) this.discover('noise_sleep');
     return heard;
+  }
+
+  // The first time a grade of ore turns up at all, it goes in the ore book.
+  meetOre(tier) {
+    const g = ORES[tier];
+    if (g.id in this.meta.ores) return;
+    this.meta.ores[g.id] = 0;
+    this.emit('banner', { text: `새 광석! ${g.name}` });
   }
 
   discover(id) {

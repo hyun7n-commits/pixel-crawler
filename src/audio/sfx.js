@@ -89,6 +89,17 @@ const SOUNDS = {
     tone(95, 0.9, { vol: 0.7, to: 32 });
     chime([1319, 1568, 1976, 2637, 3136, 2637, 3136], 0.06, 0.12, 0.16, 0.3);
   },
+  // the ore cracks into a better grade: a bright rising sparkle, higher for better grades
+  rise(tier) {
+    const b = 1 + tier * 0.08;
+    chime([1047 * b, 1319 * b, 1568 * b, 2093 * b], 0.045, 0.12, 0.2, 0.05);
+    hiss(0.25, { vol: 0.12, freq: 6000, type: 'highpass', delay: 0.05 });
+  },
+  // a bonanza: a cascade of coins
+  nugget() {
+    for (let i = 0; i < 9; i++) tone(1800 + ((i * 397) % 900), 0.07, { type: 'triangle', vol: 0.09, delay: 0.08 + i * 0.045 });
+    chime([784, 1047, 1319, 1568, 2093], 0.07, 0.13, 0.22, 0.12);
+  },
   // a low two-note sting: something heard you
   heard() {
     tone(98, 0.24, { type: 'triangle', vol: 0.28, delay: 0.14 });
@@ -119,7 +130,11 @@ export function play(name, ...args) {
 // Which sound goes with which game event (see the emit calls in core/).
 export function onRunEvent(type, d) {
   switch (type) {
-    case 'mine': play('mine', d.hits); if (d.last) play('jackpot'); break;
+    case 'mine':
+      play('mine', d.hits);
+      if (d.last) play('jackpot');
+      if (d.nugget) play('nugget'); else if (d.rose) play('rise', d.tier);
+      break;
     case 'heard': play('heard'); break;
     case 'hit': if (d.kind !== 'sneak') play('hit'); break;
     case 'sneak': play('sneak'); break;

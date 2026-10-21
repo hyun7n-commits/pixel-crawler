@@ -11,6 +11,7 @@ import { idx, inMap, WALL, STAIRS, DOOR, ORE, UPSTAIRS } from '../core/dungeon.j
 import { WAKE_AT } from '../core/ai.js';
 import { BOMB_RANGE } from '../core/run.js';
 import { ORE_HITS } from '../data/balance.js';
+import { ORES } from '../data/ores.js';
 import { cheb } from '../core/util.js';
 
 const D = { tiles: 0, ter: 1, fire: 2, gas: 3, telegraph: 4, pickups: 5, enemies: 6, player: 7, overlay: 8, fx: 9, bubble: 10, text: 11 };
@@ -249,7 +250,7 @@ export class DungeonScene extends Phaser.Scene {
       if (t === STAIRS) add('t_stairs', D.ter);
       if (t === UPSTAIRS) add('t_upStairs', D.ter);
       if (t === DOOR) this.doorImgs[i] = add(map.open[i] ? 't_doorOpen' : 't_door', D.ter);
-      if (t === ORE) add('t_bigOre', D.ter);
+      if (t === ORE) this.oreImg = add(`t_ore_${ORES[map.ore?.tier || 0].id}`, D.ter);
     }
     this.tileImgs[i] = imgs;
   }
@@ -556,9 +557,29 @@ export class DungeonScene extends Phaser.Scene {
     this.cameras.main.shake(last ? 420 : 80 + d.hits * 35, last ? 0.014 : 0.002 + d.hits * 0.0014);
     if (last) this.cameras.main.flash(160, 244, 207, 79);
     this.noiseRing(d.x, d.y, d.r);
+    const g = ORES[d.tier], tint = Phaser.Display.Color.HexStringToColor(g.vein ? g.vein[0] : '#ffffff').color;
     // the ore itself shudders
-    const img = (this.tileImgs[idx(d.x, d.y)] || []).find(im => im.texture.key === 't_bigOre');
+    const img = this.oreImg?.active ? this.oreImg : null;
     if (img && !last) this.tweens.add({ targets: img, x: img.x + 1.5, duration: 30, yoyo: true, repeat: 2 + d.hits });
+    // cracked into a better grade: the veins change colour with a glittering pop
+    if (d.rose) {
+      if (img) img.setTexture(`t_ore_${g.id}`);
+      this.hitStop(110);
+      const c = Phaser.Display.Color.IntegerToRGB(tint);
+      this.cameras.main.flash(140, c.r, c.g, c.b);
+      this.fx.spark.explode(24, cx, cy);
+      const ring = this.add.circle(cx, cy, TILE * 0.9).setStrokeStyle(2, tint, 1).setDepth(D.fx).setScale(0.2);
+      this.tweens.add({ targets: ring, scale: 1.6, alpha: 0, duration: 420, ease: 'Quad.out', onComplete: () => ring.destroy() });
+      if (!d.nugget) this.float(d.x, d.y - 0.6, `${g.name}!`, g.vein ? g.vein[0] : '#ffffff', 60, g.gem ? 15 : 13);
+    }
+    // a bonanza: a fountain of gold and a big shout
+    if (d.nugget) {
+      this.hitStop(160);
+      this.cameras.main.shake(320, 0.012);
+      this.cameras.main.flash(180, 244, 207, 79);
+      this.float(d.x, d.y - 1.1, d.rose ? `노다지! ${g.name}!` : '노다지!', '#f4cf4f', 140, 18);
+      for (let k = 0; k < 16; k++) this.coinFly(cx, cy, 2.4, 120 + k * 22);
+    }
     // gold chips spray out and fly into your pocket
     const n = last ? 14 : 2 + d.hits;
     for (let k = 0; k < n; k++) this.coinFly(cx, cy, last ? 2.2 : 1.2, k * (last ? 25 : 35));

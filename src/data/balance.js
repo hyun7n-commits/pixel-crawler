@@ -25,8 +25,19 @@ export const POTION_HEAL = 0.6;
 export const ORE_HITS = 5;
 export const ORE_NOISE = [3, 5, 7, 10, 14];
 export const ORE_GAS = 10;
-export const oreGold = floor => 3 + floor;
-export const oreJackpot = floor => 20 + 6 * floor;
+export const oreGold = floor => 2 + floor;
+export const oreJackpot = floor => 18 + 5 * floor;
+// Ore grades (data/ores.js): each zone starts one grade higher, sometimes one more.
+// Every swing but the last may crack into the next grade (harder for each grade above the
+// zone's own; the pick relics' bonus is not reduced, so gems are what an ore build hunts),
+// and later swings pay more. Now and then a swing hits a bonanza ("노다지"):
+// many times the gold, and always a better grade.
+export const ORE_START_BONUS = 0.3;
+export const ORE_RISE = [0.08, 0.1, 0.12, 0.15];
+export const ORE_RISE_DECAY = 0.6;
+export const ORE_SWING = [1, 1.25, 1.5, 1.8];
+export const ORE_NUGGET = [0.03, 0.04, 0.05, 0.06];
+export const ORE_NUGGET_MULT = 5;
 export const bombDamage = floor => 12 + 2 * floor;
 
 // Enemies: most start asleep. Once you thin a floor out, a wanderer comes in every so often.

@@ -19,7 +19,7 @@ export const RELICS = {
   boots:  { name: '살금 신발',   desc: l => `기습 피해 ×${2 + 0.5 * l} (기본 ×2)` },
   lantern: { name: '광부 랜턴',  desc: l => `시야 +${l}칸` },
   hammer: { name: '진동 망치',   desc: l => `공격할 때 ${15 * l}% 확률로 적이 한 턴 기절` },
-  pick:   { name: '금 곡괭이',   desc: l => `큰 광석에서 나오는 골드 +${50 * l}%` },
+  pick:   { name: '금 곡괭이',   desc: l => `큰 광석에서 나오는 골드 +${50 * l}%, 더 좋은 광석이 나올 확률 +${5 * l}%` },
   cloak:  { name: '깃털 망토',   desc: l => `적의 공격을 ${8 * l}% 확률로 피한다` },
   mint:   { name: '박하사탕',    desc: l => (l < 3 ? `졸음 가스를 ${l + 1}배 더 잘 버틴다` : '졸음 가스에 잠들지 않는다') },
   sweep:  { name: '휘두름 장갑', desc: l => `공격하면 옆의 다른 적에게도 ${30 * l}% 피해`, locked: true, cost: 180 },
@@ -33,11 +33,11 @@ export const RELICS = {
   goldbolt:   { name: '황금 번개', evo: true, desc: () => '3턴마다 적 3마리에게 번개 10, 얻는 골드 +150%' },
   shadow:     { name: '그림자 걸음', evo: true, desc: () => '기습 피해 ×4, 적의 공격을 30% 확률로 피한다' },
   quake:      { name: '지진 망치', evo: true, desc: () => '공격하면 옆의 모든 적에게 같은 피해, 맞은 적은 30% 확률로 기절' },
-  goldrush:   { name: '골드 러시', evo: true, desc: () => '큰 광석에서 나오는 골드 ×3, 4칸 안의 골드를 저절로 줍는다' },
+  goldrush:   { name: '골드 러시', evo: true, desc: () => '큰 광석에서 나오는 골드 ×3, 더 좋은 광석이 나올 확률 +25%, 4칸 안의 골드를 저절로 줍는다' },
 
   volcano:  { name: '화산 망치', evo: true, legend: true, desc: () => '공격력 +10, 공격하면 옆의 모든 적에게 같은 피해와 불꽃, 30% 확률로 기절' },
   undying:  { name: '불사의 심장', evo: true, legend: true, desc: () => '받는 피해 -6, 최대 체력 +40, 맞으면 때린 적에게 10 피해, 쓰러지면 한 번 되살아난다' },
-  goldstorm: { name: '황금 폭풍', evo: true, legend: true, desc: () => '2턴마다 적 4마리에게 번개 12, 얻는 골드 +200%, 큰 광석 골드 ×3, 5칸 안의 골드를 저절로 줍는다' },
+  goldstorm: { name: '황금 폭풍', evo: true, legend: true, desc: () => '2턴마다 적 4마리에게 번개 12, 얻는 골드 +200%, 큰 광석 골드 ×3, 더 좋은 광석 확률 +25%, 5칸 안의 골드를 저절로 줍는다' },
 };
 
 // When `a` and `b` are both at MAX_LEVEL, both are used up and become `id`, freeing a slot.

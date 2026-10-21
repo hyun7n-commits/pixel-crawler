@@ -2,10 +2,12 @@
 
 import { PAL, SPR, TER_SPR } from '../data/sprites.js';
 import { ZONES } from '../data/enemies.js';
+import { ORES, RAINBOW } from '../data/ores.js';
 
 export const TILE = 16; // world pixels per tile
 
-function spriteCanvas(rows) {
+// `recolor(ch, i, j)` may return a different colour for a pixel (used for the ore grades).
+function spriteCanvas(rows, recolor) {
   const h = rows.length, w = rows[0].length;
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
@@ -13,16 +15,27 @@ function spriteCanvas(rows) {
   for (let j = 0; j < h; j++) {
     for (let i = 0; i < w; i++) {
       const ch = rows[j][i];
-      if (ch !== '.' && PAL[ch]) { g.fillStyle = PAL[ch]; g.fillRect(i, j, 1, 1); }
+      const col = ch !== '.' && (recolor?.(ch, i, j) || PAL[ch]);
+      if (col) { g.fillStyle = col; g.fillRect(i, j, 1, 1); }
     }
   }
   return c;
 }
 
+// The big ore in each grade: same rock, veins in the grade's colours (rainbow stripes for the top one).
+function oreCanvas(grade) {
+  return spriteCanvas(TER_SPR.bigOre, (ch, i, j) => {
+    if (ch !== 'y' && ch !== 'Y') return null;
+    if (!grade.vein) return RAINBOW[(i + j) % RAINBOW.length];
+    return grade.vein[ch === 'y' ? 0 : 1];
+  });
+}
+
 // Same canvases for the DOM (HUD icons, hub cards, choice cards).
 const domCache = {};
 export function spriteForDom(name) {
-  return (domCache[name] ||= spriteCanvas(SPR[name]));
+  const grade = name.startsWith('t_ore_') && ORES.find(o => `t_ore_${o.id}` === name);
+  return (domCache[name] ||= grade ? oreCanvas(grade) : spriteCanvas(SPR[name]));
 }
 
 // Small deterministic noise so tiles look hand-drawn but never flicker.
@@ -92,6 +105,7 @@ export function buildTextures(scene) {
   const tx = scene.textures;
   for (const [name, rows] of Object.entries(SPR)) if (!tx.exists(name)) tx.addCanvas(name, spriteCanvas(rows));
   for (const [name, rows] of Object.entries(TER_SPR)) if (!tx.exists(`t_${name}`)) tx.addCanvas(`t_${name}`, spriteCanvas(rows));
+  for (const grade of ORES) if (!tx.exists(`t_ore_${grade.id}`)) tx.addCanvas(`t_ore_${grade.id}`, oreCanvas(grade));
   ZONES.forEach((z, zi) => {
     for (let v = 0; v < 4; v++) tx.addCanvas(`z${zi}_floor${v}`, floorTile(z, v));
     tx.addCanvas(`z${zi}_wall`, wallTile(z, false));

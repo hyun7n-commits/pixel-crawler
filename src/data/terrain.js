@@ -19,7 +19,7 @@ export const TILE_INFO = {
   stairs:  { name: '내려가는 계단', tip: '아래층으로 내려간다.' },
   upStairs: { name: '올라가는 계단', tip: '위층으로 돌아간다. 지나온 층은 떠날 때 모습 그대로 남아 있다.' },
   door:    { name: '문', tip: '열기 전에는 안이 안 보인다.' },
-  bigOre:  { name: '큰 광석', tip: '부딪혀서 캔다. 캘수록 소리가 커져서 적이 찾아온다.' },
+  bigOre:  { name: '큰 광석', tip: '부딪혀서 캔다. 칠수록 더 좋은 광석이 나오기도 하지만, 소리가 커져서 적이 찾아온다.' },
   fire:    { name: '불', tip: '닿으면 몸에 불이 붙는다. 웅덩이에 들어가면 꺼진다.' },
   floor:   { name: '바닥', tip: '아무것도 없다.' },
   wall:    { name: '벽', tip: '지나갈 수 없다. 폭탄으로 부술 수 있다.' },
@@ -50,6 +50,10 @@ export const DISCOVERIES = [
 
 // Things enemies mutter when you overhear them from inside a brush
 export const GOSSIP = [
+  '큰 광석을 계속 두드리면 속에서 더 좋은 광석이 나오기도 한대.',
+  '깊이 내려갈수록 광석이 좋아진대. 다이아몬드 위로는 보석이래.',
+  '무지개석이라는 게 있다던데, 본 사람이 거의 없대.',
+  '금 곡괭이를 쥐면 보석이 더 잘 나온대.',
   '어제 그 광부 또 실려 갔대.',
   '조합장 요즘 예민하더라.',
   '상점 주인 또 가격 올렸대.',

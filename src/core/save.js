@@ -13,6 +13,7 @@ export function freshMeta() {
     stats: { kills: 0, maxFloor: 0, bosses: [], evos: 0, runs: 0, wins: 0, bestGold: 0 },
     found: {},  // discovered combinations, see data/terrain.js
     legends: {},  // legendary relics made at least once, see data/relics.js
+    ores: {},     // ore grades seen: id -> how many broken open, see data/ores.js
   };
 }
 
@@ -29,6 +30,7 @@ export function loadMeta() {
         relicUnlock: { ...m.relicUnlock },
         found: { ...m.found },
         legends: { ...m.legends },
+        ores: { ...m.ores },
       };
     }
   } catch (e) { /* storage blocked or corrupt: start fresh */ }

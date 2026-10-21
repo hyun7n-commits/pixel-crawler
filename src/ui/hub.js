@@ -7,6 +7,7 @@ import { RELICS, LEGENDS, evolutionOf } from '../data/relics.js';
 import { freshMeta, saveMeta } from '../core/save.js';
 import { josa } from '../core/util.js';
 import { DISCOVERIES } from '../data/terrain.js';
+import { ORES } from '../data/ores.js';
 
 const TOUCH = window.matchMedia?.('(pointer: coarse)').matches;
 
@@ -22,7 +23,7 @@ export function renderHub(ctx) {
   const inner = el('div', 'hub-inner');
 
   const head = el('div', 'hub-head');
-  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.7.2 · 9층 · 보스 3마리 · 핸드폰 터치 조작</small>'));
+  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.8 · 9층 · 보스 3마리 · 광석 등급과 노다지</small>'));
   const purse = el('div', 'purse');
   purse.append(icon('gold', 24), el('span', null, `${meta.gold}G`));
   head.append(purse);
@@ -45,7 +46,7 @@ export function renderHub(ctx) {
           '<b>설명</b> 아무 칸이나 꾹 누르기 · <b>둘러보기</b> 끌어서 옮기고 두 손가락으로 확대 · 유물과 소모품은 <b>가방</b>에 있다.<br>'
         : '<b>이동</b> 방향키·WASD (두 개를 같이 누르면 대각선) 또는 가고 싶은 칸을 클릭 · <b>공격</b> 적에게 부딪히거나 적을 클릭 · ' +
           '<b>쉬기</b> 스페이스 · <b>폭탄</b> 2를 누르고 던질 곳 고르기 · 마우스를 올리면 무엇이든 한 줄 설명이 나온다. 휠로 확대, 끌어서 둘러보기.<br>') +
-      '층마다 <b>큰 광석</b>이 하나 있다. 캘수록 골드가 나오지만 소리가 커져서 적이 몰려온다. ' +
+      '층마다 <b>큰 광석</b>이 하나 있다. 칠수록 골드가 커지고, 가끔 속에서 더 좋은 광석(동, 은, 금, 다이아몬드, 그 위로 보석)이 나오거나 <b>노다지</b>가 터진다. 대신 소리가 커져서 적이 몰려온다. ' +
       '<b>올라가는 계단</b>으로 지난 층에 돌아가 남은 것을 챙길 수 있다. 쫓아오는 적은 내 발자국을 그대로 밟는다. ' +
       '잠들면 코를 골아서 적이 몰려온다. <b>광석 거북</b>은 먼저 싸우지 않지만, 쓰러뜨리면 보물을 준다. ' +
       '나를 눈치채지 못한 적(자거나 어슬렁거리는 적)을 치면 <b>기습</b>으로 피해가 두 배다. ' +
@@ -141,6 +142,20 @@ export function renderHub(ctx) {
       legends.append(row);
     }
     inner.append(legends);
+    // the ore book: every grade you have seen, and how many you broke open
+    const ores = el('div', 'shop');
+    ores.append(el('h3', null, `광석 도감 (${ORES.filter(o => o.id in meta.ores).length}/${ORES.length})`));
+    const orow = el('div', 'ore-book');
+    for (const o of ORES) {
+      const seen = o.id in meta.ores;
+      const cell = el('div', 'ore-cell' + (seen ? '' : ' unknown'));
+      const pic = icon(`t_ore_${o.id}`);
+      if (!seen) pic.classList.add('shadow');
+      cell.append(pic, el('b', null, seen ? o.name : '???'), el('span', null, seen ? `${meta.ores[o.id] ? `${meta.ores[o.id]}번 캠` : '아직 못 캠'} · 골드 ×${o.mult}` : o.gem ? '보석' : ''));
+      orow.append(cell);
+    }
+    ores.append(orow);
+    inner.append(ores);
     let armed = 0;
     const reset = button('btn', '기록 초기화', () => {
       if (Date.now() - armed < 3000) { const m = freshMeta(); saveMeta(m); setMeta(m); return; }
