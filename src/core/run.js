@@ -3,7 +3,7 @@
 // Enemy behaviour lives in ai.js, fire/gas/explosions in world.js.
 
 import * as B from '../data/balance.js';
-import { RELICS, EVOLUTIONS, MAX_LEVEL, MAX_SLOTS } from '../data/relics.js';
+import { RELICS, EVOLUTIONS, LEGENDS, MAX_LEVEL, MAX_SLOTS } from '../data/relics.js';
 import { CHARACTERS } from '../data/characters.js';
 import { ENEMIES, ZONES } from '../data/enemies.js';
 import { ITEMS } from '../data/items.js';
@@ -63,11 +63,15 @@ export class Run {
     const rl = this.p.relics, ch = this.char, up = this.meta.up;
     const lv = id => rl[id] || 0;
     return {
-      atk: ch.atk + up.atk + 2 * lv('blade') + (rl.flamesword ? 8 : 0),
-      def: ch.def + lv('shield') + (rl.fortress ? 5 : 0),
-      maxHp: ch.hp + up.hp * 4 + 8 * lv('heart') + (rl.bloodcrown ? 30 : 0) + (this.p.lvl - 1) * B.HP_PER_LEVEL,
-      goldMult: 1 + 0.4 * lv('coin') + (rl.goldbolt ? 1.5 : 0) + 0.1 * up.greed,
-      dodge: ch.dodge || 0,
+      atk: ch.atk + up.atk + 2 * lv('blade') + (rl.flamesword ? 8 : 0) + (rl.volcano ? 10 : 0),
+      def: ch.def + lv('shield') + (rl.fortress ? 5 : 0) + (rl.undying ? 6 : 0),
+      maxHp: ch.hp + up.hp * 4 + 8 * lv('heart') + (rl.bloodcrown ? 30 : 0) + (rl.undying ? 40 : 0) + (this.p.lvl - 1) * B.HP_PER_LEVEL,
+      goldMult: 1 + 0.4 * lv('coin') + (rl.goldbolt ? 1.5 : 0) + (rl.goldstorm ? 2 : 0) + 0.1 * up.greed,
+      dodge: (ch.dodge || 0) + 0.08 * lv('cloak') + (rl.shadow ? 0.3 : 0),
+      sneak: rl.shadow ? 4 : 2 + 0.5 * lv('boots'),           // damage multiplier on a surprise attack
+      sight: B.SIGHT + lv('lantern'),
+      oreMult: rl.goldrush || rl.goldstorm ? 3 : 1 + 0.5 * lv('pick'),
+      magnet: rl.goldstorm ? 5 : rl.goldrush ? 4 : rl.magnet ? rl.magnet + 1 : 0,
     };
   }
   // Runs fn; any gain in max HP also fills current HP by the same amount.
@@ -86,8 +90,8 @@ export class Run {
   canEnemyEnter(x, y) {
     return this.passable(x, y) && !this.enemyAt(x, y) && !(x === this.p.x && y === this.p.y);
   }
-  // next to each other and not split by a doorway corner
-  touching(a, b) { return cheb(a, b) === 1 && !diagBlocked(this.map, a.x, a.y, b.x, b.y); }
+  // next to each other: close enough to hit, diagonals and doorways included
+  touching(a, b) { return cheb(a, b) === 1; }
   playerHidden() { return this.map.ter[idx(this.p.x, this.p.y)] === T.BRUSH; }
   randomFloorTile() {
     for (let t = 0; t < 100; t++) {
@@ -129,8 +133,9 @@ export class Run {
   enterFloor() {
     this.telegraph = [];
     this.trail = [{ x: this.p.x, y: this.p.y }];
+    this.bandageUsed = false;
     this.refreshDoors();
-    computeFOV(this.map, this.p.x, this.p.y);
+    computeFOV(this.map, this.p.x, this.p.y, this.stat().sight);
     this.emit('floor');
   }
 
@@ -228,6 +233,7 @@ export class Run {
     } else {
       this.meta.stats.maxFloor = Math.max(this.meta.stats.maxFloor, this.floor);
       this.genFloor();
+      if (this.p.relics.bombbag) { this.p.items.bomb++; this.log('폭탄 가방에서 폭탄을 하나 꺼냈다.', 'good'); }
     }
     this.emit('banner', { text: isBossFloor(this.floor) ? `${this.floor}층 · 보스` : `${this.floor}층 · ${this.zone.name}` });
     this.log(dir > 0 ? `${this.floor}층에 내려왔다.` : `${this.floor}층으로 올라왔다.`);
@@ -260,8 +266,8 @@ export class Run {
     const p = this.p, map = this.map, nx = p.x + dx, ny = p.y + dy;
     if (!inMap(nx, ny)) return false;
     if (dx) p.face = Math.sign(dx);
-    if (diagBlocked(map, p.x, p.y, nx, ny)) return false;
     const e = this.enemyAt(nx, ny);
+    if (!e && diagBlocked(map, p.x, p.y, nx, ny)) return false;
     if (e) {
       this.emit('attack', { from: { x: p.x, y: p.y }, to: { x: nx, y: ny }, who: 'player' });
       this.playerAttack(e);
@@ -297,13 +303,13 @@ export class Run {
     this.emit('mine', { x: ore.x, y: ore.y, from: { x: p.x, y: p.y }, hits: ore.hits, r });
     for (const v of map.vents) addGas(this, v.x, v.y, 'mine', B.ORE_GAS);
     if (ore.hits < B.ORE_HITS) {
-      this.addGold(B.oreGold(this.floor));
+      this.addGold(Math.round(B.oreGold(this.floor) * this.stat().oreMult));
       this.log(`캉! 광석 조각이 떨어졌다. (${ore.hits}/${B.ORE_HITS})`);
     } else {
       const i = idx(ore.x, ore.y);
       map.tiles[i] = FLOOR;
       map.ore = null;
-      this.pickups.push({ x: ore.x, y: ore.y, type: 'gold', amount: B.oreJackpot(this.floor) });
+      this.pickups.push({ x: ore.x, y: ore.y, type: 'gold', amount: Math.round(B.oreJackpot(this.floor) * this.stat().oreMult) });
       this.pickups.push({ x: ore.x, y: ore.y, type: 'chest' });
       this.log('쩌억! 큰 광석이 통째로 쏟아졌다!', 'good');
       this.discover('ore_jackpot');
@@ -345,7 +351,8 @@ export class Run {
     p.items.bomb--;
     if (x !== p.x) p.face = Math.sign(x - p.x);
     this.emit('throw', { from: { x: p.x, y: p.y }, to: { x, y } });
-    explosion(this, x, y, 1, { dmg: B.bombDamage(this.floor), cause: '내가 던진 폭탄에 휘말렸다' });
+    const bag = this.p.relics.bombbag || 0;
+    explosion(this, x, y, 1, { dmg: Math.round(B.bombDamage(this.floor) * (1 + 0.25 * Math.max(0, bag - 1))), cause: '내가 던진 폭탄에 휘말렸다' });
     this.endTurn();
     return true;
   }
@@ -361,20 +368,42 @@ export class Run {
   }
 
   // ---------- combat ----------
+  // An enemy that is not after you (asleep, strolling, searching, or a calm one) takes a surprise attack.
+  unaware(e) { return ['sleep', 'wander', 'search'].includes(e.state) || this.calm(e); }
+
   playerAttack(e) {
-    const s = this.stat(), rl = this.p.relics;
-    const unaware = e.state === 'sleep' || this.calm(e);
-    if (unaware) this.log(`${e.state === 'sleep' ? '자고 있는 ' : ''}${e.d.name}에게 기습!`, 'good');
-    const sneak = unaware ? 2 : 1;
-    this.hurt(e, Math.max(1, (s.atk + rnd(2)) * sneak - e.def), 'normal');
+    const s = this.stat(), rl = this.p.relics, lv = id => rl[id] || 0;
+    const base = s.atk + rnd(2);
+    if (this.unaware(e)) {
+      this.emit('sneak', { x: e.x, y: e.y });
+      this.log(`${e.state === 'sleep' ? '자고 있는 ' : ''}${e.d.name}에게 기습! 피해 ×${s.sneak}`, 'good');
+      this.strike(e, Math.round(base * s.sneak), 'sneak');
+    } else this.strike(e, base, 'normal');
+    // the swing carries on into everyone else standing next to you
+    const quake = rl.quake || rl.volcano, sweep = lv('sweep');
+    if (quake || sweep) {
+      for (const o of this.enemies.filter(o => o !== e && o.hp > 0 && this.touching(o, this.p))) {
+        this.emit('attack', { from: { x: this.p.x, y: this.p.y }, to: { x: o.x, y: o.y }, who: 'player' });
+        this.strike(o, quake ? base : Math.max(1, Math.round(base * 0.3 * sweep)), 'normal');
+      }
+    }
+  }
+
+  // One blow from you: defence, then the relics that ride along with every hit.
+  strike(e, raw, kind) {
+    const rl = this.p.relics;
+    this.hurt(e, Math.max(1, raw - e.def), kind);
+    if (e.hp <= 0) return;
     let fire = 0;
-    if (rl.flamesword) fire = 5;
+    if (rl.flamesword || rl.volcano) fire = 5;
     else if (rl.ring && Math.random() < 0.3) fire = 3 * rl.ring;
-    if (fire && e.hp > 0) {
+    if (fire) {
       this.hurt(e, fire, 'fire');
       const t = this.map.ter[idx(e.x, e.y)];
       if (t === T.BRUSH) ignite(this, e.x, e.y);
     }
+    const stun = rl.quake || rl.volcano ? 0.3 : 0.15 * (rl.hammer || 0);
+    if (e.hp > 0 && !e.d.boss && Math.random() < stun) { e.stun = 1; this.emit('stun', { x: e.x, y: e.y }); }
   }
 
   hurt(e, dmg, kind) {
@@ -422,7 +451,7 @@ export class Run {
     const dmg = Math.max(1, raw + rnd(2) - s.def);
     this.hurtPlayer(dmg, `${src.d.name}에게 당했다`, kind);
     if (src && kind === 'melee') {
-      const thorn = rl.fortress ? 8 : 2 * (rl.thorns || 0);
+      const thorn = rl.undying ? 10 : rl.fortress ? 8 : 2 * (rl.thorns || 0);
       if (thorn) this.hurt(src, thorn, 'thorns');
       if (src.type === 'lord' && src.hp > 0) src.hp = Math.min(src.maxHp, src.hp + dmg);
     }
@@ -436,6 +465,18 @@ export class Run {
     this.cause = cause;
     if (p.sleep) { p.sleep = 0; p.wokeAt = this.turn; this.log('아파서 잠이 확 깼다!', 'warn'); }
     this.emit('phit', { x: p.x, y: p.y, dmg, kind });
+    const rl = p.relics, maxHp = this.stat().maxHp;
+    if (p.hp <= 0 && rl.undying && !this.revived) {
+      this.revived = true;
+      p.hp = 0;
+      this.heal(Math.round(maxHp / 2));
+      this.log('불사의 심장이 뛴다! 쓰러졌다가 다시 일어났다.', 'evo');
+      this.emit('banner', { text: '불사의 심장!' });
+    } else if (p.hp > 0 && rl.bandage && !this.bandageUsed && p.hp < maxHp / 3) {
+      this.bandageUsed = true;
+      this.heal(6 * rl.bandage);
+      this.log('비상 붕대를 감았다.', 'good');
+    }
   }
 
   heal(n) {
@@ -485,7 +526,8 @@ export class Run {
   endTurn() {
     const p = this.p, rl = p.relics;
     this.turn++;
-    if (rl.goldbolt && this.turn % 3 === 0) this.zap(3, 10);
+    if (rl.goldstorm && this.turn % 2 === 0) this.zap(4, 12);
+    else if (rl.goldbolt && this.turn % 3 === 0) this.zap(3, 10);
     else if (rl.bolt && this.turn % 6 === 0) this.zap(1, 4 * rl.bolt);
     if (rl.moss && this.turn % [6, 4, 2][rl.moss - 1] === 0) this.heal(1);
 
@@ -496,8 +538,20 @@ export class Run {
     if (p.hp > 0) envTick(this);
     this.enemies = this.enemies.filter(e => e.hp > 0);
     if (p.hp > 0) this.chatter();
+    this.magnetize();
     this.respawnTick();
     this.afterTurn();
+  }
+
+  // the magnet relics pull in gold you can see
+  magnetize() {
+    const r = this.stat().magnet, p = this.p;
+    if (!r) return;
+    for (const q of this.pickups.filter(q => q.type === 'gold' && cheb(q, p) <= r && this.isVisible(q.x, q.y))) {
+      this.pickups.splice(this.pickups.indexOf(q), 1);
+      this.emit('pickup', { x: q.x, y: q.y, type: 'gold' });
+      this.addGold(q.amount);
+    }
   }
 
   // a peaceful monster nobody has picked a fight with yet
@@ -585,7 +639,7 @@ export class Run {
 
   afterTurn() {
     this.refreshDoors();
-    computeFOV(this.map, this.p.x, this.p.y);
+    computeFOV(this.map, this.p.x, this.p.y, this.stat().sight);
     if (this.p.hp <= 0) { this.p.hp = 0; this.finish(false); return; }
     if (this.victory) { this.finish(true); return; }
     this.emit('turn');
@@ -656,7 +710,13 @@ export class Run {
       if (ev && rl[ev.id]) return false;
       return this.relicAvailable(id);
     });
-    const res = shuffle(pool).slice(0, n).map(id => ({ kind: 'relic', id }));
+    // like Vampire Survivors, one card usually helps what you already have (a level, or an evolution partner),
+    // so evolutions stay within reach even with many relics in the pool
+    const grows = id => rl[id] || EVOLUTIONS.some(ev => (ev.a === id && rl[ev.b]) || (ev.b === id && rl[ev.a]));
+    const growth = pool.filter(grows), ids = [];
+    if (growth.length && Math.random() < 0.75) ids.push(pick(growth));
+    for (const id of shuffle(pool.slice())) if (ids.length < n && !ids.includes(id)) ids.push(id);
+    const res = shuffle(ids).map(id => ({ kind: 'relic', id }));
     if (res.length < n) res.push({ kind: 'heal' });
     if (res.length < n) res.push({ kind: 'gold' });
     return res;
@@ -685,6 +745,16 @@ export class Run {
         this.log(`진화! ${RELICS[ev.a].name} + ${RELICS[ev.b].name} → ${RELICS[ev.id].name}`, 'evo');
         this.emit('evolve', { id: ev.id, x: this.p.x, y: this.p.y });
         this.emit('banner', { text: `진화! ${RELICS[ev.id].name}` });
+      }
+    }
+    for (const lg of LEGENDS) {
+      if (rl[lg.a] && rl[lg.b] && !rl[lg.id]) {
+        this.withMaxHpDelta(() => { delete rl[lg.a]; delete rl[lg.b]; rl[lg.id] = 1; });
+        const first = !this.meta.legends[lg.id];
+        this.meta.legends[lg.id] = true;
+        this.log(`전설 탄생! ${RELICS[lg.a].name} + ${RELICS[lg.b].name} → ${RELICS[lg.id].name}${first ? ' (처음 만들었다!)' : ''}`, 'evo');
+        this.emit('evolve', { id: lg.id, x: this.p.x, y: this.p.y });
+        this.emit('banner', { text: `전설 탄생! ${RELICS[lg.id].name}` });
       }
     }
   }

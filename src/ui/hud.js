@@ -1,7 +1,7 @@
 // Side panel during a run: floor, HP, XP, relics, consumables, message log.
 
 import { $, el, button, icon } from './dom.js';
-import { RELICS, MAX_SLOTS, evolutionOf } from '../data/relics.js';
+import { RELICS, MAX_SLOTS, evolutionOf, legendOf } from '../data/relics.js';
 import { ITEMS } from '../data/items.js';
 import { LAST_FLOOR, xpToLevel } from '../data/balance.js';
 import { zoneOf, isBossFloor } from '../core/run.js';
@@ -47,6 +47,12 @@ export class Hud {
   }
 
   evolutionLine(run, id) {
+    const lg = legendOf(id);
+    if (lg) {
+      if (!run.meta.legends[lg.id]) return `전설 조합: ??? · 소문: "${lg.hint}"`;
+      const part = x => `${RELICS[x].name}${run.p.relics[x] ? ' ✓' : ''}`;
+      return `전설: ${part(lg.a)} + ${part(lg.b)} → ${RELICS[lg.id].name}`;
+    }
     const ev = evolutionOf(id);
     if (!ev) return '';
     const part = x => `${RELICS[x].name} Lv${run.p.relics[x] || 0}/3`;
@@ -74,7 +80,7 @@ export class Hud {
       const id = ids[i];
       if (!id) { const b = button('relic empty'); b.disabled = true; box.append(b); continue; }
       const r = RELICS[id];
-      const b = button('relic' + (r.evo ? ' evo' : ''), null, () => {
+      const b = button('relic' + (r.legend ? ' legend' : r.evo ? ' evo' : ''), null, () => {
         this.selected = this.selected === id ? null : id;
         this.update(run);
       });
@@ -87,8 +93,8 @@ export class Hud {
     const info = $('relicInfo');
     if (this.selected && p.relics[this.selected]) {
       const id = this.selected, r = RELICS[id];
-      const ev = r.evo ? '' : this.evolutionLine(run, id);
-      info.innerHTML = `<b>${r.name}${r.evo ? ' (진화)' : ` Lv${p.relics[id]}`}</b> · ${r.desc(p.relics[id])}` +
+      const ev = this.evolutionLine(run, id);
+      info.innerHTML = `<b>${r.name}${r.legend ? ' (전설)' : r.evo ? ' (진화)' : ` Lv${p.relics[id]}`}</b> · ${r.desc(p.relics[id])}` +
         (ev ? `<br><span class="evo-line">${ev}</span>` : '');
     } else {
       info.textContent = '유물을 누르면 효과와 진화 조합이 보인다.';

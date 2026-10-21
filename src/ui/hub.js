@@ -3,7 +3,7 @@
 import { $, el, button, icon } from './dom.js';
 import { CHARACTERS } from '../data/characters.js';
 import { UPGRADES } from '../data/upgrades.js';
-import { RELICS, evolutionOf } from '../data/relics.js';
+import { RELICS, LEGENDS, evolutionOf } from '../data/relics.js';
 import { freshMeta, saveMeta } from '../core/save.js';
 import { josa } from '../core/util.js';
 import { DISCOVERIES } from '../data/terrain.js';
@@ -20,7 +20,7 @@ export function renderHub(ctx) {
   const inner = el('div', 'hub-inner');
 
   const head = el('div', 'hub-head');
-  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.6 · 9층 · 보스 3마리 · 돌아다니는 적과 광석 거북</small>'));
+  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.7 · 9층 · 보스 3마리 · 유물 26종과 전설 유물</small>'));
   const purse = el('div', 'purse');
   purse.append(icon('gold', 24), el('span', null, `${meta.gold}G`));
   head.append(purse);
@@ -43,6 +43,7 @@ export function renderHub(ctx) {
       '층마다 <b>큰 광석</b>이 하나 있다. 캘수록 골드가 나오지만 소리가 커져서 적이 몰려온다. ' +
       '<b>올라가는 계단</b>으로 지난 층에 돌아가 남은 것을 챙길 수 있다. 쫓아오는 적은 내 발자국을 그대로 밟는다. ' +
       '잠들면 코를 골아서 적이 몰려온다. <b>광석 거북</b>은 먼저 싸우지 않지만, 쓰러뜨리면 보물을 준다. ' +
+      '나를 눈치채지 못한 적(자거나 어슬렁거리는 적)을 치면 <b>기습</b>으로 피해가 두 배다. ' +
       '적 코에 <b>콧방울</b>이 있으면 자는 중이다. 내 칸에 <b style="color:var(--danger)">빨간 발톱 자국</b>이 보이면 다음 턴에 맞는다.'));
     const grid = el('div', 'chars');
     for (const [id, c] of Object.entries(CHARACTERS)) {
@@ -124,6 +125,17 @@ export function renderHub(ctx) {
       book.append(row);
     }
     inner.append(book);
+    const legends = el('div', 'shop');
+    legends.append(el('h3', null, `전설 유물 (${LEGENDS.filter(l => meta.legends[l.id]).length}/${LEGENDS.length})`));
+    for (const l of LEGENDS) {
+      const got = meta.legends[l.id];
+      const row = el('div', 'row' + (got ? '' : ' unknown')), main = el('div', 'row-main');
+      main.append(el('span', 'row-name', got ? `${RELICS[l.a].name} + ${RELICS[l.b].name} → ${RELICS[l.id].name}` : '???'),
+        el('span', 'row-sub', got ? RELICS[l.id].desc() : `소문: "${l.hint}"`));
+      row.append(main);
+      legends.append(row);
+    }
+    inner.append(legends);
     let armed = 0;
     const reset = button('btn', '기록 초기화', () => {
       if (Date.now() - armed < 3000) { const m = freshMeta(); saveMeta(m); setMeta(m); return; }

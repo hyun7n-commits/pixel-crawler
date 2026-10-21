@@ -97,6 +97,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .relic canvas { width: 70%; height: 70%; }
 .relic .lv { position: absolute; right: 2px; bottom: 0; font-size: 10px; font-weight: 700; color: var(--fg); text-shadow: 1px 1px 0 #000; }
 .relic.evo { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
+.relic.legend { border-color: #f08c3a; box-shadow: inset 0 0 0 1px #f08c3a, 0 0 6px #f08c3a; }
 .relic.empty { opacity: .35; cursor: default; }
 .relic[aria-pressed="true"] { outline: 2px solid var(--accent); }
 #relicInfo { font-size: 12.5px; line-height: 1.5; color: var(--muted); min-height: 38px; }

@@ -6,7 +6,6 @@
 import { TILE, buildTextures } from './textures.js';
 import { CHARACTERS } from '../data/characters.js';
 import { ITEMS } from '../data/items.js';
-import { SIGHT } from '../data/balance.js';
 import { T, TERRAIN, GASES, GAS_KEYS } from '../data/terrain.js';
 import { idx, inMap, WALL, STAIRS, DOOR, ORE, UPSTAIRS } from '../core/dungeon.js';
 import { WAKE_AT } from '../core/ai.js';
@@ -204,6 +203,7 @@ export class DungeonScene extends Phaser.Scene {
     for (const [i, img] of Object.entries(this.doorImgs)) img.setTexture(map.open[i] ? 't_doorOpen' : 't_door');
 
     // fog of war with light falling off from the player
+    const sight = run.stat().sight;
     for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) {
       const i = idx(x, y), imgs = this.tileImgs[i];
       if (!imgs) continue;
@@ -211,7 +211,7 @@ export class DungeonScene extends Phaser.Scene {
       let v;
       if (map.visible[i]) {
         const d = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
-        v = Math.round(255 - Math.min(1, d / (SIGHT + 1)) * 110);
+        v = Math.round(255 - Math.min(1, d / (sight + 1)) * 110);
       } else v = 70;
       const tint = (v << 16) | (v << 8) | Math.min(255, Math.round(v * 1.05));
       imgs.forEach(im => im.setVisible(true).setTint(tint));
@@ -289,6 +289,11 @@ export class DungeonScene extends Phaser.Scene {
         this.fx.blood.explode(8, center(d.x), center(d.y));
         this.float(d.x, d.y, `-${d.dmg}`, '#ff6b6b');
         break;
+      case 'sneak':
+        this.float(d.x, d.y - 1.1, '기습!', '#f4cf4f', 0, 12);
+        this.fx.spark.explode(12, center(d.x), center(d.y));
+        this.cameras.main.shake(90, 0.004);
+        break;
       case 'snore': this.noiseRing(d.x, d.y, d.r, 0xb58cf0); break;
       case 'dodge': this.float(d.x, d.y, '회피', '#6fe0e0'); break;
       case 'heal': this.float(d.x, d.y, `+${d.n}`, '#8fd36a'); this.fx.heal.explode(6, center(d.x), center(d.y)); break;
@@ -340,12 +345,13 @@ export class DungeonScene extends Phaser.Scene {
   onHit(d) {
     const s = this.enemySprites[d.enemy.id];
     if (s) this.flash(s);
-    const color = { normal: '#ffffff', fire: '#f08c3a', bolt: '#f4cf4f', thorns: '#b8b8c8' }[d.kind] || '#ffffff';
+    const color = { normal: '#ffffff', sneak: '#f4cf4f', fire: '#f08c3a', bolt: '#f4cf4f', thorns: '#b8b8c8' }[d.kind] || '#ffffff';
     const kind = d.enemy.d.sprite;
     const fx = d.kind === 'fire' ? 'fire' : d.kind === 'bolt' ? 'spark' : kind === 'skel' ? 'bone' : kind === 'slime' ? 'slime' : 'blood';
     if (this.run.isVisible(d.x, d.y)) {
       this.fx[fx].explode(d.kind === 'normal' ? 6 : 10, center(d.x), center(d.y));
-      this.float(d.x, d.y, String(d.dmg), color, d.kind === 'normal' ? 0 : 120);
+      const first = d.kind === 'normal' || d.kind === 'sneak';
+      this.float(d.x, d.y, String(d.dmg), color, first ? 0 : 120, d.kind === 'sneak' ? 13 : 10);
     }
   }
 
@@ -380,9 +386,9 @@ export class DungeonScene extends Phaser.Scene {
     this.tweens.add({ targets: sprite, x: bx + dx, y: by + dy, duration: 55, yoyo: true, ease: 'Quad.out' });
   }
 
-  float(x, y, text, color, delay = 0) {
+  float(x, y, text, color, delay = 0, size = 10) {
     const t = this.add.text(center(x), y * TILE, text, {
-      fontFamily: '"Do Hyeon", sans-serif', fontSize: '10px', color, stroke: '#000000', strokeThickness: 2,
+      fontFamily: '"Do Hyeon", sans-serif', fontSize: `${size}px`, color, stroke: '#000000', strokeThickness: 2,
     }).setOrigin(0.5, 1).setDepth(D.text).setResolution(this.textRes()).setAlpha(delay ? 0 : 1);
     this.tweens.add({ targets: t, alpha: 1, duration: 1, delay });
     this.tweens.add({ targets: t, y: t.y - 10, alpha: 0, duration: 800, delay: delay + 150, ease: 'Quad.in', onComplete: () => t.destroy() });

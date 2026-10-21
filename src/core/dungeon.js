@@ -273,12 +273,12 @@ export function lineOfSight(map, x0, y0, x1, y1) {
   return true;
 }
 
-export function computeFOV(map, px, py) {
+export function computeFOV(map, px, py, sight = SIGHT) {
   map.visible.fill(0);
-  for (let y = py - SIGHT; y <= py + SIGHT; y++) {
-    for (let x = px - SIGHT; x <= px + SIGHT; x++) {
+  for (let y = py - sight; y <= py + sight; y++) {
+    for (let x = px - sight; x <= px + sight; x++) {
       if (!inMap(x, y)) continue;
-      if ((x - px) ** 2 + (y - py) ** 2 > SIGHT * SIGHT + 2) continue;
+      if ((x - px) ** 2 + (y - py) ** 2 > sight * sight + 2) continue;
       if (lineOfSight(map, px, py, x, y)) { map.visible[idx(x, y)] = 1; map.explored[idx(x, y)] = 1; }
     }
   }

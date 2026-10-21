@@ -211,7 +211,10 @@ function creatureTick(run, who) {
   if (b.hp <= 0) return;
   const i = idx(b.x, b.y);
 
-  if (map.gas.sleep[i] >= SLEEP_MIN) {
+  // peppermint lets you shrug off thinner gas, and at Lv3 all of it
+  const mint = who === 'player' ? run.p.relics.mint || 0 : 0;
+  const sleepAt = mint >= 3 ? Infinity : SLEEP_MIN * (1 + mint);
+  if (map.gas.sleep[i] >= sleepAt) {
     if (who === 'player') {
       // a hit wakes you for one turn, enough to stumble out of the cloud
       if (run.p.wokeAt !== run.turn) {
