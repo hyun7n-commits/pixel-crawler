@@ -111,6 +111,25 @@ export const SPR = {
   ],
 
   // ---------- enemies ----------
+  // calm and sturdy, with ore growing on its shell
+  turtle: [
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '.....kkkkk......',
+    '....kLyyLLk.....',
+    '...kLyYYLlLk....',
+    '..kLLLYLLdyLk.kk',
+    '.kLlyyLlLyYLkkgk',
+    '.kLyYYLLLLLdkgwk',
+    '.kdLLLdLLdLLkggk',
+    '.kNNNNNNNNNNNkk.',
+    '..kgGk...kgGk...',
+    '..kkkk...kkkk...',
+    '................',
+  ],
   rat: [
     '................',
     '................',

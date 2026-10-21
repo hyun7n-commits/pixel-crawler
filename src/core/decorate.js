@@ -1,6 +1,6 @@
 // Gives each room of a freshly carved floor one theme, so every feature is there for a reason:
 //   ore    - the floor's big ore, with a gas crack beside it (mining makes noise and leaks gas)
-//   garden - mushroom brush and sleep mushrooms; enemies here are fast asleep
+//   garden - mushroom brush and a sleep mushroom or two; enemies here are fast asleep (one per floor at most)
 //   flood  - groundwater with a little brush around the edges
 //   plain  - nothing much, maybe a patch of brush
 // Corridors stay bare.
@@ -76,11 +76,11 @@ export function decorate(map, rooms, { start, stairs }) {
       if (Math.random() < 0.6) blob(map, r, rint(2, 4), T.BRUSH, keep);
     } else {
       const roll = Math.random();
-      if (roll < 0.35) {
+      if (roll < 0.3 && !has.has('garden')) {
         theme = 'garden';
         blob(map, r, Math.round(r.w * r.h * 0.45), T.BRUSH, keep);
-        sprinkle(map, r, rint(2, 3), T.MUSH_SLEEP, keep);
-      } else if (roll < 0.6) {
+        sprinkle(map, r, rint(1, 2), T.MUSH_SLEEP, keep);
+      } else if (roll >= 0.3 && roll < 0.55) {
         theme = 'flood';
         blob(map, r, Math.round(r.w * r.h * 0.4), T.WATER, keep);
         blob(map, r, rint(2, 4), T.BRUSH, keep);

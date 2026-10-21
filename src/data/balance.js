@@ -28,3 +28,12 @@ export const ORE_GAS = 10;
 export const oreGold = floor => 3 + floor;
 export const oreJackpot = floor => 20 + 6 * floor;
 export const bombDamage = floor => 12 + 2 * floor;
+
+// Enemies: most start asleep. Once you thin a floor out, a wanderer comes in every so often.
+export const START_ASLEEP = 0.85;
+export const RESPAWN_TURNS = 40;
+// Asleep, you snore: enemies this close hear it and come looking.
+export const SNORE_NOISE = 8;
+// The ore turtle: a calm, tough monster that carries treasure
+export const TURTLE_CHANCE = 0.5;
+export const turtleGold = floor => 15 + 5 * floor;

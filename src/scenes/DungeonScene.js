@@ -289,6 +289,7 @@ export class DungeonScene extends Phaser.Scene {
         this.fx.blood.explode(8, center(d.x), center(d.y));
         this.float(d.x, d.y, `-${d.dmg}`, '#ff6b6b');
         break;
+      case 'snore': this.noiseRing(d.x, d.y, d.r, 0xb58cf0); break;
       case 'dodge': this.float(d.x, d.y, '회피', '#6fe0e0'); break;
       case 'heal': this.float(d.x, d.y, `+${d.n}`, '#8fd36a'); this.fx.heal.explode(6, center(d.x), center(d.y)); break;
       case 'gold': this.float(d.x, d.y, `+${d.n}G`, '#f4cf4f', 300); break;
@@ -465,9 +466,9 @@ export class DungeonScene extends Phaser.Scene {
     }
   }
 
-  // How far a swing at the big ore is heard: a ring that grows out to that distance.
-  noiseRing(x, y, r) {
-    const c = this.add.circle(center(x), center(y), TILE * (r + 0.5)).setStrokeStyle(1.5, 0xf4cf4f, 0.9).setDepth(D.fx).setScale(0.1);
+  // How far a sound carries (a swing at the big ore, snoring): a ring that grows out to that distance.
+  noiseRing(x, y, r, color = 0xf4cf4f) {
+    const c = this.add.circle(center(x), center(y), TILE * (r + 0.5)).setStrokeStyle(1.5, color, 0.9).setDepth(D.fx).setScale(0.1);
     this.tweens.add({ targets: c, scale: 1, duration: 260 + r * 40, ease: 'Quad.out' });
     this.tweens.add({ targets: c, alpha: 0, delay: 200 + r * 40, duration: 300, onComplete: () => c.destroy() });
   }
@@ -545,7 +546,7 @@ export class DungeonScene extends Phaser.Scene {
       this.drawStatus(g, s, e, top, flip ? -1 : 1, time);
       if (e.state !== 'sleep' || e.hp < e.maxHp) {
         g.fillStyle(0x000000, 0.8); g.fillRect(s.x - 6, top - 3, 12, 2);
-        g.fillStyle(e.d.boss ? 0xf4cf4f : 0xe0525a, 1); g.fillRect(s.x - 6, top - 3, 12 * Math.max(0, e.hp) / e.maxHp, 2);
+        g.fillStyle(e.d.boss ? 0xf4cf4f : run.calm(e) ? 0x8fd36a : 0xe0525a, 1); g.fillRect(s.x - 6, top - 3, 12 * Math.max(0, e.hp) / e.maxHp, 2);
       }
       if (e.aim && e.aimAt) {
         const a = 0.45 + 0.4 * Math.sin(time / 80);

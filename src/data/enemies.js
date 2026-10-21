@@ -2,6 +2,7 @@
 // slow: acts every other turn · fast: moves two tiles per turn
 // ranged: aims one turn, then shoots the aimed tile (range in tiles)
 // flees: runs away when badly hurt
+// peaceful: never starts a fight, but fights back once hit · treasure: drops a chest and gold
 
 export const ENEMIES = {
   rat:      { name: '쥐',     sprite: 'rat',    hp: 4,  atk: 1, xp: 1, flees: true },
@@ -13,6 +14,8 @@ export const ENEMIES = {
   knight:   { name: '흑기사', sprite: 'knight', hp: 20, atk: 5, def: 1, xp: 8 },
   wizard:   { name: '마법사', sprite: 'wizard', hp: 10, atk: 5, xp: 7, ranged: 6, tip: '조준선을 그은 다음 턴에 쏜다.' },
   garg:     { name: '가고일', sprite: 'garg',   hp: 15, atk: 4, xp: 8, fast: true },
+  turtle:   { name: '광석 거북', sprite: 'turtle', hp: 26, atk: 5, def: 1, xp: 10, slow: true, peaceful: true, treasure: true,
+              tip: '먼저 건드리지 않으면 싸우지 않는다. 튼튼하고 세지만 쓰러뜨리면 보물을 떨군다.' },
 
   ratking:  { name: '왕쥐',          sprite: 'rat',  hp: 45,  atk: 3, xp: 20, boss: true, tip: '가끔 쥐를 불러낸다.' },
   skelking: { name: '해골 왕',       sprite: 'skel', hp: 80,  atk: 5, xp: 30, boss: true, tip: '붉게 표시된 칸을 내려친다. 칸 밖으로 피해야 한다.' },

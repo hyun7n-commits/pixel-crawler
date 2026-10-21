@@ -7,7 +7,7 @@
 
 import { lineOfSight, distMap, idx, diagBlocked } from './dungeon.js';
 import { SLEEP_MIN } from '../data/terrain.js';
-import { cheb, shuffle, DIRS8 } from './util.js';
+import { cheb, shuffle, josa, DIRS8 } from './util.js';
 import { onEnter } from './world.js';
 
 export const WAKE_AT = 10;
@@ -22,6 +22,7 @@ export function canSee(run, e, range) {
 export function enemyAct(run, e, dmP) {
   const d = e.d, p = run.p;
   if (e.stun > 0) { e.stun--; return; }
+  if (run.calm(e)) { calmAct(run, e); return; }
   if (e.state === 'sleep') { sleepTick(run, e); return; }
   if (d.slow) { e.skip = !e.skip; if (e.skip) return; }
   e.timer++;
@@ -34,7 +35,7 @@ export function enemyAct(run, e, dmP) {
       e.state = 'hunt';
       run.say(e, '!');
       run.emit('alert', { enemy: e });
-      return; // noticing takes its turn
+      if (!run.p.sleep) return; // noticing takes its turn, unless you are asleep and easy pickings
     }
   }
   if (e.state === 'hunt' && d.flees && e.hp <= e.maxHp * 0.3) {
@@ -64,8 +65,30 @@ function sleepTick(run, e) {
   }
 }
 
+// A peaceful monster minding its own business: naps, wakes up, ambles about.
+function calmAct(run, e) {
+  if (e.state === 'sleep') {
+    if (e.doze > 0) e.doze--;
+    else if (Math.random() < 0.05) e.state = 'wander';
+    return;
+  }
+  if (e.d.slow) { e.skip = !e.skip; if (e.skip) return; }
+  if (Math.random() < 0.03) { e.state = 'sleep'; return; }
+  wander(run, e);
+}
+
 // Woken by a hit (`by` = 'hit') or a noise at (x, y)
 export function rouse(run, e, by, x, y) {
+  if (run.calm(e)) {
+    if (by !== 'hit') return false; // noise doesn't bother it
+    e.angry = true;
+    e.state = 'hunt'; e.wake = 0; e.doze = 0;
+    e.last = { x: run.p.x, y: run.p.y };
+    run.say(e, '!');
+    run.emit('alert', { enemy: e });
+    run.log(`${josa(e.d.name, '이', '가')} 화났다!`, 'warn');
+    return true;
+  }
   if (e.state === 'sleep') {
     if (by !== 'hit' && run.map.gas.sleep[idx(e.x, e.y)] >= SLEEP_MIN) return false;
     e.wake = 0; e.doze = 0;
@@ -166,7 +189,6 @@ function wander(run, e) {
   if (!e.target || (e.x === e.target.x && e.y === e.target.y) || Math.random() < 0.03) e.target = run.randomFloorTile();
   const dm = distMap(run.map, e.target.x, e.target.y);
   if (!stepToward(run, e, dm)) e.target = null;
-  if (Math.random() < 0.02) { e.state = 'sleep'; e.wake = 0; }
 }
 
 function randomStep(run, e) {

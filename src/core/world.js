@@ -4,9 +4,10 @@
 import { T, TERRAIN, GAS_KEYS, SLEEP_MIN, MINE_MIN } from '../data/terrain.js';
 import { idx, inMap, passable, isBorder, WALL, FLOOR, DOOR } from './dungeon.js';
 import { DIRS8 } from './util.js';
+import { SNORE_NOISE } from '../data/balance.js';
 
 const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-const GAS_DECAY = { sleep: 0.9, mine: 0.97 };
+const GAS_DECAY = { sleep: 0.8, mine: 0.97 };
 
 // 'player', an enemy, or null
 export function whoAt(run, x, y) {
@@ -214,7 +215,11 @@ function creatureTick(run, who) {
     if (who === 'player') {
       // a hit wakes you for one turn, enough to stumble out of the cloud
       if (run.p.wokeAt !== run.turn) {
-        if (!run.p.sleep) { run.say('player', '하암…'); run.log('졸음 가스를 마셔서 잠들었다…', 'warn'); }
+        if (!run.p.sleep) {
+          run.say('player', '하암…');
+          run.log(run.told.snore ? '졸음 가스를 마셔서 잠들었다…' : '졸음 가스를 마셔서 잠들었다… 코 고는 소리에 적이 몰려온다!', 'warn');
+          run.told.snore = true;
+        }
         run.p.sleep = 2;
       }
     } else if (who.state !== 'sleep') {
@@ -223,6 +228,11 @@ function creatureTick(run, who) {
     } else who.doze = 2;
   } else if (who === 'player' && run.p.sleep > 0 && --run.p.sleep === 0) {
     run.log('잠에서 깼다.', 'good');
+  }
+  // asleep you snore, and anything awake nearby comes to see
+  if (who === 'player' && run.p.sleep > 0) {
+    run.emit('snore', { x: b.x, y: b.y, r: SNORE_NOISE });
+    run.noise(b.x, b.y, SNORE_NOISE);
   }
 
   if (b.burn > 0) {

@@ -120,6 +120,7 @@ export class Run {
     this.has = new Set();
     this.gasActive = false;
     this.overheard = false; // at most one overheard line per floor
+    this.respawnT = 0;
     if (isBossFloor(this.floor)) this.genBossFloor();
     else this.genNormalFloor();
     this.enterFloor();
@@ -167,8 +168,11 @@ export class Run {
     for (let i = 0; i < B.enemiesPerFloor(this.floor); i++) {
       place(s => {
         const e = this.spawnEnemy(pick(this.zone.enemies), s.x, s.y, scale);
-        e.state = s.theme === 'garden' || Math.random() < 0.5 ? 'sleep' : 'wander';
+        e.state = s.theme === 'garden' || Math.random() < B.START_ASLEEP ? 'sleep' : 'wander';
       });
+    }
+    if (Math.random() < B.TURTLE_CHANCE) {
+      place(s => { this.spawnEnemy('turtle', s.x, s.y, scale).state = Math.random() < 0.5 ? 'sleep' : 'wander'; });
     }
     for (let i = 0, n = rint(5, 7); i < n; i++) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'gold', amount: (zi + 1) * rint(3, 7) }));
     place(s => this.pickups.push({ x: s.x, y: s.y, type: 'chest' }));
@@ -210,7 +214,7 @@ export class Run {
   changeFloor(dir) {
     this.floors[this.floor] = {
       map: this.map, enemies: this.enemies.filter(e => e.hp > 0), pickups: this.pickups,
-      boss: this.boss, has: this.has, gasActive: this.gasActive, overheard: this.overheard,
+      boss: this.boss, has: this.has, gasActive: this.gasActive, overheard: this.overheard, respawnT: this.respawnT,
     };
     this.floor += dir;
     this.p.burn = 0; this.p.sleep = 0;
@@ -359,8 +363,9 @@ export class Run {
   // ---------- combat ----------
   playerAttack(e) {
     const s = this.stat(), rl = this.p.relics;
-    if (e.state === 'sleep') this.log(`자고 있는 ${e.d.name}에게 기습!`, 'good');
-    const sneak = e.state === 'sleep' ? 2 : 1;
+    const unaware = e.state === 'sleep' || this.calm(e);
+    if (unaware) this.log(`${e.state === 'sleep' ? '자고 있는 ' : ''}${e.d.name}에게 기습!`, 'good');
+    const sneak = unaware ? 2 : 1;
     this.hurt(e, Math.max(1, (s.atk + rnd(2)) * sneak - e.def), 'normal');
     let fire = 0;
     if (rl.flamesword) fire = 5;
@@ -400,6 +405,9 @@ export class Run {
         this.log('내려가는 계단이 나타나고, 위층으로 가는 길도 열렸다.', 'good');
       }
       this.addGold(30 * (this.floor / 3));
+    } else if (e.d.treasure) {
+      this.pickups.push({ x: e.x, y: e.y, type: 'chest' }, { x: e.x, y: e.y, type: 'gold', amount: B.turtleGold(this.floor) });
+      this.log(`${josa(e.d.name, '이', '가')} 등에 지고 있던 보물을 떨궜다!`, 'good');
     } else if (Math.random() < B.GOLD_DROP_CHANCE) {
       this.pickups.push({ x: e.x, y: e.y, type: 'gold', amount: (Math.floor((this.floor - 1) / 3) + 1) * rint(1, 4) });
     }
@@ -488,12 +496,40 @@ export class Run {
     if (p.hp > 0) envTick(this);
     this.enemies = this.enemies.filter(e => e.hp > 0);
     if (p.hp > 0) this.chatter();
+    this.respawnTick();
     this.afterTurn();
+  }
+
+  // a peaceful monster nobody has picked a fight with yet
+  calm(e) { return !!e.d.peaceful && !e.angry; }
+
+  // Like Shattered Pixel Dungeon: once you thin a floor out, a new enemy wanders in now and then,
+  // somewhere out of sight, and roams until it runs into you.
+  respawnTick() {
+    if (isBossFloor(this.floor) || this.over) return;
+    const hostile = this.enemies.filter(e => !e.d.peaceful).length;
+    if (hostile >= B.enemiesPerFloor(this.floor)) { this.respawnT = 0; return; }
+    if (++this.respawnT < B.RESPAWN_TURNS) return;
+    const spot = this.hiddenSpot();
+    if (!spot) return;
+    this.respawnT = 0;
+    this.spawnEnemy(pick(this.zone.enemies), spot.x, spot.y, B.enemyScale(this.floor)).state = 'wander';
+  }
+
+  hiddenSpot() {
+    const map = this.map;
+    for (let t = 0; t < 300; t++) {
+      const x = rnd(map.w), y = rnd(map.h), i = idx(x, y);
+      if (map.tiles[i] !== FLOOR || map.visible[i] || cheb({ x, y }, this.p) < 10) continue;
+      if (!this.canEnemyEnter(x, y) || map.ter[i] === T.MUSH_SLEEP || map.fire[i] || map.gas.sleep[i] > 0.5) continue;
+      return { x, y };
+    }
+    return null;
   }
 
   zap(count, dmg) {
     const targets = this.enemies
-      .filter(e => e.hp > 0 && this.isVisible(e.x, e.y))
+      .filter(e => e.hp > 0 && this.isVisible(e.x, e.y) && !this.calm(e))
       .sort((a, b) => cheb(a, this.p) - cheb(b, this.p))
       .slice(0, count);
     const hit = new Set();
