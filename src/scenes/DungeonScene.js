@@ -581,6 +581,17 @@ export class DungeonScene extends Phaser.Scene {
         this.float(this.run.p.x, this.run.p.y, `♥+${d.n}`, '#ff9fb4', 0, 12);
         this.face('sparkle', 1100);
         break;
+      case 'warp': {
+        // a puff of fairy dust where you stepped in, and you pop out of the other ring
+        this.fx.magic.explode(20, center(d.from.x), center(d.from.y));
+        this.fx.spark.explode(16, center(d.to.x), center(d.to.y));
+        this.moveTo(this.playerSprite, d.to.x, d.to.y, 0);
+        const ps = this.playerSprite;
+        ps.sqx = 0.6; ps.sqy = 1.4;
+        this.tweens.add({ targets: ps, sqx: 1, sqy: 1, duration: 260, ease: 'Back.out' });
+        this.face('shock', 600);
+        break;
+      }
       case 'swarm': if (d.x != null) this.noiseRing(d.x, d.y, 2, 0xf4cf4f); break;
       case 'smoke': this.fx.steam.explode(24, center(d.x), center(d.y)); this.fx.sleep.explode(10, center(d.x), center(d.y)); break;
       case 'locked': this.float(d.x, d.y, '잠김', '#b8bccb'); break;

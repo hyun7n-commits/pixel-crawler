@@ -6,7 +6,7 @@
 export const T = {
   NONE: 0, BRUSH: 1, ASH: 2, WATER: 3, VENT: 4, GRASS: 5,
   TRAP_SLEEP: 6, TRAP_SUMMON: 7, TRAP_ALARM: 8, TRAP_SPIKE: 9, TRAP_OFF: 10,
-  DUG: 11, ANVIL: 12,
+  DUG: 11, ANVIL: 12, RING: 13,
 };
 // Like Shattered Pixel Dungeon traps: a plate that goes off once when stepped on (or blown up).
 // Some are hidden (map.hidden) until you spot them standing next to them.
@@ -28,6 +28,7 @@ export const TERRAIN = {
   [T.TRAP_OFF]:   { name: '밟힌 덫',      sprite: 'trapOff',    tip: '이미 작동한 덫이다.' },
   [T.DUG]:        { name: '파헤친 흙',    sprite: 'dug',        tip: '누군가 파헤친 자리다.' },
   [T.ANVIL]:      { name: '모루',         sprite: 'anvil',      tip: '대장장이의 모루다.' },
+  [T.RING]:       { name: '요정 고리',    sprite: 'fairyRing',  tip: '버섯이 동그랗게 났다. 들어가면 이 구역 어딘가의 짝 고리로 뿅 하고 나간다.' },
 };
 
 export const TILE_INFO = {

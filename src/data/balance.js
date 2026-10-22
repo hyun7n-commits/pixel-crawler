@@ -115,5 +115,7 @@ export const HIVE_CHANCE = 0.35;       // the honey stump, a little rarer
 // gimmick's) give up once you are farther than BEE_HOME from it; a fire within HIVE_SMOKE smokes them to sleep
 export const honeyHp = floor => 3 + Math.floor((floor - 1) / FLOORS_PER_ZONE);
 export const BEE_HOME = 6;
+// 요정 고리: the chance a field has a pair of fairy rings, by zone (most in the deep forest)
+export const RING_CHANCE = [0.2, 0.7, 0.3];
 export const HIVE_SMOKE = 2;
 export const graveGold = floor => (2 + Math.floor((floor - 1) / FLOORS_PER_ZONE)) * (3 + Math.floor(Math.random() * 4));

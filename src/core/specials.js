@@ -10,6 +10,8 @@
 //            (more max HP for the run) and every bee that is awake comes after you, until you get
 //            far enough away. Smoke from a fire next to it, or sleepy pollen, puts them to sleep first.
 // Floors without a vault sometimes have a locked chest instead, with its key elsewhere.
+// Some floors (most in the deep forest) also get a pair of fairy rings in two far-apart rooms:
+// step into one and you pop out of the other (world.js warp).
 // Nothing here touches the run directly: placeSpecials returns what to add.
 
 import { T } from '../data/terrain.js';
@@ -124,7 +126,22 @@ export function placeSpecials(map, rooms, deco, ctx) {
     make[kind](map, rooms[i], out, ctx);
     made++;
   }
+  if (Math.random() < B.RING_CHANCE[Math.min(2, Math.floor((ctx.floor - 1) / B.FLOORS_PER_ZONE))]) rings(map, rooms, ids());
   return out;
+}
+
+// two fairy rings on open ground, as far apart as the free rooms allow (never set pieces, never by a door)
+function rings(map, rooms, free) {
+  const spot = i => {
+    const doors = doorsOf(map, rooms[i]);
+    return pick(floorTiles(map, rooms[i]).filter(t => map.ter[idx(t.x, t.y)] === T.NONE && !doors.some(d => cheb(t, d.in) <= 1)));
+  };
+  const spots = free.map(spot).filter(Boolean);
+  let best = null;
+  for (const a of spots) for (const b of spots) if (cheb(a, b) >= 12 && (!best || cheb(a, b) > cheb(best[0], best[1]))) best = [a, b];
+  if (!best) return;
+  for (const t of best) map.ter[idx(t.x, t.y)] = T.RING;
+  map.rings = best.map(t => ({ x: t.x, y: t.y }));
 }
 
 function vault(map, r, out, ctx) {

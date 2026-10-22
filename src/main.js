@@ -11,7 +11,7 @@ import { suspend, resume, clearSuspended } from './core/suspend.js';
 import { pathTo, idx, isBump, isStairs } from './core/dungeon.js';
 import { ENEMIES } from './data/enemies.js';
 import { cheb } from './core/util.js';
-import { isTrap } from './data/terrain.js';
+import { T, isTrap } from './data/terrain.js';
 import { Hud, lowHealth } from './ui/hud.js';
 import { renderPanel, renderVillageHud } from './ui/hub.js';
 import { showChoice, showSummary, showTalk, closeTalk, closeModal, modalOpen } from './ui/modal.js';
@@ -407,7 +407,7 @@ function walkTo(x, y) {
   const m = run.map, p = run.p;
   if (!run.passable(x, y) || !m.explored[idx(x, y)]) return [];
   return pathTo(m, p.x, p.y, x, y,
-    (tx, ty) => (isTrap(m.ter[idx(tx, ty)]) && !m.hidden[idx(tx, ty)]) || m.fire[idx(tx, ty)] > 0,
+    (tx, ty) => (isTrap(m.ter[idx(tx, ty)]) && !m.hidden[idx(tx, ty)]) || m.fire[idx(tx, ty)] > 0 || m.ter[idx(tx, ty)] === T.RING,
     // never change floors by walking over stairs on the way somewhere else
     (tx, ty) => isStairs(m.tiles[idx(tx, ty)]));
 }

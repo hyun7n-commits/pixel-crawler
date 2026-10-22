@@ -37,6 +37,19 @@ export function onEnter(run, who, x, y) {
   // tall grass is flattened by whoever walks into it, like in Shattered Pixel Dungeon
   if (ter === T.BRUSH) trample(run, who, x, y);
   if (who === 'player' && isTrap(ter)) springTrap(run, x, y);
+  if (who === 'player' && ter === T.RING) warp(run, x, y);
+}
+
+// 요정 고리: step into one and you pop out of its partner. The fairies only carry you, so whoever
+// was on your heels loses your trail and has to find the long way round.
+function warp(run, x, y) {
+  const to = (run.map.rings || []).find(r => r.x !== x || r.y !== y);
+  if (!to) return;
+  if (run.enemyAt(to.x, to.y)) { run.log('짝 고리 위에 누가 서 있어서 빠져나가지 못했다.'); return; }
+  run.p.x = to.x; run.p.y = to.y;
+  run.trail = [{ x: to.x, y: to.y }];
+  run.emit('warp', { from: { x, y }, to: { x: to.x, y: to.y } });
+  if (!run.told.ring) { run.told.ring = true; run.log('요정 고리에 들어갔더니 다른 고리로 뿅 하고 나왔다!', 'good'); }
 }
 
 function trample(run, who, x, y) {
