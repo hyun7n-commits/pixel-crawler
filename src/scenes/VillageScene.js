@@ -4,7 +4,7 @@
 // Each time you come home a few shiny bits lie hidden in the grass for whoever wanders off the path.
 
 /* global Phaser */
-import { TILE, wallKey, waterKey, shadeKey, floorKey, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
+import { TILE, wallKey, waterKey, shadeKey, floorKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
 import { houseCanvas, pathKey, lampPostCanvas } from './village-art.js';
 import { baseZoom } from './zoom.js';
 import { faceKey } from '../data/faces.js';
@@ -496,7 +496,8 @@ export class VillageScene extends Phaser.Scene {
     const all = [ps, ...this.folk.map(f => f.s), ...this.heroes.map(h => h.s)];
     all.forEach((s, i) => {
       const breathe = s === ps && walking ? 1 : 1 + 0.035 * Math.sin(time / 420 + i * 1.7);
-      s.setScale(1, breathe).setOrigin(0.5, 1 + (s.hop || 0) / TILE);
+      const k = texScale(s);
+      s.setScale(k, k * breathe).setOrigin(0.5, 1 + (s.hop || 0) / TILE);
       g.fillStyle(0x000000, 0.28);
       g.fillEllipse(s.x, s.y - 1.5, 11, 4);
     });

@@ -3,7 +3,7 @@
 // Characters stand on the bottom middle of their tile (origin 0.5, 1).
 
 /* global Phaser */
-import { TILE, buildTextures, wallKey, waterKey, shadeKey, floorKey, oreFrame, dropKey, chipKey, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
+import { TILE, buildTextures, wallKey, waterKey, shadeKey, floorKey, oreFrame, dropKey, chipKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
 import { CHARACTERS } from '../data/characters.js';
 import { ITEMS } from '../data/items.js';
 import { T, TERRAIN, GASES, GAS_KEYS } from '../data/terrain.js';
@@ -223,6 +223,7 @@ export class DungeonScene extends Phaser.Scene {
 
   makeActor(tex, x, y) {
     const s = this.add.image(center(x), foot(y), tex).setOrigin(0.5, 1);
+    s.setScale(texScale(s));
     s.hop = 0;
     s.flashUntil = 0;
     return s;
@@ -337,7 +338,7 @@ export class DungeonScene extends Phaser.Scene {
       if (!s) {
         s = this.makeActor(e.state === 'hide' ? 'chest' : e.d.sprite, e.x, e.y).setDepth(D.enemies);
         if (e.d.boss) {
-          s.setScale(1.25);
+          s.setScale(1.25 * texScale(s));
           s.crown = this.add.image(0, 0, 'crown').setOrigin(0.5, 1).setDepth(D.enemies + 0.1);
         }
         this.enemySprites[e.id] = s;
@@ -678,7 +679,7 @@ export class DungeonScene extends Phaser.Scene {
     s.crown?.destroy();
     this.tweens.killTweensOf(s);
     this.tweens.add({
-      targets: s, alpha: 0, scaleX: 1.4, scaleY: 0.3, duration: 220, ease: 'Quad.in',
+      targets: s, alpha: 0, scaleX: 1.4 * texScale(s), scaleY: 0.3 * texScale(s), duration: 220, ease: 'Quad.in',
       onComplete: () => { s.destroy(); delete this.enemySprites[e.id]; },
     });
   }
@@ -927,7 +928,7 @@ export class DungeonScene extends Phaser.Scene {
       this.shadowGfx.fillEllipse(s.x, s.y - 1.5, w * (1 - 0.3 * lift), 4);
     };
     shadow(this.playerSprite, 11);
-    for (const s of Object.values(this.enemySprites)) shadow(s, s.scaleX > 1.1 ? 15 : 11);
+    for (const s of Object.values(this.enemySprites)) shadow(s, s.scaleX / texScale(s) > 1.1 ? 15 : 11);
     for (const s of Object.values(this.pickupSprites)) if (s.visible) { this.shadowGfx.fillStyle(0x000000, 0.25); this.shadowGfx.fillEllipse(s.x + 8, s.getData?.('baseY') ?? s.y + 15, 9, 3); }
 
     // water ripples
@@ -1029,7 +1030,7 @@ export class DungeonScene extends Phaser.Scene {
       this.pose(s, e, flip, time);
       if (!s.visible) continue;
       if (s.crown) s.crown.setPosition(s.x, s.y - TILE * 1.25 + 2 - s.hop);
-      const top = s.y - TILE * s.scaleY * (e.d.boss ? 1.25 : 1) - s.hop;
+      const top = s.y - TILE * (s.scaleY / texScale(s)) * (e.d.boss ? 1.25 : 1) - s.hop;
       if (['hide', 'stone', 'npc'].includes(e.state)) continue; // no marks: a chest, a statue, a friend
       this.drawStatus(g, s, e, top, flip ? -1 : 1, time);
       if (e.loot) { // your gold, in a little sack over its head
@@ -1104,7 +1105,7 @@ export class DungeonScene extends Phaser.Scene {
       // a mimic gives itself away with a twitch now and then; a statue just stands there, grey
       const twitch = who.state === 'hide' && (time + id * 977) % 5200 < 160 ? 1.5 : 0;
       s.flat = who.state === 'hide';
-      s.setFlipX(false).setScale(1).setOrigin(0.5, 1 + twitch / TILE);
+      s.setFlipX(false).setScale(texScale(s)).setOrigin(0.5, 1 + twitch / TILE);
       if (time >= s.flashUntil) s.setTint(who.state === 'stone' ? 0xa8a8b8 : 0xffffff);
       return;
     }
@@ -1125,7 +1126,8 @@ export class DungeonScene extends Phaser.Scene {
     if (who.charge) jitter = Math.sin(time / 40) * 1.2;
     if (who.stoneT > 0) { sx = 1; sy = 1; hop = 0; }
     const base = (who.d?.boss ? 1.25 : 1) * (who.small ? 0.8 : 1);
-    if (!s.dying) s.setScale(base * sx, base * sy);
+    const k = texScale(s);
+    if (!s.dying) s.setScale(base * sx * k, base * sy * k);
     s.setOrigin(0.5 + jitter / TILE, 1 + hop / TILE);
     if (time < s.flashUntil) return;
     let tint = who.d?.boss ? 0xffb0b0 : 0xffffff;

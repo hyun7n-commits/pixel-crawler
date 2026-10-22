@@ -17,6 +17,8 @@ export const PAL = {
   n: '#a0703f', N: '#5e3d24',
   // the worker's straw hat, and the heroes' soft mouths
   u: '#b8913a', U: '#7d6127', i: '#dcb75a', z: '#fff3b0', f: '#7a4e57', F: '#c49aa0',
+  // the 32px characters' extra shades: deep blush, an open mouth, soft shadow on white, bright white
+  e: '#e58aa5', j: '#c97b8e', a: '#e8e1d4', t: '#fbf8f2',
 };
 
 export const SPR = {
