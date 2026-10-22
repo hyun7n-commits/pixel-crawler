@@ -459,9 +459,9 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
    screen so their words read as comfortably as on a laptop. The map scales itself (scenes/zoom.js). */
 @media (min-width: 1600px) and (min-height: 900px) and (pointer: fine) {
   #game { grid-template-columns: 1fr 348px; }
-  #side, #modal, #tip, #vhud { zoom: 1.2; }
+  #side, #modal, #tip, #vhud, .st-box, .st-skip, .st-dots { zoom: 1.2; }
 }
 @media (min-width: 2400px) and (min-height: 1300px) and (pointer: fine) {
   #game { grid-template-columns: 1fr 464px; }
-  #side, #modal, #tip, #vhud { zoom: 1.6; }
+  #side, #modal, #tip, #vhud, .st-box, .st-skip, .st-dots { zoom: 1.6; }
 }
