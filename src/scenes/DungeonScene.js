@@ -607,7 +607,7 @@ export class DungeonScene extends Phaser.Scene {
         const e = this.run.enemyAt(d.x, d.y), s = this.enemySprites[e?.id];
         if (s) this.emote(s, '!', 500);
         // just pulled: its sprite turns up a moment later, then it yells
-        if (d.first && e) this.time.delayedCall(80, () => this.say(e, '꺄아아악!'));
+        if (d.first && e) { this.time.delayedCall(80, () => this.say(e, '꺄아아악!')); this.face('shock', 900); }
         break;
       }
       case 'burrow': {

@@ -486,12 +486,12 @@ export class Run {
     return true;
   }
 
-  // 풀뽑기: pull a weed for a little pay (the spot is left bare). A screaming root jumps out yelling and runs (ai.js scream);
-  // the last weed of the patch has a star candy under it.
+  // 풀뽑기: pull a weed for a little pay, leaving loose soil. A screaming root jumps out yelling and
+  // runs (ai.js scream); the last weed of the patch has a star candy under it.
   pullWeed(x, y) {
     const map = this.map, i = idx(x, y), patch = map.weeds || { left: 1, roots: [] };
     map.tiles[i] = FLOOR;
-    map.ter[i] = T.NONE;
+    map.ter[i] = T.DUG;
     patch.left--;
     this.weeds = (this.weeds || 0) + 1;
     this.emit('tiles', { list: [i], soft: true });
