@@ -1,4 +1,4 @@
-// Pop-up sheets: relic choice (level up / chest) and the end-of-run summary.
+// Pop-up sheets: relic choice (level up / chest), the end-of-run summary, and talking in the village.
 
 import { $, el, button, icon } from './dom.js';
 import { RELICS, recipeKey, tierOf } from '../data/relics.js';
@@ -7,11 +7,14 @@ import { josa } from '../core/util.js';
 import { DISCOVERIES } from '../data/terrain.js';
 
 export const modalOpen = () => !$('modal').hidden;
+let talkClose = null; // set while a villager's talk sheet is open
 
 export function closeModal() {
   const m = $('modal');
   m.hidden = true;
   m.innerHTML = '';
+  m.onclick = null;
+  talkClose = null;
 }
 
 function openSheet(build) {
@@ -21,7 +24,7 @@ function openSheet(build) {
   build(sh);
   m.append(sh);
   m.hidden = false;
-  setTimeout(() => sh.querySelector('button')?.focus(), 0);
+  setTimeout(() => sh.querySelector('button')?.focus({ preventScroll: true }), 0);
 }
 
 // opts: [{kind:'relic', id} | {kind:'heal'} | {kind:'gold', name?, amount?} | {kind:'ok', name, desc}]
@@ -84,6 +87,35 @@ export function showChoice({ title, sub, run, opts, onPick, onReroll, who }) {
   });
 }
 
+// Talking to a villager: their face and what they say, then what they look after (`build` fills the
+// body and can be called again through `redraw` after a purchase). Closes with the button, Esc, or a
+// tap outside.
+export function showTalk({ who, name, line, build, onClose }) {
+  openSheet(sh => {
+    sh.classList.add('talk');
+    const head = el('div', 'talk-head');
+    head.append(icon(who, 48), el('h2', null, name));
+    sh.append(head, el('p', 'talk-text', line));
+    const body = el('div', 'talk-body');
+    const redraw = () => { const y = sh.scrollTop; body.innerHTML = ''; build(body, redraw); sh.scrollTop = y; };
+    redraw();
+    sh.append(body);
+    const foot = el('div', 'sheet-foot');
+    foot.append(button('btn', '닫기', () => closeTalk()));
+    sh.append(foot);
+  });
+  talkClose = onClose || (() => {});
+  $('modal').onclick = ev => { if (ev.target === $('modal')) closeTalk(); };
+}
+// true when there was a talk sheet to close
+export function closeTalk() {
+  if (!talkClose) return false;
+  const done = talkClose;
+  closeModal();
+  done();
+  return true;
+}
+
 export function showSummary({ won, run, newlyUnlockable, onClose }) {
   openSheet(sh => {
     sh.append(el('h2', null, won ? '들판을 모두 토벌했다!' : '쓰러졌다'));
@@ -110,7 +142,7 @@ export function showSummary({ won, run, newlyUnlockable, onClose }) {
       sh.append(el('div', 'unlock-note', `이번에 새로 발견한 것: ${names.join(' · ')}`));
     }
     if (newlyUnlockable.length) {
-      sh.append(el('div', 'unlock-note', `새 캐릭터 조건 달성: ${newlyUnlockable.join(', ')}. 마을에서 골드로 데려올 수 있다.`));
+      sh.append(el('div', 'unlock-note', `새 캐릭터 조건 달성: ${newlyUnlockable.join(', ')}. 마을의 조합장에게 가면 골드로 데려올 수 있다.`));
     }
     const foot = el('div', 'sheet-foot');
     foot.append(button('btn primary', '마을로 돌아가기', () => { closeModal(); onClose(); }));

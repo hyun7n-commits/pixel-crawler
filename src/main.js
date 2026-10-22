@@ -1,7 +1,8 @@
-// Entry point: connects the saved progress, the hub, the run rules, the Phaser scene and the HUD.
+// Entry point: connects the saved progress, the village, the run rules, the Phaser scenes and the HUD.
 
 /* global Phaser */
 import { DungeonScene } from './scenes/DungeonScene.js';
+import { VillageScene } from './scenes/VillageScene.js';
 import { Run } from './core/run.js';
 import { loadMeta, saveMeta } from './core/save.js';
 import { pathTo, idx, isBump, isStairs } from './core/dungeon.js';
@@ -9,8 +10,10 @@ import { ENEMIES } from './data/enemies.js';
 import { cheb } from './core/util.js';
 import { isTrap } from './data/terrain.js';
 import { Hud, lowHealth } from './ui/hud.js';
-import { renderHub } from './ui/hub.js';
-import { showChoice, showSummary, modalOpen } from './ui/modal.js';
+import { renderPanel, renderVillageHud } from './ui/hub.js';
+import { showChoice, showSummary, showTalk, closeTalk, closeModal, modalOpen } from './ui/modal.js';
+import { FOLK } from './data/village.js';
+import { CHARACTERS } from './data/characters.js';
 import { describeTile } from './ui/tip.js';
 import { $ } from './ui/dom.js';
 import * as sfx from './audio/sfx.js';
@@ -23,6 +26,7 @@ let seenCount = 0;
 let aiming = false;
 let chase = null;   // an enemy tapped from afar: walk up to it and hit it once
 let pinned = null;  // tile whose tip stays up after a long press on a phone
+let inVillage = false;
 
 const hud = new Hud({
   onUseItem: id => {
@@ -68,22 +72,39 @@ function showTip(h) {
 }
 
 // ---------- screens ----------
-function showHub() {
+// Between runs you are in the village (scenes/VillageScene.js): the run's HUD hides and the map
+// shows the village instead. `from`: 'run' when coming back from the fields.
+const village = () => game.scene.getScene('village');
+
+function showVillage(from) {
   sfx.setHeartbeat(0);
-  $('hub').hidden = false;
-  $('game').hidden = true;
-  game.loop.sleep();
-  renderHub({ meta, onStart: startRun, setMeta: m => { meta = m; showHub(); } });
+  inVillage = true;
+  pinned = null;
+  showTip(null);
+  const g = $('game');
+  g.hidden = false;
+  g.classList.add('village');
+  g.classList.remove('low', 'bag-open');
+  fitCanvas();
+  game.scene.sleep('dungeon');
+  // first time: start the scene; after a run: wake it up; already showing (a reset): rebuild it
+  if (village().sys.isActive()) village().enter({ meta, from });
+  else game.scene.run('village', { meta, from });
+  renderVillageHud(meta);
 }
 
 function startRun() {
+  if (run) return;
   sfx.unlockAudio();
-  $('hub').hidden = true;
-  $('game').hidden = false;
-  game.loop.wake();
+  closeModal();
+  inVillage = false;
+  $('game').classList.remove('village');
+  game.scene.sleep('village');
+  game.scene.run('dungeon');
   setBag(false);
   pinned = null;
-  // the stage was hidden while the hub was open, so measure it again before drawing
+  showVillageTip('');
+  // the stage changed shape, so measure it again before drawing
   fitCanvas();
   run = new Run(meta, meta.sel);
   hud.reset();
@@ -93,6 +114,53 @@ function startRun() {
   // no manual up front: the first runs get one line on how to ask about anything
   if (meta.stats.runs < 2) run.log(TOUCH ? '모르는 게 보이면 꾹 눌러 보자. 설명이 나온다.' : '모르는 게 보이면 마우스를 올려 보자. 설명이 나온다.');
   setAim(false);
+}
+
+// Bumping into a villager: they turn, say something, and open what they look after.
+function talkTo(id, line) {
+  const f = FOLK[id];
+  sfx.play('talk');
+  showVillageTip('');
+  showTalk({
+    who: f.sprite, name: f.name, line,
+    build: (box, redraw) => renderPanel(f.panel, box, {
+      meta,
+      onStart: startRun,
+      changed: () => { saveMeta(meta); redraw(); renderVillageHud(meta); village().resync(); },
+      setMeta: m => { meta = m; closeModal(); showVillage(); },
+    }),
+  });
+}
+
+const villageHooks = {
+  onTalk: talkTo,
+  onSwap: id => {
+    meta.sel = id;
+    saveMeta(meta);
+    village().swapHero(id);
+    sfx.play('swap');
+    renderVillageHud(meta);
+  },
+  onLeave: () => startRun(),
+  onArrive: id => {
+    meta.village.seen[id] = true;
+    saveMeta(meta);
+    hud.banner(`새 이웃! ${FOLK[id].name}`);
+    sfx.play('welcome');
+  },
+  onStep: alt => sfx.play('step', alt),
+  onHover: (text, flash) => showVillageTip(text, flash),
+};
+
+// The village's tip line: who someone is when the mouse rests on them, or a short note after a tap.
+let villageTipTimer = 0;
+function showVillageTip(text, flash) {
+  if (!inVillage && text) return;
+  const tip = $('tip');
+  tip.textContent = text;
+  tip.hidden = !text;
+  clearTimeout(villageTipTimer);
+  if (flash && text) villageTipTimer = setTimeout(() => { tip.hidden = true; }, 1800);
 }
 
 function onRunEvent(type, d) {
@@ -107,9 +175,14 @@ function onRunEvent(type, d) {
   if (type === 'end') {
     clearPath();
     setAim(false);
+    // what the neighbour will be talking about when you get back
+    meta.lastRun = {
+      won: d.won, floor: run.floor, zone: run.zone.name, cause: run.cause, kills: run.kills, gold: run.gold,
+      recipes: run.newRecipes.length, who: CHARACTERS[meta.sel].name,
+    };
     saveMeta(meta);
     hud.update(run);
-    showSummary({ won: d.won, run, newlyUnlockable: d.newlyUnlockable, onClose: () => { scene.detach(); run = null; showHub(); } });
+    showSummary({ won: d.won, run, newlyUnlockable: d.newlyUnlockable, onClose: () => { scene.detach(); run = null; showVillage('run'); } });
   }
 }
 
@@ -169,13 +242,21 @@ window.addEventListener('blur', () => held.clear());
 
 document.addEventListener('keydown', ev => {
   if (modalOpen()) {
+    if (ev.key === 'Escape' && closeTalk()) return;
     const n = parseInt(ev.key, 10);
     const b = n && $('modal').querySelector(`.choice[data-key="${n}"]`);
     if (b) { ev.preventDefault(); b.click(); }
     return;
   }
-  if (!run || $('game').hidden) return;
   const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
+  // in the village: walk a step, or bump whoever is there; Enter heads out
+  if (inVillage) {
+    if (KEYS[k]) { ev.preventDefault(); village().step(...KEYS[k]); }
+    if (k === 'Enter' && document.activeElement === document.body) startRun();
+    if (k === 'm') toggleSound();
+    return;
+  }
+  if (!run || $('game').hidden) return;
   if (k === 'Escape') { setAim(false); clearPath(); return; }
   if (ARROWS.has(k)) {
     ev.preventDefault(); clearPath(); setAim(false);
@@ -260,9 +341,11 @@ setInterval(() => {
 }, 380);
 
 // sound on/off, remembered between visits
-function showSoundState() { $('soundBtn').textContent = sfx.isMuted() ? '소리 끔' : '소리 켬'; }
+function showSoundState() { for (const id of ['soundBtn', 'vSound']) $(id).textContent = sfx.isMuted() ? '소리 끔' : '소리 켬'; }
 function toggleSound() { sfx.unlockAudio(); sfx.setMuted(!sfx.isMuted()); showSoundState(); }
 $('soundBtn').addEventListener('click', toggleSound);
+$('vSound').addEventListener('click', toggleSound);
+$('vGo').addEventListener('click', () => startRun());
 showSoundState();
 // browsers allow sound only after the first click or key press
 // (iPhone only counts a finger lifting or a click, so listen for those every time, not just once)
@@ -295,7 +378,7 @@ const game = new Phaser.Game({
   backgroundColor: '#07060a',
   scale: { mode: Phaser.Scale.NONE, width: 320, height: 240, zoom: 1 / DPR },
   callbacks: { preBoot: g => { g.registry.set('dpr', DPR); g.registry.set('touch', TOUCH); } },
-  scene: new DungeonScene(s => {
+  scene: [new DungeonScene(s => {
     scene = s;
     scene.onTileClick = onTileClick;
     scene.onHover = (x, y) => { if (!pinned) showTip(x === null ? null : { x, y }); };
@@ -304,8 +387,9 @@ const game = new Phaser.Game({
       showTip(pinned);
       if (!$('tip').hidden) navigator.vibrate?.(12);
     };
-    showHub();
-  }),
+    // the dungeon scene builds every texture; once it is up, open in the village
+    setTimeout(() => showVillage(), 0);
+  }), new VillageScene(villageHooks)],
 });
 
 function fitCanvas() {
@@ -318,4 +402,4 @@ function fitCanvas() {
 new ResizeObserver(fitCanvas).observe($('phaser'));
 
 // test hook for automated play-testing; harmless in normal play
-window.__game = { get run() { return run; }, get meta() { return meta; }, get scene() { return scene; }, startRun, setAim };
+window.__game = { get run() { return run; }, get meta() { return meta; }, get scene() { return scene; }, get village() { return village(); }, startRun, setAim, showVillage };

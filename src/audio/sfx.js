@@ -132,6 +132,10 @@ const SOUNDS = {
   kill() { tone(560, 0.13, { type: 'triangle', vol: 0.2, to: 150 }); },
   gold() { tone(1568, 0.06, { type: 'triangle', vol: 0.1 }); tone(2093, 0.09, { type: 'triangle', vol: 0.1, delay: 0.05 }); },
   chest() { chime([784, 988, 1175, 1568], 0.06, 0.14); },
+  // the village: a little two-note "hm?" when someone turns to talk, a welcome tune when someone moves in
+  talk() { tone(660, 0.07, { type: 'triangle', vol: 0.12 }); tone(880, 0.09, { type: 'triangle', vol: 0.12, delay: 0.08 }); },
+  welcome() { chime([523, 659, 784, 659, 784, 1047], 0.1, 0.12, 0.2, 0.1); },
+  swap() { chime([784, 1175], 0.07, 0.1); },
   boom() { hiss(0.8, { vol: 0.65, freq: 1800, to: 70, type: 'lowpass' }); tone(70, 0.6, { vol: 0.5, to: 28 }); },
   alert() { tone(880, 0.05, { type: 'square', vol: 0.05 }); tone(1320, 0.07, { type: 'square', vol: 0.05, delay: 0.05 }); },
   snore() { hiss(0.55, { vol: 0.14, freq: 320, to: 160, type: 'lowpass', attack: 0.25 }); },

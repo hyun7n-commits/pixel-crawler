@@ -14,6 +14,7 @@ import { ORE_HITS } from '../data/balance.js';
 import { ORES } from '../data/ores.js';
 import { cheb } from '../core/util.js';
 import { faceKey } from '../data/faces.js';
+import { baseZoom } from './zoom.js';
 
 const D = { tiles: 0, ter: 1, fire: 2, gas: 3, telegraph: 4, pickups: 5, enemies: 6, player: 7, overlay: 8, fx: 9, bubble: 10, text: 11 };
 // what a pickup looks like on the floor (items use their own sprite)
@@ -138,16 +139,12 @@ export class DungeonScene extends Phaser.Scene {
     this.onReady?.(this);
   }
 
-  // The canvas is drawn at the screen's real pixel density (main.js), so zoom is counted in
-  // device pixels per art pixel and always stays a whole number to keep the pixel art crisp.
   get dpr() { return this.game.registry.get('dpr') || 1; }
 
   fitZoom() {
-    const r = this.dpr, w = this.scale.gameSize.width / r, h = this.scale.gameSize.height / r;
-    if (w < 16 || h < 16) return;
-    let tile = Math.min(w / 15, h / 11);                                   // whole rooms on a big screen
-    if (this.game.registry.get('touch')) tile = Math.max(tile, Math.min(w, h) / 10); // finger-sized on a phone
-    this.baseZoom = Math.max(1, Math.floor(Math.max(tile, 32) * r / TILE));
+    const z = baseZoom(this, TILE);
+    if (!z) return;
+    this.baseZoom = z;
     this.zoomBy(0);
   }
 

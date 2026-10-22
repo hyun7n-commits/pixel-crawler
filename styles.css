@@ -1,4 +1,5 @@
-/* Layout: one-screen game. Hub (characters / shop / records) and dungeon (map canvas + side panel) swap in place. */
+/* Layout: one-screen game. The map canvas shows the village between runs (with a small overlay HUD) and the fields
+   during a run (with the side panel, or on a phone the status bar, toolbar and bag). */
 :root {
   --bg: #14121a;
   --panel: #1d1a26;
@@ -31,16 +32,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #app { height: 100%; display: flex; flex-direction: column; }
 @supports (height: 100dvh) { #app { height: 100dvh; } }
 
-/* ---------- Hub ---------- */
-#hub { flex: 1; overflow-y: auto; padding-top: max(20px, env(safe-area-inset-top, 0px)); padding-bottom: max(32px, env(safe-area-inset-bottom, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-.hub-inner { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
-.hub-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.logo { font-family: var(--font-display); font-size: clamp(34px, 7vw, 52px); line-height: 1; letter-spacing: 0.01em; color: var(--accent); text-shadow: 3px 3px 0 #0a0910; }
-.logo small { display: block; font-size: 15px; color: var(--muted); text-shadow: none; margin-top: 6px; font-family: var(--font-body); letter-spacing: 0.02em; }
+/* ---------- What the villagers look after (talk sheets) ---------- */
 .purse { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-size: 24px; color: var(--gold); background: var(--panel); border: 1px solid var(--line); padding: 6px 14px; border-radius: 6px; font-variant-numeric: tabular-nums; }
-.tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); }
-.tab { background: none; border: 0; padding: 10px 14px; font-family: var(--font-display); font-size: 19px; color: var(--muted); border-bottom: 3px solid transparent; margin-bottom: -1px; }
-.tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
 .chars { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
 .char { background: var(--panel); border: 2px solid var(--line); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 8px; text-align: left; min-width: 0; }
 .char.sel { border-color: var(--accent); background: var(--panel-2); }
@@ -55,6 +48,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn:disabled { opacity: 0.4; cursor: default; }
 .btn.gold { background: var(--gold); color: #2b2205; border-color: transparent; }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.btn.quiet { align-self: flex-start; background: none; color: var(--muted); font-weight: 400; font-size: 12.5px; }
 .enter { font-family: var(--font-display); font-size: 26px; padding: 14px 20px; align-self: stretch; border-radius: 6px; box-shadow: 0 4px 0 #4c7a35; }
 .enter:active { transform: translateY(2px); box-shadow: 0 2px 0 #4c7a35; }
 .shop { display: flex; flex-direction: column; gap: 8px; }
@@ -299,3 +293,34 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* grow-two card: the two relics stacked, each a little smaller */
 .twin-pic { flex-direction: column; gap: 4px; width: 48px; }
 .choice .twin-pic canvas { width: 30px; height: 30px; }
+
+/* ---------- Village (v0.17) ----------
+   The run's HUD steps aside and a light overlay sits on the map: where you are and your gold on top,
+   the way out at the bottom. Hover and tap notes show under the top bar. */
+#game.village { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+#game.village #stage { grid-column: 1; grid-row: 1; }
+#game.village #side, #game.village #mtop, #game.village #mbar, #game.village #mlog, #game.village #shade, #game.village #danger { display: none; }
+#game:not(.village) #vhud { display: none; }
+#vhud {
+  position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; gap: 8px;
+  padding: max(10px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+}
+.vh-top { display: flex; align-items: center; gap: 8px; }
+.vh-place { margin-right: auto; font-family: var(--font-display); font-size: 26px; line-height: 1; color: #f4f0e8; text-shadow: 2px 2px 0 #10301c, 0 0 6px rgba(0,0,0,.5); }
+.vh-place small { margin-left: 6px; font-family: var(--font-body); font-size: 11px; color: #d8e8c8; text-shadow: 1px 1px 0 #10301c; }
+#vhud .purse { font-size: 19px; padding: 3px 10px; gap: 6px; background: rgba(20,18,26,.82); }
+#vhud .btn { pointer-events: auto; }
+#vSound { background: rgba(20,18,26,.82); font-size: 13px; }
+#vGo { align-self: center; width: min(420px, 100%); font-size: 22px; padding: 10px 18px; }
+#game.village #tip { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 44px); bottom: auto; }
+/* talking: the gossip as speech, the rival's race */
+.sheet.talk .talk-text { color: var(--fg); font-size: 15px; }
+.talk-body { display: flex; flex-direction: column; gap: 12px; }
+.gossip { display: flex; flex-direction: column; gap: 6px; }
+.say { margin: 0; background: #f4f0e8; color: #1b1424 !important; border-radius: 10px; padding: 8px 12px; line-height: 1.5; position: relative; }
+.say.hint { background: #2a2410; color: var(--gold) !important; border: 1px dashed #6a5a1c; }
+.race { display: flex; flex-direction: column; gap: 8px; }
+.race-row { display: grid; grid-template-columns: 52px 1fr 48px; align-items: center; gap: 8px; }
+.race-row .bar { height: 12px; }
+.race-row.them .bar > i { background: #b48cff; }
+.race-row b { font-family: var(--font-display); font-weight: 400; font-size: 17px; text-align: right; }
