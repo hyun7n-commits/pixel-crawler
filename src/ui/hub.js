@@ -12,7 +12,7 @@ import { josa } from '../core/util.js';
 import { DISCOVERIES } from '../data/terrain.js';
 import { ORES } from '../data/ores.js';
 import { FOLK, HOUSES, gossip } from '../data/village.js';
-import { LAST_FLOOR } from '../data/balance.js';
+import { LAST_FLOOR, STEP_MAX, stepsOpen, stepFoe, stepGold } from '../data/balance.js';
 
 export function renderPanel(id, box, ctx) {
   PANELS[id](box, ctx);
@@ -36,6 +36,24 @@ const startButton = (meta, onStart) => {
   return wrap;
 };
 
+// 토벌 단계 (data/balance.js): after the first win, how rowdy the fields are this time
+function stepRow(meta, changed) {
+  const open = stepsOpen(meta), cur = Math.min(meta.step || 0, open);
+  const row = el('div', 'steps'), main = el('div', 'row-main');
+  const stars = el('span', 'step-stars');
+  for (let i = 1; i <= STEP_MAX; i++) stars.append(el('i', i <= cur ? 'on' : i <= open ? 'open' : ''));
+  const name = el('span', 'row-name', `토벌 단계 ${cur ? `★${cur}` : '보통'}`);
+  name.append(stars);
+  main.append(name, el('span', 'row-sub', cur
+    ? `들판의 적 체력과 공격 +${Math.round((stepFoe(cur) - 1) * 100)}%, 얻는 골드 +${Math.round((stepGold(cur) - 1) * 100)}%`
+    : `이길 때마다 한 단계씩 열린다 (지금 ★${open}까지)`));
+  const set = s => { meta.step = s; changed(); };
+  const down = button('btn', '−', () => set(cur - 1)), up = button('btn', '+', () => set(cur + 1));
+  down.disabled = cur <= 0; up.disabled = cur >= open;
+  row.append(main, down, up);
+  return row;
+}
+
 // the three 토벌 licenses (one per zone boss), greyed out until earned; see scenes/storyboards.js
 const LICENSES = [['ratking', '초원', '#6fbf4e'], ['skelking', '깊은숲', '#2f7a46'], ['lord', '돌산', '#8a7aa8']];
 function licenses(meta) {
@@ -54,6 +72,7 @@ function licenses(meta) {
 function chars(box, { meta, onStart, changed, setMeta, onStory }) {
   const buy = (cost, apply) => { meta.gold -= cost; apply(); changed(); };
   box.append(licenses(meta));
+  if (stepsOpen(meta) > 0) box.append(stepRow(meta, changed));
   const grid = el('div', 'chars');
   for (const [id, c] of Object.entries(CHARACTERS)) {
     const owned = meta.chars[id];

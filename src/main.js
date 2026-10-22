@@ -244,7 +244,7 @@ function onRunEvent(type, d) {
     };
     saveMeta(meta);
     hud.update(run);
-    showSummary({ won: d.won, run, newlyUnlockable: d.newlyUnlockable, onClose: () => { scene.detach(); run = null; afterRunStory(); } });
+    showSummary({ won: d.won, run, newlyUnlockable: d.newlyUnlockable, stepOpened: d.stepOpened, onClose: () => { scene.detach(); run = null; afterRunStory(); } });
   }
 }
 

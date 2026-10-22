@@ -88,7 +88,8 @@ export class Hud {
 
   update(run) {
     const s = run.stat(), p = run.p;
-    $('floorLabel').innerHTML = `${run.floor}구역<small>${isBossFloor(run.floor) ? '보스' : zoneOf(run.floor).name} · ${LAST_FLOOR}구역까지</small>`;
+    const star = run.danger ? ` ★${run.danger}` : '';
+    $('floorLabel').innerHTML = `${run.floor}구역<small>${isBossFloor(run.floor) ? '보스' : zoneOf(run.floor).name} · ${LAST_FLOOR}구역까지${star}</small>`;
     $('goldNow').textContent = `${run.gold}G`;
     $('hpText').textContent = `${Math.max(0, p.hp)} / ${s.maxHp}`;
     $('hpbar').firstElementChild.style.width = `${(Math.max(0, p.hp) / s.maxHp) * 100}%`;
@@ -106,7 +107,7 @@ export class Hud {
     $('quests').innerHTML = '';
     for (const t of questLines(run)) $('quests').append(el('div', 'quest', t));
 
-    $('mFloor').innerHTML = `${run.floor}구역<small>${isBossFloor(run.floor) ? '보스' : zoneOf(run.floor).name}</small>`;
+    $('mFloor').innerHTML = `${run.floor}구역<small>${isBossFloor(run.floor) ? '보스' : zoneOf(run.floor).name}${run.danger ? ` ★${run.danger}` : ''}</small>`;
     $('mGold').textContent = `${run.gold}G`;
     $('mHpText').textContent = `${Math.max(0, p.hp)} / ${s.maxHp}`;
     $('mHp').firstElementChild.style.width = $('hpbar').firstElementChild.style.width;

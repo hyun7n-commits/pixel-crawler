@@ -52,6 +52,7 @@ export class Run {
     };
     this.stall = [];
     this.request = pickRequest(meta);   // the guild's request of the day (data/requests.js)
+    this.danger = Math.max(0, Math.min(meta.step || 0, B.stepsOpen(meta)));   // 토벌 단계 (meta.step)
     this.startStats = JSON.parse(JSON.stringify(meta.stats));
     this.listeners = [];
     this.p = {
@@ -109,8 +110,8 @@ export class Run {
       maxHp: ch.hp + up.hp * 4 + 8 * lv('heart') + f('bloodcrown', 15, 5) + 10 * lv('lifetree') + (on('eternity') ? 30 : 0) +
         f('ironheart', 10, 5) + f('pillow', 16, 4) + f('giantfist', 12, 4) + 10 * lv('guardian') + (on('bloodking') ? 20 : 0) +
         (this.p.lvl - 1) * B.HP_PER_LEVEL,
-      goldMult: 1 + 0.4 * lv('coin') + f('goldbolt', 0.75, 0.25) + 0.25 * lv('goldstorm') + (on('minecrown') ? 0.5 : 0) + 0.1 * up.greed +
-        f('luckycharm', 1, 0.25) + f('goldfang', 0.8, 0.2) + 0.25 * lv('fortune') + (on('dawnstar') ? 0.5 : 0),
+      goldMult: (1 + 0.4 * lv('coin') + f('goldbolt', 0.75, 0.25) + 0.25 * lv('goldstorm') + (on('minecrown') ? 0.5 : 0) + 0.1 * up.greed +
+        f('luckycharm', 1, 0.25) + f('goldfang', 0.8, 0.2) + 0.25 * lv('fortune') + (on('dawnstar') ? 0.5 : 0)) * B.stepGold(this.danger || 0),
       // never more than 60%: something always gets through
       dodge: Math.min(0.6, (ch.dodge || 0) + 0.08 * lv('cloak') + f('shadow', 0.15, 0.05) + 0.05 * lv('phantom') +
         f('luckycharm', 0.2, 0.05) + f('spikecloak', 0.2, 0.05) + 0.05 * lv('fortune') + (on('dawnstar') ? 0.1 : 0)),
@@ -328,10 +329,10 @@ export class Run {
   }
 
   spawnEnemy(type, x, y, scale = 1) {
-    const d = ENEMIES[type];
+    const d = ENEMIES[type], k = d.npc ? 1 : B.stepFoe(this.danger || 0);
     const e = {
       id: Run.nextId++, type, d, x, y,
-      hp: Math.round(d.hp * scale), maxHp: Math.round(d.hp * scale), atk: Math.round(d.atk * (1 + (scale - 1) * B.ATK_SHARE)),
+      hp: Math.round(d.hp * scale * k), maxHp: Math.round(d.hp * scale * k), atk: Math.round(d.atk * (1 + (scale - 1) * B.ATK_SHARE) * k),
       def: d.def || 0, aim: false, aimAt: null, skip: false, slam: false, timer: 0, face: -1,
       state: d.boss ? 'hunt' : Math.random() < 0.65 ? 'sleep' : 'wander',
       wake: 0, doze: 0, last: null, target: null, searchT: 0,
@@ -1334,14 +1335,22 @@ export class Run {
     this.over = true;
     this.queue = [];
     const stats = this.meta.stats;
-    if (won) { stats.wins++; this.gold += B.VICTORY_BONUS; }
+    let stepOpened = 0;
+    if (won) {
+      stats.wins++;
+      this.gold += B.VICTORY_BONUS;
+      // winning at the top step opens the next one
+      const before = B.stepsOpen(this.meta);
+      stats.topStep = Math.max(B.topStep(this.meta), this.danger || 0);
+      if (B.stepsOpen(this.meta) > before) stepOpened = B.stepsOpen(this.meta);
+    }
     this.meta.gold += this.gold;
     stats.bestGold = Math.max(stats.bestGold, this.gold);
     const before = { stats: this.startStats };
     const newlyUnlockable = Object.entries(CHARACTERS)
       .filter(([id, c]) => c.cond && !this.meta.chars[id] && c.cond.val(this.meta) >= c.cond.goal && c.cond.val(before) < c.cond.goal)
       .map(([, c]) => c.name);
-    this.emit('end', { won, newlyUnlockable });
+    this.emit('end', { won, newlyUnlockable, stepOpened });
   }
 }
 Run.nextId = 1;

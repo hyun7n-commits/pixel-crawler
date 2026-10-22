@@ -133,7 +133,7 @@ export function closeTalk() {
   return true;
 }
 
-export function showSummary({ won, run, newlyUnlockable, onClose }) {
+export function showSummary({ won, run, newlyUnlockable, stepOpened, onClose }) {
   openSheet(sh => {
     sh.append(el('h2', null, won ? '들판을 모두 토벌했다!' : '쓰러졌다'));
     if (!won && run.cause) sh.append(el('p', 'cause', `마지막 순간: ${run.cause}`));
@@ -163,6 +163,7 @@ export function showSummary({ won, run, newlyUnlockable, onClose }) {
     if (newlyUnlockable.length) {
       sh.append(el('div', 'unlock-note', `새 캐릭터 조건 달성: ${newlyUnlockable.join(', ')}. 마을의 조합장에게 가면 골드로 데려올 수 있다.`));
     }
+    if (stepOpened) sh.append(el('div', 'unlock-note', `토벌 단계 ★${stepOpened} 열림! 들판이 더 사나워진 대신 골드를 더 준다. 조합장에게서 고른다.`));
     const foot = el('div', 'sheet-foot');
     foot.append(button('btn primary', '마을로 돌아가기', () => { closeModal(); onClose(); }));
     sh.append(foot);

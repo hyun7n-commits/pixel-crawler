@@ -34,6 +34,15 @@ export const bossScale = floor => 1 + 0.5 * (floor / 3 - 1);
 export const GOLD_DROP_CHANCE = 0.4;
 export const VICTORY_BONUS = 200;
 
+// 토벌 단계: after the first win the fields get rowdier, one step per win, up to STEP_MAX. Picked at
+// the guild (ui/hub.js). Each step makes every critter tougher and pays more gold.
+export const STEP_MAX = 5;
+export const stepFoe = s => 1 + 0.15 * s;   // critters' health and attack
+export const stepGold = s => 1 + 0.2 * s;   // gold you pick up
+// the highest step won so far (-1 before the first win; saves from before steps count a win as step 0)
+export const topStep = m => m.stats.topStep ?? (m.stats.wins > 0 ? 0 : -1);
+export const stepsOpen = m => Math.min(STEP_MAX, topStep(m) + 1);
+
 export const POTION_HEAL = 0.6;
 
 // Tension, the Shattered Pixel Dungeon way: you should often end up a hit or two from death and live.

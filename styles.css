@@ -430,3 +430,10 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .pack.on { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), 0 0 10px rgba(244,207,79,.4); }
 .go-wrap { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
 .packed-note { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--gold); font-weight: 700; font-size: 13px; }
+/* 토벌 단계 at the guild (ui/hub.js stepRow) */
+.steps { display: flex; align-items: center; gap: 8px; padding: 10px 12px; margin: 4px 0 10px; background: #0f0e15; border: 1px solid var(--line); border-radius: 6px; }
+.steps .btn { min-width: 40px; }
+.step-stars { display: inline-flex; gap: 2px; margin-left: 8px; vertical-align: middle; }
+.step-stars i { width: 10px; height: 10px; background: #2a2636; clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+.step-stars i.open { background: #6b5a2a; }
+.step-stars i.on { background: var(--gold); }
