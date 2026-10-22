@@ -84,6 +84,10 @@ export const bombDamage = floor => 12 + 2 * floor;
 
 // Enemies: most start asleep. Once you thin a floor out, a wanderer comes in every so often.
 export const START_ASLEEP = 0.6;
+// ...and every one closer than this to where you arrive is asleep (SPD v4.0's calm vault entrance)
+export const CALM_START = 10;
+// awake critters moving out of sight this close leave footprints you can hear (scenes/DungeonScene.js)
+export const HEAR_STEPS = 6;
 export const RESPAWN_TURNS = 40;
 // Asleep, you snore: enemies this close hear it and come looking.
 export const SNORE_NOISE = 8;

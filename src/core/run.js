@@ -276,7 +276,8 @@ export class Run {
     // about half of them start asleep
     for (let i = 0; i < B.enemiesPerFloor(this.floor); i++) {
       place(s => {
-        const type = pick(this.zone.enemies), state = Math.random() < B.START_ASLEEP ? 'sleep' : 'wander';
+        // nothing awake near where you come in: the first steps of a field are yours to look around
+        const type = pick(this.zone.enemies), state = cheb(s, this.p) < B.CALM_START || Math.random() < B.START_ASLEEP ? 'sleep' : 'wander';
         const e = this.spawnEnemy(type, s.x, s.y, scale);
         e.state = state;
         // pack animals bring friends, curled up right beside them

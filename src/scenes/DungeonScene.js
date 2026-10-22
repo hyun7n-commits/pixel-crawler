@@ -11,7 +11,7 @@ import { T, TERRAIN, GASES, GAS_KEYS } from '../data/terrain.js';
 import { idx, inMap, lineOfSight, WALL, STAIRS, DOOR, ORE, UPSTAIRS, GRAVE, LOCKED, HIVE, WEED } from '../core/dungeon.js';
 import { WAKE_AT } from '../core/ai.js';
 import { BOMB_RANGE } from '../core/run.js';
-import { ORE_HITS } from '../data/balance.js';
+import { ORE_HITS, HEAR_STEPS } from '../data/balance.js';
 import { ORES } from '../data/ores.js';
 import { cheb } from '../core/util.js';
 import { faceKey } from '../data/faces.js';
@@ -85,6 +85,7 @@ export class DungeonScene extends Phaser.Scene {
     this.overlay = this.add.graphics().setDepth(D.overlay);
     this.pathGfx = this.add.graphics().setDepth(D.overlay);
     this.bubbles = [];
+    this.prints = [];
     this.waterFrame = 0;
     this.lastEmber = 0;
 
@@ -220,6 +221,7 @@ export class DungeonScene extends Phaser.Scene {
     this.doorImgs = {};
     this.oreImgs = {};
     this.bubbles = [];
+    this.prints = [];
     this.playerSprite = null;
     // a tween whose sprite is gone keeps running for nothing (the bobbing ones loop forever): sweep them
     for (const t of this.tweens.getTweens()) if (t.targets?.some(o => o?.type && !o.scene)) t.remove();
@@ -444,6 +446,12 @@ export class DungeonScene extends Phaser.Scene {
       const sensed = run.sensed(e);
       s.setVisible(run.isVisible(e.x, e.y) || (still && !!map.explored[idx(e.x, e.y)]) || sensed);
       s.setAlpha(sensed ? 0.5 : 1).setDepth(sensed ? D.overlay + 0.5 : D.enemies);
+      // footsteps in the dark: an awake critter moving out of sight within earshot leaves a faint print
+      if (s.at && (s.at.x !== e.x || s.at.y !== e.y) && !s.visible && !['sleep', 'npc'].includes(e.state) && !e.d.npc && cheb(e, run.p) <= HEAR_STEPS) {
+        this.prints.push({ x: e.x, y: e.y, dx: e.x - s.at.x, dy: e.y - s.at.y, at: this.time.now });
+        if (this.prints.length > 24) this.prints.shift();
+      }
+      s.at = { x: e.x, y: e.y };
       this.moveTo(s, e.x, e.y, dur);
       // a mark over its head when its mind changes, and only two kinds: ! it is after you, ? it is looking
       const seen = run.isVisible(e.x, e.y);
@@ -1319,6 +1327,16 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     this.clawed = claw;
+
+    // footprints you heard: two small paw marks on the tile, pointing the way it went, fading out
+    this.prints = this.prints.filter(f => time - f.at < 1800);
+    for (const f of this.prints) {
+      const a = 0.75 * (1 - (time - f.at) / 1800), cx = center(f.x), cy = center(f.y);
+      const sx = f.dy ? 2 : 0, sy = f.dx ? 2 : 0; // side by side across the direction of travel
+      g.fillStyle(0xe8e4dc, a);
+      g.fillRect(Math.round(cx - sx - 1 - f.dx), Math.round(cy - sy - f.dy), 2, 2);
+      g.fillRect(Math.round(cx + sx + f.dx), Math.round(cy + sy + f.dy), 2, 2);
+    }
 
     // you: walk frames while moving; standing still a while, you glance back over your shoulder now and then
     const ps = this.playerSprite;
