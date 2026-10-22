@@ -1,7 +1,7 @@
 // The village's own pictures: cottages drawn to their footprint, and the dirt paths between them.
 
 import { TILE, N, E, S, W_ } from './textures.js';
-import { ZONES } from '../data/enemies.js';
+import { VILLAGE_GROUND } from '../data/enemies.js';
 
 const mixHex = (a, b, t) => {
   const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
@@ -78,7 +78,7 @@ export function houseCanvas(h, lived) {
 function pathTile(mask) {
   const c = document.createElement('canvas');
   c.width = TILE; c.height = TILE;
-  const g = c.getContext('2d'), z = ZONES[0];
+  const g = c.getContext('2d'), z = VILLAGE_GROUND;
   let s = mask * 31 + 7;
   const r = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
   g.fillStyle = '#c9a878'; g.fillRect(0, 0, TILE, TILE);

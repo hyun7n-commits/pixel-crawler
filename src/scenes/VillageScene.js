@@ -4,13 +4,13 @@
 // Each time you come home a few shiny bits lie hidden in the grass for whoever wanders off the path.
 
 /* global Phaser */
-import { TILE, wallKey, waterKey, shadeKey, floorKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
+import { TILE, HOME_ZI, wallKey, waterKey, shadeKey, floorKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
 import { houseCanvas, pathKey, lampPostCanvas, lotCanvas } from './village-art.js';
 import { baseZoom } from './zoom.js';
 import { faceKey } from '../data/faces.js';
 import { VILLAGE_MAP, HOUSES, FOLK, doorOf, HERO_LINES, HOME, ownsHome } from '../data/village.js';
 import { CHARACTERS } from '../data/characters.js';
-import { ZONES } from '../data/enemies.js';
+import { VILLAGE_GROUND } from '../data/enemies.js';
 import { DECOR, hasDecor, LETTERS } from '../data/home.js';
 import { decorCanvas, pupCanvas } from './home-art.js';
 import { setEmote, drawEmote } from './emotes.js';
@@ -41,7 +41,7 @@ export class VillageScene extends Phaser.Scene {
   create(data) {
     const cam = this.cameras.main;
     cam.setRoundPixels(true);
-    cam.setBackgroundColor(ZONES[0].wallDark);
+    cam.setBackgroundColor(VILLAGE_GROUND.wallDark);
     this.spark = this.add.particles(0, 0, 'px', {
       emitting: false, lifespan: { min: 300, max: 650 }, speed: { min: 15, max: 60 }, scale: { start: 1.5, end: 0 },
       gravityY: 40, tint: [0xf4cf4f, 0xffffff, 0xf29bb2],
@@ -340,18 +340,18 @@ export class VillageScene extends Phaser.Scene {
     const add = (key, depth = D.tiles) => this.keep(this.add.image(x * TILE, y * TILE, key).setOrigin(0).setDepth(depth));
     const hedge = (nx, ny) => this.ch(nx, ny) === '#';
     if (ch === '#') {
-      add(wallKey(this, 0, around((nx, ny) => !hedge(nx, ny)), hash(x + 99, y + 99) % 3));
+      add(wallKey(this, HOME_ZI, around((nx, ny) => !hedge(nx, ny)), hash(x + 99, y + 99) % 3));
       return;
     }
     if (ch === '~') {
-      const img = add(waterKey(this, 0, 0, around((nx, ny) => this.ch(nx, ny) !== '~')));
+      const img = add(waterKey(this, HOME_ZI, 0, around((nx, ny) => this.ch(nx, ny) !== '~')));
       img.shore = around((nx, ny) => this.ch(nx, ny) !== '~');
       this.waterImgs.push(img);
       return;
     }
     const pathy = (nx, ny) => ':>'.includes(this.ch(nx, ny));
     if (pathy(x, y)) add(pathKey(this, around((nx, ny) => !pathy(nx, ny)) & (N | E | S | W_)));
-    else add(ch === '*' ? `z0_floor${4 + (hash(x, y) % 3)}` : floorKey(0, hash(x, y) & 31)); // '*': daisies, pink flowers, buttercups
+    else add(ch === '*' ? `z${HOME_ZI}_floor${4 + (hash(x, y) % 3)}` : floorKey(HOME_ZI, hash(x, y) & 31)); // '*': daisies, pink flowers, buttercups
     const shade = around(hedge) & (N | E | W_ | NE | NW);
     if (shade) add(shadeKey(this, shade));
     if (ch === '>') add('t_stairs', D.deco);
@@ -764,7 +764,7 @@ export class VillageScene extends Phaser.Scene {
     const wf = Math.floor(time / 600) % 2;
     if (wf !== this.waterFrame) {
       this.waterFrame = wf;
-      for (const img of this.waterImgs) img.setTexture(waterKey(this, 0, wf, img.shore));
+      for (const img of this.waterImgs) img.setTexture(waterKey(this, HOME_ZI, wf, img.shore));
     }
     const view = this.cameras.main.worldView;
     this.bubbles = this.bubbles.filter(b => {

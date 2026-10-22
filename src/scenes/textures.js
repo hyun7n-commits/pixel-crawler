@@ -3,7 +3,7 @@
 import { PAL, SPR, TER_SPR } from '../data/sprites.js';
 import { FACES, faceRows, faceKey } from '../data/faces.js';
 import { CHARACTERS } from '../data/characters.js';
-import { ZONES } from '../data/enemies.js';
+import { ZONES, VILLAGE_GROUND } from '../data/enemies.js';
 import { ORES, RAINBOW } from '../data/ores.js';
 
 export const TILE = 16; // world pixels per tile
@@ -411,15 +411,18 @@ function crystalCanvas() {
 
 // Wall, water and shade tiles depend on their neighbours, so they are made the first time a
 // combination is needed and then reused.
+// the field zones, then the village's own daytime palette at HOME_ZI
+const GROUNDS = [...ZONES, VILLAGE_GROUND];
+export const HOME_ZI = ZONES.length;
 export function wallKey(scene, zi, mask, v = 0) {
   const key = `z${zi}_wall_${mask}_${v}`;
-  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, wallTile(ZONES[zi], zi, mask, v));
+  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, wallTile(GROUNDS[zi], zi, mask, v));
   return key;
 }
 // `warm`: a hot spring's pool, milky jade instead of the zone's blue
 export function waterKey(scene, zi, frame, mask, warm = false) {
   const key = `z${zi}_water${frame}_${mask}${warm ? '_warm' : ''}`;
-  const z = warm ? { ...ZONES[zi], water: '#5fb8b0', waterLight: '#d2f4ec' } : ZONES[zi];
+  const z = warm ? { ...GROUNDS[zi], water: '#4f9a93', waterLight: '#a9d8ce' } : GROUNDS[zi];
   if (!scene.textures.exists(key)) scene.textures.addCanvas(key, waterTile(z, frame, mask));
   return key;
 }
@@ -438,7 +441,7 @@ export function floorKey(zi, h) {
 // Back blades are darker, front ones lighter with pale tips.
 function tallGrass(variant) {
   const [c, g] = canvas(), r = noise(variant * 31 + 7);
-  const dark = '#1f5a32', mid = '#2f7a43', light = '#4fa35a', tip = '#9fd67a';
+  const dark = '#1c3a24', mid = '#2a5233', light = '#3d6c44', tip = '#7fa267';
   g.fillStyle = dark; g.fillRect(0, 11, TILE, 5);
   for (let layer = 0; layer < 3; layer++) {
     for (let k = 0; k < 9; k++) {
@@ -465,7 +468,7 @@ function flatGrass(variant) {
     let x = Math.floor(r() * 14) + 1, y = 2 + Math.floor(r() * 13);
     const dir = r() < 0.5 ? -1 : 1, len = 3 + Math.floor(r() * 4);
     for (let j = 0; j < len; j++) {
-      g.fillStyle = j === len - 1 ? '#6cb85e' : j % 2 ? '#3f8c4b' : '#2f7a43';
+      g.fillStyle = j === len - 1 ? '#5f8a50' : j % 2 ? '#3b6340' : '#2d5234';
       g.fillRect(x, y, 1, 1);
       x += dir;
       if (j % 2) y -= 1;
@@ -494,7 +497,7 @@ export function buildTextures(scene) {
     tx.addCanvas(`t_brush${v}`, tallGrass(v));
     tx.addCanvas(`t_grass${v}`, flatGrass(v));
   }
-  ZONES.forEach((z, zi) => {
+  GROUNDS.forEach((z, zi) => {
     for (let v = 0; v < FLOOR_VARIANTS; v++) tx.addCanvas(`z${zi}_floor${v}`, floorTile(z, zi, v));
   });
   tx.addCanvas('t_lamp', spriteCanvas(LAMP));

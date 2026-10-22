@@ -503,16 +503,19 @@ export class DungeonScene extends Phaser.Scene {
       const i = idx(x, y), imgs = this.tileImgs[i];
       if (!imgs) continue;
       if (!map.explored[i]) { imgs.forEach(im => im.setVisible(false)); continue; }
-      let v;
+      // night: your lantern warms what is near and fades to cold blue at the edge of sight;
+      // what you only remember sinks into dim blue, like Shattered Pixel Dungeon's fog
+      let r, v, b;
       if (map.visible[i]) {
-        const d = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
-        v = Math.round(255 - Math.min(1, d / (sight + 1)) * 110);
-      } else v = 70;
+        const t = Math.min(1, Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2) / (sight + 1)), warm = (1 - t) * (1 - t);
+        v = 255 - t * 120;
+        r = v; b = v - warm * 38 + t * 12; v -= warm * 8;
+      } else { r = 50; v = 58; b = 76; }
       // lamplight warms and brightens the tiles around a lamp, even ones you only remember
       const L = this.light ? this.light[i] : 0;
-      v = Math.min(255, v + Math.round(L * (map.visible[i] ? 40 : 50)));
-      const r = Math.min(255, v + Math.round(L * 22)), b = Math.max(0, Math.min(255, Math.round(v * 1.05 - L * 34)));
-      const tint = (r << 16) | (v << 8) | b;
+      const k = L * (map.visible[i] ? 40 : 60);
+      const ch = n => Math.max(0, Math.min(255, Math.round(n)));
+      const tint = (ch(r + k + L * 22) << 16) | (ch(v + k) << 8) | ch(b + k - L * 34);
       imgs.forEach(im => im.setVisible(true).setTint(tint));
     }
     for (const l of this.lamps) {

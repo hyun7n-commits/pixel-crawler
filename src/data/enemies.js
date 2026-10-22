@@ -53,17 +53,23 @@ export const ENEMIES = {
 // Three floors per zone; the third floor of each zone is the boss.
 // `style` picks how the walls and ground are drawn (see scenes/textures.js): hedges on the meadow,
 // a line of trees in the deep forest, rock cliffs on the mountain. `void` is the unexplored dark.
+// The village keeps the bright daytime green: home is where it is light; the fields are walked at night.
+export const VILLAGE_GROUND = { name: '마을', style: 'meadow', void: '#0c1a10',
+  floor: '#92c86a', floorDark: '#7cb458', floorLight: '#acdc86',
+  wallTop: '#3a8448', wallLight: '#5aad58', wallFace: '#2c6b3a', wallDark: '#1f5230', wallLine: '#10301c',
+  water: '#4a9fc4', waterLight: '#8fd8f0' };
+
 export const ZONES = [
-  { name: '초원', style: 'meadow', wallName: '산울타리', enemies: ['rat', 'rat', 'slime', 'goblin'], boss: 'ratking', void: '#0c1a10',
-    floor: '#92c86a', floorDark: '#7cb458', floorLight: '#acdc86',
-    wallTop: '#3a8448', wallLight: '#5aad58', wallFace: '#2c6b3a', wallDark: '#1f5230', wallLine: '#10301c',
-    water: '#4a9fc4', waterLight: '#8fd8f0' },
-  { name: '깊은숲', style: 'forest', wallName: '큰 나무', enemies: ['bat', 'skel', 'spider', 'goblin'], boss: 'skelking', void: '#08110b',
-    floor: '#66683f', floorDark: '#535633', floorLight: '#7d7f4f',
-    wallTop: '#2b6638', wallLight: '#46914a', wallFace: '#6b4a2e', wallDark: '#1c4628', wallLine: '#0d1a10',
-    water: '#2f6f80', waterLight: '#5fa8b8' },
-  { name: '돌산', style: 'rock', wallName: '바위 절벽', enemies: ['knight', 'wizard', 'garg', 'skel'], boss: 'lord', void: '#0f0e14',
-    floor: '#a39478', floorDark: '#86795f', floorLight: '#bcae90',
-    wallTop: '#81858f', wallLight: '#a9adb6', wallFace: '#6a6e7a', wallDark: '#4c4f5a', wallLine: '#2a2c34',
-    water: '#3f86ab', waterLight: '#7cc0dc' },
+  { name: '초원', style: 'meadow', wallName: '산울타리', enemies: ['rat', 'rat', 'slime', 'goblin'], boss: 'ratking', void: '#07090a',
+    floor: '#61774a', floorDark: '#536840', floorLight: '#728a57',
+    wallTop: '#34573a', wallLight: '#4b7549', wallFace: '#28452d', wallDark: '#1b3221', wallLine: '#0b160e',
+    water: '#33627c', waterLight: '#6b9db5' },
+  { name: '깊은숲', style: 'forest', wallName: '큰 나무', enemies: ['bat', 'skel', 'spider', 'goblin'], boss: 'skelking', void: '#050706',
+    floor: '#4f4f36', floorDark: '#42422d', floorLight: '#5e5f42',
+    wallTop: '#244530', wallLight: '#346440', wallFace: '#4d3a26', wallDark: '#16301d', wallLine: '#070d08',
+    water: '#26505c', waterLight: '#4e8592' },
+  { name: '돌산', style: 'rock', wallName: '바위 절벽', enemies: ['knight', 'wizard', 'garg', 'skel'], boss: 'lord', void: '#09090c',
+    floor: '#6f6857', floorDark: '#5e5849', floorLight: '#807967',
+    wallTop: '#5c6068', wallLight: '#767a84', wallFace: '#484b54', wallDark: '#33353d', wallLine: '#18191e',
+    water: '#2f5b75', waterLight: '#5e8ca8' },
 ];

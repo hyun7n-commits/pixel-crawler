@@ -9,6 +9,8 @@
 // carried home by the guild. Beat the boss at the end of a zone and you get that zone's license;
 // all three, and there is a big prize. (The prize is a house of your own.)
 
+import { HOME_ZI } from './textures.js';
+
 const HOME = { id: 'home', w: 5, h: 4, roof: '#f4cf4f', sign: 'heart', chimney: true };
 const GUILD = { id: 'guild', w: 5, h: 4, roof: '#3f6fb3', sign: 'flag', chimney: true };
 const SHOP = { id: 'shop', w: 5, h: 4, roof: '#d9454a', sign: 'coin', awning: true };
@@ -27,8 +29,8 @@ function homeKey(k) {
 // the guild with its master at the door and the hero in front: the opening's job talk, the licenses
 function atGuild(k) {
   k.sky('day');
-  k.ground(0, 3);
-  k.hedge(0, L, R, 2);
+  k.ground(HOME_ZI, 3);
+  k.hedge(HOME_ZI, L, R, 2);
   k.house(GUILD, 1.5, -1.5);
   const boss = k.actor('guildBoss', 4, 1.6);
   const hero = k.actor('adv', 3, 3.1);
@@ -39,8 +41,8 @@ function atGuild(k) {
 // the village at night, lamps lit
 function villageNight(k) {
   k.sky('night');
-  k.ground(0, 3, NIGHT);
-  const back = k.hedge(0, L, R, 2, NIGHT);
+  k.ground(HOME_ZI, 3, NIGHT);
+  const back = k.hedge(HOME_ZI, L, R, 2, NIGHT);
   k.house(SHOP, -5, -1.5, true, HOUSE_NIGHT);
   k.house(GUILD, 1.5, -1.5, true, HOUSE_NIGHT);
   k.house(NEIGHBOR, 8, -1.5, true, HOUSE_NIGHT);
@@ -52,7 +54,7 @@ const intro = [
   { // the village at night, and the fields that toss in their sleep
     build(k) {
       const back = villageNight(k);
-      const front = [...k.hedge(0, L, 1, 4, NIGHT), ...k.hedge(0, 6, R, 4, NIGHT)];
+      const front = [...k.hedge(HOME_ZI, L, 1, 4, NIGHT), ...k.hedge(HOME_ZI, 6, R, 4, NIGHT)];
       return { hedges: [...back, ...front] };
     },
     lines: [
@@ -63,8 +65,8 @@ const intro = [
   { // the new worker moves in
     build(k) {
       k.sky('day');
-      k.ground(0, 2);
-      k.hedge(0, L, R, 1);
+      k.ground(HOME_ZI, 2);
+      k.hedge(HOME_ZI, L, R, 1);
       k.house(NEIGHBOR, 5.5, -2.5);
       const hero = k.actor('adv', -4, 2.8);
       k.walk(hero, 2.5, 1500, () => k.breathe(hero));
@@ -93,8 +95,8 @@ const intro = [
   { // the sparkle boulders: money, but loud
     build(k) {
       k.sky('day');
-      k.ground(0, 2);
-      k.hedge(0, L, R, 1);
+      k.ground(HOME_ZI, 2);
+      k.hedge(HOME_ZI, L, R, 1);
       const rock = k.keep(k.add.image(4.6 * 16 + 8, 3 * 16 + 16, 't_ore_gold').setOrigin(0.5, 1).setDepth(4.03).setScale(1.5));
       const hero = k.actor('adv', 3, 3, { face: 'grit' });
       k.breathe(hero);
@@ -123,8 +125,8 @@ const intro = [
   { // fainting is not the end
     build(k) {
       k.sky('dusk');
-      k.ground(0, 2, DUSK);
-      k.hedge(0, L, R, 1, DUSK);
+      k.ground(HOME_ZI, 2, DUSK);
+      k.hedge(HOME_ZI, L, R, 1, DUSK);
       const hero = k.actor('adv', 3.5, 3, { face: 'hit' });
       hero.setAngle(-90).setOrigin(0.5, 0.75);
       const rescuer = k.actor('rescuer', 12, 3, { flip: true });
@@ -208,8 +210,8 @@ const ending = [
   { // the big prize
     build(k) {
       k.sky('day');
-      k.ground(0, 3);
-      k.hedge(0, L, R, 2);
+      k.ground(HOME_ZI, 3);
+      k.hedge(HOME_ZI, L, R, 2);
       const home = k.house(HOME, 3, -1.5);
       home.setAlpha(0);
       const gm = k.actor('guildBoss', 1, 2.4);
@@ -228,9 +230,9 @@ const ending = [
   { // and the next morning...
     build(k) {
       k.sky('day');
-      k.ground(0, 2);
-      const back = k.hedge(0, L, R, 1);
-      const front = [...k.hedge(0, L, 0, 4), ...k.hedge(0, 7, R, 4)];
+      k.ground(HOME_ZI, 2);
+      const back = k.hedge(HOME_ZI, L, R, 1);
+      const front = [...k.hedge(HOME_ZI, L, 0, 4), ...k.hedge(HOME_ZI, 7, R, 4)];
       const gm = k.actor('guildBoss', 2.5, 2.6);
       const hero = k.actor('adv', 4.5, 2.6, { flip: true });
       k.breathe(gm); k.breathe(hero, 200);
