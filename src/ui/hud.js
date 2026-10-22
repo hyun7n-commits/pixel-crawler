@@ -126,11 +126,13 @@ export class Hud {
     for (let i = 0; i < MAX_SLOTS; i++) {
       const id = ids[i];
       if (!id) { const b = button('relic empty'); b.disabled = true; box.append(b); continue; }
-      const b = button('relic' + (isFused(id) ? ' fused' : TIER_CLASS[tierOf(id)]), null, () => {
+      // a relic at its top level says MAX in gold: fully grown, the way basic ones must be to evolve
+      const top = maxLevelOf(id), maxed = top > 1 && p.relics[id] >= top;
+      const b = button('relic' + (isFused(id) ? ' fused' : TIER_CLASS[tierOf(id)]) + (maxed ? ' maxed' : ''), null, () => {
         this.selected = this.selected === id ? null : id;
         this.update(run);
       });
-      b.append(relicIcon(id), el('span', 'lv', maxLevelOf(id) === 1 ? '★' : String(p.relics[id])));
+      b.append(relicIcon(id), el('span', 'lv', top === 1 ? '★' : maxed ? 'MAX' : String(p.relics[id])));
       b.setAttribute('aria-label', relicName(id));
       b.dataset.id = id;
       b.setAttribute('aria-pressed', String(this.selected === id));

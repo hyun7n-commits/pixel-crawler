@@ -1,12 +1,15 @@
 // Pop-up sheets: relic choice (level up / chest), the end-of-run summary, and talking in the village.
 
 import { $, el, button, icon } from './dom.js';
-import { RELICS, recipeKey, tierOf } from '../data/relics.js';
+import { RELICS, recipeKey, tierOf, maxLevelOf } from '../data/relics.js';
 import { recipeFor } from './recipe.js';
 import { josa } from '../core/util.js';
 import { DISCOVERIES } from '../data/terrain.js';
 import { STALL } from '../data/npcs.js';
 import { ENEMIES } from '../data/enemies.js';
+
+// the level a relic grows to, MAX when that is its top (as the bag shows it)
+const lvTo = (id, n) => (n >= maxLevelOf(id) ? 'MAX' : `Lv${n}`);
 
 export const modalOpen = () => !$('modal').hidden;
 let talkClose = null; // set while a villager's talk sheet is open
@@ -61,7 +64,7 @@ export function showChoice({ title, sub, run, opts, onPick, onReroll, who }) {
         if (evo) b.classList.add('ready');
         info.append(
           el('span', 'nm', r.name),
-          el('span', evo ? 'tag ready' : cur ? 'tag' : 'tag new', evo ? `진화! → ${RELICS[evo.id].name}` : cur ? `Lv${cur} → Lv${cur + 1}` : '새 유물'),
+          el('span', evo ? 'tag ready' : cur ? 'tag' : 'tag new', evo ? `진화! → ${RELICS[evo.id].name}` : cur ? `Lv${cur} → ${lvTo(o.id, cur + 1)}` : '새 유물'),
           el('span', 'ds', r.desc(cur + 1)),
         );
         const rc = recipeFor(run, o.id, o.id);
@@ -80,7 +83,7 @@ export function showChoice({ title, sub, run, opts, onPick, onReroll, who }) {
         b.append(pic);
         const lv = id => run.p.relics[id] || 0;
         info.append(el('span', 'nm', '둘 다 쑥쑥'), el('span', 'tag', '두 개 +1'),
-          el('span', 'ds', `${RELICS[o.a].name} Lv${lv(o.a)} → Lv${lv(o.a) + 1}, ${RELICS[o.b].name} Lv${lv(o.b)} → Lv${lv(o.b) + 1}`));
+          el('span', 'ds', `${RELICS[o.a].name} Lv${lv(o.a)} → ${lvTo(o.a, lv(o.a) + 1)}, ${RELICS[o.b].name} Lv${lv(o.b)} → ${lvTo(o.b, lv(o.b) + 1)}`));
       } else if (o.kind === 'buy') {
         // the stall: what it is and its price; greyed out when your purse is short
         const it = STALL[o.what];
