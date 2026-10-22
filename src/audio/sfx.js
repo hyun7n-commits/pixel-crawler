@@ -2,7 +2,7 @@
 // Each sound is a few short tones and noise bursts. Swap these for recorded sounds later
 // by changing SOUNDS only; the rest of the game just calls onRunEvent.
 import { T } from '../data/terrain.js';
-import { wait, fissionMs, evolveMs, FISSION_LEAD, FISSION_STEP, EVOLVE_FLASH } from '../ui/beat.js';
+import { wait, fissionMs, evolveMs, FISSION_LEAD, FISSION_STEP, EVOLVE_FLASH, GROW_MS } from '../ui/beat.js';
 
 const VOLUME = 0.4;
 const MUTE_KEY = 'pixel-crawler-muted';
@@ -170,6 +170,11 @@ const SOUNDS = {
   },  dodge() { hiss(0.12, { vol: 0.12, freq: 2000, to: 4500, q: 2 }); },
   puff() { hiss(0.35, { vol: 0.15, freq: 900, to: 300, q: 0.6, attack: 0.02 }); },
   levelup() { chime([659, 784, 988, 1319], 0.07, 0.13); },
+  // a relic you picked lands: one pip, a little run up when it is full
+  grow(max, delay) {
+    tone(1175, 0.1, { type: 'triangle', vol: 0.1, delay });
+    if (max) { tone(1568, 0.1, { type: 'triangle', vol: 0.1, delay: delay + 0.07 }); tone(2093, 0.16, { type: 'triangle', vol: 0.09, delay: delay + 0.14 }); }
+  },
   // a star candy: a pop, then one bright pip per relic it grows, climbing the scale (다다다닥)
   candy(n, delay) {
     hiss(0.2, { vol: 0.14, freq: 5200, type: 'highpass', delay });
@@ -235,6 +240,7 @@ export function onRunEvent(type, d) {
     case 'levelup': play('levelup'); break;
     case 'evolve': { const ms = evolveMs(d); play('evolve', d.fused ? 0 : d.tier, wait(d, ms) / 1000, EVOLVE_FLASH * ms / 1000); break; }
     case 'fission': play('candy', d.steps.length, wait(d, fissionMs(d.steps.length)) / 1000); break;
+    case 'grow': play('grow', d.max, wait(d, GROW_MS) / 1000); break;
     case 'steal': play('gold'); play('dodge'); break;
     case 'escape': play('puff'); break;
     case 'bones': play('kill'); play('hit'); break;

@@ -1344,6 +1344,7 @@ export class Run {
     const rl = this.p.relics;
     this.withMaxHpDelta(() => { rl[id] = (rl[id] || 0) + 1; });
     this.log(`${RELICS[id].name} Lv${rl[id]}`, 'good');
+    this.emit('grow', { id, lvl: rl[id], max: maxLevelOf(id) > 1 && rl[id] >= maxLevelOf(id) });
     this.checkRecipes();
     this.emit('relics');
   }
@@ -1377,7 +1378,7 @@ export class Run {
       let r = Math.random() * w.reduce((a, b) => a + b, 0), id = ids[0];
       for (let i = 0; i < ids.length; i++) if ((r -= w[i]) < 0) { id = ids[i]; break; }
       this.withMaxHpDelta(() => { rl[id]++; });
-      steps.push({ id, lvl: rl[id] });
+      steps.push({ id, lvl: rl[id], max: rl[id] >= maxLevelOf(id) });
     }
     this.meta.stats.candies = (this.meta.stats.candies || 0) + 1;
     const grown = steps.filter(t => t.id).map(t => `${RELICS[t.id].name} Lv${t.lvl}`);

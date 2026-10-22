@@ -12,7 +12,7 @@ import { ITEMS } from '../data/items.js';
 import { LAST_FLOOR, xpToLevel } from '../data/balance.js';
 import { zoneOf, isBossFloor } from '../core/run.js';
 import { playerStatus } from './tip.js';
-import { wait, fissionMs, FISSION_LEAD, FISSION_STEP } from './beat.js';
+import { wait, fissionMs, FISSION_LEAD, FISSION_STEP, GROW_MS } from './beat.js';
 
 // What the quest folk asked of you and have not had back yet.
 function questLines(run) {
@@ -69,13 +69,18 @@ export class Hud {
   // A star candy's burst: each relic it grows gives its slot a little bounce, in step with the field.
   fission(d) {
     const delay = wait(d, fissionMs(d.steps.length));
-    d.steps.forEach((st, k) => st.id && setTimeout(() => {
-      const b = $('relics').querySelector(`[data-id="${st.id}"]`);
-      if (!b) return;
-      b.classList.remove('ding');
-      void b.offsetWidth;
-      b.classList.add('ding');
-    }, delay + FISSION_LEAD + k * FISSION_STEP));
+    d.steps.forEach((st, k) => st.id && setTimeout(() => this.ding(st.id), delay + FISSION_LEAD + k * FISSION_STEP));
+  }
+
+  // a relic you picked: its slot bounces as it lands over your head
+  grow(d) { setTimeout(() => this.ding(d.id), wait(d, GROW_MS)); }
+
+  ding(id) {
+    const b = $('relics').querySelector(`[data-id="${id}"]`);
+    if (!b) return;
+    b.classList.remove('ding');
+    void b.offsetWidth;
+    b.classList.add('ding');
   }
 
   banner(text) {
