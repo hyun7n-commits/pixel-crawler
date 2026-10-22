@@ -551,7 +551,6 @@ function fitCanvas() {
 }
 new ResizeObserver(fitCanvas).observe($('phaser'));
 
-// test hook for automated play-testing; harmless in normal play
 // the page going away (tab closed, app switched, phone locked): write the run down, and the save with
 // it (kills, finds and recipes count as they happen, so they must match the run that comes back)
 function putAway() {
@@ -562,4 +561,5 @@ function putAway() {
 document.addEventListener('visibilitychange', () => { if (document.hidden) putAway(); });
 window.addEventListener('pagehide', putAway);
 
+// test hook for automated play-testing; harmless in normal play
 window.__game = { get run() { return run; }, get meta() { return meta; }, get scene() { return scene; }, get village() { return village(); }, startRun, setAim, showVillage, showStory };

@@ -132,6 +132,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .relic.myth { border-color: #c48cff; box-shadow: inset 0 0 0 1px #c48cff, 0 0 8px #9a5fd1; animation: mythglow 1.6s ease-in-out infinite alternate; }
 .relic.fused { border-color: #6fe0e0; box-shadow: inset 0 0 0 1px #6fe0e0; }
 .relic.ding { animation: ding .3s ease-out; }
+.relic.maxed .lv { color: var(--gold); font-size: 9px; letter-spacing: -.3px; }
 @keyframes ding { 0% { transform: scale(1); } 35% { transform: scale(1.25); box-shadow: 0 0 10px var(--gold); border-color: var(--gold); } 100% { transform: scale(1); } }
 @keyframes mythglow { from { box-shadow: inset 0 0 0 1px #c48cff, 0 0 4px #9a5fd1; } to { box-shadow: inset 0 0 0 1px #c48cff, 0 0 12px #c48cff; } }
 /* a fused relic: its two halves overlapping, the second a little lower */
@@ -454,3 +455,17 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* 집 꾸미기: each piece's picture in a little frame */
 .decor-frame { flex: 0 0 48px; height: 40px; display: grid; place-items: center; background: rgba(111, 191, 78, 0.18); border-radius: 8px; }
 .row.owned .row-name::after { content: ' ✓'; color: #8fd86f; }
+
+/* Big desktop screens (the usual Steam monitor and up): the side panel and the sheets grow with the
+   screen so their words read as comfortably as on a laptop. The map scales itself (scenes/zoom.js). */
+@media (min-width: 1600px) and (min-height: 900px) and (pointer: fine) {
+  #game { grid-template-columns: 1fr 348px; }
+  #side, #modal, #tip, #vhud, .st-box, .st-skip, .st-dots { zoom: 1.2; }
+  /* screen units grow with the zoom too, so a sheet's height cap shrinks by it to stay on screen */
+  .sheet, .sheet-box { max-height: calc((100vh - 38px) / 1.2); max-height: calc((100dvh - 38px) / 1.2); }
+}
+@media (min-width: 2400px) and (min-height: 1300px) and (pointer: fine) {
+  #game { grid-template-columns: 1fr 464px; }
+  #side, #modal, #tip, #vhud, .st-box, .st-skip, .st-dots { zoom: 1.6; }
+  .sheet, .sheet-box { max-height: calc((100vh - 52px) / 1.6); max-height: calc((100dvh - 52px) / 1.6); }
+}
