@@ -1272,9 +1272,19 @@ export class DungeonScene extends Phaser.Scene {
       if (top >= 2) this.fx[top >= 3 ? 'magic' : 'ember'].explode(top >= 3 ? 3 : 2, ps.x + (Math.random() - 0.5) * 12, ps.y - 4 - Math.random() * 10);
     }
     this.drawStatus(g, ps, p, ps.y - TILE - ps.hop, p.face < 0 ? -1 : 1, time);
-    // nothing after you for a while: you hum to yourself
+    // nothing after you for a while: you hum to yourself, or do your own little thing (see pose)
     if (walking || !this.safe || this.lowHp || p.sleep || !ps.calmSince) ps.calmSince = time;
-    else if (time - ps.calmSince > 6000 && time > (ps.humAt || 0)) { ps.humAt = time + 5500; this.emote(ps, '♪', 1300); }
+    else if (time - ps.calmSince > 4000 && time > (ps.humAt || 0)) {
+      ps.humAt = time + 4500 + Math.random() * 2000;
+      ps.quirkN = (ps.quirkN || 0) + 1;
+      if (ps.quirkN % 2) this.emote(ps, '♪', 1300);
+      else {
+        ps.quirkAt = time;
+        const id = this.run.charId, side = p.face < 0 ? -5 : 5;
+        if (id === 'mage' || id === 'vamp') this.later(150, () => this.fx.magic.explode(4, ps.x, ps.y - 12));
+        if (id === 'knight') this.later(250, () => this.fx.spark.explode(4, ps.x + side, ps.y - 6));
+      }
+    }
     this.drawEmote(g, ps, ps.x, ps.y - TILE - ps.hop - 3, time);
 
     // speech bubbles follow their speaker
@@ -1356,6 +1366,19 @@ export class DungeonScene extends Phaser.Scene {
         case 'garg': sx = 1 + 0.05 * Math.sin(t / 150); break; // crawling
         case 'knight': if (t % 3000 < 220) { sx = 1.07; sy = 0.93; } break; // a snort
         case 'turtle': rot = 0.03 * Math.sin(t / 900); break;
+      }
+    }
+    // you, at ease: the worker stretches, the rogue crouches and peeks both ways, the mage floats,
+    // the knight puffs up proudly, the vampire flits
+    const q = time - (s.quirkAt ?? -1e9);
+    if (who === this.run.p && q < 900) {
+      const k = Math.sin(q / 900 * Math.PI);
+      switch (this.run.charId) {
+        case 'adv': sy = 1 + 0.12 * k; sx = 1 - 0.08 * k; break;
+        case 'rogue': sy = 0.9; sx = 1.06; if (Math.floor(q / 225) % 2) flip = !flip; break;
+        case 'mage': hop = Math.max(hop, 3 * k); break;
+        case 'knight': sx = 1 + 0.1 * k; sy = 1 + 0.07 * k; break;
+        case 'vamp': hop = Math.max(hop, 4 * k); sx = 1 + 0.1 * Math.sin(q / 50); break;
       }
     }
     s.setFlipX(flip).setRotation(rot);
