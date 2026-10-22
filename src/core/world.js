@@ -71,7 +71,7 @@ export function springTrap(run, x, y) {
     if (seen) run.log('푹! 바닥에서 가시가 솟았다!', 'warn');
     damageAt(run, x, y, B.trapSpike(run.floor), '가시 함정을 밟았다', 'spike');
   } else if (t === T.TRAP_ALARM) {
-    run.log('따르르릉! 요란한 종소리가 층 전체에 울렸다!', 'warn');
+    run.log('따르르릉! 요란한 종소리가 구역 전체에 울렸다!', 'warn');
     run.emit('alarm', { x, y });
     run.noise(x, y, 99);
   } else if (t === T.TRAP_SUMMON) {
@@ -244,7 +244,7 @@ export function gasExplode(run, sx, sy) {
   for (const t of tiles) g[idx(t.x, t.y)] = 0;
   run.emit('gasboom', { tiles, x: sx, y: sy });
   const dmg = 8 + 2 * run.floor;
-  for (const t of tiles) damageAt(run, t.x, t.y, dmg, '광산 가스 폭발에 휘말렸다', 'fire');
+  for (const t of tiles) damageAt(run, t.x, t.y, dmg, '늪 가스 폭발에 휘말렸다', 'fire');
   for (const t of tiles) ignite(run, t.x, t.y, true);
   run.noise(sx, sy, 12);
   if (tiles.length > 1 || run.isVisible(sx, sy)) run.discover('fire_mine');

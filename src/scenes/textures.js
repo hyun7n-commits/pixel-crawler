@@ -1,6 +1,8 @@
 // Builds Phaser textures from the pixel-art strings and draws the floor and wall tiles for each zone.
 
 import { PAL, SPR, TER_SPR } from '../data/sprites.js';
+import { FACES, faceRows, faceKey } from '../data/faces.js';
+import { CHARACTERS } from '../data/characters.js';
 import { ZONES } from '../data/enemies.js';
 import { ORES, RAINBOW } from '../data/ores.js';
 
@@ -162,42 +164,51 @@ function canvas() {
   return [c, c.getContext('2d')];
 }
 
-// Stone floor: four slabs with dark seams and a few chips. Variants 4+ carry a small detail
-// that fits the zone (pebbles, coal and planks up top, crystal shards in the caves, rubble in the ruins).
+// Ground: the zone's colour with little marks so it never looks like flat paint (grass tufts on the
+// meadow and in the forest, grit on the mountain). Variants 3+ carry a detail of the place:
+// flowers and clover on the meadow, mushrooms, twigs and fallen leaves in the forest,
+// pebbles, tufts and small crystals on the mountain.
 const FLOOR_VARIANTS = 8;
+const DETAILS = {
+  meadow: [null, null, null,
+    px => px('#4f9a3e', [[5, 6], [6, 6], [5, 7], [8, 6], [9, 6], [9, 7], [6, 9], [7, 9], [7, 10], [8, 9]]), // clover
+    px => { px('#f4f0e8', [[7, 7], [9, 7], [8, 6], [8, 8], [3, 12], [12, 3]]); px('#f4cf4f', [[8, 7]]); }, // a daisy
+    px => { px('#f29bb2', [[4, 5], [6, 5], [5, 4], [5, 6], [11, 11], [10, 10], [12, 10]]); px('#f4cf4f', [[5, 5], [11, 10]]); },
+    px => { px('#f4cf4f', [[4, 10], [5, 9], [10, 5], [11, 4], [12, 12]]); px('#fff3b0', [[5, 10], [11, 5]]); }, // buttercups
+    (px, z) => { // a bare patch of earth with a pebble
+      px('#a08458', [[6, 7], [7, 7], [8, 7], [9, 7], [5, 8], [6, 8], [7, 8], [8, 8], [9, 8], [10, 8], [6, 9], [7, 9], [8, 9], [9, 9]]);
+      px('#c9a878', [[7, 8]]); px(z.floorDark, [[5, 9], [10, 9]]);
+    }],
+  forest: [null, null, null,
+    px => px('#6b4a2e', [[3, 11], [4, 10], [5, 10], [6, 9], [7, 8], [8, 8], [9, 7], [6, 10]]), // a twig
+    px => { // a red toadstool
+      px('#1b1424', [[6, 11], [7, 12], [8, 12], [9, 11]]);
+      px('#d9454a', [[6, 8], [7, 7], [8, 7], [9, 8], [6, 9], [7, 9], [8, 9], [9, 9], [7, 8], [8, 8]]);
+      px('#f4f0e8', [[7, 8], [9, 9], [7, 10], [8, 10], [8, 11], [7, 11]]);
+    },
+    px => { px('#f08c3a', [[3, 4], [4, 4], [11, 9], [12, 10]]); px('#f4cf4f', [[9, 3], [10, 3], [5, 12]]); px('#b4581f', [[4, 5], [12, 9]]); },
+    px => px('#7fb35a', [[4, 9], [5, 8], [6, 7], [7, 8], [8, 9], [6, 8], [10, 5], [11, 4], [12, 5]]), // a fern
+    px => { px('#a0703f', [[4, 6], [5, 6], [10, 10], [11, 10], [9, 11]]); px('#f4f0e8', [[4, 7], [5, 7], [10, 11], [11, 11]]); },
+  ],
+  rock: [null, null, null,
+    (px, z) => px(z.floorDark, [[3, 3], [4, 4], [5, 4], [6, 5], [7, 6], [7, 7], [8, 8], [9, 8], [10, 9]]), // a crack
+    (px, z) => { px(z.floorDark, [[4, 11], [5, 11], [10, 5], [11, 5], [12, 12]]); px(z.floorLight, [[4, 10], [5, 10], [10, 4], [11, 4], [12, 11]]); },
+    px => { px('#2f7a43', [[6, 10], [8, 10], [7, 10]]); px('#6cc45a', [[5, 8], [6, 9], [8, 9], [9, 8], [7, 8]]); }, // a tuft
+    px => { px('#c9c2b6', [[6, 7], [7, 7], [8, 7]]); px('#9a958c', [[5, 8], [6, 8], [7, 8], [8, 8], [9, 8]]); px('#5e5a52', [[5, 9], [6, 9], [7, 9], [8, 9], [9, 9]]); },
+    px => { px('#3d8fb3', [[6, 9], [7, 9], [7, 8], [10, 10], [11, 10]]); px('#8fd8f0', [[6, 8], [7, 7], [10, 9]]); px('#c49aff', [[11, 9]]); },
+  ],
+};
 function floorTile(z, zi, variant) {
   const [c, g] = canvas(), r = noise(variant * 17 + 3 + zi * 101);
-  g.fillStyle = z.floor; g.fillRect(0, 0, TILE, TILE);
-  const off = variant % 2 ? 4 : 0;
-  g.fillStyle = z.floorDark;
-  g.fillRect(0, 7, TILE, 1); g.fillRect(0, 15, TILE, 1);
-  g.fillRect((7 + off) % TILE, 0, 1, 7); g.fillRect((11 + off) % TILE, 8, 1, 7);
-  g.fillStyle = z.floorLight;
-  g.fillRect(0, 0, TILE, 1); g.fillRect(0, 8, TILE, 1);
-  for (let i = 0; i < 5 + (variant % 4) * 2; i++) {
-    g.fillStyle = r() < 0.5 ? z.floorDark : z.floorLight;
-    g.fillRect(Math.floor(r() * 15), 1 + Math.floor(r() * 14), 1, 1);
-  }
   const px = (col, list) => { g.fillStyle = col; list.forEach(([x, y]) => g.fillRect(x, y, 1, 1)); };
-  if (variant === 3) px(z.floorDark, [[3, 3], [4, 4], [5, 4], [6, 5], [7, 6], [7, 9], [8, 10], [9, 10], [10, 11]]);
-  if (variant === 4) { // pebbles
-    px(z.floorDark, [[4, 11], [5, 11], [10, 5], [11, 5], [12, 12]]);
-    px(z.floorLight, [[4, 10], [5, 10], [10, 4], [11, 4], [12, 11]]);
+  g.fillStyle = z.floor; g.fillRect(0, 0, TILE, TILE);
+  for (let k = 0; k < 4 + (variant % 3); k++) {
+    const x = 1 + Math.floor(r() * 14), y = 1 + Math.floor(r() * 14);
+    if (z.style === 'rock') px(r() < 0.6 ? z.floorDark : z.floorLight, r() < 0.4 ? [[x, y], [x + 1, y]] : [[x, y]]);
+    else { px(z.floorDark, [[x, y], [x, y - 1]]); px(z.floorDark, [[x + 2, y], [x + 2, y - 1], [x + 1, y + 1]]); } // a blade or two
   }
-  if (variant === 5) {
-    if (zi === 1) { px('#3d8fb3', [[5, 12], [6, 11], [6, 12], [7, 12]]); px('#8fd8f0', [[6, 10], [5, 11]]); }
-    else if (zi === 2) { px(z.floorDark, [[3, 4], [4, 4], [4, 5], [11, 10], [12, 10], [12, 11], [11, 11]]); px(z.floorLight, [[3, 3], [11, 9], [12, 9]]); }
-    else { px('#1b1424', [[5, 5], [6, 5], [6, 6], [11, 11], [12, 11]]); px('#2c2536', [[5, 4], [11, 10]]); } // coal
-  }
-  if (variant === 6) {
-    if (zi === 1) { px('#3d8fb3', [[10, 6], [10, 7], [11, 7], [9, 7]]); px('#c8f6ff', [[10, 5]]); }
-    else if (zi === 2) { px('#c9c2b6', [[4, 9], [5, 9], [6, 9], [7, 10]]); px('#f4f0e8', [[4, 8], [7, 9]]); } // a bone
-    else { px('#5e3d24', [[3, 10], [4, 10], [5, 10], [6, 10], [7, 10]]); px('#a0703f', [[3, 9], [4, 9], [5, 9], [6, 9]]); } // plank bit
-  }
-  if (variant === 7) { // a damp patch
-    g.fillStyle = 'rgba(0,0,0,0.12)';
-    g.fillRect(4, 5, 7, 5); g.fillRect(3, 6, 9, 3);
-  }
+  for (let k = 0; k < 5; k++) px(z.floorLight, [[Math.floor(r() * TILE), Math.floor(r() * TILE)]]);
+  DETAILS[z.style][variant]?.(px, z);
   return c;
 }
 
@@ -210,47 +221,82 @@ const mix = (a, b, t) => {
 // Neighbour masks for walls, water and floor shading: bit set = that side is open.
 export const N = 1, E = 2, S = 4, W_ = 8, NE = 16, SE = 32, SW = 64, NW = 128;
 
-// A wall seen from above. Where floor lies below it, its stone face shows (blocks with a lit top
-// edge); where floor lies beside or behind it, a pale rim marks the edge of the wall's top.
-function wallTile(z, zi, mask) {
-  const [c, g] = canvas();
-  const top = mix(z.wall, z.wallTop, 0.18), rim = mix(z.wall, z.wallTop, 0.7), line = z.wallLine;
-  g.fillStyle = top; g.fillRect(0, 0, TILE, TILE);
-  g.fillStyle = line;
-  g.fillRect(3, 3, 2, 1); g.fillRect(10, 8, 2, 1); g.fillRect(6, 12, 1, 1);
-  const face = mask & S, topH = face ? 4 : TILE;
-  g.fillStyle = rim;
-  if (mask & N) g.fillRect(0, 0, TILE, 1);
-  if (mask & W_) g.fillRect(0, 0, 1, topH);
-  if (mask & E) g.fillRect(TILE - 1, 0, 1, topH);
+// Clumps for the top of a wall: a staggered grid of little shapes (h highlight, l light, d shadow),
+// a few left out at random, clipped to rows y0..y1.
+const LEAVES = ['.hl.', 'hll.', 'l..d', '.dd.'];
+const BOULDER = ['.hhl.', 'hll.d', '.ddd.'];
+function clumps(fill, r, v, y0, y1, shape, col) {
+  for (let gy = -1; gy < 5; gy++) for (let gx = -1; gx < 5; gx++) {
+    if (r() < 0.25) continue;
+    const ox = gx * 4 + (gy % 2 ? 2 : 0) + ((v + gy) % 3) - 1, oy = y0 + gy * 4 + (gx % 2);
+    shape.forEach((row, j) => [...row].forEach((ch, i) => {
+      const x = ox + i, y = oy + j;
+      if (ch !== '.' && x >= 0 && x < TILE && y >= y0 && y < y1) fill(col[ch], x, y);
+    }));
+  }
+}
+
+// A wall seen from above. Its top fills the tile; where floor lies below it, its front shows on the
+// lower part of the tile. A dark line marks every side that faces open ground.
+//   meadow: a clipped hedge, leafy on top and in front
+//   forest: the canopy on top, and in front tree trunks standing in the dark under it
+//   rock:   a cliff, cracked on top, with a face of rough blocks
+// `v` (0-2) shifts the leaves, trunks and seams so a long wall does not look stamped.
+function wallTile(z, zi, mask, v) {
+  const [c, g] = canvas(), r = noise(mask * 7 + v * 131 + zi * 977 + 1);
+  const fill = (col, x, y, w = 1, h = 1) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+  const face = mask & S, topH = face ? (z.style === 'forest' ? 7 : 5) : TILE;
+  // the top: rows of round leaf clumps (or boulders on the mountain), lit from the top left
+  fill(z.wallTop, 0, 0, TILE, topH);
+  const hi = mix(z.wallLight, '#ffffff', 0.3);
+  clumps(fill, r, v, 0, topH, z.style === 'rock' ? BOULDER : LEAVES, { h: hi, l: z.wallLight, d: z.wallDark });
+  // the front
+  if (face) {
+    if (z.style === 'meadow') {
+      fill(z.wallFace, 0, topH, TILE, TILE - topH);
+      clumps(fill, r, v + 1, topH + 1, TILE - 3, LEAVES, { h: z.wallLight, l: z.wallTop, d: z.wallDark });
+      // the top's leaves hang over the edge in little bumps
+      for (let x = 0; x < TILE; x++) if ((x + v) % 4 < 2) fill(z.wallTop, x, topH, 1, 1);
+      fill(z.wallDark, 0, TILE - 3, TILE, 1);
+      fill(z.wallLine, 0, TILE - 2, TILE, 2);
+    } else if (z.style === 'forest') {
+      // dark between the trees, one trunk per tile with roots spreading at the foot
+      fill(z.wallLine, 0, topH, TILE, TILE - topH);
+      const tx = 4 + v;
+      fill(z.wallFace, tx, topH, 6, TILE - topH);
+      fill(mix(z.wallFace, '#ffffff', 0.2), tx, topH, 1, TILE - topH);
+      const bark = mix(z.wallFace, '#000000', 0.35);
+      fill(bark, tx + 2, topH + 2, 1, 4); fill(bark, tx + 4, topH + 4, 1, 3); fill(bark, tx + 5, topH, 1, TILE - topH);
+      fill(z.wallFace, tx - 1, TILE - 2, 1, 1); fill(z.wallFace, tx + 6, TILE - 2, 1, 1); fill(bark, tx - 2, TILE - 1, 2, 1); fill(bark, tx + 6, TILE - 1, 2, 1);
+      // the canopy's lower edge hangs down in leafy bumps
+      for (let x = 0; x < TILE; x++) {
+        const d = (x + v * 2) % 5 < 3 ? 1 : 0;
+        fill(z.wallTop, x, topH, 1, d + 1);
+        if (d) fill(z.wallDark, x, topH + 2, 1, 1);
+      }
+    } else {
+      fill(z.wallFace, 0, topH, TILE, TILE - topH);
+      fill(z.wallLight, 0, topH, TILE, 1);
+      // rough blocks: two rows, the seams shifted per tile
+      const s1 = 4 + v * 3, s2 = (s1 + 6) % 13 + 1;
+      fill(z.wallDark, 0, topH + 5, TILE, 1);
+      fill(z.wallDark, s1, topH + 1, 1, 4); fill(z.wallDark, s2, topH + 6, 1, 4);
+      fill(mix(z.wallFace, '#ffffff', 0.15), s1 + 1, topH + 1, 4, 1); fill(mix(z.wallFace, '#ffffff', 0.15), 0, topH + 6, s2, 1);
+      fill(z.wallDark, 0, TILE - 3, TILE, 1);
+      fill(z.wallLine, 0, TILE - 2, TILE, 2);
+    }
+  }
+  // dark edges along every side that faces open ground
+  const line = z.wallLine;
+  if (mask & N) fill(line, 0, 0, TILE, 1);
+  if (mask & W_) fill(line, 0, 0, 1, TILE);
+  if (mask & E) fill(line, TILE - 1, 0, 1, TILE);
   if (!face) {
-    if ((mask & NE) && !(mask & (N | E))) g.fillRect(TILE - 1, 0, 1, 1);
-    if ((mask & NW) && !(mask & (N | W_))) g.fillRect(0, 0, 1, 1);
-    if ((mask & SE) && !(mask & E)) g.fillRect(TILE - 1, TILE - 1, 1, 1);
-    if ((mask & SW) && !(mask & W_)) g.fillRect(0, TILE - 1, 1, 1);
-    return c;
+    if ((mask & NE) && !(mask & (N | E))) fill(line, TILE - 1, 0);
+    if ((mask & NW) && !(mask & (N | W_))) fill(line, 0, 0);
+    if ((mask & SE) && !(mask & E)) fill(line, TILE - 1, TILE - 1);
+    if ((mask & SW) && !(mask & W_)) fill(line, 0, TILE - 1);
   }
-  // the face: two rows of blocks, lit from above, darkest where it meets the floor
-  const faceCol = z.wallTop, faceDark = mix(z.wallTop, z.wallLine, 0.45), faceLight = mix(z.wallTop, '#ffffff', 0.18);
-  g.fillStyle = rim; g.fillRect(0, 3, TILE, 1);
-  g.fillStyle = faceCol; g.fillRect(0, 4, TILE, 12);
-  g.fillStyle = line;
-  g.fillRect(0, 4, TILE, 1); g.fillRect(0, 9, TILE, 1);
-  g.fillRect(5, 5, 1, 4); g.fillRect(12, 5, 1, 4); g.fillRect(2, 10, 1, 4); g.fillRect(9, 10, 1, 4);
-  g.fillStyle = faceLight;
-  g.fillRect(0, 5, 5, 1); g.fillRect(6, 5, 6, 1); g.fillRect(13, 5, 3, 1);
-  g.fillRect(0, 10, 2, 1); g.fillRect(3, 10, 6, 1); g.fillRect(10, 10, 6, 1);
-  g.fillStyle = faceDark;
-  g.fillRect(0, 8, TILE, 1); g.fillRect(0, 13, TILE, 1);
-  g.fillStyle = line; g.fillRect(0, 14, TILE, 2);
-  if (zi === 1) { // crystals poking out of the cave wall
-    g.fillStyle = '#3d8fb3'; g.fillRect(7, 6, 2, 3); g.fillRect(8, 5, 1, 1);
-    g.fillStyle = '#8fd8f0'; g.fillRect(7, 6, 1, 2);
-  }
-  // an outer corner: the face ends with a dark edge
-  g.fillStyle = line;
-  if (mask & W_) g.fillRect(0, 4, 1, 12);
-  if (mask & E) g.fillRect(TILE - 1, 4, 1, 12);
   return c;
 }
 
@@ -305,19 +351,19 @@ function waterTile(z, frame, mask) {
   return c;
 }
 
-// A miner's lamp hanging on a wall face, and the warm glow around it.
+// A jar of fireflies hanging from the wall, and the soft glow around it.
 const LAMP = [
   '................',
   '.......kk.......',
   '........k.......',
   '......kkkk......',
-  '.....kLllLk.....',
-  '.....kyywyk.....',
-  '.....kyoyyk.....',
-  '.....koyyok.....',
-  '.....kLLLLk.....',
+  '.....kNnnNk.....',
+  '.....kcvccck....',
+  '....kcczcvck....',
+  '....kcvcczck....',
+  '....kcccvcck....',
+  '.....kcccck.....',
   '......kkkk......',
-  '................',
   '................',
   '................',
   '................',
@@ -330,9 +376,9 @@ function glowCanvas() {
   const c = document.createElement('canvas'), R = 14;
   c.width = c.height = R * 2;
   const g = c.getContext('2d'), grad = g.createRadialGradient(R, R, 0, R, R, R);
-  grad.addColorStop(0, 'rgba(255,200,120,0.7)');
-  grad.addColorStop(0.5, 'rgba(255,160,80,0.22)');
-  grad.addColorStop(1, 'rgba(255,140,60,0)');
+  grad.addColorStop(0, 'rgba(230,255,150,0.7)');
+  grad.addColorStop(0.5, 'rgba(200,240,110,0.22)');
+  grad.addColorStop(1, 'rgba(180,230,90,0)');
   g.fillStyle = grad; g.fillRect(0, 0, R * 2, R * 2);
   return c;
 }
@@ -359,9 +405,9 @@ function crystalCanvas() {
 
 // Wall, water and shade tiles depend on their neighbours, so they are made the first time a
 // combination is needed and then reused.
-export function wallKey(scene, zi, mask) {
-  const key = `z${zi}_wall_${mask}`;
-  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, wallTile(ZONES[zi], zi, mask));
+export function wallKey(scene, zi, mask, v = 0) {
+  const key = `z${zi}_wall_${mask}_${v}`;
+  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, wallTile(ZONES[zi], zi, mask, v));
   return key;
 }
 export function waterKey(scene, zi, frame, mask) {
@@ -448,6 +494,12 @@ function trapPlate(color, sign) {
 export function buildTextures(scene) {
   const tx = scene.textures;
   for (const [name, rows] of Object.entries(SPR)) if (!tx.exists(name)) tx.addCanvas(name, spriteCanvas(rows));
+  // every hero frame (standing and both walk steps) gets one copy per face: hit, grit, teary, sparkle, shock
+  const heroes = new Set(Object.values(CHARACTERS).map(c => c.sprite));
+  for (const [name, rows] of Object.entries(SPR)) {
+    if (!heroes.has(name.replace(/_walk\d$/, ''))) continue;
+    for (const expr of Object.keys(FACES)) if (!tx.exists(faceKey(name, expr))) tx.addCanvas(faceKey(name, expr), spriteCanvas(faceRows(rows, expr)));
+  }
   for (const [name, rows] of Object.entries(TER_SPR)) if (!tx.exists(`t_${name}`)) tx.addCanvas(`t_${name}`, spriteCanvas(rows));
   for (const grade of ORES) {
     if (!tx.exists(`t_ore_${grade.id}`)) tx.addCanvas(`t_ore_${grade.id}`, oreCanvas(grade));

@@ -8,13 +8,13 @@
 //   block: chance to stop a blow on the shield · lifesteal: HP back per hit · noRegen: no slow healing
 export const CHARACTERS = {
   adv: {
-    name: '광부', sprite: 'adv', hp: 30, atk: 3, def: 0, quiet: true,
-    start: { blade: 1 }, note: '곡괭이질 소리가 작아 광석에 몬스터가 덜 몰려온다',
+    name: '일꾼', sprite: 'adv', hp: 30, atk: 3, def: 0, quiet: true,
+    start: { blade: 1 }, note: '곡괭이질 소리가 작아 반짝 바위에 몬스터가 덜 몰려온다',
   },
   rogue: {
     name: '도적', sprite: 'rogue', hp: 24, atk: 4, def: 0, dodge: 0.1, sneak: 1, hush: 0.5,
     start: { boots: 1 }, note: '자는 적이 늦게 깨고, 기습이 훨씬 아프다',
-    cost: 200, cond: { text: '4층(동굴)에 도착하기', val: m => m.stats.maxFloor, goal: 4 },
+    cost: 200, cond: { text: '4구역(깊은숲)에 도착하기', val: m => m.stats.maxFloor, goal: 4 },
   },
   mage: {
     name: '마법사', sprite: 'mage', hp: 22, atk: 3, def: 0, choices: 4,
@@ -24,7 +24,7 @@ export const CHARACTERS = {
   knight: {
     name: '기사', sprite: 'knightP', hp: 34, atk: 3, def: 1, block: 0.25,
     start: { shield: 1 }, note: '네 번에 한 번꼴로 공격을 방패로 막아 낸다',
-    cost: 600, cond: { text: '해골 왕 쓰러뜨리기', val: m => (m.stats.bosses.includes('skelking') ? 1 : 0), goal: 1 },
+    cost: 600, cond: { text: '버섯 왕 쓰러뜨리기', val: m => (m.stats.bosses.includes('skelking') ? 1 : 0), goal: 1 },
   },
   vamp: {
     name: '흡혈귀', sprite: 'vamp', hp: 28, atk: 4, def: 0, lifesteal: 1, noRegen: true,

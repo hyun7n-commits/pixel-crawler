@@ -90,7 +90,7 @@ function calmAct(run, e) {
 // A mimic drops its act, or a statue comes to life, and goes straight for you.
 export function awaken(run, e) {
   if (e.state !== 'hide' && e.state !== 'stone') return;
-  run.log(e.state === 'hide' ? '상자가 입을 쩍 벌렸다! 미믹이다!' : '석상이 쿠르릉 움직이기 시작했다!', 'warn');
+  run.log(e.state === 'hide' ? '상자가 입을 쩍 벌렸다! 미믹이다!' : '허수아비가 삐걱삐걱 움직이기 시작했다!', 'warn');
   e.state = 'hunt';
   e.last = { x: run.p.x, y: run.p.y };
   run.say(e, '!');

@@ -16,10 +16,10 @@ import { playerStatus } from './tip.js';
 // What the quest folk asked of you and have not had back yet.
 function questLines(run) {
   const { ghost, smith } = run.quests, out = [];
-  if (ghost.state === 'asked') out.push(`유령 광부의 부탁: 목걸이 도둑 쥐를 잡자 (${ghost.floor}층)`);
-  if (ghost.state === 'found') out.push(`유령 광부에게 목걸이를 돌려주자 (${ghost.floor}층)`);
+  if (ghost.state === 'asked') out.push(`꼬마 유령의 부탁: 목걸이 도둑 쥐를 잡자 (${ghost.floor}구역)`);
+  if (ghost.state === 'found') out.push(`꼬마 유령에게 목걸이를 돌려주자 (${ghost.floor}구역)`);
   if (smith.state === 'asked') {
-    out.push(smith.chunk === null ? `대장장이의 부탁: ${smith.floor}층 큰 광석을 끝까지 캐자` : `대장장이에게 광석 덩어리를 가져가자 (${smith.floor}층)`);
+    out.push(smith.chunk === null ? `대장장이의 부탁: ${smith.floor}구역 반짝 바위를 끝까지 캐자` : `대장장이에게 반짝돌 덩어리를 가져가자 (${smith.floor}구역)`);
   }
   return out;
 }
@@ -74,7 +74,7 @@ export class Hud {
 
   update(run) {
     const s = run.stat(), p = run.p;
-    $('floorLabel').innerHTML = `${run.floor}층<small>${isBossFloor(run.floor) ? '보스' : zoneOf(run.floor).name} · ${LAST_FLOOR}층까지</small>`;
+    $('floorLabel').innerHTML = `${run.floor}구역<small>${isBossFloor(run.floor) ? '보스' : zoneOf(run.floor).name} · ${LAST_FLOOR}구역까지</small>`;
     $('goldNow').textContent = `${run.gold}G`;
     $('hpText').textContent = `${Math.max(0, p.hp)} / ${s.maxHp}`;
     $('hpbar').firstElementChild.style.width = `${(Math.max(0, p.hp) / s.maxHp) * 100}%`;
@@ -92,7 +92,7 @@ export class Hud {
     $('quests').innerHTML = '';
     for (const t of questLines(run)) $('quests').append(el('div', 'quest', t));
 
-    $('mFloor').innerHTML = `${run.floor}층<small>${isBossFloor(run.floor) ? '보스' : zoneOf(run.floor).name}</small>`;
+    $('mFloor').innerHTML = `${run.floor}구역<small>${isBossFloor(run.floor) ? '보스' : zoneOf(run.floor).name}</small>`;
     $('mGold').textContent = `${run.gold}G`;
     $('mHpText').textContent = `${Math.max(0, p.hp)} / ${s.maxHp}`;
     $('mHp').firstElementChild.style.width = $('hpbar').firstElementChild.style.width;

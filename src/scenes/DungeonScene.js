@@ -13,6 +13,7 @@ import { BOMB_RANGE } from '../core/run.js';
 import { ORE_HITS } from '../data/balance.js';
 import { ORES } from '../data/ores.js';
 import { cheb } from '../core/util.js';
+import { faceKey } from '../data/faces.js';
 
 const D = { tiles: 0, ter: 1, fire: 2, gas: 3, telegraph: 4, pickups: 5, enemies: 6, player: 7, overlay: 8, fx: 9, bubble: 10, text: 11 };
 // what a pickup looks like on the floor (items use their own sprite)
@@ -39,7 +40,7 @@ export class DungeonScene extends Phaser.Scene {
 
   create() {
     buildTextures(this);
-    this.cameras.main.setBackgroundColor('#07060a');
+    this.cameras.main.setBackgroundColor('#0c1a10');
     this.cameras.main.setRoundPixels(true);
 
     const burst = (tint, extra = {}) => this.add.particles(0, 0, 'px', {
@@ -47,8 +48,8 @@ export class DungeonScene extends Phaser.Scene {
       scale: { start: 1.5, end: 0 }, gravityY: 90, tint, ...extra,
     }).setDepth(D.fx);
     this.fx = {
-      blood: burst([0xd9454a, 0xa02c3e]),
-      bone: burst([0xf4f0e8, 0xb8b8c8]),
+      blood: burst([0xff6b7a, 0xffc4cc]), // a soft pink puff, not gore
+      spore: burst([0xc49aff, 0xf4f0e8, 0x9a5fd1], { gravityY: 20 }),
       slime: burst([0x6cc45a, 0x2f7a43]),
       fire: burst([0xf08c3a, 0xf4cf4f, 0xd9454a], { gravityY: -50 }),
       ember: burst([0xf08c3a, 0xf4cf4f], { gravityY: -40, speed: { min: 4, max: 14 }, lifespan: { min: 300, max: 600 }, scale: { start: 1, end: 0 } }),
@@ -213,6 +214,7 @@ export class DungeonScene extends Phaser.Scene {
   buildFloor() {
     this.clearFloor();
     const run = this.run, map = run.map;
+    this.cameras.main.setBackgroundColor(run.zone.void);
     for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) this.buildTile(x, y);
     this.buildLamps();
     this.heroKey = CHARACTERS[run.charId].sprite;
@@ -266,7 +268,7 @@ export class DungeonScene extends Phaser.Scene {
     if (t === WALL) {
       const open = around((nx, ny) => !wall(nx, ny));
       if (!open) { this.tileImgs[i] = null; return; }
-      add(wallKey(this, zi, open));
+      add(wallKey(this, zi, open, hash(x, y) % 3));
     } else {
       if (ter === T.WATER) {
         const shore = around((nx, ny) => wall(nx, ny) || map.ter[idx(nx, ny)] !== T.WATER);
@@ -328,6 +330,7 @@ export class DungeonScene extends Phaser.Scene {
 
     this.paintFog();
     this.moveTo(this.playerSprite, p.x, p.y, dur);
+    this.lowHp = p.hp > 0 && p.hp <= run.stat().maxHp * 0.3;
 
     const alive = new Set();
     for (const e of run.enemies) {
@@ -437,6 +440,7 @@ export class DungeonScene extends Phaser.Scene {
       case 'hit': this.onHit(d); break;
       case 'kill': this.onKill(d.enemy); break;
       case 'phit':
+        this.face('hit', 450);
         this.flash(this.playerSprite);
         this.shake(['slam', 'bomb', 'charge'].includes(d.kind) ? 220 : 110, ['slam', 'bomb', 'charge'].includes(d.kind) ? 0.012 : 0.005);
         this.fx.blood.explode(8, center(d.x), center(d.y));
@@ -456,7 +460,10 @@ export class DungeonScene extends Phaser.Scene {
       case 'dodge': this.float(d.x, d.y, '회피', '#6fe0e0'); break;
       case 'heal': this.float(d.x, d.y, `+${d.n}`, '#8fd36a'); this.fx.heal.explode(6, center(d.x), center(d.y)); break;
       case 'gold': this.float(d.x, d.y, `+${d.n}G`, '#f4cf4f', 300); break;
-      case 'pickup': this.fx[d.type === 'gold' ? 'gold' : 'spark'].explode(d.type === 'chest' ? 20 : 6, center(d.x), center(d.y)); break;
+      case 'pickup':
+        this.fx[d.type === 'gold' ? 'gold' : 'spark'].explode(d.type === 'chest' ? 20 : 6, center(d.x), center(d.y));
+        if (d.type === 'chest') this.face('sparkle', 900);
+        break;
       case 'zap': this.lightning(d.from, d.to); break;
       case 'shot': this.projectile(d.from, d.to, d.hit); break;
       case 'throw': this.throwArc(d.from, d.to); break;
@@ -504,9 +511,11 @@ export class DungeonScene extends Phaser.Scene {
       case 'alert': {
         const s = this.enemySprites[d.enemy.id];
         if (s) this.tweens.add({ targets: s, hop: 5, duration: 100, yoyo: true, ease: 'Quad.out' });
+        // you see it notice you: wide eyes and a bead of sweat
+        if (this.run.isVisible(d.enemy.x, d.enemy.y)) { this.face('shock', 700); this.playerSprite.sweatUntil = this.time.now + 900; }
         break;
       }
-      case 'discover': this.fx.spark.explode(30, center(this.run.p.x), center(this.run.p.y)); break;
+      case 'discover': this.fx.spark.explode(30, center(this.run.p.x), center(this.run.p.y)); this.face('sparkle', 1000); break;
       case 'slam':
         d.tiles.forEach(t => this.fx.dust.explode(3, center(t.x), center(t.y)));
         if (!d.hit) this.shake(120, 0.004);
@@ -536,9 +545,9 @@ export class DungeonScene extends Phaser.Scene {
         break;
       }
       case 'bones':
-        this.fx.bone.explode(30, center(d.x), center(d.y));
+        this.fx.spore.explode(30, center(d.x), center(d.y));
         this.fx.dust.explode(10, center(d.x), center(d.y));
-        this.noiseRing(d.x, d.y, 1, 0xf4f0e8);
+        this.noiseRing(d.x, d.y, 1, 0xc49aff);
         this.shake(140, 0.006);
         break;
       case 'split': {
@@ -563,6 +572,7 @@ export class DungeonScene extends Phaser.Scene {
         break;
       case 'evolve': {
         // the higher the tier, the bigger the bang; a recipe found for the first time rings out twice
+        this.face('sparkle', 1200);
         const col = [[111, 224, 224], [244, 207, 79], [240, 140, 58], [196, 140, 255]][d.tier || 0];
         this.fx.spark.explode(30 + 20 * (d.tier || 0), center(d.x), center(d.y));
         this.fx[d.tier >= 3 ? 'magic' : d.fused ? 'crystal' : 'fire'].explode(20 + 10 * (d.tier || 0), center(d.x), center(d.y));
@@ -634,7 +644,7 @@ export class DungeonScene extends Phaser.Scene {
     if (s) this.flash(s);
     const color = { normal: '#ffffff', sneak: '#f4cf4f', fire: '#f08c3a', bolt: '#f4cf4f', thorns: '#b8b8c8' }[d.kind] || '#ffffff';
     const kind = d.enemy.d.sprite;
-    const fx = d.kind === 'fire' ? 'fire' : d.kind === 'bolt' ? 'spark' : kind === 'skel' ? 'bone' : kind === 'slime' ? 'slime' : 'blood';
+    const fx = d.kind === 'fire' ? 'fire' : d.kind === 'bolt' ? 'spark' : kind === 'skel' ? 'spore' : kind === 'slime' ? 'slime' : 'blood';
     if (this.run.isVisible(d.x, d.y)) {
       this.fx[fx].explode(d.kind === 'normal' ? 6 : 10, center(d.x), center(d.y));
       const first = d.kind === 'normal' || d.kind === 'sneak';
@@ -663,7 +673,7 @@ export class DungeonScene extends Phaser.Scene {
 
   onKill(e) {
     const s = this.enemySprites[e.id];
-    const fx = e.d.sprite === 'skel' ? 'bone' : e.d.sprite === 'slime' ? 'slime' : 'blood';
+    const fx = e.d.sprite === 'skel' ? 'spore' : e.d.sprite === 'slime' ? 'slime' : 'blood';
     if (this.run.isVisible(e.x, e.y)) this.fx[fx].explode(e.d.boss ? 40 : 14, center(e.x), center(e.y));
     if (e.d.boss) { this.shake(300, 0.01); this.fx.spark.explode(30, center(e.x), center(e.y)); }
     if (!s) return;
@@ -781,6 +791,7 @@ export class DungeonScene extends Phaser.Scene {
   // A swing at the big ore: everything gets a little bigger with each hit, and the last one pours out.
   onMine(d) {
     const cx = center(d.x), cy = center(d.y), last = d.last, size = d.size || 1;
+    this.face(last ? 'sparkle' : 'grit', last ? 900 : 380);
     this.bump(this.playerSprite, d.from, d);
     this.hitStop(last ? 140 + size * 30 : 35 + d.hits * 12);
     this.fx.spark.explode((last ? 30 : 6) + d.hits * 3, cx, cy);
@@ -1054,10 +1065,13 @@ export class DungeonScene extends Phaser.Scene {
       for (let k = 0; k < 3; k++) g.lineBetween(x0 + 3 + k * 4, y0 + 2, x0 + 7 + k * 4, y0 + 13);
     }
 
+    this.clawed = claw;
+
     // you: walk frames while moving; standing still a while, you glance back over your shoulder now and then
     const ps = this.playerSprite;
     const walking = time < (ps.stepUntil || 0);
-    const key = walking ? `${this.heroKey}_walk${ps.stepFrame}` : this.heroKey;
+    const expr = time < (ps.exprUntil || 0) ? ps.expr : this.lowHp ? 'teary' : '';
+    const key = faceKey(walking ? `${this.heroKey}_walk${ps.stepFrame}` : this.heroKey, expr);
     if (ps.texture.key !== key && this.textures.exists(key)) ps.setTexture(key);
     if (walking || p.sleep || !ps.nextLook) ps.nextLook = time + 2500 + Math.random() * 2000;
     else if (time > ps.nextLook) { ps.lookAt = time; ps.nextLook = time + 4000 + Math.random() * 4000; }
@@ -1074,6 +1088,16 @@ export class DungeonScene extends Phaser.Scene {
     });
 
     if (this.aim) this.drawAim(g, time);
+  }
+
+  // A Chiikawa face on the hero for a moment; while two overlap, the stronger feeling stays.
+  face(expr, ms) {
+    const ps = this.playerSprite;
+    if (!ps) return;
+    const rank = { grit: 1, sparkle: 2, shock: 3, hit: 4 }, now = this.time.now;
+    if (now < (ps.exprUntil || 0) && rank[ps.expr] > rank[expr]) return;
+    ps.expr = expr;
+    ps.exprUntil = now + ms;
   }
 
   // Body language: breathing while asleep, crouching before a hit, hopping when on fire.
@@ -1094,7 +1118,12 @@ export class DungeonScene extends Phaser.Scene {
     if (who.sleep || who.state === 'sleep') sy = 1 + 0.05 * Math.sin(time / 450 + id);
     else if (who.d && this.run.willHit(who)) { sx = 1.08; sy = 0.86; }
     if (who.burn > 0) hop = Math.max(hop, Math.abs(Math.sin(time / 90 + id)) * 3);
-    // a skeleton about to fall apart rattles; a knight about to charge paws the ground
+    // 부들부들: little bursts of trembling when nearly beaten, wide-eyed, or running for it
+    const you = who === this.run.p, asleep = who.sleep || who.state === 'sleep';
+    const low = you ? this.lowHp : who.d && !who.d.boss && who.hp <= who.maxHp * 0.25;
+    const scared = who.state === 'flee' || (you && s.expr === 'shock' && time < (s.exprUntil || 0));
+    if (!asleep && (scared || (low && (time + id * 613) % 1400 < 480))) jitter = (Math.floor(time / 45) % 2 ? 0.6 : -0.6);
+    // a toadstool about to burst shivers; a boar about to charge paws the ground
     if (who.d?.bones && who.hp <= who.maxHp * 0.4 && who.state !== 'sleep') jitter = Math.sin(time / 28 + id) * 0.8;
     if (who.charge) jitter = Math.sin(time / 40) * 1.2;
     if (who.stoneT > 0) { sx = 1; sy = 1; hop = 0; }
@@ -1133,6 +1162,20 @@ export class DungeonScene extends Phaser.Scene {
       }
     }
     if (who.burn > 0) this.drawFlame(g, s.x - dir * 2, s.y - (s.hop || 0) - 2, 0.7, time, who.id || 7);
+    if (who !== this.run.p) return;
+    // a bead of sweat when something is about to hit you or has just noticed you
+    if (this.clawed || time < (s.sweatUntil || 0)) {
+      const bob = Math.sin(time / 140), sx = s.x - dir * 7;
+      g.fillStyle(0x8fd8f0, 1); g.fillRect(sx, top + 3 + bob, 2, 3); g.fillRect(sx + 0.5, top + 2 + bob, 1, 1);
+    }
+    // nearly out: now and then a tear rolls down from each eye (columns 7 and 12 of the sprite)
+    if (s.texture.key.endsWith('~teary')) {
+      const t = (time % 1600) / 900;
+      if (t < 1) for (const c of [7, 12]) {
+        const ex = s.flipX ? s.x + 7.5 - c : s.x - 7.5 + c;
+        g.fillStyle(0x8fd8f0, 1 - t * 0.6); g.fillRect(ex - 0.5, top + 8 + t * 5, 1, 2);
+      }
+    }
   }
 
   drawFlame(g, x, y, k, time, seed) {

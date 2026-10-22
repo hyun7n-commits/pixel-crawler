@@ -22,7 +22,7 @@ export function renderHub(ctx) {
   const inner = el('div', 'hub-inner');
 
   const head = el('div', 'hub-head');
-  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.15</small>'));
+  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.16</small>'));
   const purse = el('div', 'purse');
   purse.append(icon('gold', 24), el('span', null, `${meta.gold}G`));
   head.append(purse);
@@ -65,7 +65,7 @@ export function renderHub(ctx) {
       grid.append(card);
     }
     inner.append(grid);
-    inner.append(button('btn primary enter', `${josa(CHARACTERS[meta.sel].name, '으로', '로')} 던전 입장`, onStart));
+    inner.append(button('btn primary enter', `${josa(CHARACTERS[meta.sel].name, '으로', '로')} 들판으로 출발`, onStart));
   }
 
   if (tab === 'shop') {
@@ -83,7 +83,7 @@ export function renderHub(ctx) {
       row.append(main, b);
       shop.append(row);
     }
-    shop.append(el('h3', null, '던전에 새 유물 추가'));
+    shop.append(el('h3', null, '들판에 새 유물 추가'));
     for (const [id, r] of Object.entries(RELICS).filter(([, r]) => r.locked)) {
       const row = el('div', 'row'), main = el('div', 'row-main');
       main.append(el('span', 'row-name', r.name), el('span', 'row-sub', `Lv1: ${r.desc(1)}`));
@@ -98,7 +98,7 @@ export function renderHub(ctx) {
 
   if (tab === 'records') {
     const st = meta.stats, g = el('div', 'stats');
-    for (const [v, l] of [[st.runs, '도전 횟수'], [st.wins, '정복 횟수'], [`${st.maxFloor || 0}층`, '최고 도달 층'], [st.kills, '쓰러뜨린 적'],
+    for (const [v, l] of [[st.runs, '도전 횟수'], [st.wins, '정복 횟수'], [`${st.maxFloor || 0}구역`, '최고 도달 구역'], [st.kills, '쓰러뜨린 적'],
       [st.evos, '유물 진화'], [st.bosses.length, '쓰러뜨린 보스 종류'], [st.bestGold, '한 판 최고 골드']]) {
       const s = el('div', 'stat');
       s.append(el('b', null, String(v)), el('span', null, l));
@@ -140,7 +140,7 @@ export function renderHub(ctx) {
     inner.append(book2);
     // the ore book: every grade you have seen, and how many you broke open
     const ores = el('div', 'shop');
-    ores.append(el('h3', null, `광석 도감 (${ORES.filter(o => o.id in meta.ores).length}/${ORES.length})`));
+    ores.append(el('h3', null, `반짝돌 도감 (${ORES.filter(o => o.id in meta.ores).length}/${ORES.length})`));
     const orow = el('div', 'ore-book');
     for (const o of ORES) {
       const seen = o.id in meta.ores;

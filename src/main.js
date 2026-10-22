@@ -136,7 +136,7 @@ function nextChoice() {
     showChoice({ title: npc.name, sub: q.text, run, who: npc.sprite, opts: q.smithPick ? run.smithOffers() : q.opts, onPick });
     return;
   }
-  const title = q.kind === 'level' ? `레벨 ${run.p.lvl}!` : q.vein ? '광맥 속 상자' : q.rich ? '잠긴 상자' : '보물 상자';
+  const title = q.kind === 'level' ? `레벨 ${run.p.lvl}!` : q.vein ? '바위 속 상자' : q.rich ? '잠긴 상자' : '보물 상자';
   const sub = q.kind === 'level' ? '유물을 하나 고르자.' : q.rich ? '좋은 상자다. 넷 중 하나를 가져가자.' : '안에 든 유물 중 하나를 가져가자.';
   const open = () => showChoice({
     title, sub, run, opts: run.offers(q.rich ? 4 : 3), onPick,

@@ -10,9 +10,9 @@ import { RELICS } from '../data/relics.js';
 const CHEST = '보물 상자: 열면 유물을 하나 고른다.';
 const PICKUP = {
   chest: () => CHEST,
-  lockedChest: () => '잠긴 상자: 이 층의 열쇠로 열면 유물을 넷 중 하나 고른다.',
-  key: () => '작은 열쇠: 이 층의 잠긴 문이나 상자를 연다.',
-  necklace: () => '반짝돌 목걸이: 유령 광부의 것이다.',
+  lockedChest: () => '잠긴 상자: 이 구역의 열쇠로 열면 유물을 넷 중 하나 고른다.',
+  key: () => '작은 열쇠: 이 구역의 잠긴 문이나 상자를 연다.',
+  necklace: () => '반짝돌 목걸이: 꼬마 유령의 것이다.',
   crystal: (q, run) => {
     const lv = (run.p.relics[q.relic] || 0) + 1;
     return `수정 속 유물: ${RELICS[q.relic].name} Lv${lv}, ${RELICS[q.relic].desc(lv)}. 하나를 가지면 나머지 수정은 깨진다.`;
@@ -59,8 +59,8 @@ export function describeTile(run, x, y, always = false) {
   if (t === GRAVE) { const g = TILE_INFO[map.bigGrave === i ? 'graveBig' : 'grave']; lines.push(`${g.name}: ${g.tip}`); }
   const ore = t === ORE && map.ores.find(o => o.cells.some(c => idx(c.x, c.y) === i));
   if (ore) {
-    const what = ore.size > 1 ? `${['', '', '두 칸짜리', '세 칸짜리', '네 칸짜리'][ore.size]} ${ORES[ore.tier].name} 광맥` : `큰 ${ORES[ore.tier].name} 광석`;
-    lines.push(`${what} (${ore.hits}/${ORE_HITS}): ${TILE_INFO.bigOre.tip}${ore.size > 1 ? ' 광맥이 클수록 많이 나온다.' : ''}`);
+    const what = ore.size > 1 ? `${['', '', '두 칸짜리', '세 칸짜리', '네 칸짜리'][ore.size]} ${ORES[ore.tier].name} 반짝 바위` : `${ORES[ore.tier].name} 반짝 바위`;
+    lines.push(`${what} (${ore.hits}/${ORE_HITS}): ${TILE_INFO.bigOre.tip}${ore.size > 1 ? ' 바위가 클수록 많이 나온다.' : ''}`);
   }
   const ter = map.ter[i];
   if (ter !== T.NONE && TERRAIN[ter] && !map.hidden[i]) lines.push(`${TERRAIN[ter].name}: ${TERRAIN[ter].tip}`);
@@ -77,6 +77,6 @@ export function describeTile(run, x, y, always = false) {
     lines.push(q.type === 'gold' ? `골드 ${q.amount}` : PICKUP[q.type] ? PICKUP[q.type](q, run) : `${ITEMS[q.type].name}: ${ITEMS[q.type].desc}`);
   }
   // a long press on a phone should always answer with something
-  if (!lines.length && always) lines.push(t === WALL ? `${TILE_INFO.wall.name}: ${TILE_INFO.wall.tip}` : `${TILE_INFO.floor.name}: ${TILE_INFO.floor.tip}`);
+  if (!lines.length && always) lines.push(t === WALL ? `${run.zone.wallName}: ${TILE_INFO.wall.tip}` : `${TILE_INFO.floor.name}: ${TILE_INFO.floor.tip}`);
   return lines.join('\n');
 }

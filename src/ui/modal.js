@@ -86,13 +86,13 @@ export function showChoice({ title, sub, run, opts, onPick, onReroll, who }) {
 
 export function showSummary({ won, run, newlyUnlockable, onClose }) {
   openSheet(sh => {
-    sh.append(el('h2', null, won ? '던전을 정복했다!' : '쓰러졌다'));
+    sh.append(el('h2', null, won ? '들판을 모두 토벌했다!' : '쓰러졌다'));
     if (!won && run.cause) sh.append(el('p', 'cause', `마지막 순간: ${run.cause}`));
     sh.append(el('p', null, won
-      ? '뱀파이어 군주를 쓰러뜨렸다. 보너스 골드 200을 받았다.'
+      ? '박쥐 대왕을 쓰러뜨렸다. 보너스 골드 200을 받았다.'
       : '모은 골드는 그대로 가져간다. 마을에서 강해진 다음 다시 도전하자.'));
     const sum = el('div', 'summary');
-    for (const [v, l] of [[`${run.floor}층`, '도달한 층'], [run.kills, '쓰러뜨린 적'], [`Lv${run.p.lvl}`, '레벨'], [`+${run.gold}`, '가져가는 골드']]) {
+    for (const [v, l] of [[`${run.floor}구역`, '도달한 구역'], [run.kills, '쓰러뜨린 적'], [`Lv${run.p.lvl}`, '레벨'], [`+${run.gold}`, '가져가는 골드']]) {
       const s = el('div', 'stat');
       s.append(el('b', null, String(v)), el('span', null, l));
       sum.append(s);

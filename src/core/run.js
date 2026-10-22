@@ -144,8 +144,8 @@ export class Run {
   // ---------- floors ----------
   start() {
     this.genFloor();
-    this.log(`${josa(this.char.name, '으로', '로')} 광산에 들어왔다. 계단을 찾아 내려가자.`, 'good');
-    this.emit('banner', { text: `1층 · ${this.zone.name}` });
+    this.log(`${josa(this.char.name, '으로', '로')} 들판에 나왔다. 표지판을 찾아 앞으로 가자.`, 'good');
+    this.emit('banner', { text: `1구역 · ${this.zone.name}` });
     this.afterTurn();
   }
 
@@ -282,7 +282,7 @@ export class Run {
     b.state = 'hunt';
     this.boss = b;
     this.log(`${josa(ENEMIES[type].name, '이', '가')} 나타났다! ${ENEMIES[type].tip}`, 'warn');
-    this.log('쓰러뜨리기 전에는 위층으로 돌아갈 수 없다.');
+    this.log('쓰러뜨리기 전에는 돌아갈 수 없다.');
   }
 
   spawnEnemy(type, x, y, scale = 1) {
@@ -321,8 +321,8 @@ export class Run {
       const fb = this.lv('firebomb'), bombs = fb ? (fb < 3 ? 1 : 2) : this.lv('bombbag') ? 1 : 0;
       if (bombs) { this.p.items.bomb += bombs; this.log('폭탄 가방에서 폭탄을 꺼냈다.', 'good'); }
     }
-    this.emit('banner', { text: isBossFloor(this.floor) ? `${this.floor}층 · 보스` : `${this.floor}층 · ${this.zone.name}` });
-    this.log(dir > 0 ? `${this.floor}층에 내려왔다.` : `${this.floor}층으로 올라왔다.`);
+    this.emit('banner', { text: isBossFloor(this.floor) ? `${this.floor}구역 · 보스` : `${this.floor}구역 · ${this.zone.name}` });
+    this.log(dir > 0 ? `${this.floor}구역에 왔다.` : `${this.floor}구역으로 돌아왔다.`);
     this.afterTurn();
   }
 
@@ -393,7 +393,7 @@ export class Run {
   unlock(x, y) {
     const map = this.map, i = idx(x, y);
     if (!map.keyHeld) {
-      this.log('잠겨 있다. 이 층 어딘가에 열쇠가 있을 것이다.');
+      this.log('잠겨 있다. 이 구역 어딘가에 열쇠가 있을 것이다.');
       this.emit('locked', { x, y });
       return false;
     }
@@ -485,7 +485,7 @@ export class Run {
       const smith = this.quests.smith;
       if (this.floor === smith.floor && smith.state !== 'done' && (smith.chunk === null || ore.tier > smith.chunk)) {
         smith.chunk = ore.tier;
-        this.log(`광석 덩어리를 하나 챙겼다.${smith.state === 'asked' ? ' 대장장이에게 가져가자.' : ''}`, 'good');
+        this.log(`반짝돌 덩어리를 하나 챙겼다.${smith.state === 'asked' ? ' 대장장이에게 가져가자.' : ''}`, 'good');
       }
       this.emit('tiles', { list: ore.cells.map(c => idx(c.x, c.y)) });
     }
@@ -521,7 +521,7 @@ export class Run {
         if (near) m.explored[idx(x, y)] = 1;
       }
       const traps = revealTraps(this);
-      this.log(`지도를 펼쳤다. 계단 위치가 보인다.${traps ? ` 숨은 함정 ${traps}개도 표시돼 있다.` : ''}`, 'good');
+      this.log(`지도를 펼쳤다. 표지판 위치가 보인다.${traps ? ` 숨은 함정 ${traps}개도 표시돼 있다.` : ''}`, 'good');
     }
     this.endTurn();
     return true;
@@ -547,7 +547,7 @@ export class Run {
   pickupAt(x, y) {
     const map = this.map;
     for (const q of this.pickups.filter(q => q.x === x && q.y === y)) {
-      if (q.type === 'lockedChest' && !map.keyHeld) { this.log('잠긴 상자다. 이 층 어딘가에 열쇠가 있을 것이다.'); continue; }
+      if (q.type === 'lockedChest' && !map.keyHeld) { this.log('잠긴 상자다. 이 구역 어딘가에 열쇠가 있을 것이다.'); continue; }
       this.pickups.splice(this.pickups.indexOf(q), 1);
       this.emit('pickup', { x, y, type: q.type });
       if (q.type === 'gold' && q.stolen) { this.gold += q.amount; this.emit('gold', { x, y, n: q.amount }); }
@@ -562,11 +562,11 @@ export class Run {
         this.log('열쇠로 잠긴 상자를 열었다!', 'good');
       } else if (q.type === 'key') {
         map.keyHeld = true;
-        this.log('작은 열쇠를 주웠다. 이 층의 잠긴 곳을 연다.', 'good');
+        this.log('작은 열쇠를 주웠다. 이 구역의 잠긴 곳을 연다.', 'good');
       } else if (q.type === 'crystal') this.takeCrystal(q);
       else if (q.type === 'necklace') {
         this.quests.ghost.state = 'found';
-        this.log('반짝돌 목걸이를 찾았다! 유령 광부에게 돌려주자.', 'good');
+        this.log('반짝돌 목걸이를 찾았다! 꼬마 유령에게 돌려주자.', 'good');
       } else { this.p.items[q.type]++; this.log(`${josa(ITEMS[q.type].name, '을', '를')} 주웠다.`); }
     }
   }
@@ -679,7 +679,7 @@ export class Run {
         this.map.tiles[idx(up.x, up.y)] = UPSTAIRS;
         this.map.ter[idx(up.x, up.y)] = T.NONE;
         this.emit('stairs', { x: up.x, y: up.y });
-        this.log('내려가는 계단이 나타나고, 위층으로 가는 길도 열렸다.', 'good');
+        this.log('다음 구역 표지판이 나타나고, 돌아가는 길도 열렸다.', 'good');
       }
       this.addGold(30 * (this.floor / 3));
     } else if (e.d.treasure) {
@@ -704,7 +704,7 @@ export class Run {
     const dmg = e.atk + rint(1, 3);
     this.emit('bones', { x: e.x, y: e.y });
     for (const o of this.enemies.filter(o => o !== e && o.hp > 0 && cheb(o, e) === 1)) this.hurt(o, dmg * 2, 'bones');
-    if (cheb(this.p, e) === 1) this.hurtPlayer(Math.max(1, dmg - this.stat().def), '해골 뼛조각에 맞았다', 'bones');
+    if (cheb(this.p, e) === 1) this.hurtPlayer(Math.max(1, dmg - this.stat().def), '독버섯 포자에 맞았다', 'bones');
   }
 
   damagePlayer(raw, src, kind = 'melee') {
@@ -996,7 +996,7 @@ export class Run {
         const hit = this.telegraph.some(t => t.x === p.x && t.y === p.y);
         this.emit('slam', { tiles: this.telegraph, hit });
         this.telegraph = [];
-        if (hit) { this.hurtPlayer(10 + this.floor, '해골 왕의 뼈망치에 맞았다', 'slam'); this.log('해골 왕의 내려치기에 맞았다!', 'warn'); }
+        if (hit) { this.hurtPlayer(10 + this.floor, '버섯 왕의 버섯 망치에 맞았다', 'slam'); this.log('버섯 왕의 내려치기에 맞았다!', 'warn'); }
         else this.log('내려치기를 피했다!', 'good');
         return true;
       }
@@ -1006,7 +1006,7 @@ export class Run {
         for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
           if (passable(this.map, p.x + i, p.y + j)) this.telegraph.push({ x: p.x + i, y: p.y + j });
         }
-        this.log('해골 왕이 뼈망치를 들어 올렸다. 붉은 칸에서 벗어나야 한다!', 'warn');
+        this.log('버섯 왕이 커다란 버섯 망치를 들어 올렸다. 붉은 칸에서 벗어나야 한다!', 'warn');
         return true;
       }
     }
@@ -1032,7 +1032,7 @@ export class Run {
         this.emit('teleport', { enemy: e, from: { x: e.x, y: e.y }, to: s });
         e.x = s.x; e.y = s.y;
         e.aim = true; e.aimAt = { x: p.x, y: p.y };
-        this.log('뱀파이어 군주가 순간이동해 조준하고 있다!', 'warn');
+        this.log('박쥐 대왕이 순간이동해 조준하고 있다!', 'warn');
         return true;
       }
     }
