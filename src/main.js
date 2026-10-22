@@ -255,6 +255,7 @@ function onRunEvent(type, d) {
   if (type === 'request') setTimeout(() => hud.banner(`조합 의뢰 완료! +${d.pay}G`), 300);
   if (type === 'evolve') showEvolve(d);
   if (type === 'fission') hud.fission(d);
+  if (type === 'grow') hud.grow(d);
   if (type === 'floor') { clearPath(); seenCount = 0; setMusic(isBossFloor(run.floor) ? 'boss' : run.zone.style); }
   if (type === 'kill' && d.enemy.d.boss && !run.victory) setMusic(run.zone.style);
   if (type === 'phit') clearPath();

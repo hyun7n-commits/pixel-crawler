@@ -17,7 +17,7 @@ import { cheb } from '../core/util.js';
 import { faceKey } from '../data/faces.js';
 import { tierOf } from '../data/relics.js';
 import { baseZoom } from './zoom.js';
-import { wait, fissionMs, evolveMs, FISSION_LEAD, FISSION_STEP, EVOLVE_FLASH } from '../ui/beat.js';
+import { wait, fissionMs, evolveMs, FISSION_LEAD, FISSION_STEP, EVOLVE_FLASH, GROW_MS } from '../ui/beat.js';
 
 const D = { tiles: 0, ter: 1, fire: 2, gas: 3, telegraph: 4, pickups: 5, enemies: 6, player: 7, overlay: 8, fx: 9, bubble: 10, text: 11 };
 // what a pickup looks like on the floor (items use their own sprite)
@@ -758,6 +758,10 @@ export class DungeonScene extends Phaser.Scene {
         });
         break;
       }
+      case 'grow':
+        // the relic card you picked lands on you: its icon pops up over your head (before any evolve it sets off)
+        this.later(wait(d, GROW_MS), () => this.growPop(d, 2));
+        break;
       case 'evolve': {
         // goes off when the two relics meet on the evolve card (ui/evo.js)
         const ms = evolveMs(d);
@@ -903,7 +907,8 @@ export class DungeonScene extends Phaser.Scene {
     const img = this.add.image(x, y, st.id || 'gold').setDepth(D.text).setScale(0);
     this.tweens.add({ targets: img, scale: 1.6, duration: 110, ease: 'Back.out' });
     this.tweens.add({ targets: img, y: y - 16, alpha: 0, delay: 260, duration: 420, ease: 'Quad.in', onComplete: () => img.destroy() });
-    if (st.id) this.float(p.x, p.y - 0.9, `Lv${st.lvl}`, st.lvl >= 3 ? '#f4cf4f' : '#ffffff', 60, 9);
+    // a new relic needs no number; a full one says so in gold, like its slot in the bag
+    if (st.id && st.lvl > 1) this.float(p.x, p.y - 0.9, st.max ? 'MAX' : `Lv${st.lvl}`, st.max ? '#f4cf4f' : '#ffffff', 60, 9);
     this.fx.spark.explode(5 + k, x, y);
   }
 
