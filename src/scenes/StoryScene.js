@@ -6,7 +6,6 @@
 import { TILE, wallKey, floorKey, texScale, S } from './textures.js';
 import { houseCanvas, lampPostCanvas } from './village-art.js';
 import { faceKey } from '../data/faces.js';
-import { HIRES } from './textures.js';
 
 const D = { sky: 0, ground: 1, back: 2, house: 3, actors: 4, fx: 5, bubble: 6 };
 // the diorama: the tiles that always fit on screen (rows from `top`, so house roofs show); more ground
@@ -38,7 +37,6 @@ export class StoryScene extends Phaser.Scene {
     const cam = this.cameras.main, box = this.game.registry.get('storyBox') || 0.3;
     if (!cam) return;
     let z = Math.floor(Math.min(cam.width / (VIEW.w * TILE), cam.height * (1 - box) / (VIEW.h * TILE)));
-    if (HIRES && z > 2 && z % 2) z--;
     cam.setZoom(Math.max(1, z));
     // the diorama stands on the text box; on a tall screen the extra room goes to the sky
     const z2 = cam.zoom, bottom = (VIEW.top + VIEW.h) * TILE + 6;
@@ -210,6 +208,5 @@ export class StoryScene extends Phaser.Scene {
       this.tweens.add({ targets: im, scaleY: 1.12, duration: 260 + (i % 3) * 40, yoyo: true, repeat: 3, delay: i * 35, ease: 'Sine.inOut' });
       if (i % 3 === 1) this.tweens.add({ targets: im, x: im.x + (i % 2 ? TILE : -TILE), duration: 420, yoyo: true, hold: 500, delay: 200 + i * 30, ease: 'Quad.inOut' });
     });
-    this.cameras.main.shake(900, 0.002);
   }
 }

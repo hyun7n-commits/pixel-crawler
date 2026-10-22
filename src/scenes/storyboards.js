@@ -104,7 +104,7 @@ const intro = [
       {
         text: '들판 곳곳의 반짝 바위. 깨면 반짝돌이 쏟아진다.',
         at: (k, c) => {
-          for (let i = 0; i < 3; i++) k.time.delayedCall(i * 380, () => { k.tweens.add({ targets: c.hero, x: c.hero.x + 4, duration: 70, yoyo: true }); k.cameras.main.shake(80, 0.004); k.sparkle(4.6, 3, 6); });
+          for (let i = 0; i < 3; i++) k.time.delayedCall(i * 380, () => { k.tweens.add({ targets: c.hero, x: c.hero.x + 4, duration: 70, yoyo: true }); k.sparkle(4.6, 3, 6); });
           k.time.delayedCall(1200, () => { k.tweens.add({ targets: c.rock, alpha: 0, scale: 2, duration: 220 }); k.coins(4.6, 2.6, 7); k.sparkle(4.6, 3, 30); k.face(c.hero, 'sparkle'); k.hop(c.hero, 2); });
         },
       },
@@ -169,7 +169,7 @@ const skelking = [{
   build: atGuild,
   lines: [
     { who: '조합장', text: '버섯 왕까지! 깊은숲 토벌 자격증이네.', at: (k, c) => { k.badge(3, 1.9, LICENSE.skelking); k.hop(c.boss); k.face(c.hero, 'sparkle'); } },
-    { who: '조합장', text: '…그런데 말이야. 돌산 꼭대기에서 누가 뒤척일 때마다 들판도 같이 뒤척인다는 소문이 있네.', at: (k, c) => { k.face(c.hero, 'shock'); k.cameras.main.shake(500, 0.002); } },
+    { who: '조합장', text: '…그런데 말이야. 돌산 꼭대기에서 누가 뒤척일 때마다 들판도 같이 뒤척인다는 소문이 있네.', at: (k, c) => { k.face(c.hero, 'shock'); } },
     { who: '조합장', text: '마지막 자격증은 돌산에 있다네. 조심하게.' },
   ],
 }];

@@ -5,23 +5,12 @@ import { FACES, faceRows, faceKey } from '../data/faces.js';
 import { CHARACTERS } from '../data/characters.js';
 import { ZONES } from '../data/enemies.js';
 import { ORES, RAINBOW } from '../data/ores.js';
-import { ENEMIES } from '../data/enemies.js';
-import { FOLK } from '../data/village.js';
-import { HI, faceRows32, up2 } from '../data/sprites32.js';
 
 export const TILE = 16; // world pixels per tile
 
-// Characters (heroes, villagers, critters) can be drawn at 32px and shown at half scale (data/sprites32.js).
-// The choice is kept per browser; on by default.
-export const HIRES = (() => { try { return localStorage.getItem('pixel-crawler-hires') !== '0'; } catch { return true; } })();
-export function setHires(on) { try { localStorage.setItem('pixel-crawler-hires', on ? '1' : '0'); } catch { /* private mode */ } }
+// Everything is drawn at one pixel size, 16px to a tile, characters a little smaller than their tile.
 const HEROES = new Set(Object.values(CHARACTERS).map(c => c.sprite));
-const CHARS = new Set([...HEROES, ...Object.values(ENEMIES).map(e => e.sprite), ...Object.values(FOLK).map(f => f.sprite)]);
-const hiCache = {};
-function charRows(name) {
-  if (!HIRES || !CHARS.has(name.replace(/_walk\d$/, ''))) return SPR[name] || TER_SPR[name];
-  return (hiCache[name] ||= HI[name] || up2(SPR[name]));
-}
+const charRows = name => SPR[name] || TER_SPR[name];
 // how much to scale a sprite so it takes one tile whatever its texture size
 export const texScale = s => TILE / s.frame.height;
 
@@ -493,8 +482,7 @@ export function buildTextures(scene) {
   // every hero frame (standing and both walk steps) gets one copy per face: hit, grit, teary, sparkle, shock
   for (const [name, rows] of Object.entries(SPR)) {
     if (!HEROES.has(name.replace(/_walk\d$/, ''))) continue;
-    const face = expr => (!HIRES ? faceRows(rows, expr) : HI[name] ? faceRows32(HI[name], expr) : up2(faceRows(rows, expr)));
-    for (const expr of Object.keys(FACES)) if (!tx.exists(faceKey(name, expr))) tx.addCanvas(faceKey(name, expr), spriteCanvas(face(expr)));
+    for (const expr of Object.keys(FACES)) if (!tx.exists(faceKey(name, expr))) tx.addCanvas(faceKey(name, expr), spriteCanvas(faceRows(rows, expr)));
   }
   for (const [name, rows] of Object.entries(TER_SPR)) if (!tx.exists(`t_${name}`)) tx.addCanvas(`t_${name}`, spriteCanvas(rows));
   for (const grade of ORES) {

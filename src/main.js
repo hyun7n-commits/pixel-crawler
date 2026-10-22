@@ -25,7 +25,6 @@ import { describeTile } from './ui/tip.js';
 import { $ } from './ui/dom.js';
 import * as sfx from './audio/sfx.js';
 import { setMusic, musicOff, setMusicOff } from './audio/music.js';
-import { HIRES, setHires } from './scenes/textures.js';
 
 let meta = loadMeta();
 let run = null;
@@ -486,8 +485,6 @@ function toggleSound() {
 $('soundBtn').addEventListener('click', toggleSound);
 $('vSound').addEventListener('click', toggleSound);
 // 32px or 16px characters: the textures are built once, so switching reloads the page (the save is kept)
-$('vArt').textContent = HIRES ? '그림 32' : '그림 16';
-$('vArt').addEventListener('click', () => { setHires(!HIRES); location.reload(); });
 $('vGo').addEventListener('click', () => startRun());
 showSoundState();
 // browsers allow sound only after the first click or key press
