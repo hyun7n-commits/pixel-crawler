@@ -17,8 +17,8 @@ export const PARTNER_CHANCE = 0.55;
 export const candySteps = floor => 3 + Math.floor((floor - 1) / FLOORS_PER_ZONE);
 export const CANDY_BOSS = 2;              // extra steps in a boss's candy
 export const CANDY_ORE = [0.3, 0.45, 0.65, 1];
-export const HP_PER_LEVEL = 1;
-export const LEVEL_UP_HEAL = 0.1;  // share of max HP restored on level up (levels come often since v0.15)
+export const UP_HP = 3;           // max HP per level of the shop's 튼튼한 몸
+export const HP_PER_LEVEL = 1;     // a level up heals nothing (v0.20): health only comes back slowly, or from potions
 
 // v0.15: the Shattered Pixel Dungeon way. Fewer monsters than v0.14, but each one hits hard
 // (enemies.js), so walking in and trading blows with two at once loses;
@@ -26,9 +26,9 @@ export const LEVEL_UP_HEAL = 0.1;  // share of max HP restored on level up (leve
 export const enemiesPerFloor = floor => 5 + floor;
 // stat multiplier for enemies: grows within a zone and a lot per zone, because relics, candies and
 // evolutions make you much stronger as you go (v0.19). Attack grows by ATK_SHARE of it, health in full.
-export const enemyScale = floor => 1 + 0.25 * ((floor - 1) % 3) + 0.55 * Math.floor((floor - 1) / 3);
+export const enemyScale = floor => 1 + 0.18 * ((floor - 1) % 3) + 0.55 * Math.floor((floor - 1) / 3);
 export const ATK_SHARE = 1.6;
-export const POTION_CHANCE = 0.45;  // a potion lying somewhere on a floor
+export const POTION_CHANCE = 0.35;  // a potion lying somewhere on a floor (scarce: healing is precious)
 export const bossScale = floor => 1 + 0.5 * (floor / 3 - 1);
 
 export const GOLD_DROP_CHANCE = 0.4;
@@ -47,18 +47,17 @@ export const POTION_HEAL = 0.6;
 
 // Tension, the Shattered Pixel Dungeon way: you should often end up a hit or two from death and live.
 // Enemy hits roll between these shares of their attack, so you never quite know if the next one is the one.
-export const HIT_ROLL = [0.6, 1.4];
-// A blow that would knock you out from above this share of your health leaves you hanging on at 1 HP.
-export const HANG_ON = 0.35;
+// Wide (v0.20): now and then one lands much harder than you planned for, and nothing saves you at 1 HP.
+export const HIT_ROLL = [0.5, 1.6];
 // Wounds close slowly on their own (1 HP every this many turns), so backing off and catching your
 // breath is worth it, but monsters keep wandering in while you wait.
 export const REGEN_TURNS = 15;
 
 // The big ore on each floor: how many swings it takes, how far each swing is heard,
 // how much mine gas the crack beside it puffs per swing, and what it pays.
-// Two big ores a floor, each paying a bit less than the old single one did.
+// One big ore a field (v0.20: fewer things on the map, so each one matters).
 // From the third swing the mine answers: monsters crawl out of the dark and head for the sound.
-export const ORES_PER_FLOOR = 2;
+export const ORES_PER_FLOOR = 1;
 export const ORE_HITS = 5;
 export const ORE_NOISE = [3, 5, 7, 10, 14];
 export const ORE_WAVE = [0, 0, 1, 2, 2];
@@ -68,8 +67,8 @@ export const ORE_SIZE_CHANCE = [0.5, 0.3, 0.13, 0.07];
 export const ORE_SIZE_MULT = [1, 1.5, 2, 3];
 export const ORE_SIZE_WAVE = [0, 0, 1, 1];
 export const ORE_GAS = 10;
-export const oreGold = floor => 0.75 * (2 + floor);
-export const oreJackpot = floor => 0.75 * (18 + 5 * floor);
+export const oreGold = floor => 2 + floor;
+export const oreJackpot = floor => 18 + 5 * floor;
 // Ore grades (data/ores.js): each zone starts one grade higher, sometimes one more.
 // Every swing but the last may crack into the next grade (harder for each grade above the
 // zone's own; the pick relics' bonus is not reduced, so gems are what an ore build hunts),

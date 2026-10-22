@@ -554,11 +554,6 @@ export class DungeonScene extends Phaser.Scene {
       case 'snore': this.noiseRing(d.x, d.y, d.r, 0xb58cf0); break;
       case 'vein': this.onVein(d); break;
       case 'newOre': this.onNewOre(d); break;
-      case 'hangon':
-        // the blow should have finished you: everything stops for a moment, and you're still standing
-        this.hitStop(420);
-        this.float(d.x, d.y - 0.4, '버텼다!', '#ffd6d6', 120, 16);
-        break;
       case 'dodge': this.float(d.x, d.y, '회피', '#6fe0e0'); break;
       // the evolved relics' own moves
       case 'shade': this.fx.magic.explode(14, center(d.x), center(d.y)); break;

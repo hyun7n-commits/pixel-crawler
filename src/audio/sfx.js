@@ -223,7 +223,6 @@ export function onRunEvent(type, d) {
     case 'heard': play('heard'); break;
     case 'vein': play('vein', d.size); break;
     case 'newOre': play('rise', d.tier); break;
-    case 'hangon': play('hangon'); break;
     case 'move': if (d.ter === T.WATER) play('splash'); else play('step', (stepN = !stepN)); break;
     case 'hit': if (d.kind !== 'sneak') play('hit'); break;
     case 'sneak': play('sneak'); break;

@@ -162,17 +162,18 @@ export function decorate(map, rooms, { start, stairs }) {
 
 // A few traps on room floors (never in the start room, a doorway's mouth or next to another trap).
 // Returns how many were placed.
-export function placeTraps(map, rooms, { start, stairs }, floor) {
+// Before the 'traps' unlock (data/unlocks.js) there are only a couple, all in plain sight, spikes and sleepy pollen.
+export function placeTraps(map, rooms, { start, stairs }, floor, all = true) {
   const near = (x, y, cond) => DIRS8.some(([dx, dy]) => inMap(x + dx, y + dy) && cond(idx(x + dx, y + dy)));
   const spots = shuffle(rooms.slice(1).flatMap(r => roomTiles(r))).filter(([x, y]) =>
     free(map, x, y) && Math.max(Math.abs(x - start.x), Math.abs(y - start.y)) > 2 && Math.max(Math.abs(x - stairs.x), Math.abs(y - stairs.y)) > 1 &&
     !near(x, y, i => map.tiles[i] === DOOR || map.tiles[i] === ORE));
   let n = 0;
   for (const [x, y] of spots) {
-    if (n >= trapsPerFloor(floor)) break;
+    if (n >= (all ? trapsPerFloor(floor) : Math.min(2, trapsPerFloor(floor)))) break;
     if (near(x, y, i => TRAPS.includes(map.ter[i]))) continue;
-    map.ter[idx(x, y)] = pick(floor === 1 ? [T.TRAP_SPIKE, T.TRAP_SLEEP] : TRAPS);
-    map.hidden[idx(x, y)] = Math.random() < trapHidden(floor) ? 1 : 0;
+    map.ter[idx(x, y)] = pick(floor === 1 || !all ? [T.TRAP_SPIKE, T.TRAP_SLEEP] : TRAPS);
+    map.hidden[idx(x, y)] = all && Math.random() < trapHidden(floor) ? 1 : 0;
     n++;
   }
   return n;

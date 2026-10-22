@@ -3,13 +3,14 @@
 // `cond.val` reads the saved progress (see core/save.js).
 
 // Each one plays differently because of one trait of their own (`note` says it in a line):
-//   quiet: mining is quieter, so fewer monsters come for the ore · sneak: added to the surprise
+//   sneak: added to the surprise
 //   multiplier · hush: how fast sleepers notice you (1 = normal) · choices: relic cards per pick
 //   block: chance to stop a blow on the shield · lifesteal: HP back per hit · noRegen: no slow healing
 export const CHARACTERS = {
+  // the one you start as: no trait, no relic, nothing but a pickaxe and a lantern
   adv: {
-    name: '일꾼', sprite: 'adv', hp: 30, atk: 3, def: 0, quiet: true,
-    start: { blade: 1 }, note: '곡괭이질 소리가 작아 반짝 바위에 몬스터가 덜 몰려온다',
+    name: '일꾼', sprite: 'adv', hp: 30, atk: 3, def: 0,
+    start: {}, note: '재주도 유물도 없는 평범한 일꾼. 그래서 뭐든 될 수 있다',
   },
   rogue: {
     name: '도적', sprite: 'rogue', hp: 27, atk: 4, def: 0, dodge: 0.2, sneak: 1, hush: 0.5,

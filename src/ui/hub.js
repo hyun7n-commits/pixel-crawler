@@ -6,6 +6,7 @@
 import { $, el, button, icon } from './dom.js';
 import { CHARACTERS } from '../data/characters.js';
 import { UPGRADES, PACK_COST } from '../data/upgrades.js';
+import { isOpen, RELIC_GATES } from '../data/unlocks.js';
 import { RELICS, RECIPES, recipeKey, tierOf, DISCOVERY_GOLD } from '../data/relics.js';
 import { freshMeta, saveMeta } from '../core/save.js';
 import { josa } from '../core/util.js';
@@ -128,6 +129,8 @@ function shop(box, { meta, changed }) {
     row.append(main, b);
     list.append(row);
   }
+  // the relic shelf and packing a relic come once the meadow's boss has fallen (data/unlocks.js)
+  if (!isOpen(meta, 'shelf')) { box.append(list); return; }
   list.append(el('h3', null, '들판에 새 유물 추가'));
   for (const [id, r] of Object.entries(RELICS).filter(([, r]) => r.locked)) {
     const row = el('div', 'row'), main = el('div', 'row-main');
@@ -142,7 +145,7 @@ function shop(box, { meta, changed }) {
   list.append(el('h3', null, '다음 판에 챙겨 갈 유물'));
   list.append(el('p', 'row-sub', `${PACK_COST}G를 내면 기본 유물 하나를 Lv1로 들고 나간다(이미 있으면 +1). 한 판만. 궁금한 조합을 시험해 보기 좋다.`));
   const grid = el('div', 'pack-grid');
-  const pick = Object.keys(RELICS).filter(id => !tierOf(id) && (!RELICS[id].locked || meta.relicUnlock[id]));
+  const pick = Object.keys(RELICS).filter(id => !tierOf(id) && (RELICS[id].locked ? meta.relicUnlock[id] : !RELIC_GATES[id] || isOpen(meta, RELIC_GATES[id])));
   for (const id of pick) {
     const on = meta.pack === id;
     const b = button(`pack${on ? ' on' : ''}`, null, () => {

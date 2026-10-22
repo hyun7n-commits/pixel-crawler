@@ -137,7 +137,7 @@ export function closeTalk() {
   return true;
 }
 
-export function showSummary({ won, run, newlyUnlockable, stepOpened, onClose }) {
+export function showSummary({ won, run, newlyUnlockable, stepOpened, opened = [], onClose }) {
   openSheet(sh => {
     sh.append(el('h2', null, won ? '들판을 모두 토벌했다!' : '쓰러졌다'));
     if (!won && run.cause) sh.append(el('p', 'cause', `마지막 순간: ${run.cause}`));
@@ -151,6 +151,20 @@ export function showSummary({ won, run, newlyUnlockable, stepOpened, onClose }) 
       sum.append(s);
     }
     sh.append(sum);
+    // 새로 열림: what this trip opened up (data/unlocks.js), a line or two each time
+    if (opened.length) {
+      const box = el('div', 'opened');
+      box.append(el('h3', null, '새로 열림'));
+      for (const u of opened) {
+        const row = el('div', 'open-row');
+        if (u.relic || u.icon) row.append(icon(u.relic || u.icon));
+        const t = el('div');
+        t.append(el('b', null, u.relic ? RELICS[u.relic].name : u.what), el('span', null, u.relic ? `새 유물. 이제 유물 카드에 나온다. ${RELICS[u.relic].desc(1)}` : u.desc));
+        row.append(t);
+        box.append(row);
+      }
+      sh.append(box);
+    }
     const q = run.request;
     if (q) sh.append(el('div', 'unlock-note' + (q.done ? ' req-done' : ''), q.done ? `조합 의뢰 완료: ${q.text} · 일당 ${q.pay}G를 받았다` : `조합 의뢰 미완료: ${q.text} (${q.got}/${q.n})`));
     if (run.newRecipes.length) {
