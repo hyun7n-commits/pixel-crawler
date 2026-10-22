@@ -454,3 +454,14 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* 집 꾸미기: each piece's picture in a little frame */
 .decor-frame { flex: 0 0 48px; height: 40px; display: grid; place-items: center; background: rgba(111, 191, 78, 0.18); border-radius: 8px; }
 .row.owned .row-name::after { content: ' ✓'; color: #8fd86f; }
+
+/* Big desktop screens (the usual Steam monitor and up): the side panel and the sheets grow with the
+   screen so their words read as comfortably as on a laptop. The map scales itself (scenes/zoom.js). */
+@media (min-width: 1600px) and (min-height: 900px) and (pointer: fine) {
+  #game { grid-template-columns: 1fr 348px; }
+  #side, #modal, #tip, #vhud { zoom: 1.2; }
+}
+@media (min-width: 2400px) and (min-height: 1300px) and (pointer: fine) {
+  #game { grid-template-columns: 1fr 464px; }
+  #side, #modal, #tip, #vhud { zoom: 1.6; }
+}
