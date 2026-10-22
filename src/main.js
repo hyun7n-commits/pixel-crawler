@@ -89,6 +89,8 @@ function startRun() {
   run.on(onRunEvent);
   scene.attach(run);
   run.start();
+  // no manual up front: the first runs get one line on how to ask about anything
+  if (meta.stats.runs < 2) run.log(TOUCH ? '모르는 게 보이면 꾹 눌러 보자. 설명이 나온다.' : '모르는 게 보이면 마우스를 올려 보자. 설명이 나온다.');
   setAim(false);
 }
 

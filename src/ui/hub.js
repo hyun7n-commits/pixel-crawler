@@ -9,7 +9,6 @@ import { josa } from '../core/util.js';
 import { DISCOVERIES } from '../data/terrain.js';
 import { ORES } from '../data/ores.js';
 
-const TOUCH = window.matchMedia?.('(pointer: coarse)').matches;
 
 let tab = 'chars';
 
@@ -23,7 +22,7 @@ export function renderHub(ctx) {
   const inner = el('div', 'hub-inner');
 
   const head = el('div', 'hub-head');
-  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.10 · 9층 · 보스 3마리 · 특수 방과 퀘스트</small>'));
+  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.11</small>'));
   const purse = el('div', 'purse');
   purse.append(icon('gold', 24), el('span', null, `${meta.gold}G`));
   head.append(purse);
@@ -40,19 +39,6 @@ export function renderHub(ctx) {
   inner.append(tabs);
 
   if (tab === 'chars') {
-    inner.append(el('div', 'howto',
-      (TOUCH
-        ? '<b>이동</b> 가고 싶은 칸을 톡 (대각선도 된다) · <b>공격</b> 적을 톡 · <b>쉬기</b> 나를 톡 · ' +
-          '<b>설명</b> 아무 칸이나 꾹 누르기 · <b>둘러보기</b> 끌어서 옮기고 두 손가락으로 확대 · 유물과 소모품은 <b>가방</b>에 있다.<br>'
-        : '<b>이동</b> 방향키·WASD (두 개를 같이 누르면 대각선) 또는 가고 싶은 칸을 클릭 · <b>공격</b> 적에게 부딪히거나 적을 클릭 · ' +
-          '<b>쉬기</b> 스페이스 · <b>폭탄</b> 2를 누르고 던질 곳 고르기 · 마우스를 올리면 무엇이든 한 줄 설명이 나온다. 휠로 확대, 끌어서 둘러보기.<br>') +
-      '층마다 <b>큰 광석</b>이 하나 있다. 칠수록 골드가 커지고, 가끔 속에서 더 좋은 광석(동, 은, 금, 다이아몬드, 그 위로 보석)이 나오거나 <b>노다지</b>가 터진다. 대신 소리가 커져서 적이 몰려온다. ' +
-      '<b>올라가는 계단</b>으로 지난 층에 돌아가 남은 것을 챙길 수 있다. 쫓아오는 적은 내 발자국을 그대로 밟는다. ' +
-      '<b>키 큰 풀</b>은 앞을 가리지만 누가 밟으면 쓰러진다. 바닥의 <b>함정</b>은 밟으면 터지고, 숨은 함정은 옆에 서 있으면 찾아낸다. ' +
-      '<b>잠긴 문과 상자</b>는 같은 층 어딘가의 <b>열쇠</b>로 연다. <b>무덤</b>은 부딪히면 파헤친다. 가끔 들썩이는 상자는 <b>미믹</b>이다. 말을 거는 이웃(유령 광부, 두더지 대장장이)의 부탁을 들어주면 보답을 받는다. ' +
-      '잠들면 코를 골아서 적이 몰려온다. <b>광석 거북</b>은 먼저 싸우지 않지만, 쓰러뜨리면 보물을 준다. ' +
-      '나를 눈치채지 못한 적(자거나 어슬렁거리는 적)을 치면 <b>기습</b>으로 피해가 두 배다. ' +
-      '적 코에 <b>콧방울</b>이 있으면 자는 중이다. 내 칸에 <b style="color:var(--danger)">빨간 발톱 자국</b>이 보이면 다음 턴에 맞는다.'));
     const grid = el('div', 'chars');
     for (const [id, c] of Object.entries(CHARACTERS)) {
       const owned = meta.chars[id];
