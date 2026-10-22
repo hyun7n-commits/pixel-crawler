@@ -67,6 +67,19 @@ export class StoryScene extends Phaser.Scene {
       }
       g.fillStyle(0xfff3b0, 1).fillCircle(VIEW.w * TILE - 12, -8, 7);
       g.fillStyle(SKY.night, 1).fillCircle(VIEW.w * TILE - 9, -10, 6);
+    } else if (kind === 'day' || kind === 'dusk') {
+      // a tall phone shows a lot of sky over the diorama: a sun and a few slow clouds fill it
+      const g = this.keep(this.add.graphics().setDepth(D.sky));
+      const sun = kind === 'day' ? 0xfff3b0 : 0xffd27a;
+      g.fillStyle(sun, 0.35).fillCircle(VIEW.w * TILE - 22, -70, 14);
+      g.fillStyle(sun, 1).fillCircle(VIEW.w * TILE - 22, -70, 10);
+      const cloud = kind === 'day' ? 0xffffff : 0xffe2c4;
+      [[8, -50, 1], [70, -110, 0.8], [-20, -170, 1.2], [90, -220, 0.9]].forEach(([x, y, s], i) => {
+        const c = this.keep(this.add.graphics().setDepth(D.sky));
+        c.fillStyle(cloud, 0.9).fillRect(-12, -3, 24, 6).fillRect(-7, -7, 10, 4).fillRect(0, -9, 9, 6).fillRect(-16, -1, 32, 4);
+        c.setPosition(x, y).setScale(s);
+        this.tweens.add({ targets: c, x: x + 14, duration: 6000 + i * 1300, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      });
     }
   }
 
