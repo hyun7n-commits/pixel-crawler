@@ -16,7 +16,8 @@ import { wait, fissionMs, FISSION_LEAD, FISSION_STEP } from './beat.js';
 
 // What the quest folk asked of you and have not had back yet.
 function questLines(run) {
-  const { ghost, smith } = run.quests, out = [];
+  const { ghost, smith } = run.quests, out = [], q = run.request;
+  if (q) out.push(q.done ? `조합 의뢰 완료! ${q.text} (+${q.pay}G)` : `조합 의뢰: ${q.text} (${q.got}/${q.n}) · 일당 ${q.pay}G`);
   if (ghost.state === 'asked') out.push(`울보 아기새의 부탁: 리본 도둑 들쥐를 잡자 (${ghost.floor}구역)`);
   if (ghost.state === 'found') out.push(`울보 아기새에게 리본을 돌려주자 (${ghost.floor}구역)`);
   if (smith.state === 'asked') {
@@ -112,6 +113,9 @@ export class Hud {
     $('mXp').firstElementChild.style.width = $('xpbar').firstElementChild.style.width;
     $('mStatus').innerHTML = '';
     for (const t of st) $('mStatus').append(el('span', 'chip', t));
+    // phone: the request of the day as a small chip until it is done
+    const q = run.request;
+    if (q && !q.done) $('mStatus').append(el('span', 'chip req', `의뢰 ${q.got}/${q.n}`));
     this.renderBar(run);
 
     const ids = Object.keys(p.relics);

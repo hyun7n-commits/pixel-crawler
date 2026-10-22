@@ -29,9 +29,24 @@ export function renderVillageHud(meta) {
 const startButton = (meta, onStart) =>
   button('btn primary enter', `${josa(CHARACTERS[meta.sel].name, '으로', '로')} 들판으로 출발`, onStart);
 
+// the three 토벌 licenses (one per zone boss), greyed out until earned; see scenes/storyboards.js
+const LICENSES = [['ratking', '초원', '#6fbf4e'], ['skelking', '깊은숲', '#2f7a46'], ['lord', '돌산', '#8a7aa8']];
+function licenses(meta) {
+  const row = el('div', 'licenses');
+  row.append(el('span', 'lic-title', '토벌 자격증'));
+  for (const [boss, name, color] of LICENSES) {
+    const got = meta.stats.bosses.includes(boss);
+    const b = el('span', 'lic' + (got ? ' got' : ''), `<i style="--c:${color}">★</i>${name}`);
+    b.title = got ? `${name} 토벌 자격증` : `${name} 끝의 대장을 잡으면 받는다`;
+    row.append(b);
+  }
+  return row;
+}
+
 // ---------- 조합장: heroes ----------
-function chars(box, { meta, onStart, changed, setMeta }) {
+function chars(box, { meta, onStart, changed, setMeta, onStory }) {
   const buy = (cost, apply) => { meta.gold -= cost; apply(); changed(); };
+  box.append(licenses(meta));
   const grid = el('div', 'chars');
   for (const [id, c] of Object.entries(CHARACTERS)) {
     const owned = meta.chars[id];
@@ -64,7 +79,7 @@ function chars(box, { meta, onStart, changed, setMeta }) {
     armed = Date.now();
     reset.textContent = '한 번 더 누르면 모든 진행이 지워진다';
   });
-  box.append(reset);
+  box.append(button('btn quiet', '처음 이야기 다시 보기', onStory), reset);
 }
 
 // ---------- 상점 주인: upgrades and new relics ----------

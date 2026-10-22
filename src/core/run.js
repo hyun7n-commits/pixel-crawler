@@ -17,6 +17,7 @@ import {
 import { decorate, decorateArena, placeTraps } from './decorate.js';
 import { placeSpecials, SET_PIECES } from './specials.js';
 import { NPC_TEXT } from '../data/npcs.js';
+import { REQUESTS, pickRequest } from '../data/requests.js';
 import { enemyAct, rouse, awaken } from './ai.js';
 import { onEnter, explosion, envTick, waterBody, ignite, addGas, spotTraps, revealTraps, openGrave, setBurn, springTrap } from './world.js';
 
@@ -48,6 +49,7 @@ export class Run {
       ghost: { floor: rint(1, 2), state: 'idle' },              // idle -> asked -> found -> done
       smith: { floor: rint(4, 5), state: 'idle', chunk: null },  // chunk: grade of the big ore you broke there
     };
+    this.request = pickRequest(meta);   // the guild's request of the day (data/requests.js)
     this.startStats = JSON.parse(JSON.stringify(meta.stats));
     this.listeners = [];
     this.p = {
@@ -63,7 +65,24 @@ export class Run {
 
   // ---------- events ----------
   on(fn) { this.listeners.push(fn); }
-  emit(type, data = {}) { for (const fn of this.listeners) fn(type, data); }
+  emit(type, data = {}) {
+    for (const fn of this.listeners) fn(type, data);
+    if (this.request && !this.request.done) this.trackRequest(type, data);
+  }
+
+  // the request of the day: count what it asks for, and pay the moment it is met
+  trackRequest(type, d) {
+    const q = this.request, c = REQUESTS[q.id].count(type, d, this);
+    if (!c) return;
+    q.got = c.set ?? q.got + 1;
+    if (q.got < q.n) { this.emit('requestStep', q); return; }
+    q.got = q.n;
+    q.done = true;
+    this.gold += q.pay;
+    this.emit('gold', { x: this.p.x, y: this.p.y, n: q.pay });
+    this.emit('request', q);
+    this.log(`조합 의뢰 완료! ${q.text}. 일당 ${q.pay}G를 받았다.`, 'good');
+  }
   log(text, cls) { this.emit('log', { text, cls }); }
   say(who, text) { this.emit('say', { who, text }); }
 
@@ -146,6 +165,7 @@ export class Run {
     this.arrival = { dir: 0 };
     this.genFloor();
     this.log(`${josa(this.char.name, '으로', '로')} 들판에 나왔다. 깃발 꽂힌 땅굴을 찾아 앞으로 가자.`, 'good');
+    this.log(`오늘의 조합 의뢰: ${this.request.text} (일당 ${this.request.pay}G)`, 'quest');
     this.emit('banner', { text: `1구역 · ${this.zone.name}` });
     this.afterTurn();
   }

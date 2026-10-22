@@ -16,6 +16,7 @@ export function freshMeta() {
     ores: {},     // ore grades seen: id -> how many broken open, see data/ores.js
     village: { seen: {} },  // villagers who have already moved in with a hello, see data/village.js
     lastRun: null,          // how the last run went, for the village gossip
+    story: {},              // picture-book scenes already shown: intro, ratking, skelking, ending (ui/story.js)
   };
 }
 
@@ -38,6 +39,7 @@ export function loadMeta() {
         recipes: { ...m.recipes, ...oldLegends(m.legends) },
         ores: { ...m.ores },
         village: { seen: { ...m.village?.seen } },
+        story: { ...m.story },
       };
     }
   } catch (e) { /* storage blocked or corrupt: start fresh */ }

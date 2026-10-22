@@ -135,6 +135,8 @@ export function showSummary({ won, run, newlyUnlockable, onClose }) {
       sum.append(s);
     }
     sh.append(sum);
+    const q = run.request;
+    if (q) sh.append(el('div', 'unlock-note' + (q.done ? ' req-done' : ''), q.done ? `조합 의뢰 완료: ${q.text} · 일당 ${q.pay}G를 받았다` : `조합 의뢰 미완료: ${q.text} (${q.got}/${q.n})`));
     if (run.newRecipes.length) {
       const made = run.newRecipes.map(k => k.split(':')[0]);
       const row = el('div', 'unlock-note new-recipes');

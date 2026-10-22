@@ -360,3 +360,46 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .race-row .bar { height: 12px; }
 .race-row.them .bar > i { background: #b48cff; }
 .race-row b { font-family: var(--font-display); font-weight: 400; font-size: 17px; text-align: right; }
+
+/* ---------- Story (v0.19) ----------
+   The picture book over the stage: a diorama on the canvas, the line in a box at the bottom, a dot
+   per panel on top and a skip button. A tap anywhere moves on. */
+#game.story #vhud, #game.story #tip { display: none; }
+#story {
+  position: absolute; inset: 0; z-index: 6; cursor: pointer; user-select: none; -webkit-user-select: none;
+  padding: max(10px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(14px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+}
+.st-dots { position: absolute; top: max(16px, calc(env(safe-area-inset-top, 0px) + 8px)); left: 50%; transform: translateX(-50%); display: flex; gap: 6px; }
+.st-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(244,240,232,.3); transition: background .2s; }
+.st-dots i.on { background: var(--gold); }
+.st-skip {
+  position: absolute; top: max(10px, env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
+  font: inherit; font-size: 14px; color: #f4f0e8; background: rgba(20,18,26,.75); border: 2px solid rgba(244,240,232,.25);
+  border-radius: 999px; padding: 6px 14px; cursor: pointer;
+}
+.st-skip:hover { border-color: var(--gold); color: var(--gold); }
+.st-box {
+  position: relative; width: min(640px, 100%); min-height: 96px; box-sizing: border-box;
+  background: rgba(20,18,26,.92); border: 2px solid var(--line); border-radius: 16px; padding: 16px 20px 18px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.45);
+}
+.st-who {
+  position: absolute; top: -15px; left: 16px; font-family: var(--font-display); font-weight: normal; font-size: 16px;
+  color: var(--accent-ink); background: var(--gold); border-radius: 999px; padding: 3px 12px;
+}
+.st-text { margin: 0; font-family: var(--font-display); font-size: 21px; line-height: 1.45; color: #f4f0e8; word-break: keep-all; }
+.st-next { position: absolute; right: 16px; bottom: 8px; font-size: 12px; color: var(--gold); animation: st-bob .8s ease-in-out infinite; }
+@keyframes st-bob { 50% { transform: translateY(3px); } }
+@media (max-width: 520px) { .st-text { font-size: 18px; } .st-box { padding: 14px 16px 16px; min-height: 88px; } }
+/* the guild's license row */
+.licenses { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
+.lic-title { font-family: var(--font-display); font-size: 16px; color: var(--muted); margin-right: 4px; }
+.lic { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; border-radius: 999px; background: var(--panel-2); border: 2px solid var(--line); color: var(--muted); font-size: 14px; }
+.lic i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 12px; color: #6b6780; background: #2e2a3c; border: 2px solid #3d3850; }
+.lic.got { color: var(--fg); border-color: var(--gold); }
+.lic.got i { color: #fff3b0; background: var(--c); border-color: var(--gold); }
+/* the guild's request of the day in the log, on the phone's status row, and on the summary */
+#log .quest, #mlog .quest { color: #ffe08a; }
+#mStatus .chip.req { background: rgba(244, 207, 79, 0.16); color: #ffe08a; }
+.unlock-note.req-done { color: #ffe08a; }

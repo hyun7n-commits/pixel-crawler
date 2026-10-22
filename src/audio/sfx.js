@@ -226,6 +226,7 @@ export function onRunEvent(type, d) {
     case 'charge': if (!d.hit) play('boom'); break;
     case 'meteor': play('boom'); break;
     case 'rage': play('boom'); play('alert'); break;
+    case 'request': play('jackpot'); break;
     case 'sunbeam': play('rise', 2); break;
     case 'block': play('hit'); play('dodge'); break;
     default: break;

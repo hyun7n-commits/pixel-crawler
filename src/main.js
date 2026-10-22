@@ -3,6 +3,8 @@
 /* global Phaser */
 import { DungeonScene } from './scenes/DungeonScene.js';
 import { VillageScene } from './scenes/VillageScene.js';
+import { StoryScene } from './scenes/StoryScene.js';
+import { playStory } from './ui/story.js';
 import { Run } from './core/run.js';
 import { loadMeta, saveMeta } from './core/save.js';
 import { pathTo, idx, isBump, isStairs } from './core/dungeon.js';
@@ -95,6 +97,33 @@ function showVillage(from) {
   renderVillageHud(meta);
 }
 
+// The picture book (ui/story.js): the opening on the very first launch, a license from the guild the
+// first time each zone boss falls, and the ending after the first win. Each is shown once.
+function showStory(id, then) {
+  sfx.setHeartbeat(0);
+  inVillage = false;
+  showTip(null);
+  const g = $('game');
+  g.hidden = false;
+  g.classList.add('village');
+  g.classList.remove('low', 'bag-open');
+  fitCanvas();
+  playStory(game, id, () => {
+    meta.story[id] = true;
+    saveMeta(meta);
+    then?.();
+  });
+}
+
+function afterRunStory() {
+  const st = meta.story, beat = meta.stats.bosses;
+  const id = meta.stats.wins && !st.ending ? 'ending' : ['ratking', 'skelking'].find(b => beat.includes(b) && !st[b]);
+  // the ending covers the licenses that came with it
+  if (id === 'ending') st.ratking = st.skelking = true;
+  if (id) showStory(id, () => showVillage('run'));
+  else showVillage('run');
+}
+
 function startRun() {
   if (run) return;
   sfx.unlockAudio();
@@ -130,6 +159,7 @@ function talkTo(id, line) {
       onStart: startRun,
       changed: () => { saveMeta(meta); redraw(); renderVillageHud(meta); village().resync(); },
       setMeta: m => { meta = m; closeModal(); showVillage(); },
+      onStory: () => { closeTalk(); showStory('intro', () => showVillage()); },
     }),
   });
 }
@@ -179,6 +209,7 @@ function onRunEvent(type, d) {
   // a new field's name shows once you have popped out of the burrow
   if (type === 'banner') setTimeout(() => hud.banner(d.text), scene?.busy() ? 650 : 0);
   if (type === 'discover') hud.banner(`새 발견! ${d.d.combo}`);
+  if (type === 'request') setTimeout(() => hud.banner(`조합 의뢰 완료! +${d.pay}G`), 300);
   if (type === 'evolve') showEvolve(d);
   if (type === 'fission') hud.fission(d);
   if (type === 'floor') { clearPath(); seenCount = 0; }
@@ -194,7 +225,7 @@ function onRunEvent(type, d) {
     };
     saveMeta(meta);
     hud.update(run);
-    showSummary({ won: d.won, run, newlyUnlockable: d.newlyUnlockable, onClose: () => { scene.detach(); run = null; showVillage('run'); } });
+    showSummary({ won: d.won, run, newlyUnlockable: d.newlyUnlockable, onClose: () => { scene.detach(); run = null; afterRunStory(); } });
   }
 }
 
@@ -402,9 +433,10 @@ const game = new Phaser.Game({
       showTip(pinned);
       if (!$('tip').hidden) navigator.vibrate?.(12);
     };
-    // the dungeon scene builds every texture; once it is up, open in the village
-    setTimeout(() => showVillage(), 0);
-  }), new VillageScene(villageHooks)],
+    // the dungeon scene builds every texture; once it is up, open in the village (the very first
+    // time, after the opening picture book)
+    setTimeout(() => (meta.story.intro ? showVillage() : showStory('intro', () => showVillage())), 0);
+  }), new VillageScene(villageHooks), new StoryScene()],
 });
 
 function fitCanvas() {
@@ -417,4 +449,4 @@ function fitCanvas() {
 new ResizeObserver(fitCanvas).observe($('phaser'));
 
 // test hook for automated play-testing; harmless in normal play
-window.__game = { get run() { return run; }, get meta() { return meta; }, get scene() { return scene; }, get village() { return village(); }, startRun, setAim, showVillage };
+window.__game = { get run() { return run; }, get meta() { return meta; }, get scene() { return scene; }, get village() { return village(); }, startRun, setAim, showVillage, showStory };
