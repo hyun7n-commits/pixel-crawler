@@ -178,6 +178,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .book-tier.t3 { color: #c48cff; }
 .new-recipes { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .new-recipes canvas { width: 28px; height: 28px; }
+.new-recipes .crit-pic, .new-recipes .crit-pic canvas:first-child { width: 28px; height: 28px; }
+.new-recipes .crit-pic canvas + canvas { width: 14px; height: 14px; left: 7px; top: -7px; }
 @keyframes pipblink { 50% { opacity: .25; } }
 .items { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .item { display: flex; flex-direction: column; align-items: center; gap: 2px; background: #0f0e15; border: 1px solid var(--line); border-radius: 5px; padding: 6px 2px; font-size: 11.5px; }

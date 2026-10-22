@@ -160,7 +160,13 @@ export function showSummary({ won, run, newlyUnlockable, stepOpened, onClose }) 
     if (run.newCritters?.length) {
       const row = el('div', 'unlock-note new-recipes');
       row.append(el('span', null, '새로 만난 친구'));
-      for (const t of run.newCritters) row.append(icon(ENEMIES[t].sprite));
+      // a boss shares its kind's picture, so it wears its crown here as in the critter book
+      for (const t of run.newCritters) {
+        if (!ENEMIES[t].boss) { row.append(icon(ENEMIES[t].sprite)); continue; }
+        const pic = el('span', 'crit-pic');
+        pic.append(icon(ENEMIES[t].sprite), icon('crown'));
+        row.append(pic);
+      }
       sh.append(row);
     }
     if (run.found.length) {
