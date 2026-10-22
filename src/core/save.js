@@ -17,8 +17,9 @@ export function freshMeta() {
     village: { seen: {} },  // villagers who have already moved in with a hello, see data/village.js
     lastRun: null,          // how the last run went, for the village gossip
     story: {},              // picture-book scenes already shown: intro, ratking, skelking, ending (ui/story.js)
-    pack: null,
-    step: 0,                // the 토벌 단계 picked at the guild (data/balance.js)             // a basic relic paid for in the shop to take on the next run (data/upgrades.js PACK_COST)
+    pack: null,             // a basic relic paid for in the shop to take on the next run (data/upgrades.js PACK_COST)
+    step: 0,                // the 토벌 단계 picked at the guild (data/balance.js)
+    home: [],               // 집 꾸미기 pieces put up round your house (data/home.js)
   };
 }
 
@@ -42,6 +43,7 @@ export function loadMeta() {
         ores: { ...m.ores },
         village: { seen: { ...m.village?.seen } },
         story: { ...m.story },
+        home: Array.isArray(m.home) ? m.home : [],
       };
     }
   } catch (e) { /* storage blocked or corrupt: start fresh */ }

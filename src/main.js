@@ -18,6 +18,7 @@ import { showChoice, showSummary, showTalk, closeTalk, closeModal, modalOpen } f
 import { showEvolve } from './ui/evo.js';
 import { bossCard } from './ui/bosscard.js';
 import { FOLK } from './data/village.js';
+import { DECOR } from './data/home.js';
 import { CHARACTERS } from './data/characters.js';
 import { describeTile } from './ui/tip.js';
 import { $ } from './ui/dom.js';
@@ -178,8 +179,27 @@ function talkTo(id, line) {
   });
 }
 
+// Bumping into your own house: the 집 꾸미기 list. Buying a piece closes the sheet so you can watch
+// it go up beside the house.
+function openHome() {
+  const n = (meta.home || []).length, all = n >= DECOR.length;
+  sfx.play('talk');
+  showVillageTip('');
+  showTalk({
+    who: CHARACTERS[meta.sel].sprite, name: '내 집',
+    line: all ? '더 바랄 게 없는 내 집이다!' : n ? '조금씩 내 집 같아진다. 다음엔 뭘 놓을까?' : '조합에서 받은 내 집. 아직 휑하다… 뭐부터 놓을까?',
+    build: (box, redraw) => renderPanel('home', box, {
+      meta,
+      changed: () => { saveMeta(meta); redraw(); renderVillageHud(meta); },
+      onDecor: id => { closeTalk(); sfx.play('buy'); village().showDecor(id); },
+    }),
+  });
+}
+
 const villageHooks = {
   onTalk: talkTo,
+  onHome: openHome,
+  onPet: () => sfx.play('talk'),
   onSwap: id => {
     meta.sel = id;
     saveMeta(meta);

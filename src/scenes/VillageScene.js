@@ -11,6 +11,8 @@ import { faceKey } from '../data/faces.js';
 import { VILLAGE_MAP, HOUSES, FOLK, doorOf, HERO_LINES, HOME, ownsHome } from '../data/village.js';
 import { CHARACTERS } from '../data/characters.js';
 import { ZONES } from '../data/enemies.js';
+import { DECOR, hasDecor } from '../data/home.js';
+import { decorCanvas, pupCanvas } from './home-art.js';
 
 const MW = VILLAGE_MAP[0].length, MH = VILLAGE_MAP.length;
 const D = { tiles: 0, deco: 1, house: 2, actors: 3, fx: 4, bubble: 5 };
@@ -105,6 +107,12 @@ export class VillageScene extends Phaser.Scene {
     if (!this.textures.exists('village_lot')) this.textures.addCanvas('village_lot', lotCanvas(HOME.w, HOME.h));
     this.keep(this.add.image(HOME.x * TILE, HOME.y * TILE, home ? this.houseKey(HOME, true) : 'village_lot').setOrigin(0).setDepth(D.house));
     for (let y = HOME.y; y < HOME.y + HOME.h; y++) for (let x = HOME.x; x < HOME.x + HOME.w; x++) this.blocked[y * MW + x] = 1;
+    // what you have put round it (data/home.js); bumping the house in front of its door opens that list
+    this.homeDoor = home ? { ...doorOf(HOME), home: true } : null;
+    if (this.homeDoor) this.homeDoor.y--;
+    this.decor = {};
+    this.pup = null;
+    this.placeDecor();
     // the villagers stand at their doors; ones who just moved in arrive with a little fanfare
     this.folk = [];
     const arrivals = [];
@@ -128,6 +136,71 @@ export class VillageScene extends Phaser.Scene {
     this.cameras.main.centerOn(center(start.x), foot(start.y) - TILE / 2);
     this.hideFinds(2 + Math.floor(Math.random() * 2));
     if (arrivals.length) this.welcome(arrivals);
+  }
+
+  // the pieces of 집 꾸미기 bought so far, each on its own tiles round the house; `fresh`: the one
+  // just bought, which pops in with sparkles
+  placeDecor(fresh) {
+    if (!ownsHome(this.meta)) return;
+    for (const d of DECOR) {
+      if (!hasDecor(this.meta, d.id) || this.decor[d.id]) continue;
+      const key = `decor_${d.id}`;
+      if (!this.textures.exists(key)) this.textures.addCanvas(key, decorCanvas(d.id));
+      const x0 = Math.min(...d.at.map(a => a[0])), y1 = Math.max(...d.at.map(a => a[1]));
+      const img = this.keep(this.add.image(x0 * TILE, foot(y1), key).setOrigin(0, 1).setDepth(D.actors + y1 / 100));
+      for (const [x, y] of d.at) this.blocked[y * MW + x] = 1;
+      if (this.pup && d.at.some(([x, y]) => x === this.pup.x && y === this.pup.y)) this.movePup(39, 27);
+      if (this.p && d.at.some(([x, y]) => x === this.p.x && y === this.p.y)) {
+        const door = doorOf(HOME);
+        this.p.x = door.x; this.p.y = door.y;
+        this.ps.setPosition(center(door.x), foot(door.y)).setDepth(D.actors + door.y / 100);
+      }
+      this.decor[d.id] = img;
+      if (d.id === 'statue') this.tweens.add({ targets: img, alpha: 0.82, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      if (d.id === 'dog') this.placePup();
+      if (d.id === fresh) {
+        const cx = img.x + img.width / 2, cy = img.y - img.height / 2;
+        this.spark.explode(30, cx, cy);
+        img.setScale(0.2);
+        this.tweens.add({ targets: img, scale: 1, duration: 320, ease: 'Back.out' });
+      }
+    }
+  }
+
+  // a piece just bought: the camera drifts over, it pops up with sparkles, you cheer, back to you
+  showDecor(id) {
+    const d = DECOR.find(o => o.id === id);
+    if (!d) return;
+    const cam = this.cameras.main;
+    const cx = (Math.min(...d.at.map(a => a[0])) + Math.max(...d.at.map(a => a[0])) + 1) / 2 * TILE;
+    const cy = (Math.min(...d.at.map(a => a[1])) + Math.max(...d.at.map(a => a[1]))) / 2 * TILE;
+    cam.stopFollow();
+    cam.pan(cx, cy, 450, 'Sine.easeInOut');
+    this.time.delayedCall(500, () => {
+      this.placeDecor(id);
+      this.ps.expr = 'sparkle';
+      this.ps.exprUntil = this.time.now + 1400;
+      this.tweens.add({ targets: this.ps, hop: 5, duration: 120, yoyo: true, repeat: 1, ease: 'Quad.out' });
+      this.say(this.ps, '짠!', 1300);
+    });
+    this.time.delayedCall(1700, () => cam.pan(this.ps.x, this.ps.y - TILE / 2, 450, 'Sine.easeInOut', false, (c, k) => {
+      if (k === 1) cam.startFollow(this.ps, true, 0.2, 0.2, 0, TILE / 2);
+    }));
+  }
+
+  // the dog house's puppy pads about the yard; bump it and it hops
+  placePup() {
+    if (this.pup) return;
+    if (!this.textures.exists('home_pup')) this.textures.addCanvas('home_pup', pupCanvas());
+    const [x, y] = [39, 27];
+    const s = this.keep(this.add.image(center(x), foot(y), 'home_pup').setOrigin(0.5, 1).setDepth(D.actors + y / 100));
+    s.setScale(TILE * 0.8 / s.height);
+    s.hop = 0;
+    this.pup = { x, y, s, next: 0, pup: true };
+  }
+  movePup(x, y) {
+    Object.assign(this.pup, { x, y });
+    this.pup.s.setPosition(center(x), foot(y)).setDepth(D.actors + y / 100);
   }
 
   // a few bits of sparkle-stone dropped in the grass, away from the paths; you only see them twinkle
@@ -253,11 +326,13 @@ export class VillageScene extends Phaser.Scene {
   houseAt(x, y) { return HOUSES.find(h => x >= h.x && x < h.x + h.w && y >= h.y && y < h.y + h.h); }
   homeAt(x, y) { return x >= HOME.x && x < HOME.x + HOME.w && y >= HOME.y && y < HOME.y + HOME.h; }
   homeLine() {
-    return ownsHome(this.meta) ? '내 집: 토벌 자격증 셋을 따고 조합에서 받은 내 집이다!' : '빈 집터: 언젠가 여기에 내 집을… 조합장이 말한 큰 상이 이건가?';
+    return ownsHome(this.meta) ? '내 집: 토벌 자격증 셋을 따고 조합에서 받은 내 집이다! 문 앞에서 부딪히면 꾸밀 수 있다.' : '빈 집터: 언젠가 여기에 내 집을… 조합장이 말한 큰 상이 이건가?';
   }
+  pupAt(x, y) { return this.pup && this.pup.x === x && this.pup.y === y ? this.pup : null; }
+  decorAt(x, y) { return DECOR.find(d => this.decor[d.id] && d.at.some(([ax, ay]) => ax === x && ay === y)); }
   walkable(x, y) {
     if (x < 0 || y < 0 || x >= MW || y >= MH || this.blocked[y * MW + x]) return false;
-    return !this.folkAt(x, y) && !this.heroAt(x, y) && !(this.p && this.p.x === x && this.p.y === y);
+    return !this.folkAt(x, y) && !this.heroAt(x, y) && !this.pupAt(x, y) && !(this.p && this.p.x === x && this.p.y === y);
   }
 
   describe(x, y) {
@@ -265,6 +340,9 @@ export class VillageScene extends Phaser.Scene {
     if (who) return `${who.f.name}: ${who.f.tip}`;
     if (this.houseAt(x, y)) return '빈 집: 아직 아무도 안 산다.';
     if (this.homeAt(x, y)) return this.homeLine();
+    if (this.pupAt(x, y)) return '강아지: 같이 사는 강아지. 부딪히면 좋아한다.';
+    const d = this.decorAt(x, y);
+    if (d) return `${d.name}: ${d.desc}`;
     const hero = this.heroAt(x, y);
     if (hero) return `${CHARACTERS[hero.id].name}: 부딪히면 오늘은 이 친구가 나간다.`;
     if (this.ch(x, y) === '>') return '들판 가는 땅굴: 쏙 들어가면 토벌을 나간다.';
@@ -276,9 +354,12 @@ export class VillageScene extends Phaser.Scene {
   // a tap: walk to the spot; on a villager or a house, walk up to them and talk; on the sign, head out
   tap(x, y) {
     const house = this.houseAt(x, y);
-    const target = this.folkAt(x, y) || (house?.lived && this.folk.find(f => f.id === house.id)) || this.heroAt(x, y);
+    const target = this.folkAt(x, y) || (house?.lived && this.folk.find(f => f.id === house.id)) || this.heroAt(x, y) ||
+      this.pupAt(x, y) || (this.homeAt(x, y) && this.homeDoor);
     if (house && !house.lived) { this.hooks.onHover?.('빈 집: 아직 아무도 안 산다.', true); return; }
-    if (this.homeAt(x, y)) { this.hooks.onHover?.(this.homeLine(), true); return; }
+    if (this.homeAt(x, y) && !this.homeDoor) { this.hooks.onHover?.(this.homeLine(), true); return; }
+    const d = !target && this.decorAt(x, y);
+    if (d) { this.hooks.onHover?.(`${d.name}: ${d.desc}`, true); return; }
     if (target) {
       const near = this.near(target);
       if (near === 0) { this.meet(target); return; }
@@ -296,7 +377,7 @@ export class VillageScene extends Phaser.Scene {
     if (this.time.now < this.nextStep) return;
     this.nextStep = this.time.now + STEP_MS;
     const x = this.p.x + dx, y = this.p.y + dy;
-    const who = this.folkAt(x, y) || this.heroAt(x, y);
+    const who = this.folkAt(x, y) || this.heroAt(x, y) || this.pupAt(x, y) || (this.homeAt(x, y) && this.homeDoor);
     this.path = [];
     if (who) { this.meet(who); return; }
     if (this.walkable(x, y) && this.canCut(this.p.x, this.p.y, dx, dy)) this.moveTo(x, y);
@@ -332,6 +413,12 @@ export class VillageScene extends Phaser.Scene {
 
   // the shortest walk to a tile beside someone; 0 when already beside them, null when there is no way
   near(who) {
+    if (who.home) {
+      // the house: step up to its door, so nothing gets put up where you are standing
+      if (this.p.x === who.x && this.p.y === who.y + 1) return 0;
+      const r = this.walkable(who.x, who.y + 1) ? this.route(who.x, who.y + 1) : [];
+      return r.length ? r : null;
+    }
     if (Math.max(Math.abs(who.x - this.p.x), Math.abs(who.y - this.p.y)) === 1) return 0;
     let best = null;
     for (const [dx, dy] of DIRS) {
@@ -373,7 +460,17 @@ export class VillageScene extends Phaser.Scene {
   meet(who) {
     this.path = [];
     this.pending = null;
+    if (who.home) { this.hooks.onHome?.(); return; }
     if (who.x !== this.p.x) this.ps.setFlipX(who.x < this.p.x);
+    if (who.pup) {
+      who.s.setFlipX(this.p.x > who.x);
+      this.tweens.add({ targets: who.s, hop: 5, duration: 110, yoyo: true, repeat: 1, ease: 'Quad.out' });
+      this.say(who.s, Math.random() < 0.5 ? '멍!' : '♥', 1100);
+      this.ps.expr = 'sparkle';
+      this.ps.exprUntil = this.time.now + 900;
+      this.hooks.onPet?.();
+      return;
+    }
     who.s.setFlipX(this.p.x < who.x);
     this.tweens.add({ targets: who.s, hop: 4, duration: 90, yoyo: true, ease: 'Quad.out' });
     if (who.f) {
@@ -520,9 +617,32 @@ export class VillageScene extends Phaser.Scene {
       this.tweens.add({ targets: h.s, x: center(x), y: foot(y), duration: 260, onComplete: () => h.s.scene && h.s.setTexture(sp) });
       h.s.setDepth(D.actors + y / 100);
     }
+    // the puppy pads round its yard, and trots over when you come by
+    const pup = this.pup;
+    if (pup && time > pup.next && pup !== this.pending) {
+      pup.next = time + 900 + Math.random() * 1800;
+      const near = Math.max(Math.abs(pup.x - this.p.x), Math.abs(pup.y - this.p.y));
+      const yard = (x, y) => x >= HOME.x - 4 && x <= HOME.x + HOME.w + 6 && y >= HOME.y - 1 && y <= HOME.y + HOME.h + 1;
+      const ways = DIRS.slice(0, 4).filter(([dx, dy]) => yard(pup.x + dx, pup.y + dy) && grassy(this.ch(pup.x + dx, pup.y + dy)) && this.walkable(pup.x + dx, pup.y + dy));
+      const toward = ([dx, dy]) => Math.abs(pup.x + dx - this.p.x) + Math.abs(pup.y + dy - this.p.y);
+      const way = near <= 4 && near > 1 ? ways.sort((a, b) => toward(a) - toward(b))[0] : near > 1 && Math.random() < 0.6 ? ways[Math.floor(Math.random() * ways.length)] : null;
+      if (way) {
+        pup.x += way[0]; pup.y += way[1];
+        if (way[0]) pup.s.setFlipX(way[0] > 0);
+        this.tweens.add({ targets: pup.s, x: center(pup.x), y: foot(pup.y), duration: 220 });
+        this.tweens.add({ targets: pup.s, hop: 2, duration: 110, yoyo: true, ease: 'Quad.out' });
+        pup.s.setDepth(D.actors + pup.y / 100);
+      } else if (near === 1) pup.s.setFlipX(this.p.x > pup.x);
+    }
     // bobbing and shadows
     const g = this.shadows;
     g.clear();
+    if (pup) {
+      const k = TILE * 0.72 / pup.s.frame.height, br = 1 + 0.05 * Math.sin(time / 300);
+      pup.s.setScale(k, k * br).setOrigin(0.5, 1 + (pup.s.hop || 0) / (pup.s.frame.height * k));
+      g.fillStyle(0x000000, 0.25);
+      g.fillEllipse(pup.s.x, pup.s.y - 1, 9, 3);
+    }
     const all = [ps, ...this.folk.map(f => f.s), ...this.heroes.map(h => h.s)];
     all.forEach((s, i) => {
       const breathe = s === ps && walking ? 1 : 1 + 0.035 * Math.sin(time / 420 + i * 1.7);

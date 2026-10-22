@@ -13,6 +13,8 @@ import { DISCOVERIES } from '../data/terrain.js';
 import { ORES } from '../data/ores.js';
 import { FOLK, HOUSES, gossip } from '../data/village.js';
 import { LAST_FLOOR, STEP_MAX, stepsOpen, stepFoe, stepGold } from '../data/balance.js';
+import { DECOR, hasDecor } from '../data/home.js';
+import { decorCanvas } from '../scenes/home-art.js';
 
 export function renderPanel(id, box, ctx) {
   PANELS[id](box, ctx);
@@ -158,6 +160,35 @@ function shop(box, { meta, changed }) {
   box.append(list);
 }
 
+// ---------- 내 집: 집 꾸미기 (data/home.js) ----------
+// ctx.onDecor(id) runs after a piece is bought, so the village can show it going up
+function home(box, { meta, changed, onDecor }) {
+  const list = el('div', 'shop');
+  const n = DECOR.filter(d => hasDecor(meta, d.id)).length;
+  list.append(el('h3', null, `집 꾸미기 (${n}/${DECOR.length})`));
+  for (const d of DECOR) {
+    const have = hasDecor(meta, d.id);
+    const row = el('div', 'row' + (have ? ' owned' : '')), main = el('div', 'row-main');
+    main.append(el('span', 'row-name', d.name), el('span', 'row-sub', d.desc));
+    const b = button('btn gold', have ? '놓았다' : `${d.cost}G`, () => {
+      meta.gold -= d.cost;
+      meta.home = [...(meta.home || []), d.id];
+      changed();
+      onDecor?.(d.id);
+    });
+    b.disabled = have || meta.gold < d.cost;
+    const pic = decorCanvas(d.id), k = Math.min(44 / pic.width, 36 / pic.height);
+    pic.className = 'pix decor-ic';
+    pic.style.width = `${Math.round(pic.width * k)}px`;
+    pic.style.height = `${Math.round(pic.height * k)}px`;
+    const frame = el('span', 'decor-frame');
+    frame.append(pic);
+    row.append(frame, main, b);
+    list.append(row);
+  }
+  box.append(list);
+}
+
 // ---------- 수다쟁이 이웃: the last run, who might move in next, and the discovery book ----------
 function rumor(box, { meta }) {
   const talk = el('div', 'gossip');
@@ -249,4 +280,4 @@ function rival(box, { meta }) {
   box.append(race);
 }
 
-const PANELS = { chars, shop, rumor, books, records, rival };
+const PANELS = { chars, shop, rumor, books, records, rival, home };

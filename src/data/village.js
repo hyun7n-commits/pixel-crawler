@@ -116,6 +116,10 @@ export function gossip(last, meta) {
   if (last.kills >= 15) out.push(`적을 ${last.kills}마리나 쓰러뜨렸다며? 대단해.`);
   if (last.recipes) out.push(`새 합성 조합을 ${last.recipes}개나 찾았다던데? 대장장이가 궁금해하더라.`);
   if (last.gold >= 150) out.push(`${last.gold}G나 벌어 왔다며? 상점 주인이 싱글벙글이야.`);
+  // what you have put up round your house (data/home.js) gets talked about too
+  const home = meta.home || [];
+  if (home.includes('dog') && out.length < 3) out.push('너네 강아지 오늘 우리 집 앞까지 놀러 왔더라. 귀여워!');
+  else if (home.length && out.length < 3) out.push('너네 집 요즘 점점 예뻐진다? 나도 꽃 좀 심어야겠어.');
   if (out.length < 2) out.push(last.kills ? `이번엔 ${last.kills}마리를 쓰러뜨렸구나. 다음엔 더 멀리 가 보자!` : '다음엔 꼭 더 멀리 가 보자!');
   return out.slice(0, 3);
 }
