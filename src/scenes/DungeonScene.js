@@ -200,7 +200,7 @@ export class DungeonScene extends Phaser.Scene {
   clearFloor() {
     (this.tileImgs || []).forEach(list => list && list.forEach(i => i.destroy()));
     Object.values(this.enemySprites || {}).forEach(s => { s.crown?.destroy(); s.destroy(); });
-    Object.values(this.pickupSprites || {}).forEach(s => { s.extra?.destroy(); s.destroy(); });
+    Object.values(this.pickupSprites || {}).forEach(s => this.dropPickup(s));
     this.bubbles.forEach(b => b.destroy());
     this.playerSprite?.destroy();
     (this.lamps || []).forEach(l => { l.lamp.destroy(); l.glow.destroy(); });
@@ -215,6 +215,13 @@ export class DungeonScene extends Phaser.Scene {
     this.oreImgs = {};
     this.bubbles = [];
     this.playerSprite = null;
+    // a tween whose sprite is gone keeps running for nothing (the bobbing ones loop forever): sweep them
+    for (const t of this.tweens.getTweens()) if (t.targets?.some(o => o?.type && !o.scene)) t.remove();
+  }
+
+  // a pickup's sprite and its endless bobbing tween go together
+  dropPickup(s) {
+    for (const o of [s, s.extra]) if (o) { this.tweens.killTweensOf(o); o.destroy(); }
   }
 
   get zi() { return Math.floor((this.run.floor - 1) / 3); }
@@ -471,7 +478,7 @@ export class DungeonScene extends Phaser.Scene {
       s.extra?.setVisible(s.visible);
     }
     for (const key of Object.keys(this.pickupSprites)) {
-      if (!keep.has(key)) { this.pickupSprites[key].extra?.destroy(); this.pickupSprites[key].destroy(); delete this.pickupSprites[key]; }
+      if (!keep.has(key)) { this.dropPickup(this.pickupSprites[key]); delete this.pickupSprites[key]; }
     }
   }
 
