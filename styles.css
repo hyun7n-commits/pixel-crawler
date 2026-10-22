@@ -234,6 +234,10 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ore-cell b { font-family: var(--font-display); font-weight: 400; font-size: 17px; }
 .ore-cell span { font-size: 11.5px; color: var(--muted); min-height: 1em; }
 .ore-cell.unknown b { color: var(--muted); letter-spacing: .1em; }
+.book-gift .bar { margin-top: 6px; }
+.book-gift .bar > i { background: var(--gold); }
+.book-gift.ready { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+.book-gift.ready .row-name { color: var(--gold); }
 .critter-book .ore-cell { cursor: pointer; }
 .crit-pic { position: relative; display: block; width: 40px; height: 40px; }
 .crit-pic canvas:first-child { width: 40px; height: 40px; }

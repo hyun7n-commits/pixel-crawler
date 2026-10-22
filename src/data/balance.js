@@ -128,5 +128,9 @@ export const HIVE_SMOKE = 2;
 export const WEED_CHANCE = [0.65, 0.35, 0.15];
 export const weedGold = floor => (1 + Math.floor((floor - 1) / FLOORS_PER_ZONE)) * (2 + Math.floor(Math.random() * 2));
 export const SCREAM_RANGE = 7;
+// the smith's gift for every BOOK_GIFT_EVERY recipes in the book: the k-th one (from 1) is bookGift(k) gold
+export const BOOK_GIFT_EVERY = 10;
+export const bookGift = k => 100 + 100 * k;
+export const bookGiftsDue = (found, claimed) => Math.floor(found / BOOK_GIFT_EVERY) - (claimed || 0);
 export const ROOT_TURNS = 8;
 export const graveGold = floor => (2 + Math.floor((floor - 1) / FLOORS_PER_ZONE)) * (3 + Math.floor(Math.random() * 4));

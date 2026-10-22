@@ -13,7 +13,7 @@ import { DISCOVERIES } from '../data/terrain.js';
 import { ORES } from '../data/ores.js';
 import { ENEMIES } from '../data/enemies.js';
 import { FOLK, HOUSES, gossip } from '../data/village.js';
-import { LAST_FLOOR, STEP_MAX, stepsOpen, stepFoe, stepGold } from '../data/balance.js';
+import { LAST_FLOOR, STEP_MAX, stepsOpen, stepFoe, stepGold, BOOK_GIFT_EVERY, bookGift, bookGiftsDue } from '../data/balance.js';
 import { DECOR, hasDecor } from '../data/home.js';
 import { decorCanvas } from '../scenes/home-art.js';
 
@@ -213,11 +213,25 @@ function rumor(box, { meta }) {
 }
 
 // ---------- 두더지 대장장이: the recipe book and the ore book ----------
-function books(box, { meta }) {
+function books(box, { meta, changed }) {
   // every recipe, found ones in full, the rest as a shadow of what they make
   const book = el('div', 'shop');
   const found = RECIPES.filter(rc => meta.recipes[recipeKey(rc)]).length;
   book.append(el('h3', null, `합성 도감 (${found}/${RECIPES.length})`));
+  // a gift from the smith for every ten recipes in the book
+  const claimed = meta.bookGifts || 0, due = bookGiftsDue(found, claimed);
+  if (claimed * BOOK_GIFT_EVERY < RECIPES.length) {
+    const row = el('div', 'row book-gift' + (due > 0 ? ' ready' : '')), main = el('div', 'row-main');
+    const next = (claimed + 1) * BOOK_GIFT_EVERY, bar = el('div', 'bar'), fill = el('i');
+    fill.style.width = `${Math.min(100, 100 * (found - claimed * BOOK_GIFT_EVERY) / BOOK_GIFT_EVERY)}%`;
+    bar.append(fill);
+    main.append(el('span', 'row-name', due > 0 ? '도감 선물이 왔다!' : `도감 ${next}칸을 채우면 선물`),
+      el('span', 'row-sub', due > 0 ? `조합 ${next}개를 찾아냈다. 대장장이가 골드를 내민다.` : `${next - found}개 더 찾으면 대장장이가 ${bookGift(claimed + 1)}G를 준다.`), bar);
+    const b = button('btn gold', `${bookGift(claimed + 1)}G 받기`, () => { meta.gold += bookGift(claimed + 1); meta.bookGifts = claimed + 1; changed(); });
+    b.disabled = due <= 0;
+    row.append(main, b);
+    book.append(row);
+  }
   for (const [tier, label] of [[1, '진화'], [2, '전설'], [3, '신화']]) {
     book.append(el('div', 'book-tier t' + tier, label));
     const grid = el('div', 'recipe-book');

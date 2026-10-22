@@ -7,6 +7,8 @@
 //   map: '#' hedge, '.' grass, ':' path, '~' pond, '*' flowers, 'L' firefly lamp, '>' the burrow out to the fields
 
 import { josa } from '../core/util.js';
+import { bookGiftsDue } from './balance.js';
+import { RECIPES, recipeKey } from './relics.js';
 
 export const VILLAGE_MAP = [
   '#############################################',
@@ -83,7 +85,7 @@ export const FOLK = {
     tip: '찾아낸 합성 조합과 반짝돌을 적어 둔다',
     arrive: '대장간을 차렸다. 찾은 조합은 내가 다 적어 두지!',
     hint: '요즘 두더지 하나가 마을을 기웃거려. 유물을 합쳐 보거나 깊은숲까지 가 보면 이사 올지도?',
-    lines: ['새 조합 찾았나?', '반짝돌 냄새가 나는군.', '뚝딱뚝딱.'],
+    lines: [m => (bookGiftsDue(RECIPES.filter(rc => m.recipes[recipeKey(rc)]).length, m.bookGifts) > 0 ? '도감이 꽤 찼군! 선물이 있다.' : '새 조합 찾았나?'), '반짝돌 냄새가 나는군.', '뚝딱뚝딱.'],
   },
   rescue: {
     name: '구조대원', sprite: 'rescuer', panel: 'records', when: m => deaths(m) >= 2, stroll: 1100,
