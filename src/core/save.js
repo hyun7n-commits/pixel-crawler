@@ -17,6 +17,7 @@ export function freshMeta() {
     village: { seen: {} },  // villagers who have already moved in with a hello, see data/village.js
     lastRun: null,          // how the last run went, for the village gossip
     story: {},              // picture-book scenes already shown: intro, ratking, skelking, ending (ui/story.js)
+    pack: null,             // a basic relic paid for in the shop to take on the next run (data/upgrades.js PACK_COST)
   };
 }
 

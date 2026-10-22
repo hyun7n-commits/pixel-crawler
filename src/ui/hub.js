@@ -5,7 +5,7 @@
 
 import { $, el, button, icon } from './dom.js';
 import { CHARACTERS } from '../data/characters.js';
-import { UPGRADES } from '../data/upgrades.js';
+import { UPGRADES, PACK_COST } from '../data/upgrades.js';
 import { RELICS, RECIPES, recipeKey, tierOf, DISCOVERY_GOLD } from '../data/relics.js';
 import { freshMeta, saveMeta } from '../core/save.js';
 import { josa } from '../core/util.js';
@@ -26,8 +26,15 @@ export function renderVillageHud(meta) {
   $('vGo').textContent = `${josa(CHARACTERS[meta.sel].name, '으로', '로')} 들판에 출발`;
 }
 
-const startButton = (meta, onStart) =>
-  button('btn primary enter', `${josa(CHARACTERS[meta.sel].name, '으로', '로')} 들판으로 출발`, onStart);
+const startButton = (meta, onStart) => {
+  const b = button('btn primary enter', `${josa(CHARACTERS[meta.sel].name, '으로', '로')} 들판으로 출발`, onStart);
+  if (!meta.pack) return b;
+  // what you packed at the shop goes out with you
+  const wrap = el('div', 'go-wrap'), note = el('span', 'packed-note');
+  note.append(icon(meta.pack, 20), el('span', null, `${RELICS[meta.pack].name} 챙김`));
+  wrap.append(note, b);
+  return wrap;
+};
 
 // the three 토벌 licenses (one per zone boss), greyed out until earned; see scenes/storyboards.js
 const LICENSES = [['ratking', '초원', '#6fbf4e'], ['skelking', '깊은숲', '#2f7a46'], ['lord', '돌산', '#8a7aa8']];
@@ -109,6 +116,26 @@ function shop(box, { meta, changed }) {
     row.append(icon(id, 32), main, b);
     list.append(row);
   }
+  // one basic relic to take on the next run: paid each time, swap or put back for free
+  list.append(el('h3', null, '다음 판에 챙겨 갈 유물'));
+  list.append(el('p', 'row-sub', `${PACK_COST}G를 내면 기본 유물 하나를 Lv1로 들고 나간다(이미 있으면 +1). 한 판만. 궁금한 조합을 시험해 보기 좋다.`));
+  const grid = el('div', 'pack-grid');
+  const pick = Object.keys(RELICS).filter(id => !tierOf(id) && (!RELICS[id].locked || meta.relicUnlock[id]));
+  for (const id of pick) {
+    const on = meta.pack === id;
+    const b = button(`pack${on ? ' on' : ''}`, null, () => {
+      if (on) { meta.gold += PACK_COST; meta.pack = null; }        // put it back: money back
+      else if (meta.pack) meta.pack = id;                            // swap: already paid
+      else { meta.gold -= PACK_COST; meta.pack = id; }
+      changed();
+    });
+    b.append(icon(id, 32), el('span', null, RELICS[id].name));
+    b.title = RELICS[id].desc(1);
+    b.disabled = !meta.pack && meta.gold < PACK_COST;
+    grid.append(b);
+  }
+  list.append(grid);
+  if (meta.pack) list.append(el('p', 'row-sub', `${RELICS[meta.pack].name} 챙김. 다시 누르면 내려놓고 골드를 돌려받는다.`));
   box.append(list);
 }
 

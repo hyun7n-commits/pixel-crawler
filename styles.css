@@ -216,6 +216,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .choice .ds { font-size: 12.5px; color: var(--fg); line-height: 1.4; }
 .choice .recipe { justify-content: center; }
 .sheet-box { position: relative; width: min(640px, 100%); max-height: 100%; display: flex; }
+/* a sheet never grows past the screen; the rest scrolls (a % max-height doesn't resolve in the modal's grid) */
+.sheet, .sheet-box { max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); }
 .sheet-box .sheet { width: 100%; }
 .x-close { position: absolute; top: 8px; right: 8px; width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--line); background: var(--panel-2); color: var(--fg); font-size: 18px; line-height: 1; display: grid; place-items: center; padding: 0; z-index: 2; cursor: pointer; }
 .x-close:hover { border-color: var(--gold); color: var(--gold); }
@@ -421,3 +423,10 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .choice .tag.price { background: #3a2e10; color: var(--gold); }
 .choice.poor { opacity: .45; cursor: not-allowed; }
 .stall-purse { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; color: var(--gold); font-weight: 700; }
+/* the relic packed for the next run (ui/hub.js shop) */
+.pack-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; }
+.pack { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 4px; background: #0f0e15; border: 2px solid var(--line); border-radius: 6px; color: var(--fg); font-size: 11.5px; word-break: keep-all; cursor: pointer; }
+.pack:disabled { opacity: .45; cursor: not-allowed; }
+.pack.on { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), 0 0 10px rgba(244,207,79,.4); }
+.go-wrap { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.packed-note { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--gold); font-weight: 700; font-size: 13px; }

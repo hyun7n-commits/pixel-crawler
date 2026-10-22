@@ -60,6 +60,13 @@ export class Run {
       relics: { ...this.char.start },
       items: { potion: meta.up.pot, bomb: 1, map: 0 },
     };
+    // the relic packed in town for this run (paid for already)
+    if (meta.pack && RELICS[meta.pack] && !tierOf(meta.pack)) {
+      const id = meta.pack;
+      this.p.relics[id] = Math.min(maxLevelOf(id), (this.p.relics[id] || 0) + 1);
+      this.packed = id;
+      meta.pack = null;
+    }
     this.p.hp = this.stat().maxHp;
     meta.stats.runs++;
     meta.stats.maxFloor = Math.max(meta.stats.maxFloor, 1);
@@ -168,6 +175,7 @@ export class Run {
     this.genFloor();
     this.log(`${josa(this.char.name, '으로', '로')} 들판에 나왔다. 깃발 꽂힌 땅굴을 찾아 앞으로 가자.`, 'good');
     this.log(`오늘의 조합 의뢰: ${this.request.text} (일당 ${this.request.pay}G)`, 'quest');
+    if (this.packed) this.log(`챙겨 온 ${RELICS[this.packed].name} Lv${this.p.relics[this.packed]}`, 'good');
     this.emit('banner', { text: `1구역 · ${this.zone.name}` });
     this.afterTurn();
   }
