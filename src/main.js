@@ -5,7 +5,7 @@ import { DungeonScene } from './scenes/DungeonScene.js';
 import { VillageScene } from './scenes/VillageScene.js';
 import { StoryScene } from './scenes/StoryScene.js';
 import { playStory } from './ui/story.js';
-import { Run, isBossFloor } from './core/run.js';
+import { Run, isBossFloor, BOMB_RANGE } from './core/run.js';
 import { loadMeta, saveMeta } from './core/save.js';
 import { suspend, resume, clearSuspended } from './core/suspend.js';
 import { pathTo, idx, isBump, isStairs } from './core/dungeon.js';
@@ -74,6 +74,7 @@ function showTip(h) {
   let text = '';
   if (run && aiming) {
     text = '폭탄을 던질 곳을 고른다 · 취소: Esc 또는 폭탄 버튼';
+    if (!matchMedia('(pointer: coarse)').matches) text += ' · 방향키로 옮기고 Enter로 던진다';
     if (h && run.canThrowAt(h.x, h.y) && cheb(h, run.p) <= 1) text += '\n바로 옆이라 나도 맞는다!';
   } else if (run && h) text = describeTile(run, h.x, h.y, h === pinned);
   tip.textContent = text;
@@ -339,7 +340,22 @@ document.addEventListener('keydown', ev => {
     if (ev.key === 'Escape' && closeTalk()) return;
     const n = parseInt(ev.key, 10);
     const b = n && $('modal').querySelector(`.choice[data-key="${n}"]`);
-    if (b) { ev.preventDefault(); b.click(); }
+    if (b) { ev.preventDefault(); b.click(); return; }
+    // keyboard (or a pad through Steam Input): arrows walk the focus through the sheet's buttons,
+    // Enter or Space presses the one in focus, and Enter the sheet's main button when none is (not
+    // Space, which you may still be tapping to wait when the run ends)
+    const buttons = [...$('modal').querySelectorAll('button:not([disabled])')].filter(x => x.offsetParent);
+    const at = buttons.indexOf(document.activeElement);
+    if (ev.key.startsWith('Arrow') && buttons.length) {
+      ev.preventDefault();
+      const back = ev.key === 'ArrowUp' || ev.key === 'ArrowLeft';
+      const next = buttons[at < 0 ? 0 : (at + (back ? -1 : 1) + buttons.length) % buttons.length];
+      next.focus();
+      next.scrollIntoView({ block: 'nearest' });
+    } else if (ev.key === 'Enter' && !ev.repeat && at < 0) {
+      const main = $('modal').querySelector('.btn.primary:not([disabled])');
+      if (main) { ev.preventDefault(); main.click(); }
+    }
     return;
   }
   const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
@@ -352,6 +368,17 @@ document.addEventListener('keydown', ev => {
   }
   if (!run || $('game').hidden) return;
   if (k === 'Escape') { setAim(false); clearPath(); return; }
+  // aiming a bomb from the keyboard: arrows move the mark, Enter or Space throws
+  if (aiming && (KEYS[k] || k === 'Enter' || k === ' ')) {
+    ev.preventDefault();
+    const h = scene.hover && cheb(scene.hover, run.p) <= BOMB_RANGE ? scene.hover : { x: run.p.x, y: run.p.y };
+    if (KEYS[k]) {
+      const t = { x: h.x + KEYS[k][0], y: h.y + KEYS[k][1] };
+      if (cheb(t, run.p) <= BOMB_RANGE) scene.hover = t;
+      showTip(scene.hover);
+    } else if (run.canThrowAt(h.x, h.y) && canAct()) { clearPath(); run.throwBomb(h.x, h.y); setAim(false); }
+    return;
+  }
   if (ARROWS.has(k)) {
     ev.preventDefault(); clearPath(); setAim(false);
     held.add(k); tapped.add(k);
@@ -360,7 +387,16 @@ document.addEventListener('keydown', ev => {
   }
   if (KEYS[k]) { ev.preventDefault(); clearPath(); setAim(false); if (canAct()) run.step(...KEYS[k]); return; }
   if (k === ' ' || k === '.') { ev.preventDefault(); clearPath(); setAim(false); if (canAct()) run.wait(); return; }
-  if (k === '2') { setAim(!aiming); return; }
+  if (k === '2') {
+    setAim(!aiming);
+    // the mark starts on the nearest critter you could hit
+    if (aiming) {
+      const t = run.enemies.filter(e => e.hp > 0 && !e.d.npc && run.isVisible(e.x, e.y) && run.canThrowAt(e.x, e.y)).sort((a, b) => cheb(a, run.p) - cheb(b, run.p))[0];
+      scene.hover = t ? { x: t.x, y: t.y } : { x: run.p.x, y: run.p.y };
+      showTip(scene.hover);
+    }
+    return;
+  }
   if (k === 'm') { toggleSound(); return; }
   const item = { 1: 'potion', 3: 'map' }[k];
   if (item && canAct()) { clearPath(); setAim(false); run.useItem(item); }
