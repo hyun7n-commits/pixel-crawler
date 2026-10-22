@@ -255,7 +255,10 @@ function toggleSound() { sfx.unlockAudio(); sfx.setMuted(!sfx.isMuted()); showSo
 $('soundBtn').addEventListener('click', toggleSound);
 showSoundState();
 // browsers allow sound only after the first click or key press
-for (const ev of ['pointerdown', 'keydown']) document.addEventListener(ev, () => sfx.unlockAudio(), { once: true });
+// (iPhone only counts a finger lifting or a click, so listen for those every time, not just once)
+for (const ev of ['pointerdown', 'touchend', 'click', 'keydown']) document.addEventListener(ev, () => sfx.unlockAudio(), { passive: true });
+// iPhone Safari zooms the whole page on a pinch even over the map; the map does its own zoom
+document.addEventListener('gesturestart', ev => ev.preventDefault());
 
 $('waitBtn').addEventListener('click', restOnce);
 $('bagClose').addEventListener('click', () => setBag(false));

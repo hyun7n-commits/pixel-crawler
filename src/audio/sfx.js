@@ -31,7 +31,8 @@ export function unlockAudio() {
     const data = noiseBuf.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
   }
-  if (ctx.state === 'suspended') ctx.resume();
+  // iPhone suspends (or "interrupts") the sound after a call or a trip to another app
+  if (ctx.state !== 'running') ctx.resume()?.catch?.(() => {});
 }
 
 function envelope(g, t, vol, attack, dur) {

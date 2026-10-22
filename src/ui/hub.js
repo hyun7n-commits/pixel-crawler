@@ -23,7 +23,7 @@ export function renderHub(ctx) {
   const inner = el('div', 'hub-inner');
 
   const head = el('div', 'hub-head');
-  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.8 · 9층 · 보스 3마리 · 광석 등급과 노다지</small>'));
+  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.8.1 · 9층 · 보스 3마리 · 광석 등급과 노다지 · 아이폰</small>'));
   const purse = el('div', 'purse');
   purse.append(icon('gold', 24), el('span', null, `${meta.gold}G`));
   head.append(purse);
