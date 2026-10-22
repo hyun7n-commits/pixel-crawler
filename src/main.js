@@ -16,6 +16,7 @@ import { Hud, lowHealth } from './ui/hud.js';
 import { renderPanel, renderVillageHud } from './ui/hub.js';
 import { showChoice, showSummary, showTalk, closeTalk, closeModal, modalOpen } from './ui/modal.js';
 import { showEvolve } from './ui/evo.js';
+import { showsLeft } from './ui/beat.js';
 import { bossCard } from './ui/bosscard.js';
 import { FOLK } from './data/village.js';
 import { DECOR } from './data/home.js';
@@ -248,7 +249,7 @@ function onRunEvent(type, d) {
   sfx.setHeartbeat(lowHealth(run));
   if (type === 'log') hud.log(d.text, d.cls);
   // a new field's name shows once you have popped out of the burrow
-  if (type === 'banner') setTimeout(() => hud.banner(d.text), scene?.busy() ? 650 : 0);
+  if (type === 'banner') setTimeout(() => hud.banner(d.text), Math.max(scene?.busy() ? 650 : 0, showsLeft()));
   if (type === 'discover') hud.banner(`새 발견! ${d.d.combo}`);
   if (type === 'request') setTimeout(() => hud.banner(`조합 의뢰 완료! +${d.pay}G`), 300);
   if (type === 'evolve') showEvolve(d);

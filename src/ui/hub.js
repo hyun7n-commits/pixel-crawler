@@ -1,6 +1,6 @@
 // What each villager looks after, drawn as the body of their talk sheet (see FOLK[...].panel in
 // data/village.js): the guild picks heroes, the shop sells upgrades, the neighbour gossips, the smith
-// keeps the recipe and ore books, the rescuer keeps the records, the rival brags.
+// keeps the recipe and ore books, the rescuer keeps the records and the critter book, the rival brags.
 // ctx: { meta, onStart, changed, setMeta }. `changed` saves, redraws the sheet and updates the village.
 
 import { $, el, button, icon } from './dom.js';
@@ -11,6 +11,7 @@ import { freshMeta, saveMeta } from '../core/save.js';
 import { josa } from '../core/util.js';
 import { DISCOVERIES } from '../data/terrain.js';
 import { ORES } from '../data/ores.js';
+import { ENEMIES } from '../data/enemies.js';
 import { FOLK, HOUSES, gossip } from '../data/village.js';
 import { LAST_FLOOR, STEP_MAX, stepsOpen, stepFoe, stepGold } from '../data/balance.js';
 import { DECOR, hasDecor } from '../data/home.js';
@@ -260,6 +261,33 @@ function records(box, { meta }) {
     g.append(s);
   }
   box.append(g);
+  critterBook(box, meta);
+}
+
+// every kind of critter out in the fields: the ones you have met with their name and how many you
+// knocked out, the rest as a shadow. Tap one you know to read what it does.
+function critterBook(box, meta) {
+  const kinds = Object.keys(ENEMIES).filter(t => !ENEMIES[t].npc), book = meta.critters || {};
+  const wrap = el('div', 'shop');
+  wrap.append(el('h3', null, `들판 친구 도감 (${kinds.filter(t => t in book).length}/${kinds.length})`));
+  const grid = el('div', 'ore-book critter-book'), note = el('p', 'book-note', '만난 친구를 누르면 무엇을 하는지 볼 수 있다.');
+  for (const t of kinds) {
+    const d = ENEMIES[t], met = t in book;
+    const cell = el('div', 'ore-cell' + (met ? '' : ' unknown') + (d.boss ? ' boss' : ''));
+    const pic = el('span', 'crit-pic'), body = icon(d.sprite);
+    pic.append(body);
+    if (d.boss) pic.append(icon('crown'));
+    if (!met) pic.querySelectorAll('canvas').forEach(c => c.classList.add('shadow'));
+    cell.append(pic, el('b', null, met ? d.name : '???'), el('span', null, met ? (book[t] ? `${book[t]}번 쓰러뜨림` : '만나기만 함') : d.boss ? '보스' : ''));
+    cell.onclick = () => {
+      grid.querySelectorAll('.picked').forEach(c => c.classList.remove('picked'));
+      cell.classList.add('picked');
+      note.textContent = met ? `${d.name}: ${d.tip}` : '아직 만나지 못했다.';
+    };
+    grid.append(cell);
+  }
+  wrap.append(grid, note);
+  box.append(wrap);
 }
 
 // ---------- 라이벌: always one zone ahead of you, until you clear the fields ----------

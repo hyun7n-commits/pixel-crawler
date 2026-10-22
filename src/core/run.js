@@ -41,6 +41,7 @@ export class Run {
     this.cause = '';        // what knocked you out, for the summary
     this.found = [];        // discoveries made this run
     this.newRecipes = [];   // recipes found for the first time this run
+    this.newCritters = [];  // kinds of critter met for the first time this run
     this.told = {};         // one-time hints already shown
     this.floors = {};       // floors you left, kept as they were so you can go back for what you missed
     this.trail = [];        // your last steps on this floor; hunting enemies follow them
@@ -788,6 +789,8 @@ export class Run {
   onKill(e) {
     const L = this.levels(), stats = this.meta.stats;
     this.kills++; stats.kills++;
+    const book = this.meta.critters ||= {};
+    book[e.type] = (book[e.type] || 0) + 1;
     this.emit('kill', { enemy: e });
     if (e.d.boss) {
       if (!stats.bosses.includes(e.type)) stats.bosses.push(e.type);
@@ -1130,10 +1133,21 @@ export class Run {
   afterTurn() {
     this.refreshDoors();
     computeFOV(this.map, this.p.x, this.p.y, this.stat().sight);
+    this.meetCritters();
     if (this.p.hp <= 0) { this.p.hp = 0; this.finish(false); return; }
     if (this.victory) { this.finish(true); return; }
     this.emit('turn');
     this.spotVeins();
+  }
+
+  // the critter book (구조대원) fills in each kind the first time you see one
+  meetCritters() {
+    const book = this.meta.critters ||= {};
+    for (const e of this.enemies) {
+      if (e.hp <= 0 || e.d.npc || e.type in book || !this.isVisible(e.x, e.y)) continue;
+      book[e.type] = 0;
+      (this.newCritters ||= []).push(e.type);
+    }
   }
 
   // Returns true if the boss used its whole turn on a special move.

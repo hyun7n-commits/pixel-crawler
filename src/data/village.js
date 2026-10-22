@@ -87,7 +87,7 @@ export const FOLK = {
   },
   rescue: {
     name: '구조대원', sprite: 'rescuer', panel: 'records', when: m => deaths(m) >= 2, stroll: 1100,
-    tip: '지금까지의 기록을 적어 둔다',
+    tip: '지금까지의 기록과 들판 친구 도감을 적어 둔다',
     arrive: '오늘부터 마을 구조대야. 쓰러지면 내가 업어 올게!',
     hint: '들판에서 자꾸 쓰러지는 일꾼이 있다던데... 구조대가 생긴다는 소문이 있어.',
     lines: [m => `벌써 ${deaths(m)}번째 구조야.`, '오늘은 업혀 오지 마.', '구조 일지 볼래?'],

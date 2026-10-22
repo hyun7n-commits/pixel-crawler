@@ -6,6 +6,7 @@ import { recipeFor } from './recipe.js';
 import { josa } from '../core/util.js';
 import { DISCOVERIES } from '../data/terrain.js';
 import { STALL } from '../data/npcs.js';
+import { ENEMIES } from '../data/enemies.js';
 
 export const modalOpen = () => !$('modal').hidden;
 let talkClose = null; // set while a villager's talk sheet is open
@@ -154,6 +155,12 @@ export function showSummary({ won, run, newlyUnlockable, stepOpened, onClose }) 
       const row = el('div', 'unlock-note new-recipes');
       row.append(el('span', null, '새로 찾은 조합'));
       for (const id of made) { const c = icon(id); c.classList.add('t' + tierOf(id)); row.append(c); }
+      sh.append(row);
+    }
+    if (run.newCritters?.length) {
+      const row = el('div', 'unlock-note new-recipes');
+      row.append(el('span', null, '새로 만난 친구'));
+      for (const t of run.newCritters) row.append(icon(ENEMIES[t].sprite));
       sh.append(row);
     }
     if (run.found.length) {

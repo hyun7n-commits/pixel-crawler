@@ -14,6 +14,7 @@ export function freshMeta() {
     found: {},  // discovered combinations, see data/terrain.js
     recipes: {},  // relic recipes found at least once, by recipeKey, see data/relics.js
     ores: {},     // ore grades seen: id -> how many broken open, see data/ores.js
+    critters: {}, // kinds of critter met: type -> how many knocked out, see data/enemies.js
     village: { seen: {} },  // villagers who have already moved in with a hello, see data/village.js
     lastRun: null,          // how the last run went, for the village gossip
     story: {},              // picture-book scenes already shown: intro, ratking, skelking, ending (ui/story.js)
@@ -41,6 +42,7 @@ export function loadMeta() {
         found: { ...m.found },
         recipes: { ...m.recipes, ...oldLegends(m.legends) },
         ores: { ...m.ores },
+        critters: { ...m.critters },
         village: { seen: { ...m.village?.seen } },
         story: { ...m.story },
         home: Array.isArray(m.home) ? m.home : [],

@@ -25,6 +25,7 @@ export function showEvolve(d) {
       box.append(el('div', 'evo-new', `새 조합 · 도감 ${d.known}/${RECIPES.length}`));
     }
     $('stage').append(box);
+    $('banner').classList.remove('show');
     setTimeout(() => box.remove(), ms + 200);
   }, wait(d, ms));
 }

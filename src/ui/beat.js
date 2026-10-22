@@ -13,6 +13,8 @@ export function wait(d, ms) {
   }
   return d.wait;
 }
+// how long until the booked moments are over (a field's name waits for them)
+export const showsLeft = () => Math.max(0, free - performance.now());
 
 // how long each moment takes
 export const FISSION_LEAD = 250, FISSION_STEP = 170;   // the candy bursts, then one relic every step

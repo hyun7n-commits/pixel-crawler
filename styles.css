@@ -234,6 +234,13 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ore-cell b { font-family: var(--font-display); font-weight: 400; font-size: 17px; }
 .ore-cell span { font-size: 11.5px; color: var(--muted); min-height: 1em; }
 .ore-cell.unknown b { color: var(--muted); letter-spacing: .1em; }
+.critter-book .ore-cell { cursor: pointer; }
+.crit-pic { position: relative; display: block; width: 40px; height: 40px; }
+.crit-pic canvas:first-child { width: 40px; height: 40px; }
+.crit-pic canvas + canvas { position: absolute; width: 20px; height: 20px; left: 10px; top: -9px; }
+.critter-book .ore-cell.boss { border-color: #8a6d2a; }
+.critter-book .ore-cell.picked { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+.sheet p.book-note { position: sticky; bottom: -18px; font-size: 14px; color: var(--fg); background: var(--panel); border-top: 1px solid var(--line); margin: 10px -2px -2px; padding: 10px 4px 14px; min-height: 2.8em; line-height: 1.45; }
 .unlock-note { background: #2a2410; border: 1px solid #6a5a1c; color: var(--gold); padding: 10px 12px; border-radius: 6px; line-height: 1.5; }
 
 /* Phone (or any narrow window): the map takes the screen like SPD. A slim status bar on top,
