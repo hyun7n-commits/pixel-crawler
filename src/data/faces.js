@@ -6,6 +6,7 @@
 //   teary    wet eyes and a wobbly mouth when your health is low
 //   sparkle  big shiny eyes when something good happens (a chest, an evolution, a jackpot)
 //   shock    wide eyes, a small open mouth: something just noticed you
+//   blink    eyes shut for a moment, every few seconds when nothing else is going on
 // The sweat drop, falling tears and trembling are drawn over the sprite in DungeonScene.
 
 const EYES = [[7, 6], [7, 7], [12, 6], [12, 7]];
@@ -13,6 +14,7 @@ const MOUTH = [[8, 9], [9, 10], [10, 10], [11, 9]];
 const clear = list => list.map(([x, y]) => [x, y, 'w']);
 
 export const FACES = {
+  blink: [[7, 6, 'w'], [12, 6, 'w']],
   hit: [...clear(EYES), ...clear(MOUTH),
     [6, 6, 'k'], [7, 7, 'k'], [6, 8, 'k'], [13, 6, 'k'], [12, 7, 'k'], [13, 8, 'k'],
     [9, 10, 'f'], [10, 10, 'f'], [11, 10, 'f']],

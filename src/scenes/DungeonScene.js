@@ -1220,7 +1220,10 @@ export class DungeonScene extends Phaser.Scene {
     // you: walk frames while moving; standing still a while, you glance back over your shoulder now and then
     const ps = this.playerSprite;
     const walking = time < (ps.stepUntil || 0);
-    const expr = time < (ps.exprUntil || 0) ? ps.expr : this.lowHp ? 'teary' : '';
+    let expr = time < (ps.exprUntil || 0) ? ps.expr : this.lowHp ? 'teary' : '';
+    // a blink every few seconds when the face is at rest
+    if (time > (ps.nextBlink || 0)) { ps.blinkUntil = time + 130; ps.nextBlink = time + 2200 + Math.random() * 2600; }
+    if (!expr && !walking && time < ps.blinkUntil) expr = 'blink';
     const key = faceKey(walking ? `${this.heroKey}_walk${ps.stepFrame}` : this.heroKey, expr);
     if (ps.texture.key !== key && this.textures.exists(key)) ps.setTexture(key);
     if (walking || p.sleep || !ps.nextLook) ps.nextLook = time + 2500 + Math.random() * 2000;
@@ -1274,6 +1277,8 @@ export class DungeonScene extends Phaser.Scene {
     if (who.d?.npc && who.type === 'ghost') hop = Math.max(hop, 2 + 1.5 * Math.sin(time / 380));
     if (who.sleep || who.state === 'sleep') sy = 1 + 0.05 * Math.sin(time / 450 + id);
     else if (who.d && this.run.willHit(who)) { sx = 1.08; sy = 0.86; }
+    // awake and standing: breathing a little, each at their own pace
+    else if (!s.dying) sy = 1 + 0.025 * Math.sin(time / (420 + (id % 5) * 40) + id);
     if (who.burn > 0) hop = Math.max(hop, Math.abs(Math.sin(time / 90 + id)) * 3);
     // 부들부들: little bursts of trembling when nearly beaten, wide-eyed, or running for it
     const you = who === this.run.p, asleep = who.sleep || who.state === 'sleep';

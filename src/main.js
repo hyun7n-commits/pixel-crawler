@@ -5,7 +5,7 @@ import { DungeonScene } from './scenes/DungeonScene.js';
 import { VillageScene } from './scenes/VillageScene.js';
 import { StoryScene } from './scenes/StoryScene.js';
 import { playStory } from './ui/story.js';
-import { Run } from './core/run.js';
+import { Run, isBossFloor } from './core/run.js';
 import { loadMeta, saveMeta } from './core/save.js';
 import { pathTo, idx, isBump, isStairs } from './core/dungeon.js';
 import { ENEMIES } from './data/enemies.js';
@@ -20,6 +20,7 @@ import { CHARACTERS } from './data/characters.js';
 import { describeTile } from './ui/tip.js';
 import { $ } from './ui/dom.js';
 import * as sfx from './audio/sfx.js';
+import { setMusic, musicOff, setMusicOff } from './audio/music.js';
 import { HIRES, setHires } from './scenes/textures.js';
 
 let meta = loadMeta();
@@ -82,6 +83,7 @@ const village = () => game.scene.getScene('village');
 
 function showVillage(from) {
   sfx.setHeartbeat(0);
+  setMusic('village');
   inVillage = true;
   pinned = null;
   showTip(null);
@@ -101,6 +103,7 @@ function showVillage(from) {
 // first time each zone boss falls, and the ending after the first win. Each is shown once.
 function showStory(id, then) {
   sfx.setHeartbeat(0);
+  setMusic(id === 'ending' ? 'meadow' : 'village');
   inVillage = false;
   showTip(null);
   const g = $('game');
@@ -212,10 +215,12 @@ function onRunEvent(type, d) {
   if (type === 'request') setTimeout(() => hud.banner(`조합 의뢰 완료! +${d.pay}G`), 300);
   if (type === 'evolve') showEvolve(d);
   if (type === 'fission') hud.fission(d);
-  if (type === 'floor') { clearPath(); seenCount = 0; }
+  if (type === 'floor') { clearPath(); seenCount = 0; setMusic(isBossFloor(run.floor) ? 'boss' : run.zone.style); }
+  if (type === 'kill' && d.enemy.d.boss && !run.victory) setMusic(run.zone.style);
   if (type === 'phit') clearPath();
   if (type === 'turn') afterTurn();
   if (type === 'end') {
+    setMusic(null);
     clearPath();
     setAim(false);
     // what the neighbour will be talking about when you get back
@@ -383,9 +388,18 @@ setInterval(() => {
   if (run && !run.over && !modalOpen() && run.queue.length === 0 && (run.p.sleep || run.p.stun)) run.passTurn();
 }, 380);
 
-// sound on/off, remembered between visits
-function showSoundState() { for (const id of ['soundBtn', 'vSound']) $(id).textContent = sfx.isMuted() ? '소리 끔' : '소리 켬'; }
-function toggleSound() { sfx.unlockAudio(); sfx.setMuted(!sfx.isMuted()); showSoundState(); }
+// sound: all on → effects only (no music) → all off, remembered between visits
+function showSoundState() {
+  const t = sfx.isMuted() ? '소리 끔' : musicOff() ? '효과음만' : '소리 켬';
+  for (const id of ['soundBtn', 'vSound']) $(id).textContent = t;
+}
+function toggleSound() {
+  sfx.unlockAudio();
+  if (sfx.isMuted()) { sfx.setMuted(false); setMusicOff(false); }
+  else if (!musicOff()) setMusicOff(true);
+  else sfx.setMuted(true);
+  showSoundState();
+}
 $('soundBtn').addEventListener('click', toggleSound);
 $('vSound').addEventListener('click', toggleSound);
 // 32px or 16px characters: the textures are built once, so switching reloads the page (the save is kept)

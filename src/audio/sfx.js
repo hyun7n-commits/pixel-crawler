@@ -12,6 +12,8 @@ let muted = false;
 try { muted = localStorage.getItem(MUTE_KEY) === '1'; } catch (e) { /* storage blocked */ }
 
 export const isMuted = () => muted;
+// the music (audio/music.js) plays through the same output, so the sound button mutes it too
+export const audioOut = () => (ctx && ctx.state === 'running' ? { ctx, out, noiseBuf } : null);
 export function setMuted(m) {
   muted = m;
   try { localStorage.setItem(MUTE_KEY, m ? '1' : '0'); } catch (e) { /* storage blocked */ }

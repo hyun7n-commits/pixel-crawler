@@ -186,6 +186,8 @@ export class VillageScene extends Phaser.Scene {
 
   clear() {
     this.time.removeAllEvents();
+    // nothing may finish moving something that is about to go
+    this.tweens.killAll();
     this.objs.forEach(o => o.destroy());
     this.objs = [];
     this.bubbles.forEach(b => b.destroy());
@@ -468,7 +470,10 @@ export class VillageScene extends Phaser.Scene {
       }
     }
     const ps = this.ps, walking = time < (ps.stepUntil || 0);
-    const base = CHARACTERS[this.p.id].sprite, expr = time < (ps.exprUntil || 0) ? ps.expr : '';
+    const base = CHARACTERS[this.p.id].sprite;
+    let expr = time < (ps.exprUntil || 0) ? ps.expr : '';
+    if (time > (ps.nextBlink || 0)) { ps.blinkUntil = time + 130; ps.nextBlink = time + 2200 + Math.random() * 2600; }
+    if (!expr && !walking && time < ps.blinkUntil) expr = 'blink';
     const key = faceKey(walking ? `${base}_walk${ps.stepFrame}` : base, expr);
     if (ps.texture.key !== key && this.textures.exists(key)) ps.setTexture(key);
 
@@ -512,7 +517,7 @@ export class VillageScene extends Phaser.Scene {
       if (dx) h.s.setFlipX(dx < 0);
       const sp = CHARACTERS[h.id].sprite;
       h.s.setTexture(`${sp}_walk1`);
-      this.tweens.add({ targets: h.s, x: center(x), y: foot(y), duration: 260, onComplete: () => h.s.setTexture(sp) });
+      this.tweens.add({ targets: h.s, x: center(x), y: foot(y), duration: 260, onComplete: () => h.s.scene && h.s.setTexture(sp) });
       h.s.setDepth(D.actors + y / 100);
     }
     // bobbing and shadows
