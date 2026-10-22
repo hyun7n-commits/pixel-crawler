@@ -3,6 +3,7 @@
 // Characters stand on the bottom middle of their tile (origin 0.5, 1).
 
 /* global Phaser */
+import { setEmote, drawEmote } from './emotes.js';
 import { TILE, buildTextures, wallKey, waterKey, shadeKey, floorKey, oreFrame, dropKey, chipKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
 import { CHARACTERS } from '../data/characters.js';
 import { ITEMS } from '../data/items.js';
@@ -21,14 +22,6 @@ import { wait, fissionMs, evolveMs, FISSION_LEAD, FISSION_STEP, EVOLVE_FLASH } f
 const D = { tiles: 0, ter: 1, fire: 2, gas: 3, telegraph: 4, pickups: 5, enemies: 6, player: 7, overlay: 8, fx: 9, bubble: 10, text: 11 };
 // what a pickup looks like on the floor (items use their own sprite)
 const PICKUP_TEX = { gold: 'gold', chest: 'chest', lockedChest: 'lockedChest', key: 'key', necklace: 'necklace', candy: 'candy', crystal: 'pedestal' };
-// manga marks over a head, drawn in world pixels with a dark outline: 'c' is the mark's colour
-const EMOTES = {
-  '!': { c: 0xf4cf4f, rows: ['cc', 'cc', 'cc', 'cc', '..', 'cc'] },
-  '?': { c: 0x8fd8f0, rows: ['.cccc.', 'cc..cc', '....cc', '..ccc.', '..cc..', '......', '..cc..'] },
-  '…': { c: 0xf4f0e8, rows: ['cc.cc.cc', 'cc.cc.cc'] },
-  anger: { c: 0xff3b3b, line: null, k: 1.5, rows: ['.c.c.', 'cc.cc', '.....', 'cc.cc', '.c.c.'] }, // 💢, bare
-  '♪': { c: 0xf29bb2, rows: ['..c..', '..cc.', '..c.c', '..c..', 'ccc..', 'ccc..'] },
-};
 const center = v => v * TILE + TILE / 2;
 const foot = v => v * TILE + TILE;
 const hash = (x, y) => {
@@ -1309,28 +1302,9 @@ export class DungeonScene extends Phaser.Scene {
     return run.enemies.some(e => e.hp > 0 && !e.d.npc && !run.calm(e) && !['hide', 'stone', 'sleep'].includes(e.state) && run.isVisible(e.x, e.y));
   }
 
-  // A manga mark over someone's head for a moment (see EMOTES): it pops in, rises a little, fades.
-  emote(s, kind, ms = 1100) {
-    if (s) s.emote = { kind, at: this.time.now, until: this.time.now + ms };
-  }
-
-  drawEmote(g, s, x, y, time) {
-    const m = s.emote;
-    if (!m || time > m.until) return;
-    const E = EMOTES[m.kind], el = time - m.at, left = m.until - time;
-    const k = (E.k || 1) * (el < 90 ? 0.4 + 0.8 * el / 90 : el < 160 ? 1.2 - 0.2 * (el - 90) / 70 : 1);
-    const a = left < 200 ? left / 200 : 1;
-    const w = E.rows[0].length, h = E.rows.length;
-    const x0 = x - w * k / 2, y0 = y - h * k - Math.min(el, 300) / 300 * 1.5;
-    const px = [];
-    E.rows.forEach((r, j) => [...r].forEach((c, i) => { if (c === 'c') px.push([x0 + i * k, y0 + j * k]); }));
-    if (E.line !== null) {
-      g.fillStyle(E.line ?? 0x1b1424, a);
-      for (const [px0, py0] of px) g.fillRect(px0 - 1, py0 - 1, k + 2, k + 2);
-    }
-    g.fillStyle(E.c, a);
-    for (const [px0, py0] of px) g.fillRect(px0, py0, k, k);
-  }
+  // A manga mark over someone's head for a moment (scenes/emotes.js): it pops in, rises a little, fades.
+  emote(s, kind, ms = 1100) { setEmote(s, kind, this.time.now, ms); }
+  drawEmote(g, s, x, y, time) { drawEmote(g, s, x, y, time); }
 
   // A Chiikawa face on the hero for a moment; while two overlap, the stronger feeling stays.
   face(expr, ms) {

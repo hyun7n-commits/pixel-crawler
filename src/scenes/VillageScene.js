@@ -13,6 +13,7 @@ import { CHARACTERS } from '../data/characters.js';
 import { ZONES } from '../data/enemies.js';
 import { DECOR, hasDecor } from '../data/home.js';
 import { decorCanvas, pupCanvas } from './home-art.js';
+import { setEmote, drawEmote } from './emotes.js';
 
 const MW = VILLAGE_MAP[0].length, MH = VILLAGE_MAP.length;
 const D = { tiles: 0, deco: 1, house: 2, actors: 3, fx: 4, bubble: 5 };
@@ -50,6 +51,7 @@ export class VillageScene extends Phaser.Scene {
       scale: { start: 2, end: 3.5 }, alpha: { start: 0.45, end: 0 }, tint: 0xd8d4e0,
     }).setDepth(D.fx);
     this.shadows = this.add.graphics().setDepth(D.actors - 0.5);
+    this.marks = this.add.graphics().setDepth(D.fx + 0.5);
     this.objs = [];
     this.bubbles = [];
 
@@ -136,6 +138,55 @@ export class VillageScene extends Phaser.Scene {
     this.cameras.main.centerOn(center(start.x), foot(start.y) - TILE / 2);
     this.hideFinds(2 + Math.floor(Math.random() * 2));
     if (arrivals.length) this.welcome(arrivals);
+  }
+
+  // One villager's (or a hero's) habit, by who they are: the guild master mulls over requests, the
+  // shopkeeper flips a coin, the smith hammers, the neighbour hums, the rescuer keeps watch, the rival
+  // flexes; the heroes do what they do in the fields when it is quiet.
+  habit(id, s, time) {
+    const tw = cfg => this.tweens.add({ targets: s, ...cfg });
+    switch (id) {
+      case 'guild':
+        setEmote(s, '…', time, 1400);
+        this.time.delayedCall(900, () => tw({ sy: 0.9, duration: 120, yoyo: true, repeat: 1, ease: 'Quad.out' }));
+        break;
+      case 'shop': {
+        const c = this.keep(this.add.image(s.x + 3, s.y - TILE + 2, 'gold').setDepth(D.fx).setScale(0.45));
+        this.tweens.add({ targets: c, y: c.y - 12, duration: 260, yoyo: true, ease: 'Quad.out', onComplete: () => { c.destroy(); setEmote(s, '♪', this.time.now, 1000); } });
+        this.tweens.add({ targets: c, scaleX: 0.1, duration: 90, yoyo: true, repeat: 2 });
+        break;
+      }
+      case 'smith':
+        for (let i = 0; i < 3; i++) this.time.delayedCall(i * 260, () => {
+          tw({ sy: 0.86, sx: 1.06, duration: 80, yoyo: true, ease: 'Quad.out' });
+          this.spark.explode(5, s.x + (s.flipX ? -7 : 7), s.y - 5);
+        });
+        break;
+      case 'neighbor':
+        setEmote(s, Math.random() < 0.5 ? '♪' : '…', time, 1300);
+        tw({ hop: 3, duration: 120, yoyo: true, repeat: 1, ease: 'Quad.out' });
+        break;
+      case 'rescue':
+        for (let i = 0; i < 4; i++) this.time.delayedCall(i * 280, () => s.setFlipX(!s.flipX));
+        this.time.delayedCall(1150, () => setEmote(s, '!', this.time.now, 900));
+        break;
+      case 'rival':
+        setEmote(s, 'anger', time, 1200);
+        tw({ sx: 1.12, sy: 1.08, duration: 200, yoyo: true, hold: 350, ease: 'Back.out' });
+        break;
+      case 'adv': tw({ sy: 1.12, sx: 0.94, duration: 260, yoyo: true, hold: 250, ease: 'Sine.inOut' }); setEmote(s, '♪', time, 1200); break;
+      case 'rogue':
+        tw({ sy: 0.8, sx: 1.08, duration: 160, yoyo: true, hold: 600, ease: 'Quad.out' });
+        this.time.delayedCall(250, () => s.setFlipX(!s.flipX));
+        this.time.delayedCall(650, () => s.setFlipX(!s.flipX));
+        break;
+      case 'mage':
+        tw({ hop: 5, duration: 500, yoyo: true, hold: 400, ease: 'Sine.inOut' });
+        this.time.delayedCall(300, () => this.spark.explode(6, s.x, s.y - 4));
+        break;
+      case 'knight': tw({ sx: 1.1, sy: 1.07, duration: 220, yoyo: true, hold: 400, ease: 'Back.out' }); break;
+      case 'vamp': tw({ hop: 4, duration: 180, yoyo: true, repeat: 3, ease: 'Sine.inOut' }); setEmote(s, '♪', time, 1200); break;
+    }
   }
 
   // the pieces of 집 꾸미기 bought so far, each on its own tiles round the house; `fresh`: the one
@@ -634,6 +685,23 @@ export class VillageScene extends Phaser.Scene {
         pup.s.setDepth(D.actors + pup.y / 100);
       } else if (near === 1) pup.s.setFlipX(this.p.x > pup.x);
     }
+    // everyone has a little habit of their own when you are close enough to see it
+    for (const one of this.folk) {
+      if (time < (one.habitAt || 0)) continue;
+      one.habitAt = time + 5500 + Math.random() * 4500;
+      if (one.s.alpha < 1 || one === this.pending || Math.max(Math.abs(one.x - this.p.x), Math.abs(one.y - this.p.y)) > 7) continue;
+      this.habit(one.id, one.s, time);
+    }
+    for (const h of this.heroes) {
+      if (time < (h.habitAt || 0)) continue;
+      h.habitAt = time + 6000 + Math.random() * 5000;
+      if (Math.max(Math.abs(h.x - this.p.x), Math.abs(h.y - this.p.y)) <= 7) this.habit(h.id, h.s, time);
+    }
+    if (this.pup && time > (this.pup.habitAt || 0)) {
+      this.pup.habitAt = time + 3500 + Math.random() * 3000;
+      const d = Math.max(Math.abs(this.pup.x - this.p.x), Math.abs(this.pup.y - this.p.y));
+      if (d <= 3) setEmote(this.pup.s, '♥', time, 1100);
+    }
     // bobbing and shadows
     const g = this.shadows;
     g.clear();
@@ -647,10 +715,14 @@ export class VillageScene extends Phaser.Scene {
     all.forEach((s, i) => {
       const breathe = s === ps && walking ? 1 : 1 + 0.035 * Math.sin(time / 420 + i * 1.7);
       const k = texScale(s);
-      if (!s.diving) s.setScale(k, k * breathe).setOrigin(0.5, 1 + (s.hop || 0) / TILE);
+      if (!s.diving) s.setScale(k * (s.sx || 1), k * breathe * (s.sy || 1)).setOrigin(0.5, 1 + (s.hop || 0) / TILE);
       g.fillStyle(0x000000, 0.28);
       g.fillEllipse(s.x, s.y - 1.5, 11, 4);
     });
+    const mk = this.marks;
+    mk.clear();
+    for (const s of all) drawEmote(mk, s, s.x, s.y - TILE - (s.hop || 0) - 3, time);
+    if (pup) drawEmote(mk, pup.s, pup.s.x, pup.s.y - 13 - (pup.s.hop || 0), time);
     // chimney smoke from the houses people live in, and the pond shimmering
     if (time > (this.nextSmoke || 0)) {
       this.nextSmoke = time + 450;
