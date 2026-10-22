@@ -55,6 +55,14 @@ export function showChoice({ title, sub, run, opts, onPick, onReroll, who }) {
         b.append(pic);
         info.append(el('span', 'nm', '합체'), el('span', 'tag', '칸 하나 비우기'),
           el('span', 'ds', `${josa(RELICS[o.a].name, '과', '와')} ${josa(RELICS[o.b].name, '을', '를')} 한 칸에. 효과는 그대로, 더 자라지는 않는다.`));
+      } else if (o.kind === 'twin') {
+        // two of yours grow at once
+        const pic = el('span', 'fuse-pic twin-pic');
+        pic.append(icon(o.a), icon(o.b));
+        b.append(pic);
+        const lv = id => run.p.relics[id] || 0;
+        info.append(el('span', 'nm', '둘 다 쑥쑥'), el('span', 'tag', '두 개 +1'),
+          el('span', 'ds', `${RELICS[o.a].name} Lv${lv(o.a)} → Lv${lv(o.a) + 1}, ${RELICS[o.b].name} Lv${lv(o.b)} → Lv${lv(o.b) + 1}`));
       } else if (o.kind === 'heal') {
         b.append(icon('heal'));
         info.append(el('span', 'nm', '응급 치료'), el('span', 'ds', '체력 50% 회복'));

@@ -6,13 +6,19 @@ export const SIGHT = 7;            // view radius in tiles
 export const LAST_FLOOR = 9;
 export const FLOORS_PER_ZONE = 3;
 
-export const xpToLevel = lvl => 3 + lvl * 4;
-export const HP_PER_LEVEL = 3;
-export const LEVEL_UP_HEAL = 0.2;  // share of max HP restored on level up
+// v0.15: level-ups come quicker, so relics grow and evolve within a run (BALL x PIT pace)
+export const xpToLevel = lvl => 3 + lvl;
+// chance a relic card turns into "both of these +1"
+export const TWIN_CHANCE = 0.35;
+// chance a card is the unseen other half of a recipe for a relic you are growing (nothing says so)
+export const PARTNER_CHANCE = 0.55;
+export const HP_PER_LEVEL = 1;
+export const LEVEL_UP_HEAL = 0.1;  // share of max HP restored on level up (levels come often since v0.15)
 
-// v0.14: harder. More of them, more awake, and tougher, so walking in and trading blows loses;
+// v0.15: the Shattered Pixel Dungeon way. Fewer monsters than v0.14, but each one hits hard
+// (enemies.js), so walking in and trading blows with two at once loses;
 // doorways, surprise hits, bombs and backing off are what win.
-export const enemiesPerFloor = floor => 7 + floor;
+export const enemiesPerFloor = floor => 5 + floor;
 // stat multiplier for enemies: grows within a zone and a little per zone
 export const enemyScale = floor => 1 + 0.2 * ((floor - 1) % 3) + 0.15 * Math.floor((floor - 1) / 3);
 export const POTION_CHANCE = 0.45;  // a potion lying somewhere on a floor

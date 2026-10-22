@@ -22,7 +22,7 @@ export function renderHub(ctx) {
   const inner = el('div', 'hub-inner');
 
   const head = el('div', 'hub-head');
-  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.14</small>'));
+  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.15</small>'));
   const purse = el('div', 'purse');
   purse.append(icon('gold', 24), el('span', null, `${meta.gold}G`));
   head.append(purse);

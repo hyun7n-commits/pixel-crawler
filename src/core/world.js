@@ -317,7 +317,7 @@ function creatureTick(run, who) {
   const i = idx(b.x, b.y);
 
   // peppermint lets you shrug off thinner gas, and at Lv3 all of it
-  const mint = who === 'player' ? (run.lv('dreamlamp') ? 3 : run.lv('mint')) : 0;
+  const mint = who === 'player' ? (run.lv('dreamlamp') || run.lv('pillow') ? 3 : run.lv('mint')) : 0;
   const sleepAt = mint >= 3 ? Infinity : SLEEP_MIN * (1 + mint);
   if (map.gas.sleep[i] >= sleepAt) {
     if (who === 'player') {

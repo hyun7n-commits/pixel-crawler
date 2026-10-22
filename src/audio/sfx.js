@@ -193,6 +193,7 @@ export function onRunEvent(type, d) {
     case 'aimCharge': play('alert'); break;
     case 'charge': if (!d.hit) play('boom'); break;
     case 'meteor': play('boom'); break;
+    case 'sunbeam': play('rise', 2); break;
     case 'block': play('hit'); play('dodge'); break;
     default: break;
   }

@@ -18,7 +18,7 @@ import { decorate, decorateArena, placeTraps } from './decorate.js';
 import { placeSpecials, SET_PIECES } from './specials.js';
 import { NPC_TEXT } from '../data/npcs.js';
 import { enemyAct, rouse, awaken } from './ai.js';
-import { onEnter, explosion, envTick, waterBody, ignite, addGas, spotTraps, revealTraps, openGrave } from './world.js';
+import { onEnter, explosion, envTick, waterBody, ignite, addGas, spotTraps, revealTraps, openGrave, setBurn } from './world.js';
 
 export const zoneOf = floor => ZONES[Math.floor((floor - 1) / B.FLOORS_PER_ZONE)];
 export const isBossFloor = floor => floor % B.FLOORS_PER_ZONE === 0;
@@ -71,19 +71,28 @@ export class Run {
   stat() {
     const L = this.levels(), ch = this.char, up = this.meta.up;
     const lv = id => L[id] || 0, on = id => lv(id) > 0;
+    // `f(id, base, per)`: nothing without the relic, else base + per × level
+    const f = (id, base, per) => (on(id) ? base + per * lv(id) : 0);
+    const best = (...xs) => Math.max(...xs);
     return {
-      atk: ch.atk + up.atk + 2 * lv('blade') + (on('flamesword') ? 4 + 2 * lv('flamesword') : 0) + 2 * lv('volcano') + (on('minecrown') ? 5 : 0),
-      def: ch.def + lv('shield') + (on('fortress') ? 2 + lv('fortress') : 0) + lv('undying'),
-      maxHp: ch.hp + up.hp * 4 + 8 * lv('heart') + (on('bloodcrown') ? 15 + 5 * lv('bloodcrown') : 0) + 10 * lv('lifetree') + (on('eternity') ? 30 : 0) +
+      atk: ch.atk + up.atk + 2 * lv('blade') + f('flamesword', 4, 2) + 2 * lv('volcano') + (on('minecrown') ? 5 : 0) +
+        f('bloodblade', 3, 1) + f('whirl', 4, 1) + f('dagger', 2, 1) + lv('giantfist') + 2 * lv('bloodmoon') + lv('stormlord') + lv('whirlwind') + (on('godhammer') ? 5 : 0),
+      def: ch.def + lv('shield') + f('fortress', 2, 1) + lv('undying') + lv('ironheart') + f('embermail', 1, 1) + lv('guardian'),
+      maxHp: ch.hp + up.hp * 4 + 8 * lv('heart') + f('bloodcrown', 15, 5) + 10 * lv('lifetree') + (on('eternity') ? 30 : 0) +
+        f('ironheart', 10, 5) + f('pillow', 16, 4) + f('giantfist', 12, 4) + 10 * lv('guardian') + (on('bloodking') ? 20 : 0) +
         (this.p.lvl - 1) * B.HP_PER_LEVEL,
-      goldMult: 1 + 0.4 * lv('coin') + (on('goldbolt') ? 0.75 + 0.25 * lv('goldbolt') : 0) + 0.25 * lv('goldstorm') + (on('minecrown') ? 0.5 : 0) + 0.1 * up.greed,
-      dodge: (ch.dodge || 0) + 0.08 * lv('cloak') + (on('shadow') ? 0.15 + 0.05 * lv('shadow') : 0) + 0.05 * lv('phantom'),
-      // damage multiplier on a surprise attack
-      sneak: (on('shadow') ? 2.25 + 0.25 * lv('shadow') : 1.5 + 0.25 * lv('boots')) + 0.5 * lv('phantom') + (on('eclipse') ? 2 : 0) + (ch.sneak || 0),
-      sight: B.SIGHT + lv('lantern') + (on('dreamlamp') ? 1 + lv('dreamlamp') : 0),
-      oreMult: on('goldrush') ? 1.5 + 0.5 * lv('goldrush') : 1 + 0.5 * lv('pick'),
+      goldMult: 1 + 0.4 * lv('coin') + f('goldbolt', 0.75, 0.25) + 0.25 * lv('goldstorm') + (on('minecrown') ? 0.5 : 0) + 0.1 * up.greed +
+        f('luckycharm', 1, 0.25) + f('goldfang', 0.8, 0.2) + 0.25 * lv('fortune') + (on('dawnstar') ? 0.5 : 0),
+      // never more than 60%: something always gets through
+      dodge: Math.min(0.6, (ch.dodge || 0) + 0.08 * lv('cloak') + f('shadow', 0.15, 0.05) + 0.05 * lv('phantom') +
+        f('luckycharm', 0.2, 0.05) + f('spikecloak', 0.2, 0.05) + 0.05 * lv('fortune') + (on('dawnstar') ? 0.1 : 0)),
+      // damage multiplier on a surprise attack: the best of the sneaky relics, plus what legends add on top
+      sneak: best(1.5 + 0.25 * lv('boots'), f('shadow', 2.25, 0.25), f('dagger', 2.5, 0.25), f('owleye', 2, 0.25)) +
+        0.5 * lv('phantom') + 0.5 * lv('nightowl') + (on('eclipse') ? 2 : 0) + (on('dawnstar') ? 1 : 0) + (ch.sneak || 0),
+      sight: Math.min(B.SIGHT + 6, B.SIGHT + lv('lantern') + f('dreamlamp', 1, 1) + f('owleye', 1, 1) + f('headlamp', 1, 1) + f('sunlamp', 1, 1) + lv('nightowl')),
+      oreMult: best(1 + 0.5 * lv('pick'), f('goldrush', 1.5, 0.5), f('headlamp', 1.5, 0.5)),
       // extra chance a swing finds a better grade
-      oreRise: (on('goldrush') ? 0.1 + 0.05 * lv('goldrush') : 0.05 * lv('pick')) + (on('minecrown') ? 0.15 : 0),
+      oreRise: best(0.05 * lv('pick'), f('goldrush', 0.1, 0.05), f('headlamp', 0.1, 0.05)) + (on('minecrown') ? 0.15 : 0),
       magnet: on('goldrush') ? 1 + lv('goldrush') : on('magnet') ? lv('magnet') + 1 : 0,
     };
   }
@@ -471,8 +480,7 @@ export class Run {
       const haul = Math.round(B.oreJackpot(this.floor) * g.mult * s.oreMult * big / ore.size);
       for (const c of ore.cells) this.pickups.push({ x: c.x, y: c.y, type: 'gold', amount: haul, ore: ore.tier });
       this.pickups.push({ x: ore.x, y: ore.y, type: 'chest', rich: ore.size >= 4, vein: ore.size >= 4 });
-      this.log('쩌억! 광석이 통째로 무너져 내렸다!', 'good');
-      this.discover('ore_jackpot');
+      this.discover('ore_jackpot', true);
       // the blacksmith on this floor wants a chunk of it
       const smith = this.quests.smith;
       if (this.floor === smith.floor && smith.state !== 'done' && (smith.chunk === null || ore.tier > smith.chunk)) {
@@ -595,11 +603,11 @@ export class Run {
       this.strike(e, Math.round(base * s.sneak), 'sneak');
     } else this.strike(e, base, 'normal');
     // the swing carries on into everyone else standing next to you
-    const quake = L.quake, sweep = L.sweep || 0;
-    if (quake || sweep) {
+    const share = L.quake || L.whirlwind ? 1 : L.whirl ? 0.6 + 0.1 * L.whirl : 0.3 * (L.sweep || 0);
+    if (share) {
       for (const o of this.enemies.filter(o => o !== e && o.hp > 0 && this.touching(o, this.p))) {
         this.emit('attack', { from: { x: this.p.x, y: this.p.y }, to: { x: o.x, y: o.y }, who: 'player' });
-        this.strike(o, quake ? base : Math.max(1, Math.round(base * 0.3 * sweep)), 'normal');
+        this.strike(o, Math.max(1, Math.round(base * share)), 'normal');
       }
     }
   }
@@ -608,7 +616,8 @@ export class Run {
   strike(e, raw, kind) {
     const L = this.levels();
     this.hurt(e, Math.max(1, raw - e.def), kind);
-    if (this.char.lifesteal && !e.d.npc) this.heal(this.char.lifesteal);
+    const steal = (this.char.lifesteal || 0) + (L.bloodblade ? (L.bloodblade < 3 ? 1 : 2) : 0);
+    if (steal && !e.d.npc) this.heal(steal);
     if (e.hp <= 0) return;
     let fire = 0;
     if (L.flamesword) fire = 2 + L.flamesword;
@@ -618,7 +627,7 @@ export class Run {
       const t = this.map.ter[idx(e.x, e.y)];
       if (t === T.BRUSH) ignite(this, e.x, e.y);
     }
-    const stun = L.quake ? 0.15 + 0.05 * L.quake : 0.15 * (L.hammer || 0);
+    const stun = Math.max(0.15 * (L.hammer || 0), L.quake ? 0.15 + 0.05 * L.quake : 0, L.thunder ? 0.3 + 0.05 * L.thunder : 0, L.giantfist ? 0.25 + 0.05 * L.giantfist : 0);
     if (e.hp > 0 && !e.d.boss && Math.random() < stun) { e.stun = 1; this.emit('stun', { x: e.x, y: e.y }); }
   }
 
@@ -681,11 +690,11 @@ export class Run {
       this.log('도둑 쥐가 반짝돌 목걸이를 떨궜다!', 'good');
     } else if (e.loot) {
       this.pickups.push({ x: e.x, y: e.y, type: 'gold', amount: e.loot, stolen: true });
-    } else if (Math.random() < B.GOLD_DROP_CHANCE) {
+    } else if (L.goldfang || Math.random() < B.GOLD_DROP_CHANCE) {
       this.pickups.push({ x: e.x, y: e.y, type: 'gold', amount: (Math.floor((this.floor - 1) / 3) + 1) * rint(1, 4) });
     }
     if (e.d.bones) this.boneBurst(e);
-    const heal = 2 * (L.fang || 0) + (L.bloodcrown ? 4 + 2 * L.bloodcrown : 0);
+    const heal = 2 * (L.fang || 0) + (L.bloodcrown ? 4 + 2 * L.bloodcrown : 0) + (L.goldfang ? 5 + L.goldfang : 0);
     if (heal) this.heal(heal);
     this.gainXp(e.xp ?? e.d.xp);
   }
@@ -700,14 +709,20 @@ export class Run {
 
   damagePlayer(raw, src, kind = 'melee') {
     const s = this.stat(), L = this.levels(), p = this.p;
-    if (s.dodge && Math.random() < s.dodge) { this.emit('dodge', { x: p.x, y: p.y }); return false; }
+    if (s.dodge && Math.random() < s.dodge) {
+      this.emit('dodge', { x: p.x, y: p.y });
+      // the hedgehog cloak pricks whoever lunged at you, hit or miss
+      if (L.spikecloak && src && kind === 'melee') this.hurt(src, 4 + 2 * L.spikecloak, 'thorns');
+      return false;
+    }
     if (this.char.block && Math.random() < this.char.block) { this.emit('block', { x: p.x, y: p.y, from: { x: src.x, y: src.y } }); return false; }
     const roll = raw * (B.HIT_ROLL[0] + Math.random() * (B.HIT_ROLL[1] - B.HIT_ROLL[0]));
     const dmg = Math.max(1, Math.round(roll) + rnd(2) - s.def);
     this.hurtPlayer(dmg, `${src.d.name}에게 당했다`, kind);
     if (src && (kind === 'melee' || kind === 'charge')) {
-      const thorn = L.fortress ? 4 + 2 * L.fortress : 2 * (L.thorns || 0);
+      const thorn = (L.fortress ? 4 + 2 * L.fortress : 2 * (L.thorns || 0)) + (L.spikecloak ? 4 + 2 * L.spikecloak : 0);
       if (thorn) this.hurt(src, thorn, 'thorns');
+      if (L.embermail && src.hp > 0) { this.hurt(src, 3 + L.embermail, 'fire'); if (src.hp > 0) setBurn(this, src, 3); }
       if (src.type === 'lord' && src.hp > 0) src.hp = Math.min(src.maxHp, src.hp + dmg);
     }
     return true;
@@ -730,13 +745,14 @@ export class Run {
       this.emit('hangon', { x: p.x, y: p.y });
     }
     const L = this.levels(), maxHp = this.stat().maxHp;
-    const lives = L.eternity ? 2 : L.undying ? 1 : 0, band = L.herbal ? 6 + 4 * L.herbal : 6 * (L.bandage || 0);
+    const lives = (L.eternity ? 2 : L.undying ? 1 : 0) + (L.bloodking ? 1 : 0), band = L.herbal ? 6 + 4 * L.herbal : 6 * (L.bandage || 0);
     if (p.hp <= 0 && (this.revives || 0) < lives) {
       this.revives = (this.revives || 0) + 1;
       p.hp = 0;
       this.heal(Math.round(maxHp / 2));
-      this.log('불사의 심장이 뛴다! 쓰러졌다가 다시 일어났다.', 'evo');
-      this.emit('banner', { text: '불사의 심장!' });
+      const heart = this.revives <= (L.eternity ? 2 : L.undying ? 1 : 0) ? RELICS[L.eternity ? 'eternity' : 'undying'].name : RELICS.bloodking.name;
+      this.log(`${heart}의 힘으로 쓰러졌다가 다시 일어났다.`, 'evo');
+      this.emit('banner', { text: `${heart}!` });
     } else if (p.hp > 0 && band && this.bandageUsed < (L.herbal ? 2 : 1) && p.hp < maxHp / 3) {
       this.bandageUsed++;
       this.heal(band);
@@ -791,14 +807,15 @@ export class Run {
     this.emit('newOre', { tier });
   }
 
-  discover(id) {
+  // Goes in the book in town. Common-sense ones (and ones the effects already show, `quiet`) say nothing.
+  discover(id, quiet) {
     if (this.meta.found[id] || this.over) return;
     const d = DISCOVERIES.find(x => x.id === id);
     if (!d) return;
     this.meta.found[id] = true;
     this.found.push(id);
     this.emit('discover', { id, d });
-    this.log(`새 발견! ${d.combo}: ${d.result}`, 'evo');
+    if (!quiet && !d.basic) this.log(`새 발견! ${d.combo}: ${d.result}`, 'evo');
   }
 
   // ---------- turn ----------
@@ -808,10 +825,14 @@ export class Run {
     if (!this.char.noRegen && this.turn % B.REGEN_TURNS === 0 && p.hp > 0 && p.hp < this.stat().maxHp) p.hp++;
     if (L.goldbolt && this.turn % (L.goldstorm ? 2 : 3) === 0) this.zap(L.goldbolt + 1 + (L.goldstorm ? 1 : 0), 6 + 2 * L.goldbolt);
     else if (L.bolt && this.turn % 6 === 0) this.zap(1, 4 * L.bolt);
+    if (L.thunder && this.turn % (L.godhammer ? 1 : L.stormlord ? 2 : 4) === 0) this.zap(L.thunder + 1, 6 + 2 * L.thunder);
+    if (L.sunlamp && this.turn % 3 === 0) this.sunbeam(L.sunlamp < 3 ? 1 : 2, 4 + 2 * L.sunlamp);
     const every = L.eclipse ? 3 : L.meteor ? 10 - 2 * L.meteor : 0;
     if (every && this.turn % every === 0) this.meteor(10 + 5 * (L.meteor || 1));
-    const regen = L.lifetree ? (L.lifetree < 2 ? 2 : 1) : L.herbal ? [3, 2, 2][L.herbal - 1] : L.moss ? [6, 4, 2][L.moss - 1] : 0;
-    if (regen && this.turn % regen === 0) this.heal(1);
+    // the quickest of the healing relics you hold
+    const regen = Math.min(...[L.lifetree && (L.lifetree < 2 ? 2 : 1), L.herbal && [3, 2, 2][L.herbal - 1], L.moss && [6, 4, 2][L.moss - 1],
+      L.pillow && [4, 3, 2][L.pillow - 1]].filter(Boolean), Infinity);
+    if (regen < Infinity && this.turn % regen === 0) this.heal(1);
 
     // doors shut the moment nobody stands in them, so a chaser right behind you loses sight of you
     // as you step through (the Shattered Pixel Dungeon door ambush)
@@ -895,6 +916,19 @@ export class Run {
     if (!e) return;
     this.emit('meteor', { x: e.x, y: e.y });
     for (const o of this.enemies.filter(o => o.hp > 0 && cheb(o, e) <= 1 && !o.d.npc)) this.hurt(o, o === e ? dmg : Math.ceil(dmg / 2), 'fire');
+  }
+
+  // Sunlight through a crack in the ceiling onto the nearest enemies you can see, and they catch fire.
+  sunbeam(count, dmg) {
+    const targets = this.enemies
+      .filter(e => e.hp > 0 && this.isVisible(e.x, e.y) && !this.calm(e) && e.state !== 'hide' && e.state !== 'stone' && !e.d.npc)
+      .sort((a, b) => cheb(a, this.p) - cheb(b, this.p))
+      .slice(0, count);
+    for (const e of targets) {
+      this.emit('sunbeam', { x: e.x, y: e.y });
+      this.hurt(e, dmg, 'fire');
+      if (e.hp > 0) setBurn(this, e, 2);
+    }
   }
 
   zapHit(from, e, dmg, hit) {
@@ -1020,14 +1054,23 @@ export class Run {
       return this.relicAvailable(id);
     });
     // like Vampire Survivors, one card usually helps what you already have: a level, or the partner
-    // in a recipe you have found before. Recipes you haven't found stay a secret, so no hints there.
+    // in a recipe you have found before. Recipes you haven't found are never shown, but the mine is
+    // kind: now and then a card is quietly the other half of something you are growing (Lv2 and up).
     const grows = id => rl[id] || recipesWith(id).some(rc => known[recipeKey(rc)] && rl[rc.a === id ? rc.b : rc.a]);
+    const partners = pool.filter(id => !rl[id] && recipesWith(id).some(rc => (rl[rc.a === id ? rc.b : rc.a] || 0) >= 2));
     const growth = pool.filter(grows), ids = [];
     if (growth.length && Math.random() < 0.75) ids.push(pick(growth));
+    if (partners.length && Math.random() < B.PARTNER_CHANCE) { const id = pick(partners); if (!ids.includes(id)) ids.push(id); }
     for (const id of shuffle(pool.slice())) if (ids.length < n && !ids.includes(id)) ids.push(id);
     const res = shuffle(ids).map(id => ({ kind: 'relic', id }));
+    // like BALL x PIT's fission: now and then a card that grows two of yours at once
+    const growing = Object.keys(rl).filter(id => rl[id] < maxLevelOf(id));
+    if (growing.length >= 2 && Math.random() < B.TWIN_CHANCE) {
+      const [a, b] = shuffle(growing);
+      res.splice(rnd(res.length), 1, { kind: 'twin', a, b });
+    }
     // two maxed relics that make nothing together can still be fused into one slot
-    const pair = this.fusablePair();
+    const pair = this.fusablePair(!full);
     if (pair && (full || Math.random() < 0.35)) {
       if (res.length >= n) res.pop();
       res.push({ kind: 'fuse', a: pair[0], b: pair[1] });
@@ -1038,9 +1081,10 @@ export class Run {
   }
 
   // Two relics at full level that are no recipe together (and not fused or myths already).
-  fusablePair() {
+  // `basicOnly`: while there is room, evolved relics are kept for the legends they could become.
+  fusablePair(basicOnly) {
     const rl = this.p.relics;
-    const ready = Object.keys(rl).filter(id => !isFused(id) && tierOf(id) < 3 && rl[id] >= MAX_LEVEL);
+    const ready = Object.keys(rl).filter(id => !isFused(id) && tierOf(id) < (basicOnly ? 1 : 3) && rl[id] >= MAX_LEVEL);
     const pairs = [];
     for (let i = 0; i < ready.length; i++) for (let j = i + 1; j < ready.length; j++) {
       const a = ready[i], b = ready[j];
@@ -1056,6 +1100,7 @@ export class Run {
     else if (o.kind === 'gold') this.addGold(o.amount || 25);
     else if (o.kind === 'relic') this.gainRelic(o.id);
     else if (o.kind === 'fuse') this.fuse(o.a, o.b);
+    else if (o.kind === 'twin') for (const id of [o.a, o.b]) if (this.p.relics[id] && this.p.relics[id] < maxLevelOf(id)) this.gainRelic(id);
     this.emit('relics');
   }
 

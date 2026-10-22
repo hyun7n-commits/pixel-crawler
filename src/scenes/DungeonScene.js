@@ -438,7 +438,7 @@ export class DungeonScene extends Phaser.Scene {
       case 'kill': this.onKill(d.enemy); break;
       case 'phit':
         this.flash(this.playerSprite);
-        this.cameras.main.shake(['slam', 'bomb', 'charge'].includes(d.kind) ? 220 : 110, ['slam', 'bomb', 'charge'].includes(d.kind) ? 0.012 : 0.005);
+        this.shake(['slam', 'bomb', 'charge'].includes(d.kind) ? 220 : 110, ['slam', 'bomb', 'charge'].includes(d.kind) ? 0.012 : 0.005);
         this.fx.blood.explode(8, center(d.x), center(d.y));
         this.float(d.x, d.y, `-${d.dmg}`, '#ff6b6b');
         break;
@@ -450,7 +450,7 @@ export class DungeonScene extends Phaser.Scene {
         // the blow should have finished you: everything stops for a moment, and you're still standing
         this.hitStop(420);
         this.cameras.main.flash(260, 255, 255, 255);
-        this.cameras.main.shake(300, 0.015);
+        this.shake(300, 0.015);
         this.float(d.x, d.y - 0.4, '버텼다!', '#ffd6d6', 120, 16);
         break;
       case 'dodge': this.float(d.x, d.y, '회피', '#6fe0e0'); break;
@@ -464,7 +464,7 @@ export class DungeonScene extends Phaser.Scene {
       case 'gasboom': this.gasBoom(d.tiles); break;
       case 'puff': this.fx[d.kind].explode(30, center(d.x), center(d.y)); break;
       case 'rustle': this.fx.leaf.explode(7, center(d.x), center(d.y) + 3); break;
-      case 'dig': this.fx.dust.explode(14, center(d.x), center(d.y)); this.fx.rock.explode(6, center(d.x), center(d.y)); this.cameras.main.shake(90, 0.004); break;
+      case 'dig': this.fx.dust.explode(14, center(d.x), center(d.y)); this.fx.rock.explode(6, center(d.x), center(d.y)); this.shake(90, 0.004); break;
       case 'shatter': this.fx.crystal.explode(16, center(d.x), center(d.y)); break;
       case 'unlock': this.fx.spark.explode(14, center(d.x), center(d.y)); break;
       case 'locked': this.float(d.x, d.y, '잠김', '#b8bccb'); break;
@@ -476,14 +476,14 @@ export class DungeonScene extends Phaser.Scene {
           this.tweens.add({ targets: s, hop: 7, duration: 110, yoyo: true, ease: 'Quad.out' });
         }
         this.fx.dust.explode(10, center(d.enemy.x), center(d.enemy.y));
-        this.cameras.main.shake(160, 0.008);
+        this.shake(160, 0.008);
         break;
       }
       case 'trap': this.onTrap(d); break;
       case 'summon': this.fx.magic.explode(16, center(d.x), center(d.y)); break;
       case 'alarm':
         for (let k = 0; k < 3; k++) this.time.delayedCall(k * 220, () => this.noiseRing(d.x, d.y, 9, 0xff6b6b));
-        this.cameras.main.shake(260, 0.006);
+        this.shake(260, 0.006);
         break;
       case 'spot':
         this.float(d.x, d.y, '!', '#f4cf4f', 0, 14);
@@ -509,7 +509,7 @@ export class DungeonScene extends Phaser.Scene {
       case 'discover': this.fx.spark.explode(30, center(this.run.p.x), center(this.run.p.y)); break;
       case 'slam':
         d.tiles.forEach(t => this.fx.dust.explode(3, center(t.x), center(t.y)));
-        if (!d.hit) this.cameras.main.shake(120, 0.004);
+        if (!d.hit) this.shake(120, 0.004);
         break;
       case 'teleport':
         this.fx.magic.explode(18, center(d.from.x), center(d.from.y));
@@ -539,7 +539,7 @@ export class DungeonScene extends Phaser.Scene {
         this.fx.bone.explode(30, center(d.x), center(d.y));
         this.fx.dust.explode(10, center(d.x), center(d.y));
         this.noiseRing(d.x, d.y, 1, 0xf4f0e8);
-        this.cameras.main.shake(140, 0.006);
+        this.shake(140, 0.006);
         break;
       case 'split': {
         this.fx.slime.explode(14, center(d.from.x), center(d.from.y));
@@ -559,7 +559,7 @@ export class DungeonScene extends Phaser.Scene {
           const x = d.from.x + Math.sign(d.to.x - d.from.x) * k, y = d.from.y + Math.sign(d.to.y - d.from.y) * k;
           this.time.delayedCall(k * 30, () => this.fx.dust.explode(5, center(x), center(y) + 4));
         }
-        if (!d.hit) { this.cameras.main.shake(120, 0.005); this.fx.spark.explode(8, center(d.to.x), center(d.to.y) - 8); }
+        if (!d.hit) { this.shake(120, 0.005); this.fx.spark.explode(8, center(d.to.x), center(d.to.y) - 8); }
         break;
       case 'evolve': {
         // the higher the tier, the bigger the bang; a recipe found for the first time rings out twice
@@ -567,11 +567,20 @@ export class DungeonScene extends Phaser.Scene {
         this.fx.spark.explode(30 + 20 * (d.tier || 0), center(d.x), center(d.y));
         this.fx[d.tier >= 3 ? 'magic' : d.fused ? 'crystal' : 'fire'].explode(20 + 10 * (d.tier || 0), center(d.x), center(d.y));
         this.cameras.main.flash(180 + 80 * (d.tier || 0), ...col);
-        if (d.tier >= 2) this.cameras.main.shake(260, 0.006 * d.tier);
+        if (d.tier >= 2) this.shake(260, 0.006 * d.tier);
         for (let k = 0; k < (d.first ? 3 : 1); k++) {
           const ring = this.add.circle(center(d.x), center(d.y), TILE).setStrokeStyle(2, Phaser.Display.Color.GetColor(...col), 1).setDepth(D.fx).setScale(0.2);
           this.tweens.add({ targets: ring, scale: 3 + d.tier, alpha: 0, delay: k * 200, duration: 700, ease: 'Quad.out', onComplete: () => ring.destroy() });
         }
+        break;
+      }
+      case 'sunbeam': {
+        // a shaft of light drops onto them from above and they smoulder
+        const tx = center(d.x), ty = center(d.y);
+        const beam = this.add.rectangle(tx, ty - 60, 6, 120, 0xfff1a8, 0.75).setDepth(D.fx).setScale(0.3, 1);
+        this.tweens.add({ targets: beam, scaleX: 1.4, alpha: 0, duration: 380, ease: 'Quad.out', onComplete: () => beam.destroy() });
+        this.fx.spark.explode(10, tx, ty);
+        this.fx.fire.explode(8, tx, ty);
         break;
       }
       case 'meteor': {
@@ -584,7 +593,7 @@ export class DungeonScene extends Phaser.Scene {
             rock.destroy();
             this.fx.fire.explode(30, tx, ty); this.fx.rock.explode(14, tx, ty);
             this.noiseRing(d.x, d.y, 1, 0xf08c3a);
-            this.cameras.main.shake(160, 0.007);
+            this.shake(160, 0.007);
           },
         });
         break;
@@ -616,8 +625,8 @@ export class DungeonScene extends Phaser.Scene {
     if (!look) return;
     this.float(d.x, d.y - 0.4, look[0], look[1], 0, 12);
     this.noiseRing(d.x, d.y, 1, look[2]);
-    if (d.kind === T.TRAP_SPIKE) { this.fx.rock.explode(10, center(d.x), center(d.y)); this.cameras.main.shake(140, 0.008); }
-    if (d.kind === T.TRAP_SUMMON) { this.cameras.main.shake(220, 0.01); this.cameras.main.flash(120, 154, 95, 209); }
+    if (d.kind === T.TRAP_SPIKE) { this.fx.rock.explode(10, center(d.x), center(d.y)); this.shake(140, 0.008); }
+    if (d.kind === T.TRAP_SUMMON) { this.shake(220, 0.01); this.cameras.main.flash(120, 154, 95, 209); }
   }
 
   onHit(d) {
@@ -637,7 +646,7 @@ export class DungeonScene extends Phaser.Scene {
   heavyHit(x, y, from) {
     const cx = center(x), cy = center(y);
     this.hitStop(90);
-    this.cameras.main.shake(150, 0.009);
+    this.shake(150, 0.009);
     // the slash crosses the line of the swing
     const ang = Math.atan2(y - from.y, x - from.x) + Math.PI / 4;
     for (const [w, col, len] of [[5, 0xf4cf4f, 24], [2, 0xffffff, 30]]) {
@@ -656,7 +665,7 @@ export class DungeonScene extends Phaser.Scene {
     const s = this.enemySprites[e.id];
     const fx = e.d.sprite === 'skel' ? 'bone' : e.d.sprite === 'slime' ? 'slime' : 'blood';
     if (this.run.isVisible(e.x, e.y)) this.fx[fx].explode(e.d.boss ? 40 : 14, center(e.x), center(e.y));
-    if (e.d.boss) { this.cameras.main.shake(300, 0.01); this.fx.spark.explode(30, center(e.x), center(e.y)); }
+    if (e.d.boss) { this.shake(300, 0.01); this.fx.spark.explode(30, center(e.x), center(e.y)); }
     if (!s) return;
     s.dying = true;
     s.crown?.destroy();
@@ -753,11 +762,11 @@ export class DungeonScene extends Phaser.Scene {
     this.tweens.add({ targets: c, radius: TILE * (r + 0.7), alpha: 0, duration: 280, ease: 'Quad.out', onComplete: () => c.destroy() });
     this.fx.fire.explode(60, center(x), center(y));
     this.fx.dust.explode(20, center(x), center(y));
-    this.cameras.main.shake(220, 0.012);
+    this.shake(220, 0.012);
   }
 
   gasBoom(tiles) {
-    this.cameras.main.shake(400, 0.018);
+    this.shake(400, 0.018);
     this.cameras.main.flash(160, 255, 210, 120);
     for (const t of tiles) {
       this.time.delayedCall(t.d * 40, () => {
@@ -778,7 +787,7 @@ export class DungeonScene extends Phaser.Scene {
     this.fx.rock.explode((last ? 24 : 4) + d.hits * 3, cx, cy);
     // a big vein comes down in pieces: rubble from every tile it filled
     if (last && size > 1) for (const c of d.cells) { this.fx.rock.explode(14, center(c.x), center(c.y)); this.fx.spark.explode(12, center(c.x), center(c.y)); }
-    this.cameras.main.shake(last ? 420 + size * 80 : 80 + d.hits * 35, last ? 0.012 + size * 0.002 : 0.002 + d.hits * 0.0014);
+    this.shake(last ? 420 + size * 80 : 80 + d.hits * 35, last ? 0.012 + size * 0.002 : 0.002 + d.hits * 0.0014);
     if (last) this.cameras.main.flash(160, 244, 207, 79);
     this.noiseRing(d.x, d.y, d.r);
     const g = ORES[d.tier], tint = Phaser.Display.Color.HexStringToColor(g.vein ? g.vein[0] : '#ffffff').color;
@@ -805,7 +814,7 @@ export class DungeonScene extends Phaser.Scene {
     // a bonanza: a fountain of pieces, no words needed
     if (d.nugget) {
       this.hitStop(160);
-      this.cameras.main.shake(320, 0.012);
+      this.shake(320, 0.012);
       this.cameras.main.flash(180, 244, 207, 79);
       for (let k = 0; k < 16; k++) this.coinFly(cx, cy, 2.4, 120 + k * 22, chipKey(d.tier));
     }
@@ -850,7 +859,7 @@ export class DungeonScene extends Phaser.Scene {
     for (const c of d.cells) this.fx.spark.explode(10, center(c.x), center(c.y));
     const ring = this.add.circle(mx, my, TILE * 1.2).setStrokeStyle(2, tint, 1).setDepth(D.fx).setScale(0.2);
     this.tweens.add({ targets: ring, scale: 2, alpha: 0, duration: 600, ease: 'Quad.out', onComplete: () => ring.destroy() });
-    if (d.size >= 4) { const c = Phaser.Display.Color.IntegerToRGB(tint); this.cameras.main.flash(160, c.r, c.g, c.b); this.cameras.main.shake(200, 0.004); }
+    if (d.size >= 4) { const c = Phaser.Display.Color.IntegerToRGB(tint); this.cameras.main.flash(160, c.r, c.g, c.b); this.shake(200, 0.004); }
     // the bigger it is, the longer it keeps glittering
     for (let k = 0; k < d.size; k++) this.time.delayedCall(250 + k * 220, () => { const c = d.cells[k % d.cells.length]; this.shards(center(c.x), center(c.y) - 4, d.tier, 6, 0.8); });
   }
@@ -869,6 +878,9 @@ export class DungeonScene extends Phaser.Scene {
       },
     });
   }
+
+  // Every shake goes through here, kept small: a nudge you feel, not a jolt that hides the board.
+  shake(ms, k) { this.cameras.main.shake(ms * 0.7, Math.min(0.0055, k * 0.4)); }
 
   // a heartbeat of stillness so a heavy hit lands
   hitStop(ms) {
