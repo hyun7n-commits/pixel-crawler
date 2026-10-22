@@ -200,6 +200,13 @@ const villageHooks = {
   onTalk: talkTo,
   onHome: openHome,
   onPet: () => sfx.play('talk'),
+  // a letter from the mailbox (data/home.js LETTERS)
+  onMail: letter => {
+    const f = FOLK[letter.from];
+    sfx.play('talk');
+    showVillageTip('');
+    showTalk({ who: f.sprite, name: `${f.name}의 편지`, line: letter.text, build: () => {} });
+  },
   onSwap: id => {
     meta.sel = id;
     saveMeta(meta);

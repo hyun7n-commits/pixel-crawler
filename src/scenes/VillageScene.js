@@ -11,7 +11,7 @@ import { faceKey } from '../data/faces.js';
 import { VILLAGE_MAP, HOUSES, FOLK, doorOf, HERO_LINES, HOME, ownsHome } from '../data/village.js';
 import { CHARACTERS } from '../data/characters.js';
 import { ZONES } from '../data/enemies.js';
-import { DECOR, hasDecor } from '../data/home.js';
+import { DECOR, hasDecor, LETTERS } from '../data/home.js';
 import { decorCanvas, pupCanvas } from './home-art.js';
 import { setEmote, drawEmote } from './emotes.js';
 
@@ -115,6 +115,13 @@ export class VillageScene extends Phaser.Scene {
     this.decor = {};
     this.pup = null;
     this.placeDecor();
+    // a letter in the mailbox now and then, when you come home from the fields
+    this.mailbox = { x: 34, y: 29, mailbox: true };
+    const senders = LETTERS.filter(l => FOLK[l.from].when(meta) && (!l.if || l.if(meta)));
+    this.mail = from === 'run' && hasDecor(meta, 'mailbox') && senders.length && Math.random() < 0.6
+      ? senders[Math.floor(Math.random() * senders.length)] : null;
+    this.mailMark = {};
+    this.mailNext = 0;
     // the villagers stand at their doors; ones who just moved in arrive with a little fanfare
     this.folk = [];
     const arrivals = [];
@@ -410,6 +417,12 @@ export class VillageScene extends Phaser.Scene {
     if (house && !house.lived) { this.hooks.onHover?.('빈 집: 아직 아무도 안 산다.', true); return; }
     if (this.homeAt(x, y) && !this.homeDoor) { this.hooks.onHover?.(this.homeLine(), true); return; }
     const d = !target && this.decorAt(x, y);
+    if (d?.id === 'mailbox' && this.mail) {
+      const near = this.near(this.mailbox);
+      if (near === 0) this.meet(this.mailbox);
+      else if (near) { this.path = near; this.pending = this.mailbox; }
+      return;
+    }
     if (d) { this.hooks.onHover?.(`${d.name}: ${d.desc}`, true); return; }
     if (target) {
       const near = this.near(target);
@@ -428,7 +441,8 @@ export class VillageScene extends Phaser.Scene {
     if (this.time.now < this.nextStep) return;
     this.nextStep = this.time.now + STEP_MS;
     const x = this.p.x + dx, y = this.p.y + dy;
-    const who = this.folkAt(x, y) || this.heroAt(x, y) || this.pupAt(x, y) || (this.homeAt(x, y) && this.homeDoor);
+    const who = this.folkAt(x, y) || this.heroAt(x, y) || this.pupAt(x, y) || (this.homeAt(x, y) && this.homeDoor) ||
+      (this.mail && this.decorAt(x, y)?.id === 'mailbox' && this.mailbox);
     this.path = [];
     if (who) { this.meet(who); return; }
     if (this.walkable(x, y) && this.canCut(this.p.x, this.p.y, dx, dy)) this.moveTo(x, y);
@@ -512,6 +526,12 @@ export class VillageScene extends Phaser.Scene {
     this.path = [];
     this.pending = null;
     if (who.home) { this.hooks.onHome?.(); return; }
+    if (who.mailbox) {
+      const letter = this.mail;
+      this.mail = null;
+      if (letter) this.hooks.onMail?.(letter);
+      return;
+    }
     if (who.x !== this.p.x) this.ps.setFlipX(who.x < this.p.x);
     if (who.pup) {
       who.s.setFlipX(this.p.x > who.x);
@@ -723,6 +743,10 @@ export class VillageScene extends Phaser.Scene {
     mk.clear();
     for (const s of all) drawEmote(mk, s, s.x, s.y - TILE - (s.hop || 0) - 3, time);
     if (pup) drawEmote(mk, pup.s, pup.s.x, pup.s.y - 13 - (pup.s.hop || 0), time);
+    if (this.mail && this.decor.mailbox) {
+      if (time > this.mailNext) { this.mailNext = time + 2400; setEmote(this.mailMark, '!', time, 1600); }
+      drawEmote(mk, this.mailMark, center(this.mailbox.x), foot(this.mailbox.y) - 21, time);
+    }
     // chimney smoke from the houses people live in, and the pond shimmering
     if (time > (this.nextSmoke || 0)) {
       this.nextSmoke = time + 450;
