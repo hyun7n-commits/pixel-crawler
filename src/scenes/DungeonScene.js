@@ -21,6 +21,14 @@ import { wait, fissionMs, evolveMs, FISSION_LEAD, FISSION_STEP, EVOLVE_FLASH } f
 const D = { tiles: 0, ter: 1, fire: 2, gas: 3, telegraph: 4, pickups: 5, enemies: 6, player: 7, overlay: 8, fx: 9, bubble: 10, text: 11 };
 // what a pickup looks like on the floor (items use their own sprite)
 const PICKUP_TEX = { gold: 'gold', chest: 'chest', lockedChest: 'lockedChest', key: 'key', necklace: 'necklace', candy: 'candy', crystal: 'pedestal' };
+// manga marks over a head, drawn in world pixels with a dark outline: 'c' is the mark's colour
+const EMOTES = {
+  '!': { c: 0xf4cf4f, rows: ['cc', 'cc', 'cc', 'cc', '..', 'cc'] },
+  '?': { c: 0x8fd8f0, rows: ['.cccc.', 'cc..cc', '....cc', '..ccc.', '..cc..', '......', '..cc..'] },
+  '…': { c: 0xf4f0e8, rows: ['cc.cc.cc', 'cc.cc.cc'] },
+  anger: { c: 0xff3b3b, line: null, k: 1.5, rows: ['.c.c.', 'cc.cc', '.....', 'cc.cc', '.c.c.'] }, // 💢, bare
+  '♪': { c: 0xf29bb2, rows: ['..c..', '..cc.', '..c.c', '..c..', 'ccc..', 'ccc..'] },
+};
 const center = v => v * TILE + TILE / 2;
 const foot = v => v * TILE + TILE;
 const hash = (x, y) => {
@@ -398,6 +406,7 @@ export class DungeonScene extends Phaser.Scene {
     this.lowHp = p.hp > 0 && p.hp <= run.stat().maxHp * 0.3;
 
     const alive = new Set();
+    let threat = false;
     for (const e of run.enemies) {
       if (e.hp <= 0) continue;
       alive.add(e.id);
@@ -417,7 +426,18 @@ export class DungeonScene extends Phaser.Scene {
       s.setVisible(run.isVisible(e.x, e.y) || (still && !!map.explored[idx(e.x, e.y)]) || sensed);
       s.setAlpha(sensed ? 0.5 : 1).setDepth(sensed ? D.overlay + 0.5 : D.enemies);
       this.moveTo(s, e.x, e.y, dur);
+      // a mark over its head when its mind changes: ! it saw you, ? it lost you, … it gave up, 💢 it got angry
+      const seen = run.isVisible(e.x, e.y);
+      if (seen && s.was) {
+        if (e.state === 'hunt' && !['hunt', 'flee'].includes(s.was)) this.emote(s, '!');
+        else if (e.state === 'search' && s.was === 'hunt') this.emote(s, '?', 1300);
+        else if (e.state === 'wander' && s.was === 'search') this.emote(s, '…', 1300);
+      }
+      if (seen && ((e.angry && !s.wasAngry) || (e.rage && !s.wasRage))) this.emote(s, 'anger', 1500);
+      s.was = e.state; s.wasAngry = e.angry; s.wasRage = e.rage;
+      if (seen && !e.d.npc && !run.calm(e) && !['hide', 'stone', 'sleep'].includes(e.state)) threat = true;
     }
+    this.safe = !threat;
     for (const id of Object.keys(this.enemySprites)) {
       const s = this.enemySprites[id];
       if (!alive.has(+id) && !s.dying) { s.crown?.destroy(); s.destroy(); delete this.enemySprites[id]; }
@@ -779,6 +799,14 @@ export class DungeonScene extends Phaser.Scene {
     s.dying = true;
     s.crown?.destroy();
     this.tweens.killTweensOf(s);
+    // that was the last one in sight: a happy little hop
+    this.later(260, () => {
+      const ps = this.playerSprite;
+      if (!ps || this.run.p.hp <= 0 || this.anyThreat()) return;
+      this.face('sparkle', 800);
+      this.emote(ps, '♪', 1000);
+      this.tweens.add({ targets: ps, hop: 4, duration: 110, yoyo: true, repeat: 1, ease: 'Quad.out' });
+    });
     this.tweens.add({
       targets: s, alpha: 0, scaleX: 1.4 * texScale(s), scaleY: 0.3 * texScale(s), duration: 220, ease: 'Quad.in',
       onComplete: () => { s.destroy(); delete this.enemySprites[e.id]; },
@@ -1060,7 +1088,7 @@ export class DungeonScene extends Phaser.Scene {
     const shadow = (s, w) => {
       if (!s || !s.visible || s.dying) return;
       if (s.flat) { this.shadowGfx.fillStyle(0x000000, 0.25); this.shadowGfx.fillEllipse(s.x, s.y - 2, 9, 3); return; }
-      const lift = Math.min(1, (s.hop || 0) / 6);
+      const lift = Math.min(1, (s.lift ?? s.hop ?? 0) / 6);
       this.shadowGfx.fillStyle(0x000000, 0.32 * (1 - 0.5 * lift));
       this.shadowGfx.fillEllipse(s.x, s.y - 1.5, w * (1 - 0.3 * lift), 4);
     };
@@ -1181,10 +1209,15 @@ export class DungeonScene extends Phaser.Scene {
       if (e.state === 'search' && e.searchT > 0) flip = Math.floor(time / 450) % 2 === 0; // looking around
       this.pose(s, e, flip, time);
       if (!s.visible) continue;
-      if (s.crown) s.crown.setPosition(s.x, s.y - TILE * 1.25 + 2 - s.hop);
-      const top = s.y - TILE * (s.scaleY / texScale(s)) * (e.d.boss ? 1.25 : 1) - s.hop;
+      if (s.crown) s.crown.setPosition(s.x, s.y - TILE * 1.25 + 2 - s.lift);
+      const top = s.y - TILE * (s.scaleY / texScale(s)) * (e.d.boss ? 1.25 : 1) - s.lift;
       if (['hide', 'stone', 'npc'].includes(e.state)) continue; // no marks: a chest, a statue, a friend
       this.drawStatus(g, s, e, top, flip ? -1 : 1, time);
+      if (run.calm(e) && !e.sleep && e.state !== 'sleep') {
+        if (!s.humAt) s.humAt = time + Math.random() * 4000;
+        else if (time > s.humAt) { s.humAt = time + 4500 + Math.random() * 3000; this.emote(s, '♪', 1300); }
+      }
+      this.drawEmote(g, s, s.x, top - 5, time);
       if (e.loot) { // your gold, in a little sack over its head
         const gy = top - 5 + Math.sin(time / 150) * 1;
         g.fillStyle(0x1b1424, 1); g.fillCircle(s.x, gy, 3.5);
@@ -1238,6 +1271,10 @@ export class DungeonScene extends Phaser.Scene {
       if (top >= 2) this.fx[top >= 3 ? 'magic' : 'ember'].explode(top >= 3 ? 3 : 2, ps.x + (Math.random() - 0.5) * 12, ps.y - 4 - Math.random() * 10);
     }
     this.drawStatus(g, ps, p, ps.y - TILE - ps.hop, p.face < 0 ? -1 : 1, time);
+    // nothing after you for a while: you hum to yourself
+    if (walking || !this.safe || this.lowHp || p.sleep || !ps.calmSince) ps.calmSince = time;
+    else if (time - ps.calmSince > 6000 && time > (ps.humAt || 0)) { ps.humAt = time + 5500; this.emote(ps, '♪', 1300); }
+    this.drawEmote(g, ps, ps.x, ps.y - TILE - ps.hop - 3, time);
 
     // speech bubbles follow their speaker
     this.bubbles = this.bubbles.filter(b => {
@@ -1248,6 +1285,34 @@ export class DungeonScene extends Phaser.Scene {
     });
 
     if (this.aim) this.drawAim(g, time);
+  }
+
+  anyThreat() {
+    const run = this.run;
+    return run.enemies.some(e => e.hp > 0 && !e.d.npc && !run.calm(e) && !['hide', 'stone', 'sleep'].includes(e.state) && run.isVisible(e.x, e.y));
+  }
+
+  // A manga mark over someone's head for a moment (see EMOTES): it pops in, rises a little, fades.
+  emote(s, kind, ms = 1100) {
+    if (s) s.emote = { kind, at: this.time.now, until: this.time.now + ms };
+  }
+
+  drawEmote(g, s, x, y, time) {
+    const m = s.emote;
+    if (!m || time > m.until) return;
+    const E = EMOTES[m.kind], el = time - m.at, left = m.until - time;
+    const k = (E.k || 1) * (el < 90 ? 0.4 + 0.8 * el / 90 : el < 160 ? 1.2 - 0.2 * (el - 90) / 70 : 1);
+    const a = left < 200 ? left / 200 : 1;
+    const w = E.rows[0].length, h = E.rows.length;
+    const x0 = x - w * k / 2, y0 = y - h * k - Math.min(el, 300) / 300 * 1.5;
+    const px = [];
+    E.rows.forEach((r, j) => [...r].forEach((c, i) => { if (c === 'c') px.push([x0 + i * k, y0 + j * k]); }));
+    if (E.line !== null) {
+      g.fillStyle(E.line ?? 0x1b1424, a);
+      for (const [px0, py0] of px) g.fillRect(px0 - 1, py0 - 1, k + 2, k + 2);
+    }
+    g.fillStyle(E.c, a);
+    for (const [px0, py0] of px) g.fillRect(px0, py0, k, k);
   }
 
   // A Chiikawa face on the hero for a moment; while two overlap, the stronger feeling stays.
@@ -1267,18 +1332,37 @@ export class DungeonScene extends Phaser.Scene {
       // a mimic gives itself away with a twitch now and then; a statue just stands there, grey
       const twitch = who.state === 'hide' && (time + id * 977) % 5200 < 160 ? 1.5 : 0;
       s.flat = who.state === 'hide';
-      s.setFlipX(false).setScale(texScale(s)).setOrigin(0.5, 1 + twitch / TILE);
+      s.setFlipX(false).setRotation(0).setScale(texScale(s)).setOrigin(0.5, 1 + twitch / TILE);
       if (time >= s.flashUntil) s.setTint(who.state === 'stone' ? 0xa8a8b8 : 0xffffff);
       return;
     }
-    s.setFlipX(flip);
     s.flat = false;
-    let sx = 1, sy = 1, hop = s.hop || 0, jitter = 0;
+    let sx = 1, sy = 1, hop = s.hop || 0, jitter = 0, rot = 0;
+    // each kind has its own way of standing about (faster when it is after you)
+    const asleep0 = who.sleep || who.state === 'sleep', windup = who.d && this.run.willHit(who);
+    if (who.d && !asleep0 && !windup && !who.stoneT && !s.dying) {
+      const t = time * (who.state === 'hunt' ? 1.5 : 1) + id * 377;
+      switch (who.d.sprite) {
+        case 'bat': case 'vampLord': // always on the wing: bobbing and flapping
+          hop = Math.max(hop, 2.5 + 1.5 * Math.sin(t / 170)); sx = 1 + 0.08 * Math.sin(t / 55); break;
+        case 'slime': { const w = Math.sin(t / 240); sx = 1 + 0.08 * w; sy = 1 - 0.08 * w; break; } // jelly
+        case 'rat': case 'thief': { const ph = t % 2600; if (ph < 380) hop = Math.max(hop, Math.abs(Math.sin(ph / 380 * Math.PI * 2)) * 2); break; } // sniffing hops
+        case 'goblin': if (t % 3400 < 420) flip = !flip; break; // glancing over its shoulder
+        case 'wraith': hop = Math.max(hop, Math.abs(Math.sin(t / 85)) * 1.5); break; // stamping, cross
+        case 'skel': case 'statue': rot = 0.07 * Math.sin(t / 520); break; // swaying on one foot
+        case 'wizard': rot = 0.05 * Math.sin(t / 700); break;
+        case 'spider': if (who.state === 'hunt') hop = Math.max(hop, Math.abs(Math.sin(t / 70)) * 0.8); break; // skittering
+        case 'garg': sx = 1 + 0.05 * Math.sin(t / 150); break; // crawling
+        case 'knight': if (t % 3000 < 220) { sx = 1.07; sy = 0.93; } break; // a snort
+        case 'turtle': rot = 0.03 * Math.sin(t / 900); break;
+      }
+    }
+    s.setFlipX(flip).setRotation(rot);
     if (who.d?.npc && who.type === 'ghost') hop = Math.max(hop, 2 + 1.5 * Math.sin(time / 380));
-    if (who.sleep || who.state === 'sleep') sy = 1 + 0.05 * Math.sin(time / 450 + id);
-    else if (who.d && this.run.willHit(who)) { sx = 1.08; sy = 0.86; }
+    if (asleep0) sy = 1 + 0.05 * Math.sin(time / 450 + id);
+    else if (windup) { sx = 1.08; sy = 0.86; }
     // awake and standing: breathing a little, each at their own pace
-    else if (!s.dying) sy = 1 + 0.025 * Math.sin(time / (420 + (id % 5) * 40) + id);
+    else if (!s.dying && sy === 1) sy = 1 + 0.025 * Math.sin(time / (420 + (id % 5) * 40) + id);
     if (who.burn > 0) hop = Math.max(hop, Math.abs(Math.sin(time / 90 + id)) * 3);
     // 부들부들: little bursts of trembling when nearly beaten, wide-eyed, or running for it
     const you = who === this.run.p, asleep = who.sleep || who.state === 'sleep';
@@ -1293,6 +1377,7 @@ export class DungeonScene extends Phaser.Scene {
     const k = texScale(s);
     if (!s.dying) s.setScale(base * sx * k * (s.sqx ?? 1), base * sy * k * (s.sqy ?? 1));
     s.setOrigin(0.5 + jitter / TILE, 1 + hop / TILE);
+    s.lift = hop;
     if (time < s.flashUntil) return;
     let tint = who.rage ? 0xff8080 : who.d?.boss ? 0xffb0b0 : 0xffffff;
     if (who.burn > 0) tint = 0xffc890;
