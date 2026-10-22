@@ -251,7 +251,7 @@ export function gasExplode(run, sx, sy) {
 }
 
 // ---------- explosions ----------
-export function explosion(run, x, y, r, { dmg, cause, selfMult = 0.5 }) {
+export function explosion(run, x, y, r, { dmg, cause, selfMult = 0.5, burn = 0 }) {
   const map = run.map, changed = [];
   let broke = false;
   run.emit('boom', { x, y, r });
@@ -260,7 +260,7 @@ export function explosion(run, x, y, r, { dmg, cause, selfMult = 0.5 }) {
     if (!inMap(tx, ty)) continue;
     const w = whoAt(run, tx, ty);
     if (w === 'player') run.hurtPlayer(Math.max(1, Math.round(dmg * selfMult)), cause, 'bomb');
-    else if (w) run.hurt(w, dmg, 'fire');
+    else if (w) { run.hurt(w, dmg, 'fire'); if (burn && w.hp > 0) setBurn(run, w, burn); }
     const t = map.tiles[idx(tx, ty)];
     if (t === GRAVE) { openGrave(run, tx, ty); continue; }
     if ((t === WALL && !isBorder(tx, ty)) || t === DOOR || t === LOCKED) {
@@ -317,7 +317,7 @@ function creatureTick(run, who) {
   const i = idx(b.x, b.y);
 
   // peppermint lets you shrug off thinner gas, and at Lv3 all of it
-  const mint = who === 'player' ? run.p.relics.mint || 0 : 0;
+  const mint = who === 'player' ? (run.lv('dreamlamp') ? 3 : run.lv('mint')) : 0;
   const sleepAt = mint >= 3 ? Infinity : SLEEP_MIN * (1 + mint);
   if (map.gas.sleep[i] >= sleepAt) {
     if (who === 'player') {

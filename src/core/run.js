@@ -3,7 +3,7 @@
 // Enemy behaviour lives in ai.js, fire/gas/explosions in world.js.
 
 import * as B from '../data/balance.js';
-import { RELICS, EVOLUTIONS, LEGENDS, MAX_LEVEL, MAX_SLOTS } from '../data/relics.js';
+import { RELICS, RECIPES, MAX_LEVEL, MAX_SLOTS, DISCOVERY_GOLD, tierOf, maxLevelOf, recipeKey, recipesWith, fusedId, isFused, fusedParts, relicName } from '../data/relics.js';
 import { CHARACTERS } from '../data/characters.js';
 import { ENEMIES, ZONES } from '../data/enemies.js';
 import { ITEMS } from '../data/items.js';
@@ -39,6 +39,7 @@ export class Run {
     this.victory = false;
     this.cause = '';        // what knocked you out, for the summary
     this.found = [];        // discoveries made this run
+    this.newRecipes = [];   // recipes found for the first time this run
     this.told = {};         // one-time hints already shown
     this.floors = {};       // floors you left, kept as they were so you can go back for what you missed
     this.trail = [];        // your last steps on this floor; hunting enemies follow them
@@ -68,21 +69,36 @@ export class Run {
 
   // ---------- derived stats ----------
   stat() {
-    const rl = this.p.relics, ch = this.char, up = this.meta.up;
-    const lv = id => rl[id] || 0;
+    const L = this.levels(), ch = this.char, up = this.meta.up;
+    const lv = id => L[id] || 0, on = id => lv(id) > 0;
     return {
-      atk: ch.atk + up.atk + 2 * lv('blade') + (rl.flamesword ? 8 : 0) + (rl.volcano ? 10 : 0),
-      def: ch.def + lv('shield') + (rl.fortress ? 5 : 0) + (rl.undying ? 6 : 0),
-      maxHp: ch.hp + up.hp * 4 + 8 * lv('heart') + (rl.bloodcrown ? 30 : 0) + (rl.undying ? 40 : 0) + (this.p.lvl - 1) * B.HP_PER_LEVEL,
-      goldMult: 1 + 0.4 * lv('coin') + (rl.goldbolt ? 1.5 : 0) + (rl.goldstorm ? 2 : 0) + 0.1 * up.greed,
-      dodge: (ch.dodge || 0) + 0.08 * lv('cloak') + (rl.shadow ? 0.3 : 0),
-      sneak: rl.shadow ? 3 : 1.5 + 0.25 * lv('boots'),        // damage multiplier on a surprise attack
-      sight: B.SIGHT + lv('lantern'),
-      oreMult: rl.goldrush || rl.goldstorm ? 3 : 1 + 0.5 * lv('pick'),
-      oreRise: rl.goldrush || rl.goldstorm ? 0.25 : 0.05 * lv('pick'),   // extra chance a swing finds a better grade
-      magnet: rl.goldstorm ? 5 : rl.goldrush ? 4 : rl.magnet ? rl.magnet + 1 : 0,
+      atk: ch.atk + up.atk + 2 * lv('blade') + (on('flamesword') ? 4 + 2 * lv('flamesword') : 0) + 2 * lv('volcano') + (on('minecrown') ? 5 : 0),
+      def: ch.def + lv('shield') + (on('fortress') ? 2 + lv('fortress') : 0) + lv('undying'),
+      maxHp: ch.hp + up.hp * 4 + 8 * lv('heart') + (on('bloodcrown') ? 15 + 5 * lv('bloodcrown') : 0) + 10 * lv('lifetree') + (on('eternity') ? 30 : 0) +
+        (this.p.lvl - 1) * B.HP_PER_LEVEL,
+      goldMult: 1 + 0.4 * lv('coin') + (on('goldbolt') ? 0.75 + 0.25 * lv('goldbolt') : 0) + 0.25 * lv('goldstorm') + (on('minecrown') ? 0.5 : 0) + 0.1 * up.greed,
+      dodge: (ch.dodge || 0) + 0.08 * lv('cloak') + (on('shadow') ? 0.15 + 0.05 * lv('shadow') : 0) + 0.05 * lv('phantom'),
+      // damage multiplier on a surprise attack
+      sneak: (on('shadow') ? 2.25 + 0.25 * lv('shadow') : 1.5 + 0.25 * lv('boots')) + 0.5 * lv('phantom') + (on('eclipse') ? 2 : 0) + (ch.sneak || 0),
+      sight: B.SIGHT + lv('lantern') + (on('dreamlamp') ? 1 + lv('dreamlamp') : 0),
+      oreMult: on('goldrush') ? 1.5 + 0.5 * lv('goldrush') : 1 + 0.5 * lv('pick'),
+      // extra chance a swing finds a better grade
+      oreRise: (on('goldrush') ? 0.1 + 0.05 * lv('goldrush') : 0.05 * lv('pick')) + (on('minecrown') ? 0.15 : 0),
+      magnet: on('goldrush') ? 1 + lv('goldrush') : on('magnet') ? lv('magnet') + 1 : 0,
     };
   }
+  // Every relic in effect and its level: the ones in your slots, and what fused relics, legends and
+  // myths hold inside them (always at full strength).
+  levels() {
+    const out = {};
+    const add = (id, l) => {
+      out[id] = Math.max(out[id] || 0, l);
+      for (const h of isFused(id) ? fusedParts(id) : RELICS[id].has || []) add(h, maxLevelOf(h));
+    };
+    for (const [id, l] of Object.entries(this.p.relics)) add(id, l);
+    return out;
+  }
+  lv(id) { return this.levels()[id] || 0; }
   // Runs fn; any gain in max HP also fills current HP by the same amount.
   withMaxHpDelta(fn) {
     const before = this.stat().maxHp;
@@ -112,7 +128,7 @@ export class Run {
   // true if this enemy will hit you on its next turn (shown as a claw mark on your tile)
   willHit(e) {
     return e.hp > 0 && e.state === 'hunt' && this.touching(e, this.p) && !e.aim && !e.slam && !e.stun &&
-      !(e.d.slow && !e.skip);
+      !e.stoneT && !e.backoff && !e.charge && !(e.d.slow && !e.skip);
   }
   get zone() { return zoneOf(this.floor); }
 
@@ -142,7 +158,7 @@ export class Run {
   enterFloor() {
     this.telegraph = [];
     this.trail = [{ x: this.p.x, y: this.p.y }];
-    this.bandageUsed = false;
+    this.bandageUsed = 0;
     this.refreshDoors();
     computeFOV(this.map, this.p.x, this.p.y, this.stat().sight);
     this.emit('floor');
@@ -203,8 +219,15 @@ export class Run {
     // about half of them start asleep
     for (let i = 0; i < B.enemiesPerFloor(this.floor); i++) {
       place(s => {
-        const e = this.spawnEnemy(pick(this.zone.enemies), s.x, s.y, scale);
-        e.state = Math.random() < B.START_ASLEEP ? 'sleep' : 'wander';
+        const type = pick(this.zone.enemies), state = Math.random() < B.START_ASLEEP ? 'sleep' : 'wander';
+        const e = this.spawnEnemy(type, s.x, s.y, scale);
+        e.state = state;
+        // pack animals bring friends, curled up right beside them
+        for (let k = 1, n = e.d.pack ? rint(2, e.d.pack) : 1; k < n; k++) {
+          const t = shuffle(DIRS8.slice()).map(([dx, dy]) => ({ x: e.x + dx, y: e.y + dy }))
+            .find(t => map.tiles[idx(t.x, t.y)] === FLOOR && this.canEnemyEnter(t.x, t.y));
+          if (t) this.spawnEnemy(type, t.x, t.y, scale).state = state;
+        }
       });
     }
     if (Math.random() < B.TURTLE_CHANCE) {
@@ -213,7 +236,7 @@ export class Run {
     for (let i = 0, n = rint(5, 7); i < n; i++) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'gold', amount: (zi + 1) * rint(3, 7) }));
     place(s => this.addChest(s.x, s.y));
     if (this.floor === 1) place(s => this.addChest(s.x, s.y));
-    if (Math.random() < 0.6) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'potion' }));
+    if (Math.random() < B.POTION_CHANCE) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'potion' }));
     if (Math.random() < 0.6) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'bomb' }));
     if (Math.random() < 0.3) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'map' }));
 
@@ -286,7 +309,8 @@ export class Run {
     } else {
       this.meta.stats.maxFloor = Math.max(this.meta.stats.maxFloor, this.floor);
       this.genFloor();
-      if (this.p.relics.bombbag) { this.p.items.bomb++; this.log('폭탄 가방에서 폭탄을 하나 꺼냈다.', 'good'); }
+      const fb = this.lv('firebomb'), bombs = fb ? (fb < 3 ? 1 : 2) : this.lv('bombbag') ? 1 : 0;
+      if (bombs) { this.p.items.bomb += bombs; this.log('폭탄 가방에서 폭탄을 꺼냈다.', 'good'); }
     }
     this.emit('banner', { text: isBossFloor(this.floor) ? `${this.floor}층 · 보스` : `${this.floor}층 · ${this.zone.name}` });
     this.log(dir > 0 ? `${this.floor}층에 내려왔다.` : `${this.floor}층으로 올라왔다.`);
@@ -412,7 +436,7 @@ export class Run {
   // Relics the blacksmith can hammer up a level (asked when the sheet opens, so two picks in a row stay right).
   smithOffers() {
     const rl = this.p.relics;
-    const ids = Object.keys(rl).filter(id => !RELICS[id].evo && rl[id] < MAX_LEVEL);
+    const ids = Object.keys(rl).filter(id => rl[id] < maxLevelOf(id));
     return ids.length ? ids.map(id => ({ kind: 'relic', id })) : [{ kind: 'gold', name: '덩어리 값', amount: 60 }];
   }
 
@@ -433,7 +457,7 @@ export class Run {
     const rose = !last && ore.tier < top && (nugget || Math.random() < rise);
     if (rose) { ore.tier++; this.meetOre(ore.tier); }
     const g = ORES[ore.tier];
-    const r = B.ORE_NOISE[k] + (nugget ? 2 : 0);
+    const r = Math.round((B.ORE_NOISE[k] + (nugget ? 2 : 0)) * (this.char.quiet ? 0.75 : 1));
     let gold;
     if (!last) gold = Math.round(B.oreGold(this.floor) * g.mult * B.ORE_SWING[k] * s.oreMult * big * (nugget ? B.ORE_NUGGET_MULT : 1));
     this.emit('mine', { x: at.x, y: at.y, cells: ore.cells, size: ore.size, from: { x: p.x, y: p.y }, hits: ore.hits, r, last, tier: ore.tier, rose, nugget });
@@ -460,7 +484,8 @@ export class Run {
     const heard = this.noise(ore.x, ore.y, r);
     // the deeper you dig, the more the mine answers: monsters crawl out of the dark toward the sound
     const came = [];
-    for (let n = 0; n < B.ORE_WAVE[k] + (B.ORE_WAVE[k] ? B.ORE_SIZE_WAVE[ore.size - 1] : 0); n++) {
+    const wave = B.ORE_WAVE[k] + (B.ORE_WAVE[k] ? B.ORE_SIZE_WAVE[ore.size - 1] : 0);
+    for (let n = 0; n < (this.char.quiet ? wave - 1 : wave); n++) {
       const t = this.waveSpot(ore);
       if (!t) break;
       const e = this.spawnEnemy(pick(this.zone.enemies), t.x, t.y, B.enemyScale(this.floor));
@@ -504,8 +529,9 @@ export class Run {
     p.items.bomb--;
     if (x !== p.x) p.face = Math.sign(x - p.x);
     this.emit('throw', { from: { x: p.x, y: p.y }, to: { x, y } });
-    const bag = this.p.relics.bombbag || 0;
-    explosion(this, x, y, 1, { dmg: Math.round(B.bombDamage(this.floor) * (1 + 0.25 * Math.max(0, bag - 1))), cause: '내가 던진 폭탄에 휘말렸다' });
+    const bag = this.lv('bombbag'), fb = this.lv('firebomb');
+    const mult = fb ? 1.25 + 0.25 * fb : 1 + 0.25 * Math.max(0, bag - 1);
+    explosion(this, x, y, 1, { dmg: Math.round(B.bombDamage(this.floor) * mult), cause: '내가 던진 폭탄에 휘말렸다', burn: fb ? 3 : 0 });
     this.endTurn();
     return true;
   }
@@ -516,7 +542,8 @@ export class Run {
       if (q.type === 'lockedChest' && !map.keyHeld) { this.log('잠긴 상자다. 이 층 어딘가에 열쇠가 있을 것이다.'); continue; }
       this.pickups.splice(this.pickups.indexOf(q), 1);
       this.emit('pickup', { x, y, type: q.type });
-      if (q.type === 'gold') this.addGold(q.amount);
+      if (q.type === 'gold' && q.stolen) { this.gold += q.amount; this.emit('gold', { x, y, n: q.amount }); }
+      else if (q.type === 'gold') this.addGold(q.amount);
       else if (q.type === 'chest') {
         this.queue.push({ kind: 'chest', rich: !!q.rich, vein: !!q.vein });
         this.log('보물 상자를 열었다!', 'good');
@@ -539,7 +566,7 @@ export class Run {
   // A relic from a crystal vault: the other crystals of that vault shatter.
   takeCrystal(q) {
     const rl = this.p.relics, id = q.relic;
-    const fits = rl[id] ? rl[id] < MAX_LEVEL : Object.keys(rl).length < MAX_SLOTS;
+    const fits = rl[id] ? rl[id] < maxLevelOf(id) : Object.keys(rl).length < MAX_SLOTS;
     if (fits) this.gainRelic(id);
     else { this.addGold(40); this.log('유물을 더 담을 수 없어서 수정이 골드로 부서졌다.'); }
     for (const o of this.pickups.filter(o => o.type === 'crystal' && o.vault === q.vault)) {
@@ -560,7 +587,7 @@ export class Run {
   unaware(e) { return ['sleep', 'wander', 'search'].includes(e.state) || this.calm(e); }
 
   playerAttack(e) {
-    const s = this.stat(), rl = this.p.relics, lv = id => rl[id] || 0;
+    const s = this.stat(), L = this.levels();
     const base = s.atk + rnd(2);
     if (this.unaware(e)) {
       this.emit('sneak', { x: e.x, y: e.y, from: { x: this.p.x, y: this.p.y } });
@@ -568,7 +595,7 @@ export class Run {
       this.strike(e, Math.round(base * s.sneak), 'sneak');
     } else this.strike(e, base, 'normal');
     // the swing carries on into everyone else standing next to you
-    const quake = rl.quake || rl.volcano, sweep = lv('sweep');
+    const quake = L.quake, sweep = L.sweep || 0;
     if (quake || sweep) {
       for (const o of this.enemies.filter(o => o !== e && o.hp > 0 && this.touching(o, this.p))) {
         this.emit('attack', { from: { x: this.p.x, y: this.p.y }, to: { x: o.x, y: o.y }, who: 'player' });
@@ -579,31 +606,55 @@ export class Run {
 
   // One blow from you: defence, then the relics that ride along with every hit.
   strike(e, raw, kind) {
-    const rl = this.p.relics;
+    const L = this.levels();
     this.hurt(e, Math.max(1, raw - e.def), kind);
+    if (this.char.lifesteal && !e.d.npc) this.heal(this.char.lifesteal);
     if (e.hp <= 0) return;
     let fire = 0;
-    if (rl.flamesword || rl.volcano) fire = 5;
-    else if (rl.ring && Math.random() < 0.3) fire = 3 * rl.ring;
+    if (L.flamesword) fire = 2 + L.flamesword;
+    else if (L.ring && Math.random() < 0.3) fire = 3 * L.ring;
     if (fire) {
       this.hurt(e, fire, 'fire');
       const t = this.map.ter[idx(e.x, e.y)];
       if (t === T.BRUSH) ignite(this, e.x, e.y);
     }
-    const stun = rl.quake || rl.volcano ? 0.3 : 0.15 * (rl.hammer || 0);
+    const stun = L.quake ? 0.15 + 0.05 * L.quake : 0.15 * (L.hammer || 0);
     if (e.hp > 0 && !e.d.boss && Math.random() < stun) { e.stun = 1; this.emit('stun', { x: e.x, y: e.y }); }
   }
 
   hurt(e, dmg, kind) {
     if (e.hp <= 0 || e.d.npc) return;
+    if (e.stoneT > 0) dmg = 1; // a gargoyle gone to stone barely feels it
     e.hp -= dmg;
     this.emit('hit', { enemy: e, x: e.x, y: e.y, dmg, kind });
     if (e.hp <= 0) this.onKill(e);
-    else rouse(this, e, 'hit');
+    else {
+      rouse(this, e, 'hit');
+      if (e.d.splits && e.hp >= 4) this.split(e);
+    }
+  }
+
+  // A slime that takes a hit and lives splits off half of what it has left into a little one beside it.
+  split(e) {
+    const spot = shuffle(DIRS8.slice()).map(([dx, dy]) => ({ x: e.x + dx, y: e.y + dy })).find(t => this.canEnemyEnter(t.x, t.y));
+    if (!spot) return;
+    const half = Math.floor(e.hp / 2);
+    e.hp -= half;
+    const c = this.spawnEnemy(e.type, spot.x, spot.y);
+    Object.assign(c, { hp: half, maxHp: e.maxHp, atk: e.atk, state: 'hunt', last: { x: this.p.x, y: this.p.y }, small: true, xp: 1 });
+    e.small = true;
+    this.emit('split', { enemy: e, child: c, from: { x: e.x, y: e.y } });
+  }
+
+  // A thief that got out of sight with your gold is gone, and the gold with it.
+  escape(e) {
+    e.hp = 0;
+    this.emit('escape', { enemy: e });
+    this.log(`${josa(e.d.name, '이', '가')} 골드를 들고 사라졌다…`, 'warn');
   }
 
   onKill(e) {
-    const rl = this.p.relics, stats = this.meta.stats;
+    const L = this.levels(), stats = this.meta.stats;
     this.kills++; stats.kills++;
     this.emit('kill', { enemy: e });
     if (e.d.boss) {
@@ -628,25 +679,38 @@ export class Run {
     } else if (e.d.quest) {
       this.pickups.push({ x: e.x, y: e.y, type: 'necklace' });
       this.log('도둑 쥐가 반짝돌 목걸이를 떨궜다!', 'good');
+    } else if (e.loot) {
+      this.pickups.push({ x: e.x, y: e.y, type: 'gold', amount: e.loot, stolen: true });
     } else if (Math.random() < B.GOLD_DROP_CHANCE) {
       this.pickups.push({ x: e.x, y: e.y, type: 'gold', amount: (Math.floor((this.floor - 1) / 3) + 1) * rint(1, 4) });
     }
-    const heal = 2 * (rl.fang || 0) + (rl.bloodcrown ? 10 : 0);
+    if (e.d.bones) this.boneBurst(e);
+    const heal = 2 * (L.fang || 0) + (L.bloodcrown ? 4 + 2 * L.bloodcrown : 0);
     if (heal) this.heal(heal);
-    this.gainXp(e.d.xp);
+    this.gainXp(e.xp ?? e.d.xp);
+  }
+
+  // A skeleton falls apart in a burst of bone: everyone next to it takes a hit, monsters too.
+  boneBurst(e) {
+    const dmg = e.atk + rint(1, 3);
+    this.emit('bones', { x: e.x, y: e.y });
+    for (const o of this.enemies.filter(o => o !== e && o.hp > 0 && cheb(o, e) === 1)) this.hurt(o, dmg * 2, 'bones');
+    if (cheb(this.p, e) === 1) this.hurtPlayer(Math.max(1, dmg - this.stat().def), '해골 뼛조각에 맞았다', 'bones');
   }
 
   damagePlayer(raw, src, kind = 'melee') {
-    const s = this.stat(), rl = this.p.relics, p = this.p;
-    if (s.dodge && Math.random() < s.dodge) { this.emit('dodge', { x: p.x, y: p.y }); return; }
+    const s = this.stat(), L = this.levels(), p = this.p;
+    if (s.dodge && Math.random() < s.dodge) { this.emit('dodge', { x: p.x, y: p.y }); return false; }
+    if (this.char.block && Math.random() < this.char.block) { this.emit('block', { x: p.x, y: p.y, from: { x: src.x, y: src.y } }); return false; }
     const roll = raw * (B.HIT_ROLL[0] + Math.random() * (B.HIT_ROLL[1] - B.HIT_ROLL[0]));
     const dmg = Math.max(1, Math.round(roll) + rnd(2) - s.def);
     this.hurtPlayer(dmg, `${src.d.name}에게 당했다`, kind);
-    if (src && kind === 'melee') {
-      const thorn = rl.undying ? 10 : rl.fortress ? 8 : 2 * (rl.thorns || 0);
+    if (src && (kind === 'melee' || kind === 'charge')) {
+      const thorn = L.fortress ? 4 + 2 * L.fortress : 2 * (L.thorns || 0);
       if (thorn) this.hurt(src, thorn, 'thorns');
       if (src.type === 'lord' && src.hp > 0) src.hp = Math.min(src.maxHp, src.hp + dmg);
     }
+    return true;
   }
 
   // Damage that ignores defence and dodging (fire, gas, falling rocks, your own bomb...)
@@ -665,16 +729,17 @@ export class Run {
       this.log('으윽... 간신히 버텼다! 한 대만 더 맞으면 끝이다.', 'warn');
       this.emit('hangon', { x: p.x, y: p.y });
     }
-    const rl = p.relics, maxHp = this.stat().maxHp;
-    if (p.hp <= 0 && rl.undying && !this.revived) {
-      this.revived = true;
+    const L = this.levels(), maxHp = this.stat().maxHp;
+    const lives = L.eternity ? 2 : L.undying ? 1 : 0, band = L.herbal ? 6 + 4 * L.herbal : 6 * (L.bandage || 0);
+    if (p.hp <= 0 && (this.revives || 0) < lives) {
+      this.revives = (this.revives || 0) + 1;
       p.hp = 0;
       this.heal(Math.round(maxHp / 2));
       this.log('불사의 심장이 뛴다! 쓰러졌다가 다시 일어났다.', 'evo');
       this.emit('banner', { text: '불사의 심장!' });
-    } else if (p.hp > 0 && rl.bandage && !this.bandageUsed && p.hp < maxHp / 3) {
-      this.bandageUsed = true;
-      this.heal(6 * rl.bandage);
+    } else if (p.hp > 0 && band && this.bandageUsed < (L.herbal ? 2 : 1) && p.hp < maxHp / 3) {
+      this.bandageUsed++;
+      this.heal(band);
       this.log('비상 붕대를 감았다.', 'good');
     }
   }
@@ -738,13 +803,15 @@ export class Run {
 
   // ---------- turn ----------
   endTurn() {
-    const p = this.p, rl = p.relics;
+    const p = this.p, L = this.levels();
     this.turn++;
-    if (this.turn % B.REGEN_TURNS === 0 && p.hp > 0 && p.hp < this.stat().maxHp) p.hp++;
-    if (rl.goldstorm && this.turn % 2 === 0) this.zap(4, 12);
-    else if (rl.goldbolt && this.turn % 3 === 0) this.zap(3, 10);
-    else if (rl.bolt && this.turn % 6 === 0) this.zap(1, 4 * rl.bolt);
-    if (rl.moss && this.turn % [6, 4, 2][rl.moss - 1] === 0) this.heal(1);
+    if (!this.char.noRegen && this.turn % B.REGEN_TURNS === 0 && p.hp > 0 && p.hp < this.stat().maxHp) p.hp++;
+    if (L.goldbolt && this.turn % (L.goldstorm ? 2 : 3) === 0) this.zap(L.goldbolt + 1 + (L.goldstorm ? 1 : 0), 6 + 2 * L.goldbolt);
+    else if (L.bolt && this.turn % 6 === 0) this.zap(1, 4 * L.bolt);
+    const every = L.eclipse ? 3 : L.meteor ? 10 - 2 * L.meteor : 0;
+    if (every && this.turn % every === 0) this.meteor(10 + 5 * (L.meteor || 1));
+    const regen = L.lifetree ? (L.lifetree < 2 ? 2 : 1) : L.herbal ? [3, 2, 2][L.herbal - 1] : L.moss ? [6, 4, 2][L.moss - 1] : 0;
+    if (regen && this.turn % regen === 0) this.heal(1);
 
     // doors shut the moment nobody stands in them, so a chaser right behind you loses sight of you
     // as you step through (the Shattered Pixel Dungeon door ambush)
@@ -818,6 +885,16 @@ export class Run {
       .slice(0, count);
     const hit = new Set();
     for (const e of targets) this.zapHit({ x: this.p.x, y: this.p.y }, e, dmg, hit);
+  }
+
+  // A rock from the sky onto the nearest enemy you can see, and a share of it on whoever stands beside it.
+  meteor(dmg) {
+    const e = this.enemies
+      .filter(e => e.hp > 0 && this.isVisible(e.x, e.y) && !this.calm(e) && e.state !== 'hide' && e.state !== 'stone' && !e.d.npc)
+      .sort((a, b) => cheb(a, this.p) - cheb(b, this.p))[0];
+    if (!e) return;
+    this.emit('meteor', { x: e.x, y: e.y });
+    for (const o of this.enemies.filter(o => o.hp > 0 && cheb(o, e) <= 1 && !o.d.npc)) this.hurt(o, o === e ? dmg : Math.ceil(dmg / 2), 'fire');
   }
 
   zapHit(from, e, dmg, hit) {
@@ -932,25 +1009,44 @@ export class Run {
   relicAvailable(id) { return !RELICS[id].locked || this.meta.relicUnlock[id]; }
 
   offers(n = 3) {
-    const rl = this.p.relics, full = Object.keys(rl).length >= MAX_SLOTS;
+    n += (this.char.choices || 3) - 3;
+    const rl = this.p.relics, full = Object.keys(rl).length >= MAX_SLOTS, known = this.meta.recipes, have = this.levels();
     const pool = Object.keys(RELICS).filter(id => {
-      if (RELICS[id].evo) return false;
-      if (rl[id]) return rl[id] < MAX_LEVEL;
-      if (full) return false;
-      const ev = EVOLUTIONS.find(e => e.a === id || e.b === id);
-      if (ev && rl[ev.id]) return false;
+      if (rl[id]) return rl[id] < maxLevelOf(id);
+      if (tierOf(id) > 0 || full) return false;
+      // nothing new could come of it: everything it goes into, you already have
+      const uses = recipesWith(id);
+      if (uses.length && uses.every(rc => have[rc.id])) return false;
       return this.relicAvailable(id);
     });
-    // like Vampire Survivors, one card usually helps what you already have (a level, or an evolution partner),
-    // so evolutions stay within reach even with many relics in the pool
-    const grows = id => rl[id] || EVOLUTIONS.some(ev => (ev.a === id && rl[ev.b]) || (ev.b === id && rl[ev.a]));
+    // like Vampire Survivors, one card usually helps what you already have: a level, or the partner
+    // in a recipe you have found before. Recipes you haven't found stay a secret, so no hints there.
+    const grows = id => rl[id] || recipesWith(id).some(rc => known[recipeKey(rc)] && rl[rc.a === id ? rc.b : rc.a]);
     const growth = pool.filter(grows), ids = [];
     if (growth.length && Math.random() < 0.75) ids.push(pick(growth));
     for (const id of shuffle(pool.slice())) if (ids.length < n && !ids.includes(id)) ids.push(id);
     const res = shuffle(ids).map(id => ({ kind: 'relic', id }));
+    // two maxed relics that make nothing together can still be fused into one slot
+    const pair = this.fusablePair();
+    if (pair && (full || Math.random() < 0.35)) {
+      if (res.length >= n) res.pop();
+      res.push({ kind: 'fuse', a: pair[0], b: pair[1] });
+    }
     if (res.length < n) res.push({ kind: 'heal' });
     if (res.length < n) res.push({ kind: 'gold' });
     return res;
+  }
+
+  // Two relics at full level that are no recipe together (and not fused or myths already).
+  fusablePair() {
+    const rl = this.p.relics;
+    const ready = Object.keys(rl).filter(id => !isFused(id) && tierOf(id) < 3 && rl[id] >= MAX_LEVEL);
+    const pairs = [];
+    for (let i = 0; i < ready.length; i++) for (let j = i + 1; j < ready.length; j++) {
+      const a = ready[i], b = ready[j];
+      if (!RECIPES.some(rc => (rc.a === a && rc.b === b) || (rc.a === b && rc.b === a))) pairs.push([a, b]);
+    }
+    return pairs.length ? pick(pairs) : null;
   }
 
   // Called by the UI after the player picks one of `offers()`.
@@ -959,6 +1055,7 @@ export class Run {
     if (o.kind === 'heal') this.heal(Math.round(this.stat().maxHp * 0.5));
     else if (o.kind === 'gold') this.addGold(o.amount || 25);
     else if (o.kind === 'relic') this.gainRelic(o.id);
+    else if (o.kind === 'fuse') this.fuse(o.a, o.b);
     this.emit('relics');
   }
 
@@ -966,29 +1063,34 @@ export class Run {
     const rl = this.p.relics;
     this.withMaxHpDelta(() => { rl[id] = (rl[id] || 0) + 1; });
     this.log(`${RELICS[id].name} Lv${rl[id]}`, 'good');
-    this.checkEvolutions();
+    this.checkRecipes();
     this.emit('relics');
   }
 
-  checkEvolutions() {
-    const rl = this.p.relics;
-    for (const ev of EVOLUTIONS) {
-      if (rl[ev.a] === MAX_LEVEL && rl[ev.b] === MAX_LEVEL && !rl[ev.id]) {
-        this.withMaxHpDelta(() => { delete rl[ev.a]; delete rl[ev.b]; rl[ev.id] = 1; });
+  fuse(a, b) {
+    const rl = this.p.relics, id = fusedId(a, b);
+    this.withMaxHpDelta(() => { delete rl[a]; delete rl[b]; rl[id] = 1; });
+    this.meta.stats.fusions = (this.meta.stats.fusions || 0) + 1;
+    this.log(`합체! ${relicName(id)}`, 'evo');
+    this.emit('evolve', { id, tier: 0, fused: true, x: this.p.x, y: this.p.y });
+  }
+
+  // Any recipe you now hold the two halves of goes off by itself, the first time as a discovery.
+  checkRecipes() {
+    const rl = this.p.relics, ready = id => rl[id] && (tierOf(id) > 0 || rl[id] >= MAX_LEVEL);
+    for (let again = true; again;) {
+      again = false;
+      for (const rc of RECIPES) {
+        if (rl[rc.id] || !ready(rc.a) || !ready(rc.b)) continue;
+        this.withMaxHpDelta(() => { delete rl[rc.a]; delete rl[rc.b]; rl[rc.id] = 1; });
+        const key = recipeKey(rc), first = !this.meta.recipes[key], tier = tierOf(rc.id);
+        this.meta.recipes[key] = true;
         this.meta.stats.evos++;
-        this.log(`진화! ${RELICS[ev.a].name} + ${RELICS[ev.b].name} → ${RELICS[ev.id].name}`, 'evo');
-        this.emit('evolve', { id: ev.id, x: this.p.x, y: this.p.y });
-        this.emit('banner', { text: `진화! ${RELICS[ev.id].name}` });
-      }
-    }
-    for (const lg of LEGENDS) {
-      if (rl[lg.a] && rl[lg.b] && !rl[lg.id]) {
-        this.withMaxHpDelta(() => { delete rl[lg.a]; delete rl[lg.b]; rl[lg.id] = 1; });
-        const first = !this.meta.legends[lg.id];
-        this.meta.legends[lg.id] = true;
-        this.log(`전설 탄생! ${RELICS[lg.a].name} + ${RELICS[lg.b].name} → ${RELICS[lg.id].name}${first ? ' (처음 만들었다!)' : ''}`, 'evo');
-        this.emit('evolve', { id: lg.id, x: this.p.x, y: this.p.y });
-        this.emit('banner', { text: `전설 탄생! ${RELICS[lg.id].name}` });
+        if (first) { this.newRecipes.push(key); this.gold += DISCOVERY_GOLD[tier]; }
+        this.log(`${['', '진화', '전설', '신화'][tier]}! ${RELICS[rc.a].name} + ${RELICS[rc.b].name} → ${RELICS[rc.id].name}`, 'evo');
+        this.emit('evolve', { id: rc.id, tier, first, x: this.p.x, y: this.p.y });
+        this.emit('banner', { text: RELICS[rc.id].name });
+        again = true;
       }
     }
   }

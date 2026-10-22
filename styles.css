@@ -110,6 +110,16 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .relic .lv { position: absolute; right: 2px; bottom: 0; font-size: 10px; font-weight: 700; color: var(--fg); text-shadow: 1px 1px 0 #000; }
 .relic.evo { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
 .relic.legend { border-color: #f08c3a; box-shadow: inset 0 0 0 1px #f08c3a, 0 0 6px #f08c3a; }
+.relic.myth { border-color: #c48cff; box-shadow: inset 0 0 0 1px #c48cff, 0 0 8px #9a5fd1; animation: mythglow 1.6s ease-in-out infinite alternate; }
+.relic.fused { border-color: #6fe0e0; box-shadow: inset 0 0 0 1px #6fe0e0; }
+@keyframes mythglow { from { box-shadow: inset 0 0 0 1px #c48cff, 0 0 4px #9a5fd1; } to { box-shadow: inset 0 0 0 1px #c48cff, 0 0 12px #c48cff; } }
+/* a fused relic: its two halves overlapping, the second a little lower */
+.fused-icon { position: relative; width: 80%; height: 80%; display: block; }
+.relic .fused-icon canvas { position: absolute; width: 62%; height: 62%; }
+.relic .fused-icon canvas:first-child { left: 0; top: 0; }
+.relic .fused-icon canvas + canvas { right: 0; bottom: 0; }
+.fuse-pic { display: inline-flex; align-items: center; gap: 2px; }
+.fuse-pic canvas { width: 26px; height: 26px; }
 .relic.empty { opacity: .35; cursor: default; }
 .relic[aria-pressed="true"] { outline: 2px solid var(--accent); }
 #relicInfo { font-size: 12.5px; line-height: 1.5; color: var(--muted); min-height: 38px; }
@@ -129,7 +139,24 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .rc-pips i.star { width: 7px; background: #2a2638; }
 .rc-pips i.star.on { background: var(--gold); }
 .rc-op { color: var(--muted); font-weight: 700; }
-.rc-hint { flex-basis: 100%; font-size: 11.5px; color: var(--gold); }
+.recipe .rc-result.t2 { border-color: #f08c3a; }
+.recipe .rc-result.t3 { border-color: #c48cff; box-shadow: 0 0 6px #9a5fd1; }
+.recipes { display: flex; flex-direction: column; gap: 2px; }
+.recipe-book { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin-bottom: 8px; }
+.recipe-cell { display: flex; flex-direction: column; gap: 3px; padding: 6px; background: #0f0e15; border: 1px solid var(--line); border-radius: 4px; }
+.recipe-cell.t2 { border-color: #6b4a2a; }
+.recipe-cell.t3 { border-color: #5c3488; }
+.recipe-cell.unknown { opacity: .7; }
+.recipe-cell .rc-line { display: flex; align-items: center; gap: 4px; }
+.recipe-cell canvas { width: 24px; height: 24px; }
+.recipe-cell b { width: 24px; text-align: center; font-family: var(--font-display); color: var(--muted); }
+.recipe-cell .rc-name { font-size: 12px; color: var(--muted); }
+.recipe-cell:not(.unknown) .rc-name { color: var(--text, #eee); }
+.book-tier { font-size: 12px; color: var(--muted); margin: 6px 0 4px; }
+.book-tier.t2 { color: #f08c3a; }
+.book-tier.t3 { color: #c48cff; }
+.new-recipes { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.new-recipes canvas { width: 28px; height: 28px; }
 @keyframes pipblink { 50% { opacity: .25; } }
 .items { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .item { display: flex; flex-direction: column; align-items: center; gap: 2px; background: #0f0e15; border: 1px solid var(--line); border-radius: 5px; padding: 6px 2px; font-size: 11.5px; }
@@ -171,7 +198,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ore-book { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
 .ore-cell { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 6px; display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; }
 .ore-cell canvas { width: 40px; height: 40px; }
-.ore-cell canvas.shadow { filter: brightness(0) opacity(.4); }
+.ore-cell canvas.shadow, .recipe-cell canvas.shadow { filter: brightness(0) invert(.6) opacity(.5); }
 .ore-cell b { font-family: var(--font-display); font-weight: 400; font-size: 17px; }
 .ore-cell span { font-size: 11.5px; color: var(--muted); min-height: 1em; }
 .ore-cell.unknown b { color: var(--muted); letter-spacing: .1em; }

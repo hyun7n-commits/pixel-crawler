@@ -3,7 +3,7 @@
 import { $, el, button, icon } from './dom.js';
 import { CHARACTERS } from '../data/characters.js';
 import { UPGRADES } from '../data/upgrades.js';
-import { RELICS, LEGENDS, evolutionOf } from '../data/relics.js';
+import { RELICS, RECIPES, recipeKey, tierOf, DISCOVERY_GOLD } from '../data/relics.js';
 import { freshMeta, saveMeta } from '../core/save.js';
 import { josa } from '../core/util.js';
 import { DISCOVERIES } from '../data/terrain.js';
@@ -22,7 +22,7 @@ export function renderHub(ctx) {
   const inner = el('div', 'hub-inner');
 
   const head = el('div', 'hub-head');
-  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.13</small>'));
+  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.14</small>'));
   const purse = el('div', 'purse');
   purse.append(icon('gold', 24), el('span', null, `${meta.gold}G`));
   head.append(purse);
@@ -86,9 +86,7 @@ export function renderHub(ctx) {
     shop.append(el('h3', null, '던전에 새 유물 추가'));
     for (const [id, r] of Object.entries(RELICS).filter(([, r]) => r.locked)) {
       const row = el('div', 'row'), main = el('div', 'row-main');
-      const ev = evolutionOf(id);
-      main.append(el('span', 'row-name', r.name),
-        el('span', 'row-sub', `Lv1: ${r.desc(1)}${ev ? ` · 진화: ${RELICS[ev.a].name} + ${RELICS[ev.b].name} → ${RELICS[ev.id].name}` : ''}`));
+      main.append(el('span', 'row-name', r.name), el('span', 'row-sub', `Lv1: ${r.desc(1)}`));
       const have = meta.relicUnlock[id];
       const b = button('btn gold', have ? '추가됨' : `${r.cost}G`, () => buy(r.cost, () => { meta.relicUnlock[id] = true; }));
       b.disabled = have || meta.gold < r.cost;
@@ -119,17 +117,27 @@ export function renderHub(ctx) {
       book.append(row);
     }
     inner.append(book);
-    const legends = el('div', 'shop');
-    legends.append(el('h3', null, `전설 유물 (${LEGENDS.filter(l => meta.legends[l.id]).length}/${LEGENDS.length})`));
-    for (const l of LEGENDS) {
-      const got = meta.legends[l.id];
-      const row = el('div', 'row' + (got ? '' : ' unknown')), main = el('div', 'row-main');
-      main.append(el('span', 'row-name', got ? `${RELICS[l.a].name} + ${RELICS[l.b].name} → ${RELICS[l.id].name}` : '???'),
-        el('span', 'row-sub', got ? RELICS[l.id].desc() : `소문: "${l.hint}"`));
-      row.append(main);
-      legends.append(row);
+    // the recipe book: every recipe, found ones in full, the rest as a shadow of what they make
+    const book2 = el('div', 'shop');
+    const found = RECIPES.filter(rc => meta.recipes[recipeKey(rc)]).length;
+    book2.append(el('h3', null, `합성 도감 (${found}/${RECIPES.length})`));
+    for (const [tier, label] of [[1, '진화'], [2, '전설'], [3, '신화']]) {
+      book2.append(el('div', 'book-tier t' + tier, label));
+      const grid = el('div', 'recipe-book');
+      for (const rc of RECIPES.filter(rc => tierOf(rc.id) === tier)) {
+        const got = meta.recipes[recipeKey(rc)];
+        const cell = el('div', 'recipe-cell' + (got ? '' : ' unknown') + ' t' + tier);
+        const pic = (id, hide) => { const c = icon(id); if (hide) c.classList.add('shadow'); return c; };
+        const line = el('div', 'rc-line');
+        if (got) line.append(pic(rc.a), el('span', 'rc-op', '+'), pic(rc.b), el('span', 'rc-op', '→'), pic(rc.id));
+        else line.append(el('b', null, '?'), el('span', 'rc-op', '+'), el('b', null, '?'), el('span', 'rc-op', '→'), pic(rc.id, true));
+        cell.append(line, el('span', 'rc-name', got ? RELICS[rc.id].name : `처음 만들면 +${DISCOVERY_GOLD[tier]}G`));
+        cell.title = got ? `${RELICS[rc.a].name} + ${RELICS[rc.b].name} → ${RELICS[rc.id].name}: ${RELICS[rc.id].desc(1)}` : '아직 아무도 모르는 조합';
+        grid.append(cell);
+      }
+      book2.append(grid);
     }
-    inner.append(legends);
+    inner.append(book2);
     // the ore book: every grade you have seen, and how many you broke open
     const ores = el('div', 'shop');
     ores.append(el('h3', null, `광석 도감 (${ORES.filter(o => o.id in meta.ores).length}/${ORES.length})`));

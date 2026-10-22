@@ -186,6 +186,14 @@ export function onRunEvent(type, d) {
     case 'puff': play('puff'); break;
     case 'levelup': play('levelup'); break;
     case 'evolve': play('evolve'); break;
+    case 'steal': play('gold'); play('dodge'); break;
+    case 'escape': play('puff'); break;
+    case 'bones': play('kill'); play('hit'); break;
+    case 'split': play('splash'); break;
+    case 'aimCharge': play('alert'); break;
+    case 'charge': if (!d.hit) play('boom'); break;
+    case 'meteor': play('boom'); break;
+    case 'block': play('hit'); play('dodge'); break;
     default: break;
   }
 }

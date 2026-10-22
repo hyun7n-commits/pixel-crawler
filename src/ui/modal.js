@@ -1,8 +1,9 @@
 // Pop-up sheets: relic choice (level up / chest) and the end-of-run summary.
 
 import { $, el, button, icon } from './dom.js';
-import { RELICS } from '../data/relics.js';
+import { RELICS, recipeKey, tierOf } from '../data/relics.js';
 import { recipeFor } from './recipe.js';
+import { josa } from '../core/util.js';
 import { DISCOVERIES } from '../data/terrain.js';
 
 export const modalOpen = () => !$('modal').hidden;
@@ -47,6 +48,13 @@ export function showChoice({ title, sub, run, opts, onPick, onReroll, who }) {
         );
         const rc = recipeFor(run, o.id, o.id);
         if (rc) info.append(rc);
+      } else if (o.kind === 'fuse') {
+        // two full relics squeezed into one slot: both icons melt into one
+        const pic = el('span', 'fuse-pic');
+        pic.append(icon(o.a), el('span', 'rc-op', '+'), icon(o.b));
+        b.append(pic);
+        info.append(el('span', 'nm', '합체'), el('span', 'tag', '칸 하나 비우기'),
+          el('span', 'ds', `${josa(RELICS[o.a].name, '과', '와')} ${josa(RELICS[o.b].name, '을', '를')} 한 칸에. 효과는 그대로, 더 자라지는 않는다.`));
       } else if (o.kind === 'heal') {
         b.append(icon('heal'));
         info.append(el('span', 'nm', '응급 치료'), el('span', 'ds', '체력 50% 회복'));
@@ -82,6 +90,13 @@ export function showSummary({ won, run, newlyUnlockable, onClose }) {
       sum.append(s);
     }
     sh.append(sum);
+    if (run.newRecipes.length) {
+      const made = run.newRecipes.map(k => k.split(':')[0]);
+      const row = el('div', 'unlock-note new-recipes');
+      row.append(el('span', null, '새로 찾은 조합'));
+      for (const id of made) { const c = icon(id); c.classList.add('t' + tierOf(id)); row.append(c); }
+      sh.append(row);
+    }
     if (run.found.length) {
       const names = run.found.map(id => DISCOVERIES.find(d => d.id === id)).map(d => `${d.combo} = ${d.result}`);
       sh.append(el('div', 'unlock-note', `이번에 새로 발견한 것: ${names.join(' · ')}`));

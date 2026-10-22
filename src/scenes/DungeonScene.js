@@ -438,7 +438,7 @@ export class DungeonScene extends Phaser.Scene {
       case 'kill': this.onKill(d.enemy); break;
       case 'phit':
         this.flash(this.playerSprite);
-        this.cameras.main.shake(['slam', 'bomb'].includes(d.kind) ? 220 : 110, ['slam', 'bomb'].includes(d.kind) ? 0.012 : 0.005);
+        this.cameras.main.shake(['slam', 'bomb', 'charge'].includes(d.kind) ? 220 : 110, ['slam', 'bomb', 'charge'].includes(d.kind) ? 0.012 : 0.005);
         this.fx.blood.explode(8, center(d.x), center(d.y));
         this.float(d.x, d.y, `-${d.dmg}`, '#ff6b6b');
         break;
@@ -515,11 +515,89 @@ export class DungeonScene extends Phaser.Scene {
         this.fx.magic.explode(18, center(d.from.x), center(d.from.y));
         this.fx.magic.explode(18, center(d.to.x), center(d.to.y));
         break;
-      case 'evolve':
-        this.fx.spark.explode(40, center(d.x), center(d.y));
-        this.fx.fire.explode(20, center(d.x), center(d.y));
-        this.cameras.main.flash(180, 244, 207, 79);
+      case 'steal': {
+        // your coins hop over to the goblin
+        const s = this.enemySprites[d.enemy.id];
+        for (let k = 0; k < Math.min(8, 2 + d.n / 4); k++) {
+          const c = this.add.image(center(d.from.x), center(d.from.y), 'gold').setScale(0.45).setDepth(D.fx);
+          this.tweens.add({
+            targets: c, x: s ? s.x : center(d.enemy.x), duration: 300, delay: k * 40, ease: 'Quad.out',
+            onUpdate: tw => { c.y = center(d.from.y) + (center(d.enemy.y) - center(d.from.y)) * tw.progress - Math.sin(tw.progress * Math.PI) * TILE; },
+            onComplete: () => c.destroy(),
+          });
+        }
+        this.float(d.from.x, d.from.y, `-${d.n}G`, '#f4cf4f', 100);
         break;
+      }
+      case 'escape': {
+        const s = this.enemySprites[d.enemy.id];
+        this.fx.dust.explode(20, center(d.enemy.x), center(d.enemy.y));
+        if (s) { s.dying = true; this.tweens.add({ targets: s, alpha: 0, duration: 200, onComplete: () => { s.destroy(); delete this.enemySprites[d.enemy.id]; } }); }
+        break;
+      }
+      case 'bones':
+        this.fx.bone.explode(30, center(d.x), center(d.y));
+        this.fx.dust.explode(10, center(d.x), center(d.y));
+        this.noiseRing(d.x, d.y, 1, 0xf4f0e8);
+        this.cameras.main.shake(140, 0.006);
+        break;
+      case 'split': {
+        this.fx.slime.explode(14, center(d.from.x), center(d.from.y));
+        const c = this.enemySprites[d.child.id];
+        if (c) { c.x = center(d.from.x); c.y = foot(d.from.y); this.tweens.add({ targets: c, x: center(d.child.x), y: foot(d.child.y), duration: 160, ease: 'Quad.out' }); }
+        break;
+      }
+      case 'stone': this.fx.dust.explode(8, center(d.enemy.x), center(d.enemy.y)); break;
+      case 'aimCharge': {
+        const s = this.enemySprites[d.enemy.id];
+        if (s) this.tweens.add({ targets: s, hop: 4, duration: 90, yoyo: true, repeat: 1 });
+        this.fx.dust.explode(6, center(d.enemy.x), center(d.enemy.y) + 4);
+        break;
+      }
+      case 'charge':
+        for (let k = 0, n = Math.max(Math.abs(d.to.x - d.from.x), Math.abs(d.to.y - d.from.y)); k <= n; k++) {
+          const x = d.from.x + Math.sign(d.to.x - d.from.x) * k, y = d.from.y + Math.sign(d.to.y - d.from.y) * k;
+          this.time.delayedCall(k * 30, () => this.fx.dust.explode(5, center(x), center(y) + 4));
+        }
+        if (!d.hit) { this.cameras.main.shake(120, 0.005); this.fx.spark.explode(8, center(d.to.x), center(d.to.y) - 8); }
+        break;
+      case 'evolve': {
+        // the higher the tier, the bigger the bang; a recipe found for the first time rings out twice
+        const col = [[111, 224, 224], [244, 207, 79], [240, 140, 58], [196, 140, 255]][d.tier || 0];
+        this.fx.spark.explode(30 + 20 * (d.tier || 0), center(d.x), center(d.y));
+        this.fx[d.tier >= 3 ? 'magic' : d.fused ? 'crystal' : 'fire'].explode(20 + 10 * (d.tier || 0), center(d.x), center(d.y));
+        this.cameras.main.flash(180 + 80 * (d.tier || 0), ...col);
+        if (d.tier >= 2) this.cameras.main.shake(260, 0.006 * d.tier);
+        for (let k = 0; k < (d.first ? 3 : 1); k++) {
+          const ring = this.add.circle(center(d.x), center(d.y), TILE).setStrokeStyle(2, Phaser.Display.Color.GetColor(...col), 1).setDepth(D.fx).setScale(0.2);
+          this.tweens.add({ targets: ring, scale: 3 + d.tier, alpha: 0, delay: k * 200, duration: 700, ease: 'Quad.out', onComplete: () => ring.destroy() });
+        }
+        break;
+      }
+      case 'meteor': {
+        // a streak from the top of the view, then the crash
+        const tx = center(d.x), ty = center(d.y), rock = this.add.circle(tx + 40, ty - 120, 3, 0xf08c3a).setDepth(D.fx);
+        this.tweens.add({
+          targets: rock, x: tx, y: ty, duration: 220, ease: 'Quad.in',
+          onUpdate: () => this.fx.ember.explode(1, rock.x, rock.y),
+          onComplete: () => {
+            rock.destroy();
+            this.fx.fire.explode(30, tx, ty); this.fx.rock.explode(14, tx, ty);
+            this.noiseRing(d.x, d.y, 1, 0xf08c3a);
+            this.cameras.main.shake(160, 0.007);
+          },
+        });
+        break;
+      }
+      case 'block': {
+        // a clang off the shield
+        const x = center(d.x) + Math.sign(d.from.x - d.x) * 6, y = center(d.y) + Math.sign(d.from.y - d.y) * 6 - 4;
+        this.fx.spark.explode(10, x, y);
+        const sh = this.add.rectangle(x, y, 6, 8, 0x8fb8ff, 0.9).setDepth(D.fx);
+        this.tweens.add({ targets: sh, alpha: 0, scale: 1.8, duration: 260, onComplete: () => sh.destroy() });
+        this.float(d.x, d.y, '막음', '#8fb8ff');
+        break;
+      }
       case 'levelup':
         this.fx.heal.explode(24, center(this.run.p.x), center(this.run.p.y));
         this.float(this.run.p.x, this.run.p.y, '레벨 업!', '#6fb6ff', 150);
@@ -862,10 +940,17 @@ export class DungeonScene extends Phaser.Scene {
       this.fx.ember.explode(2, (i % map.w) * TILE + 8, ((i / map.w) | 0) * TILE + 8);
     }
 
-    // boss slam warning
+    // boss slam warning, and the lane a knight is about to ram down
     const pulse = 0.35 + 0.25 * Math.sin(time / 110);
     this.teleGfx.fillStyle(0xff4646, pulse);
     for (const t of run.telegraph) this.teleGfx.fillRect(t.x * TILE, t.y * TILE, TILE, TILE);
+    for (const e of run.enemies) {
+      if (!e.charge || e.hp <= 0 || !run.isVisible(e.x, e.y)) continue;
+      e.charge.forEach((t, k) => {
+        this.teleGfx.fillStyle(0xff4646, pulse * (1 - k * 0.08));
+        this.teleGfx.fillRect(t.x * TILE + 2, t.y * TILE + 2, TILE - 4, TILE - 4);
+      });
+    }
 
     // auto-walk path
     this.pathGfx.fillStyle(0x8fd36a, 0.55);
@@ -927,6 +1012,12 @@ export class DungeonScene extends Phaser.Scene {
       const top = s.y - TILE * s.scaleY * (e.d.boss ? 1.25 : 1) - s.hop;
       if (['hide', 'stone', 'npc'].includes(e.state)) continue; // no marks: a chest, a statue, a friend
       this.drawStatus(g, s, e, top, flip ? -1 : 1, time);
+      if (e.loot) { // your gold, in a little sack over its head
+        const gy = top - 5 + Math.sin(time / 150) * 1;
+        g.fillStyle(0x1b1424, 1); g.fillCircle(s.x, gy, 3.5);
+        g.fillStyle(0xf4cf4f, 1); g.fillCircle(s.x, gy, 2.5);
+        g.fillStyle(0xfff3b0, 1); g.fillRect(s.x - 1, gy - 1.5, 1, 1);
+      }
       if (e.d.quest) { // the necklace glints over the thief
         const gy = top - 6 + Math.sin(time / 200) * 1;
         g.fillStyle(0xf4cf4f, 1); g.fillTriangle(s.x, gy - 3, s.x + 3, gy, s.x - 3, gy); g.fillTriangle(s.x, gy + 3, s.x + 3, gy, s.x - 3, gy);
@@ -986,18 +1077,24 @@ export class DungeonScene extends Phaser.Scene {
     }
     s.setFlipX(flip);
     s.flat = false;
-    let sx = 1, sy = 1, hop = s.hop || 0;
+    let sx = 1, sy = 1, hop = s.hop || 0, jitter = 0;
     if (who.d?.npc && who.type === 'ghost') hop = Math.max(hop, 2 + 1.5 * Math.sin(time / 380));
     if (who.sleep || who.state === 'sleep') sy = 1 + 0.05 * Math.sin(time / 450 + id);
     else if (who.d && this.run.willHit(who)) { sx = 1.08; sy = 0.86; }
     if (who.burn > 0) hop = Math.max(hop, Math.abs(Math.sin(time / 90 + id)) * 3);
-    const base = who.d?.boss ? 1.25 : 1;
+    // a skeleton about to fall apart rattles; a knight about to charge paws the ground
+    if (who.d?.bones && who.hp <= who.maxHp * 0.4 && who.state !== 'sleep') jitter = Math.sin(time / 28 + id) * 0.8;
+    if (who.charge) jitter = Math.sin(time / 40) * 1.2;
+    if (who.stoneT > 0) { sx = 1; sy = 1; hop = 0; }
+    const base = (who.d?.boss ? 1.25 : 1) * (who.small ? 0.8 : 1);
     if (!s.dying) s.setScale(base * sx, base * sy);
-    s.setOrigin(0.5, 1 + hop / TILE);
+    s.setOrigin(0.5 + jitter / TILE, 1 + hop / TILE);
     if (time < s.flashUntil) return;
     let tint = who.d?.boss ? 0xffb0b0 : 0xffffff;
     if (who.burn > 0) tint = 0xffc890;
     if (who.sleep || who.state === 'sleep') tint = 0xc4c4dc;
+    if (who.stoneT > 0) tint = 0x9a9aac;
+    if (who.stun > 0) tint = 0xfff0a0;
     s.setTint(tint);
   }
 

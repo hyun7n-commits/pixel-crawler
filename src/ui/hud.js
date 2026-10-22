@@ -2,8 +2,12 @@
 // On a phone the same panel is a bag sheet, with a slim status bar on top and a toolbar below.
 
 import { $, el, button, icon } from './dom.js';
-import { RELICS, MAX_SLOTS } from '../data/relics.js';
-import { recipeFor } from './recipe.js';
+import { RELICS, MAX_SLOTS, MAX_LEVEL, tierOf, maxLevelOf, isFused, fusedParts, relicName } from '../data/relics.js';
+import { recipeFor, relicIcon } from './recipe.js';
+
+const TIER_CLASS = ['', ' evo', ' legend', ' myth'];
+const TIER_NAME = ['', ' (진화)', ' (전설)', ' (신화)'];
+const relicDesc = (id, l) => (isFused(id) ? fusedParts(id).map(p => RELICS[p].desc(maxLevelOf(p))).join(' / ') : RELICS[id].desc(l));
 import { ITEMS } from '../data/items.js';
 import { LAST_FLOOR, xpToLevel } from '../data/balance.js';
 import { zoneOf, isBossFloor } from '../core/run.js';
@@ -104,25 +108,25 @@ export class Hud {
     for (let i = 0; i < MAX_SLOTS; i++) {
       const id = ids[i];
       if (!id) { const b = button('relic empty'); b.disabled = true; box.append(b); continue; }
-      const r = RELICS[id];
-      const b = button('relic' + (r.legend ? ' legend' : r.evo ? ' evo' : ''), null, () => {
+      const b = button('relic' + (isFused(id) ? ' fused' : TIER_CLASS[tierOf(id)]), null, () => {
         this.selected = this.selected === id ? null : id;
         this.update(run);
       });
-      b.append(icon(id), el('span', 'lv', r.evo ? '★' : String(p.relics[id])));
-      b.setAttribute('aria-label', r.name);
+      b.append(relicIcon(id), el('span', 'lv', maxLevelOf(id) === 1 ? '★' : String(p.relics[id])));
+      b.setAttribute('aria-label', relicName(id));
       b.setAttribute('aria-pressed', String(this.selected === id));
       box.append(b);
     }
 
     const info = $('relicInfo');
     if (this.selected && p.relics[this.selected]) {
-      const id = this.selected, r = RELICS[id];
-      info.innerHTML = `<b>${r.name}${r.legend ? ' (전설)' : r.evo ? ' (진화)' : ` Lv${p.relics[id]}`}</b> · ${r.desc(p.relics[id])}`;
+      const id = this.selected, lv = p.relics[id];
+      const tag = isFused(id) ? ' (합체)' : maxLevelOf(id) === 1 ? TIER_NAME[tierOf(id)] : `${TIER_NAME[tierOf(id)]} Lv${lv}`;
+      info.innerHTML = `<b>${relicName(id)}${tag}</b> · ${relicDesc(id, lv)}`;
       const rc = recipeFor(run, id);
       if (rc) info.append(rc);
     } else {
-      info.textContent = '유물을 누르면 효과와 짝꿍 유물이 보인다.';
+      info.textContent = '유물을 누르면 효과가 보인다.';
     }
 
     const items = $('items');

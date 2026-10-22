@@ -1,7 +1,15 @@
-// Relics are passive items. Each one levels up to MAX_LEVEL.
+// Relics are passive items, and like the balls in BALL x PIT they grow, evolve and fuse.
+//   tier 0  basic relics, offered on level-ups and in chests. Each one levels up to MAX_LEVEL.
+//   tier 1  evolved: two basic relics both at MAX_LEVEL that make a recipe turn into one of these, at Lv1.
+//   tier 2  legends: two evolved relics that make a recipe (any level). A legend keeps both of them at
+//           full strength inside it (`has`), plus a power of its own.
+//   tier 3  myths: two legends. Same again, one level only.
+// Recipes are secret: nothing in a run tells you what goes with what. Making one for the first time
+// is a discovery; it goes in the book in town, and from then on the game shows it to you.
+// Several recipes can lead to the same relic.
+// Any two relics at MAX_LEVEL that are not a recipe can still be fused (see fusedId): one slot, both
+// effects, but nothing grows out of it any more.
 // `locked: true` relics only appear in the dungeon after they are bought in the shop.
-// `evo: true` relics are never offered directly; they come from EVOLUTIONS or LEGENDS.
-// `legend: true` relics come from two evolved relics; their recipes stay hidden until found.
 
 export const MAX_LEVEL = 3;
 export const MAX_SLOTS = 6;
@@ -27,38 +35,73 @@ export const RELICS = {
   magnet: { name: '반짝 자석',   desc: l => `${l + 1}칸 안의 골드를 저절로 줍는다`, locked: true, cost: 100 },
   bandage: { name: '비상 붕대',  desc: l => `체력이 1/3 아래로 떨어지면 층마다 한 번 체력 +${6 * l}`, locked: true, cost: 90 },
 
-  flamesword: { name: '불꽃의 검', evo: true, desc: () => '공격력 +8, 공격할 때마다 불꽃 피해 +5' },
-  fortress:   { name: '가시 요새', evo: true, desc: () => '받는 피해 -5, 맞으면 때린 적에게 8 피해' },
-  bloodcrown: { name: '피의 왕관', evo: true, desc: () => '최대 체력 +30, 적을 쓰러뜨리면 체력 +10' },
-  goldbolt:   { name: '황금 번개', evo: true, desc: () => '3턴마다 적 3마리에게 번개 10, 얻는 골드 +150%' },
-  shadow:     { name: '그림자 걸음', evo: true, desc: () => '나를 못 본 적을 치면 피해 ×3, 적의 공격을 30% 확률로 피한다' },
-  quake:      { name: '지진 망치', evo: true, desc: () => '공격하면 옆의 모든 적에게 같은 피해, 맞은 적은 30% 확률로 기절' },
-  goldrush:   { name: '골드 러시', evo: true, desc: () => '큰 광석에서 나오는 골드 ×3, 더 좋은 광석이 나올 확률 +25%, 4칸 안의 골드를 저절로 줍는다' },
+  // evolved
+  flamesword: { name: '불꽃의 검',   tier: 1, desc: l => `공격력 +${4 + 2 * l}, 때릴 때마다 불꽃 피해 +${2 + l}` },
+  fortress:   { name: '가시 요새',   tier: 1, desc: l => `받는 피해 -${2 + l}, 맞으면 때린 적에게 ${4 + 2 * l} 피해` },
+  bloodcrown: { name: '피의 왕관',   tier: 1, desc: l => `최대 체력 +${15 + 5 * l}, 적을 쓰러뜨리면 체력 +${4 + 2 * l}` },
+  goldbolt:   { name: '황금 번개',   tier: 1, desc: l => `3턴마다 적 ${l + 1}마리에게 번개 ${6 + 2 * l}, 얻는 골드 +${75 + 25 * l}%` },
+  shadow:     { name: '그림자 걸음', tier: 1, desc: l => `나를 못 본 적을 치면 피해 ×${2.25 + 0.25 * l}, 적의 공격을 ${15 + 5 * l}% 확률로 피한다` },
+  quake:      { name: '지진 망치',   tier: 1, desc: l => `공격하면 옆의 모든 적에게 같은 피해, ${15 + 5 * l}% 확률로 기절` },
+  goldrush:   { name: '골드 러시',   tier: 1, desc: l => `큰 광석 골드 ×${1.5 + 0.5 * l}, 더 좋은 광석 확률 +${10 + 5 * l}%, ${1 + l}칸 안의 골드를 저절로 줍는다` },
+  dreamlamp:  { name: '꿈꾸는 등불', tier: 1, desc: l => `시야 +${1 + l}칸, 자는 적이 ${20 * l}% 더 늦게 깬다, 졸음 가스에 잠들지 않는다` },
+  firebomb:   { name: '불꽃 폭탄',   tier: 1, desc: l => `처음 가는 층마다 폭탄 +${l < 3 ? 1 : 2}, 폭탄 피해 +${25 + 25 * l}%, 터진 자리의 적에게 불이 붙는다` },
+  herbal:     { name: '약초 주머니', tier: 1, desc: l => `${[3, 2, 2][l - 1]}턴마다 체력 +1, 체력이 1/3 아래로 떨어지면 층마다 두 번 체력 +${6 + 4 * l}` },
 
-  volcano:  { name: '화산 망치', evo: true, legend: true, desc: () => '공격력 +10, 공격하면 옆의 모든 적에게 같은 피해와 불꽃, 30% 확률로 기절' },
-  undying:  { name: '불사의 심장', evo: true, legend: true, desc: () => '받는 피해 -6, 최대 체력 +40, 맞으면 때린 적에게 10 피해, 쓰러지면 한 번 되살아난다' },
-  goldstorm: { name: '황금 폭풍', evo: true, legend: true, desc: () => '2턴마다 적 4마리에게 번개 12, 얻는 골드 +200%, 큰 광석 골드 ×3, 더 좋은 광석 확률 +25%, 5칸 안의 골드를 저절로 줍는다' },
+  // legends: both ingredients stay inside at full strength
+  volcano:   { name: '화산 망치',   tier: 2, has: ['flamesword', 'quake'], desc: l => `불꽃의 검과 지진 망치의 힘, 공격력 +${2 * l}` },
+  undying:   { name: '불사의 심장', tier: 2, has: ['fortress', 'bloodcrown'], desc: l => `가시 요새와 피의 왕관의 힘, 받는 피해 -${l}, 쓰러지면 한 번 되살아난다` },
+  goldstorm: { name: '황금 폭풍',   tier: 2, has: ['goldbolt', 'goldrush'], desc: l => `황금 번개와 골드 러시의 힘, 번개가 2턴마다 치고, 얻는 골드 +${25 * l}%` },
+  phantom:   { name: '달그림자',    tier: 2, has: ['shadow', 'dreamlamp'], desc: l => `그림자 걸음과 꿈꾸는 등불의 힘, 기습 피해 ×+${0.5 * l}, 피하기 +${5 * l}%` },
+  meteor:    { name: '운석 폭탄',   tier: 2, has: ['firebomb', 'quake'], desc: l => `불꽃 폭탄과 지진 망치의 힘, ${10 - 2 * l}턴마다 보이는 적에게 운석 ${10 + 5 * l}` },
+  lifetree:  { name: '생명의 나무', tier: 2, has: ['herbal', 'bloodcrown'], desc: l => `약초 주머니와 피의 왕관의 힘, ${l < 2 ? 2 : 1}턴마다 체력 +1, 최대 체력 +${10 * l}` },
+
+  // myths
+  minecrown: { name: '광산왕의 왕관', tier: 3, has: ['goldstorm', 'volcano'], desc: () => '황금 폭풍과 화산 망치의 힘, 공격력 +5, 얻는 골드 +50%, 더 좋은 광석 확률 +15%' },
+  eternity:  { name: '영원의 심장',   tier: 3, has: ['undying', 'lifetree'], desc: () => '불사의 심장과 생명의 나무의 힘, 최대 체력 +30, 두 번 되살아난다' },
+  eclipse:   { name: '일식',          tier: 3, has: ['phantom', 'meteor'], desc: () => '달그림자와 운석 폭탄의 힘, 운석이 3턴마다 떨어지고, 기습 피해 ×+2' },
 };
 
-// When `a` and `b` are both at MAX_LEVEL, both are used up and become `id`, freeing a slot.
-// An evolved relic must beat its two ingredients together, since both are gone.
-export const EVOLUTIONS = [
+export const tierOf = id => (isFused(id) ? 0 : RELICS[id].tier || 0);
+export const maxLevelOf = id => (isFused(id) || tierOf(id) === 3 ? 1 : MAX_LEVEL);
+
+// Two relics in, one out. `a` and `b` must be owned at the same time; basic ones at MAX_LEVEL.
+export const RECIPES = [
   { id: 'flamesword', a: 'blade',  b: 'ring' },
+  { id: 'flamesword', a: 'blade',  b: 'bombbag' },
   { id: 'fortress',   a: 'shield', b: 'thorns' },
   { id: 'bloodcrown', a: 'fang',   b: 'heart' },
   { id: 'goldbolt',   a: 'bolt',   b: 'coin' },
   { id: 'shadow',     a: 'boots',  b: 'cloak' },
   { id: 'quake',      a: 'hammer', b: 'sweep' },
+  { id: 'quake',      a: 'hammer', b: 'shield' },
   { id: 'goldrush',   a: 'pick',   b: 'magnet' },
-];
+  { id: 'goldrush',   a: 'pick',   b: 'coin' },
+  { id: 'dreamlamp',  a: 'lantern', b: 'mint' },
+  { id: 'firebomb',   a: 'bombbag', b: 'ring' },
+  { id: 'herbal',     a: 'moss',   b: 'bandage' },
+  { id: 'herbal',     a: 'moss',   b: 'heart' },
 
-// Two evolved relics become one legendary relic. The recipe is hidden ("???") until made once;
-// village gossip hints at it.
-export const LEGENDS = [
-  { id: 'volcano',   a: 'flamesword', b: 'quake',      hint: '불꽃 검을 든 채로 땅을 흔들면 화산이 깨어난대.' },
-  { id: 'undying',   a: 'fortress',   b: 'bloodcrown', hint: '가시로 둘러싼 피의 왕은 죽지 않는다는 전설이 있어.' },
-  { id: 'goldstorm', a: 'goldbolt',   b: 'goldrush',   hint: '금빛 번개가 금광을 휩쓸면 황금 폭풍이 분대.' },
-];
+  { id: 'volcano',   a: 'flamesword', b: 'quake' },
+  { id: 'undying',   a: 'fortress',   b: 'bloodcrown' },
+  { id: 'goldstorm', a: 'goldbolt',   b: 'goldrush' },
+  { id: 'phantom',   a: 'shadow',     b: 'dreamlamp' },
+  { id: 'meteor',    a: 'firebomb',   b: 'quake' },
+  { id: 'meteor',    a: 'firebomb',   b: 'goldbolt' },
+  { id: 'lifetree',  a: 'herbal',     b: 'bloodcrown' },
+  { id: 'lifetree',  a: 'herbal',     b: 'fortress' },
 
-export const evolutionOf = id => EVOLUTIONS.find(e => e.a === id || e.b === id);
-export const legendOf = id => LEGENDS.find(e => e.a === id || e.b === id);
+  { id: 'minecrown', a: 'goldstorm', b: 'volcano' },
+  { id: 'eternity',  a: 'undying',   b: 'lifetree' },
+  { id: 'eclipse',   a: 'phantom',   b: 'meteor' },
+];
+export const recipeKey = rc => `${rc.id}:${rc.a}+${rc.b}`;
+export const recipesWith = id => RECIPES.filter(rc => rc.a === id || rc.b === id);
+
+// What a first discovery is worth, by the tier of what it makes.
+export const DISCOVERY_GOLD = [0, 30, 100, 300];
+
+// A fused relic is named after its two halves: 'fuse:a+b'.
+export const fusedId = (a, b) => `fuse:${a}+${b}`;
+export const isFused = id => id.startsWith('fuse:');
+export const fusedParts = id => id.slice(5).split('+');
+export const relicName = id => (isFused(id) ? fusedParts(id).map(p => RELICS[p].name).join(' + ') : RELICS[id].name);

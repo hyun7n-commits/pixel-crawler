@@ -7,11 +7,11 @@
 //   hide   - a mimic posing as a chest · stone - a statue standing still · npc - quest folk
 //            (none of these act; a hit, or reaching for the mimic or the statue's chest, wakes them up)
 
-import { lineOfSight, distMap, idx } from './dungeon.js';
+import { lineOfSight, distMap, idx, passable } from './dungeon.js';
 import { SLEEP_MIN } from '../data/terrain.js';
 import { NPC_TEXT } from '../data/npcs.js';
 import { MAP_W } from '../data/balance.js';
-import { cheb, shuffle, josa, DIRS8 } from './util.js';
+import { cheb, shuffle, josa, rint, DIRS8 } from './util.js';
 import { onEnter } from './world.js';
 
 export const WAKE_AT = 10;
@@ -30,6 +30,7 @@ export function enemyAct(run, e, dmP) {
   }
   if (e.state === 'hide' || e.state === 'stone') return;
   if (e.stun > 0) { e.stun--; return; }
+  if (e.stoneT > 0) { e.stoneT--; return; }
   if (run.calm(e)) { calmAct(run, e); return; }
   if (e.state === 'sleep') { sleepTick(run, e); return; }
   if (d.slow) { e.skip = !e.skip; if (e.skip) return; }
@@ -49,6 +50,7 @@ export function enemyAct(run, e, dmP) {
   if (e.state === 'hunt' && d.flees && e.hp <= e.maxHp * 0.3) {
     e.state = 'flee';
   }
+  if (e.loot) e.state = 'flee'; // a goblin with your gold only wants to get away
   if (e.state === 'flee') { flee(run, e, dmP, sees); return; }
   if (e.state === 'hunt') {
     if (sees || e.aim || d.boss) { hunt(run, e, dmP); return; }
@@ -62,7 +64,7 @@ export function enemyAct(run, e, dmP) {
 function sleepTick(run, e) {
   if (run.map.gas.sleep[idx(e.x, e.y)] >= SLEEP_MIN) { e.wake = 0; return; }
   if (e.doze > 0) { e.doze--; return; }
-  if (canSee(run, e, 7)) e.wake += 8 - cheb(e, run.p);
+  if (canSee(run, e, 7)) e.wake += (8 - cheb(e, run.p)) * (1 - 0.2 * run.lv('dreamlamp')) * (run.char.hush || 1);
   else e.wake = Math.max(0, e.wake - 1);
   if (e.wake >= WAKE_AT) {
     e.state = 'hunt';
@@ -130,6 +132,9 @@ export function rouse(run, e, by, x, y) {
 function hunt(run, e, dm) {
   const p = run.p, d = e.d;
   if (run.bossSpecial(e)) return;
+  if (e.backoff > 0) { e.backoff--; retreat(run, e, dm, d.fast ? 2 : 1); return; }
+  if (d.charge && charge(run, e)) return;
+  if (d.blink && blink(run, e)) return;
   const dist = cheb(e, p);
   if (d.ranged) {
     if (e.aim) {
@@ -149,7 +154,10 @@ function hunt(run, e, dm) {
   }
   if (run.touching(e, p)) {
     run.emit('attack', { from: { x: e.x, y: e.y }, to: { x: p.x, y: p.y }, who: e });
-    run.damagePlayer(e.atk, e, 'melee');
+    const landed = run.damagePlayer(e.atk, e, 'melee');
+    if (d.thief && landed && run.gold > 0) steal(run, e);
+    if (d.hitAndRun) e.backoff = 2;
+    if (d.stoneSkin && e.hp > 0) { e.stoneT = 1; run.emit('stone', { enemy: e }); }
     return;
   }
   const moves = d.fast ? 2 : 1;
@@ -181,7 +189,91 @@ function followTrail(run, e, dm) {
   return true;
 }
 
+// The goblin's grab: a handful of your gold, then it runs. It's slowed by the weight, so you can catch it.
+function steal(run, e) {
+  const n = Math.min(run.gold, 5 + 3 * run.floor + rint(0, 5));
+  run.gold -= n;
+  e.loot = n;
+  e.state = 'flee';
+  run.emit('steal', { enemy: e, n, from: { x: run.p.x, y: run.p.y } });
+}
+
+// Backs away from you a step or two, like a bat after a bite.
+function retreat(run, e, dm, steps) {
+  const safe = safetyMap(dm);
+  for (let k = 0; k < steps; k++) {
+    let best = null, bs = safe[idx(e.x, e.y)];
+    for (const [dx, dy] of shuffle(DIRS8.slice())) {
+      const nx = e.x + dx, ny = e.y + dy;
+      if (canStep(run, e, nx, ny) && safe[idx(nx, ny)] < bs) { bs = safe[idx(nx, ny)]; best = [nx, ny]; }
+    }
+    if (!best) return;
+    moveEnemy(run, e, ...best);
+  }
+}
+
+// The knight: when you stand in a straight line from it, it paints the lane red and rams down it next
+// turn. Still in the lane: a double hit. Stepped aside: it runs to the end and stands there dizzy.
+function charge(run, e) {
+  const p = run.p;
+  if (e.charge) {
+    const lane = e.charge;
+    e.charge = null;
+    let at = { x: e.x, y: e.y }, hit = false;
+    for (const t of lane) {
+      if (t.x === p.x && t.y === p.y) { hit = true; break; }
+      if (!run.canEnemyEnter(t.x, t.y)) break;
+      at = t;
+    }
+    const from = { x: e.x, y: e.y };
+    if (at.x !== e.x || at.y !== e.y) moveEnemy(run, e, at.x, at.y);
+    run.emit('charge', { enemy: e, from, to: at, hit });
+    if (hit) run.damagePlayer(e.atk * 2, e, 'charge');
+    else { e.stun = 2; run.emit('stun', { x: e.x, y: e.y }); }
+    e.chargeT = e.timer;
+    return true;
+  }
+  const dx = p.x - e.x, dy = p.y - e.y, dist = cheb(e, p);
+  const straight = dx === 0 || dy === 0 || Math.abs(dx) === Math.abs(dy);
+  if (!straight || dist < 2 || dist > e.d.charge || e.timer - (e.chargeT ?? -99) < 4) return false;
+  const sx = Math.sign(dx), sy = Math.sign(dy), lane = [];
+  for (let k = 1; k <= dist + 2; k++) {
+    const x = e.x + sx * k, y = e.y + sy * k;
+    if (!passable(run.map, x, y)) break;
+    if (k < dist && run.enemyAt(x, y)) return false;
+    lane.push({ x, y });
+  }
+  if (lane.length < dist) return false;
+  e.charge = lane;
+  run.emit('aimCharge', { enemy: e });
+  return true;
+}
+
+// The wizard: let you get next to it and it pops away to somewhere it can still see you, and aims.
+function blink(run, e) {
+  const p = run.p;
+  if (!run.touching(e, p) || e.timer - (e.blinkT ?? -99) < 5) return false;
+  const spots = [];
+  for (let y = p.y - 6; y <= p.y + 6; y++) for (let x = p.x - 6; x <= p.x + 6; x++) {
+    const dd = cheb({ x, y }, p);
+    if (dd >= 4 && run.canEnemyEnter(x, y) && lineOfSight(run.map, x, y, p.x, p.y)) spots.push({ x, y });
+  }
+  if (!spots.length) return false;
+  const to = spots[Math.floor(Math.random() * spots.length)];
+  run.emit('teleport', { enemy: e, from: { x: e.x, y: e.y }, to });
+  e.x = to.x; e.y = to.y;
+  run.refreshDoors();
+  e.blinkT = e.timer;
+  e.aim = true; e.aimAt = { x: p.x, y: p.y };
+  return true;
+}
+
 function flee(run, e, dm, sees) {
+  // weighed down by your gold: a goblin stumbles every third turn, and gets away once out of sight
+  if (e.loot) {
+    if (!sees && dm[idx(e.x, e.y)] >= 6) { run.escape(e); return; }
+    if (e.timer % 3 === 0) return;
+  }
   // walk downhill on the safety map: out through a door and away, never into a corner
   const safe = safetyMap(dm);
   let best = null, bs = safe[idx(e.x, e.y)];

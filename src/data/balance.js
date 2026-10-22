@@ -8,11 +8,14 @@ export const FLOORS_PER_ZONE = 3;
 
 export const xpToLevel = lvl => 3 + lvl * 4;
 export const HP_PER_LEVEL = 3;
-export const LEVEL_UP_HEAL = 0.3;  // share of max HP restored on level up
+export const LEVEL_UP_HEAL = 0.2;  // share of max HP restored on level up
 
-export const enemiesPerFloor = floor => 6 + floor;
+// v0.14: harder. More of them, more awake, and tougher, so walking in and trading blows loses;
+// doorways, surprise hits, bombs and backing off are what win.
+export const enemiesPerFloor = floor => 7 + floor;
 // stat multiplier for enemies: grows within a zone and a little per zone
-export const enemyScale = floor => 1 + 0.15 * ((floor - 1) % 3) + 0.1 * Math.floor((floor - 1) / 3);
+export const enemyScale = floor => 1 + 0.2 * ((floor - 1) % 3) + 0.15 * Math.floor((floor - 1) / 3);
+export const POTION_CHANCE = 0.45;  // a potion lying somewhere on a floor
 export const bossScale = floor => 1 + 0.1 * (floor / 3 - 1);
 
 export const GOLD_DROP_CHANCE = 0.4;
@@ -27,7 +30,7 @@ export const HIT_ROLL = [0.6, 1.4];
 export const HANG_ON = 0.35;
 // Wounds close slowly on their own (1 HP every this many turns), so backing off and catching your
 // breath is worth it, but monsters keep wandering in while you wait.
-export const REGEN_TURNS = 10;
+export const REGEN_TURNS = 15;
 
 // The big ore on each floor: how many swings it takes, how far each swing is heard,
 // how much mine gas the crack beside it puffs per swing, and what it pays.
@@ -59,7 +62,7 @@ export const ORE_NUGGET_MULT = 5;
 export const bombDamage = floor => 12 + 2 * floor;
 
 // Enemies: most start asleep. Once you thin a floor out, a wanderer comes in every so often.
-export const START_ASLEEP = 0.85;
+export const START_ASLEEP = 0.6;
 export const RESPAWN_TURNS = 40;
 // Asleep, you snore: enemies this close hear it and come looking.
 export const SNORE_NOISE = 8;

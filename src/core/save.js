@@ -12,10 +12,14 @@ export function freshMeta() {
     sel: 'adv',
     stats: { kills: 0, maxFloor: 0, bosses: [], evos: 0, runs: 0, wins: 0, bestGold: 0 },
     found: {},  // discovered combinations, see data/terrain.js
-    legends: {},  // legendary relics made at least once, see data/relics.js
+    recipes: {},  // relic recipes found at least once, by recipeKey, see data/relics.js
     ores: {},     // ore grades seen: id -> how many broken open, see data/ores.js
   };
 }
+
+// Saves from before v0.14 kept the legends made as { id: true }; those were these recipes.
+const OLD_LEGENDS = { volcano: 'volcano:flamesword+quake', undying: 'undying:fortress+bloodcrown', goldstorm: 'goldstorm:goldbolt+goldrush' };
+const oldLegends = (legends = {}) => Object.fromEntries(Object.keys(legends).filter(id => OLD_LEGENDS[id]).map(id => [OLD_LEGENDS[id], true]));
 
 export function loadMeta() {
   try {
@@ -29,7 +33,7 @@ export function loadMeta() {
         chars: { ...f.chars, ...m.chars },
         relicUnlock: { ...m.relicUnlock },
         found: { ...m.found },
-        legends: { ...m.legends },
+        recipes: { ...m.recipes, ...oldLegends(m.legends) },
         ores: { ...m.ores },
       };
     }
