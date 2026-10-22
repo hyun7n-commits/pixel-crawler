@@ -267,5 +267,6 @@ const canStep = (run, e, x, y) => run.canEnemyEnter(x, y);
 function moveEnemy(run, e, x, y) {
   e.face = x < e.x ? -1 : x > e.x ? 1 : e.face;
   e.x = x; e.y = y;
+  run.refreshDoors();
   onEnter(run, e, x, y);
 }

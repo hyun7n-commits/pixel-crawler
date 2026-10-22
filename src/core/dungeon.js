@@ -50,259 +50,227 @@ export const opaque = (map, x, y) => {
 export const isBorder = (x, y) => x <= 0 || y <= 0 || x >= W - 1 || y >= H - 1;
 
 // ---------- rooms ----------
-// Like Shattered Pixel Dungeon, rooms are packed together and share their walls; a door in a
-// shared wall joins two rooms. Each new room grows off the side of one already placed, so the
-// floor comes out as one tight, irregular cluster with no long corridors through empty rock.
-// Between the proper rooms there are narrow pieces too: straight halls and winding tunnels.
+// Like Shattered Pixel Dungeon's loop builder: the main rooms sit around one big loop, the start on
+// one side and the stairs on the far side, each joined to the next by a winding passage. You can walk
+// the floor round either way instead of in and out of a middle. A few side rooms hang off the loop
+// (dead ends, where vaults and trap rooms go), and sometimes a hall in the middle cuts across it like
+// a figure eight. Rooms come in shapes: plain, cave, round, cross, ring (a block in the middle),
+// pillars and L.
 // A box is given by its walls: x0..x1, y0..y1 inclusive; the floor inside is x0+1..x1-1.
 
-const SIDES = ['top', 'bottom', 'left', 'right'];
-const SIZES = {
-  start:  () => [rint(4, 6), rint(4, 6)],
-  room:   () => [rint(4, 8), rint(4, 7)],
-  large:  () => [rint(8, 11), rint(7, 9)],
-  tunnel: () => [rint(3, 6), rint(3, 6)],
-};
-
 const box = (x0, y0, w, h, kind) => ({ x0, y0, x1: x0 + w + 1, y1: y0 + h + 1, kind, links: [] });
-// two boxes may touch along a wall but never overlap inside
-const clash = (a, b) => Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) > 0 && Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) > 0;
-const fits = b => b.x0 >= 0 && b.y0 >= 0 && b.x1 <= W - 1 && b.y1 <= H - 1;
+// boxes keep at least one tile of rock between their walls, for the passages to run through
+const clash = (a, b) => a.x0 - 1 <= b.x1 && b.x0 - 1 <= a.x1 && a.y0 - 1 <= b.y1 && b.y0 - 1 <= a.y1;
+const fits = b => b.x0 >= 1 && b.y0 >= 1 && b.x1 <= W - 2 && b.y1 <= H - 2;
+const inBox = (b, x, y) => x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1;
+const midOf = b => ({ x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 });
 
-// The wall tiles two boxes share where a door could go (not at a corner), or [].
-function sharedWall(a, b) {
-  const out = [];
-  if (a.x1 === b.x0 || b.x1 === a.x0) {
-    const x = a.x1 === b.x0 ? a.x1 : a.x0;
-    for (let y = Math.max(a.y0, b.y0) + 1; y <= Math.min(a.y1, b.y1) - 1; y++) out.push([x, y]);
-  } else if (a.y1 === b.y0 || b.y1 === a.y0) {
-    const y = a.y1 === b.y0 ? a.y1 : a.y0;
-    for (let x = Math.max(a.x0, b.x0) + 1; x <= Math.min(a.x1, b.x1) - 1; x++) out.push([x, y]);
-  }
-  return out;
-}
-
-// A new box of `kind` against one side of `p`, sharing at least `minShare` tiles of wall.
-function growFrom(p, kind, minShare = 2) {
-  const side = pick(SIDES);
-  let w, h;
-  if (kind === 'hall') {
-    const len = rint(3, 8);
-    [w, h] = side === 'left' || side === 'right' ? [len, 1] : [1, len];
-    minShare = 1;
-  } else [w, h] = SIZES[kind]();
-  let x0, y0;
-  if (side === 'right' || side === 'left') {
-    x0 = side === 'right' ? p.x1 : p.x0 - w - 1;
-    y0 = rint(p.y0 - h + minShare - 1, p.y1 - minShare - 1);
-  } else {
-    y0 = side === 'bottom' ? p.y1 : p.y0 - h - 1;
-    x0 = rint(p.x0 - w + minShare - 1, p.x1 - minShare - 1);
-  }
-  return box(x0, y0, w, h, kind);
-}
-
-function addDoor(map, a, b) {
-  const spots = sharedWall(a, b).filter(([x, y]) =>
-    !map.doors.some(d => Math.abs(d.x - x) + Math.abs(d.y - y) <= 1));
-  if (!spots.length) return false;
-  const [x, y] = pick(spots);
-  map.doors.push({ x, y });
-  a.links.push(b); b.links.push(a);
-  return true;
-}
-
-// Returns the proper rooms (not halls or tunnels), ordered from the start room outward.
 export function carveRooms(map) {
-  for (let attempt = 0; attempt < 60; attempt++) {
-    map.tiles.fill(WALL); map.room.fill(-1); map.doors = [];
-    const rooms = buildLayout(map);
+  for (let attempt = 0; attempt < 120; attempt++) {
+    map.tiles.fill(WALL); map.room.fill(-1); map.doors = []; map.passage = [];
+    const rooms = buildLoop(map);
     if (rooms) return rooms;
   }
   throw new Error('no floor layout');
 }
 
-function buildLayout(map) {
-  const [sw, sh] = SIZES.start();
-  const boxes = [box(rint(W / 2 - 8, W / 2 + 2), rint(H / 2 - 6, H / 2 + 1), sw, sh, 'start')];
-  const want = rint(8, 10);
-  let large = 0;
-  for (let t = 0; t < 3000 && boxes.filter(b => b.kind !== 'hall' && b.kind !== 'tunnel').length < want; t++) {
-    // halls and tunnels always lead on to a proper room, so grow off those first
-    const open = boxes.filter(b => (b.kind === 'hall' || b.kind === 'tunnel') && b.links.length < 2);
-    const parent = open.length && Math.random() < 0.8 ? pick(open) : pick(boxes);
-    const roll = Math.random();
-    let kind = roll < 0.18 ? 'hall' : roll < 0.28 ? 'tunnel' : roll < 0.38 && large < 2 ? 'large' : 'room';
-    if ((parent.kind === 'hall' || parent.kind === 'tunnel') && kind === 'hall') kind = 'room';
-    const b = growFrom(parent, kind);
-    if (!fits(b) || boxes.some(o => clash(o, b))) continue;
-    if (!addDoor(map, parent, b)) continue;
-    if (kind === 'large') large++;
-    boxes.push(b);
+// A box of the given size centred near (px, py), nudged a little until it fits among the others.
+function placeBox(boxes, px, py, w, h, kind) {
+  for (let t = 0; t < 30; t++) {
+    const s = t < 10 ? 0 : t < 20 ? 1 : 2;
+    const ww = Math.max(3, w - s), hh = Math.max(3, h - s);
+    const b = box(Math.round(px - (ww + 1) / 2) + rint(-s, s), Math.round(py - (hh + 1) / 2) + rint(-s, s), ww, hh, kind);
+    if (fits(b) && !boxes.some(o => clash(o, b))) return b;
   }
-  // a hall or tunnel that leads nowhere is filled back in
-  for (let changed = true; changed;) {
-    changed = false;
-    for (const b of boxes.slice()) {
-      if ((b.kind !== 'hall' && b.kind !== 'tunnel') || b.links.length >= 2) continue;
-      for (const o of b.links) o.links.splice(o.links.indexOf(b), 1);
-      map.doors = map.doors.filter(d => !(onBoxWall(b, d.x, d.y) && b.links.some(o => onBoxWall(o, d.x, d.y))));
-      boxes.splice(boxes.indexOf(b), 1);
-      changed = true;
+  return null;
+}
+
+function buildLoop(map) {
+  const boxes = [];
+  const n = rint(6, 8), cx = W / 2 + rint(-1, 1), cy = H / 2 + rint(-1, 1);
+  const rx = rint(13, 15), ry = rint(8, 10), a0 = Math.random() * Math.PI * 2, turn = Math.random() < 0.5 ? 1 : -1;
+  const stairsAt = Math.round(n / 2);
+  // the main loop
+  const main = [];
+  for (let i = 0; i < n; i++) {
+    const a = a0 + turn * (i * 2 * Math.PI) / n + (Math.random() - 0.5) * 0.35, f = 0.85 + Math.random() * 0.2;
+    const kind = i === 0 ? 'start' : i === stairsAt ? 'stairs' : Math.random() < 0.2 ? 'large' : 'room';
+    const [w, h] = kind === 'start' || kind === 'stairs' ? [rint(4, 6), rint(4, 5)] : kind === 'large' ? [rint(7, 9), rint(6, 7)] : [rint(5, 8), rint(4, 7)];
+    const b = placeBox(boxes, cx + Math.cos(a) * rx * f, cy + Math.sin(a) * ry * f, w, h, kind);
+    if (!b) return null;
+    b.angle = a;
+    boxes.push(b); main.push(b);
+  }
+  const links = main.map((b, i) => [b, main[(i + 1) % n]]);
+  // a hall across the middle, joining the two halves of the loop (a figure eight)
+  if (Math.random() < 0.55) {
+    const q = Math.max(1, Math.round(n / 4));
+    const c = placeBox(boxes, cx, cy, rint(5, 8), rint(4, 5), 'room');
+    if (c) { boxes.push(c); links.push([main[q], c], [c, main[(stairsAt + q) % n]]); }
+  }
+  // side rooms off the loop, out toward the edge or in toward the middle: dead ends
+  const sides = rint(3, 5);
+  for (let k = 0, t = 0; k < sides && t < 12; t++) {
+    const w = rint(4, 6), h = rint(3, 5), spots = [];
+    for (const m of main.slice(1)) for (let gap = 2; gap <= 5; gap++) for (const [ax, ay] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      const mx = Math.round((m.x0 + m.x1) / 2 - (w + 1) / 2) + rint(-2, 2), my = Math.round((m.y0 + m.y1) / 2 - (h + 1) / 2) + rint(-2, 2);
+      const x0 = ax < 0 ? m.x0 - gap - w - 2 : ax > 0 ? m.x1 + gap + 1 : mx;
+      const y0 = ay < 0 ? m.y0 - gap - h - 2 : ay > 0 ? m.y1 + gap + 1 : my;
+      const sb = box(x0, y0, w, h, 'side');
+      if (fits(sb) && !boxes.some(o => clash(o, sb))) spots.push([m, sb]);
     }
+    if (!spots.length) continue;
+    const [m, sb] = pick(spots);
+    boxes.push(sb); links.push([m, sb]); k++;
   }
-  // a few extra doors between neighbours so there is more than one way around
-  for (const a of boxes) for (const b of boxes) {
-    if (a === b || a.links.includes(b) || boxes.indexOf(a) > boxes.indexOf(b)) continue;
-    if (a.kind === 'hall' && b.kind === 'hall') continue;
-    if (sharedWall(a, b).length && Math.random() < 0.3) addDoor(map, a, b);
-  }
-  // the stairs go in the proper room the longest walk away, and it sits on one loop with the start
-  const walk = walkFrom(boxes[0]);
-  // (a room stuck out on its own with nothing beside it can't be looped, so the next farthest is tried)
-  const far = boxes.filter(b => b.kind === 'room' || b.kind === 'large')
-    .sort((a, b) => walk.get(b) - walk.get(a)).slice(0, 4)
-    .find(b => ringUp(map, boxes, boxes[0], b));
-  if (!far) return null;
-  far.stairs = true;
+
+  // shape the rooms, then join them
+  for (const b of boxes) shapeBox(b);
+  for (const [a, b] of links) if (!join(map, boxes, a, b)) return null;
 
   // carve
   const rooms = [];
   for (const b of boxes) {
-    const r = { x: b.x0 + 1, y: b.y0 + 1, w: b.x1 - b.x0 - 1, h: b.y1 - b.y0 - 1, kind: b.kind, stairs: !!b.stairs };
-    r.cx = r.x + (r.w >> 1); r.cy = r.y + (r.h >> 1);
-    b.r = r;
-    if (b.kind === 'tunnel') continue;
-    const id = b.kind === 'hall' ? -1 : rooms.length;
-    fillRect(map, r.x, r.y, r.w, r.h, id);
-    if (id >= 0) rooms.push(r);
-  }
-  for (const d of map.doors) map.tiles[idx(d.x, d.y)] = DOOR;
-  // a tunnel is a block of rock with a winding path from each of its doors to its middle
-  for (const b of boxes.filter(o => o.kind === 'tunnel')) {
-    const r = b.r, hub = { x: rint(r.x, r.x + r.w - 1), y: rint(r.y, r.y + r.h - 1) };
-    for (const d of map.doors.filter(o => onBoxWall(b, o.x, o.y))) {
-      let x = Math.min(Math.max(d.x, r.x), r.x + r.w - 1), y = Math.min(Math.max(d.y, r.y), r.y + r.h - 1);
-      const xFirst = Math.random() < 0.5;
-      map.tiles[idx(x, y)] = FLOOR;
-      while (x !== hub.x || y !== hub.y) {
-        if ((xFirst && x !== hub.x) || y === hub.y) x += Math.sign(hub.x - x); else y += Math.sign(hub.y - y);
-        map.tiles[idx(x, y)] = FLOOR;
-      }
+    const r = { x: b.x0 + 1, y: b.y0 + 1, w: b.x1 - b.x0 - 1, h: b.y1 - b.y0 - 1, kind: b.kind === 'stairs' ? 'room' : b.kind, stairs: b.kind === 'stairs', shape: b.shape };
+    const id = boxes.indexOf(b);
+    for (let y = 0; y < r.h; y++) for (let x = 0; x < r.w; x++) {
+      if (!b.mask[y][x]) continue;
+      map.tiles[idx(r.x + x, r.y + y)] = FLOOR;
+      map.room[idx(r.x + x, r.y + y)] = id;
     }
+    // the middle: the floor tile nearest the box's centre
+    let best = null;
+    for (let y = 0; y < r.h; y++) for (let x = 0; x < r.w; x++) {
+      if (!b.mask[y][x]) continue;
+      const d = (x - (r.w - 1) / 2) ** 2 + (y - (r.h - 1) / 2) ** 2;
+      if (!best || d < best.d) best = { x: r.x + x, y: r.y + y, d };
+    }
+    r.cx = best.x; r.cy = best.y;
+    b.r = r;
+    rooms.push(r);
   }
-  if (rooms.length < 6) return null;
-  shapeRooms(map, rooms);
+  for (const t of map.passage) map.tiles[t] = FLOOR;
+  delete map.passage;
+  for (const d of map.doors) map.tiles[idx(d.x, d.y)] = DOOR;
 
   // order from the start outward, and make sure every room can be reached
-  const dm = distMap(map, rooms[0].cx, rooms[0].cy);
+  const start = main[0].r;
+  const dm = distMap(map, start.cx, start.cy);
   if (rooms.some(r => dm[idx(r.cx, r.cy)] >= 9999)) return null;
-  const start = rooms[0];
   rooms.sort((a, b) => (a === start ? -1 : b === start ? 1 : dm[idx(a.cx, a.cy)] - dm[idx(b.cx, b.cy)]));
-  rooms.forEach((r, i) => {
-    r.id = i;
-    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (map.room[idx(x, y)] >= 0) map.room[idx(x, y)] = i;
-  });
+  // map.room held each box's index; renumber to the sorted order
+  const newId = boxes.map(b => rooms.indexOf(b.r));
+  for (let i = 0; i < map.room.length; i++) if (map.room[i] >= 0) map.room[i] = newId[map.room[i]];
+  rooms.forEach((r, i) => { r.id = i; });
   return rooms;
 }
 
-// Makes two separate ways between the start and the stairs room, so the floor is a loop you can walk
-// round instead of one corridor out and the same one back: every door the only route depends on
-// gets a second way around it, through a new door between two boxes on either side of it.
-// A new hall or tunnel off a box outside `side` that also touches a box inside it, with a door to each.
-function bridgeWith(map, boxes, side) {
-  const out = boxes.filter(b => !side.has(b) && b.kind !== 'hall');
-  for (let t = 0; t < 300; t++) {
-    const b = pick(out), c = growFrom(b, Math.random() < 0.5 ? 'hall' : 'tunnel');
-    if (!fits(c) || boxes.some(o => clash(o, c))) continue;
-    const a = [...side].find(o => o.kind !== 'hall' && sharedWall(o, c).length);
-    if (!a || !addDoor(map, b, c)) continue;
-    if (!addDoor(map, c, a)) {
-      map.doors.pop(); b.links.pop(); c.links.length = 0;
-      continue;
+// Which tiles inside a box are floor. Start and stairs rooms stay open in the middle.
+function shapeBox(b) {
+  const w = b.x1 - b.x0 - 1, h = b.y1 - b.y0 - 1;
+  const m = Array.from({ length: h }, () => Array(w).fill(true));
+  const wall = (x, y) => { if (x >= 0 && y >= 0 && x < w && y < h) m[y][x] = false; };
+  const keepMiddle = b.kind === 'start' || b.kind === 'stairs';
+  const options = ['rect', 'cave', 'cave'];
+  if (w >= 5 && h >= 5) options.push('round', 'round', 'cross');
+  if (w >= 6 && h >= 5) options.push('ell');
+  if (w >= 7 && h >= 6 && !keepMiddle) options.push('ring', 'ring');
+  if (w >= 7 && h >= 7) options.push('pillars');
+  const shape = w < 4 || h < 4 || (b.kind === 'side' && Math.random() < 0.5) ? 'rect' : pick(options);
+  b.shape = shape;
+  if (shape === 'cave') {
+    for (const [x, y, sx, sy] of [[0, 0, 1, 1], [w - 1, 0, -1, 1], [0, h - 1, 1, -1], [w - 1, h - 1, -1, -1]]) {
+      if (Math.random() < 0.25) continue;
+      wall(x, y);
+      if (w >= 6 && h >= 5 && Math.random() < 0.6) { wall(x + sx, y); wall(x, y + sy); }
     }
-    boxes.push(c);
+    // a few bites out of the long walls
+    for (let k = 0; w >= 5 && h >= 5 && k < (w + h) / 4; k++) {
+      const side = rint(0, 3), t = side < 2 ? rint(1, w - 2) : rint(1, h - 2);
+      if (side === 0) wall(t, 0); else if (side === 1) wall(t, h - 1); else if (side === 2) wall(0, t); else wall(w - 1, t);
+    }
+  } else if (shape === 'round') {
+    const cut = Math.max(1, Math.floor(Math.min(w, h) / 2.6));
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const dx = Math.min(x, w - 1 - x), dy = Math.min(y, h - 1 - y);
+      if (dx + dy < cut) wall(x, y);
+    }
+  } else if (shape === 'cross') {
+    const cw = Math.floor(w / 3), ch = Math.floor(h / 3);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if ((x < cw || x >= w - cw) && (y < ch || y >= h - ch)) wall(x, y);
+    }
+  } else if (shape === 'ell') {
+    const cw = Math.floor((w - 1) / 2), ch = Math.floor((h - 1) / 2), right = Math.random() < 0.5, down = Math.random() < 0.5;
+    for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) wall(right ? w - 1 - x : x, down ? h - 1 - y : y);
+  } else if (shape === 'ring') {
+    for (let y = 2; y < h - 2; y++) for (let x = 2; x < w - 2; x++) wall(x, y);
+  } else if (shape === 'pillars') {
+    for (const [x, y] of [[1, 1], [w - 2, 1], [1, h - 2], [w - 2, h - 2]]) wall(x, y);
+  }
+  b.mask = m;
+}
+
+// Joins two boxes: a door in each, facing the other, and a winding passage between them through the rock.
+function join(map, boxes, a, b) {
+  const doorsOn = bx => map.doors.filter(d => (d.x === bx.x0 || d.x === bx.x1 || d.y === bx.y0 || d.y === bx.y1) && inBox(bx, d.x, d.y));
+  // the spots in a box's wall where a door could go: the tile inside is floor, and no door right beside
+  const spots = (bx, toward) => {
+    const out = [], w = bx.x1 - bx.x0 - 1, h = bx.y1 - bx.y0 - 1, taken = doorsOn(bx);
+    const add = (x, y, ix, iy, nx, ny) => {
+      if (!bx.mask[iy]?.[ix]) return;
+      if (taken.some(d => Math.abs(d.x - x) + Math.abs(d.y - y) <= 2)) return;
+      const ox = x + nx, oy = y + ny;
+      if (!inMap(ox, oy) || isBorder(ox, oy) || boxes.some(o => inBox(o, ox, oy))) return;
+      const score = -Math.hypot(ox - toward.x, oy - toward.y) + Math.random() * 2;
+      out.push({ x, y, ox, oy, score });
+    };
+    for (let x = 0; x < w; x++) { add(bx.x0 + 1 + x, bx.y0, x, 0, 0, -1); add(bx.x0 + 1 + x, bx.y1, x, h - 1, 0, 1); }
+    for (let y = 0; y < h; y++) { add(bx.x0, bx.y0 + 1 + y, 0, y, -1, 0); add(bx.x1, bx.y0 + 1 + y, w - 1, y, 1, 0); }
+    return out.sort((p, q) => q.score - p.score);
+  };
+  const sa = spots(a, midOf(b)).slice(0, 4), sb = spots(b, midOf(a)).slice(0, 4);
+  for (const da of sa) for (const db of sb) {
+    const path = passage(boxes, da, db, map.passage);
+    if (!path) continue;
+    map.passage.push(...path);
+    map.doors.push({ x: da.x, y: da.y }, { x: db.x, y: db.y });
+    a.links.push(b); b.links.push(a);
     return true;
   }
   return false;
 }
 
-// Rough walking distance from box `from` to every box, going door to door between box middles.
-function walkFrom(from) {
-  const mid = b => [(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2];
-  const walk = new Map([[from, 0]]), todo = [from];
-  while (todo.length) {
-    const b = todo.shift();
-    for (const o of b.links) {
-      const d = walk.get(b) + Math.abs(mid(b)[0] - mid(o)[0]) + Math.abs(mid(b)[1] - mid(o)[1]);
-      if (!walk.has(o) || d < walk.get(o)) { walk.set(o, d); todo.push(o); }
+// A winding way through rock from just outside one door to just outside the other, 4-way steps,
+// around every box. Slightly random costs make it wander like a mine tunnel instead of a ruler line.
+function passage(boxes, from, to, dug) {
+  const n = W * H, cost = new Float32Array(n).fill(Infinity), prev = new Int32Array(n).fill(-1);
+  const blocked = i => { const x = i % W, y = (i / W) | 0; return isBorder(x, y) || boxes.some(o => inBox(o, x, y)); };
+  const s = idx(from.ox, from.oy), t = idx(to.ox, to.oy), dugSet = new Set(dug);
+  const noise = new Float32Array(n);
+  for (let i = 0; i < n; i++) noise[i] = Math.random() * 1.5;
+  cost[s] = 0;
+  const open = [s];
+  while (open.length) {
+    let bi = 0;
+    for (let k = 1; k < open.length; k++) if (cost[open[k]] < cost[open[bi]]) bi = k;
+    const c = open.splice(bi, 1)[0];
+    if (c === t) break;
+    const x = c % W, y = (c / W) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (!inMap(nx, ny)) continue;
+      const j = idx(nx, ny);
+      if (j !== t && blocked(j)) continue;
+      // reuse an old passage cheaply (they join up into crossroads), else rock with a little noise
+      const step = dugSet.has(j) ? 0.6 : 1 + noise[j];
+      if (cost[c] + step < cost[j]) { cost[j] = cost[c] + step; prev[j] = c; if (!open.includes(j)) open.push(j); }
     }
   }
-  return walk;
-}
-
-function ringUp(map, boxes, start, far) {
-  const same = (e, a, b) => (e[0] === a && e[1] === b) || (e[0] === b && e[1] === a);
-  const reach = cut => {
-    const seen = new Set([start]), todo = [start];
-    while (todo.length) {
-      const b = todo.pop();
-      for (const o of b.links) if (!seen.has(o) && !(cut && same(cut, b, o))) { seen.add(o); todo.push(o); }
-    }
-    return seen;
-  };
-  const route = () => {
-    const from = new Map([[start, null]]), todo = [start];
-    while (todo.length) {
-      const b = todo.shift();
-      for (const o of b.links) if (!from.has(o)) { from.set(o, b); todo.push(o); }
-    }
-    const edges = [];
-    for (let b = far; from.get(b); b = from.get(b)) edges.push([from.get(b), b]);
-    return edges;
-  };
-  for (let tries = 0; tries < 12; tries++) {
-    const bridge = route().find(e => !reach(e).has(far));
-    if (!bridge) return true;
-    const side = reach(bridge), pairs = [];
-    // the way round should be a real second way, not a shortcut: prefer a door far from both ends
-    const fromStart = walkFrom(start), fromFar = walkFrom(far);
-    for (const a of side) for (const b of boxes) {
-      if (side.has(b) || a.links.includes(b) || (a.kind === 'hall' && b.kind === 'hall')) continue;
-      if (sharedWall(a, b).length) pairs.push([a, b, fromStart.get(a) + fromFar.get(b) + 6 * Math.random()]);
-    }
-    if (pairs.sort((p, q) => q[2] - p[2]).some(([a, b]) => addDoor(map, a, b))) continue;
-    // nothing on the two sides touches: dig a short hall or tunnel that joins them
-    if (!bridgeWith(map, boxes, side)) return false;
-  }
-  return false;
-}
-
-const onBoxWall = (b, x, y) => ((x === b.x0 || x === b.x1) && y > b.y0 && y < b.y1) || ((y === b.y0 || y === b.y1) && x > b.x0 && x < b.x1);
-
-// Some rooms get a little character: rough cave corners or a few pillars.
-// Nothing goes within a step of a door, and the room's middle stays open.
-function shapeRooms(map, rooms) {
-  const nearDoor = (x, y) => map.doors.some(d => Math.abs(d.x - x) <= 1 && Math.abs(d.y - y) <= 1);
-  const wallUp = list => {
-    if (list.some(([x, y]) => nearDoor(x, y))) return;
-    for (const [x, y] of list) { map.tiles[idx(x, y)] = WALL; map.room[idx(x, y)] = -1; }
-  };
-  rooms.forEach((r, i) => {
-    if (i === 0 || r.w < 5 || r.h < 5) return;
-    const roll = Math.random(), x1 = r.x + r.w - 1, y1 = r.y + r.h - 1;
-    if (roll < 0.35) {
-      // cave: knock the corners in
-      for (const [cx, cy, sx, sy] of [[r.x, r.y, 1, 1], [x1, r.y, -1, 1], [r.x, y1, 1, -1], [x1, y1, -1, -1]]) {
-        if (Math.random() < 0.3) continue;
-        const big = r.w >= 7 && r.h >= 6 && Math.random() < 0.5;
-        wallUp(big ? [[cx, cy], [cx + sx, cy], [cx, cy + sy]] : [[cx, cy]]);
-      }
-    } else if (roll < 0.55 && r.w >= 7 && r.h >= 7) {
-      // pillars, a step in from the walls
-      for (const [px, py] of [[r.x + 1, r.y + 1], [x1 - 1, r.y + 1], [r.x + 1, y1 - 1], [x1 - 1, y1 - 1]]) wallUp([[px, py]]);
-    }
-  });
+  if (cost[t] === Infinity) return null;
+  const path = [];
+  for (let c = t; c !== -1; c = prev[c]) path.push(c);
+  return path;
 }
 
 // One large arena for boss floors, with four pillars for cover.

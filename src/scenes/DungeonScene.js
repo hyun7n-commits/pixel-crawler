@@ -3,7 +3,7 @@
 // Characters stand on the bottom middle of their tile (origin 0.5, 1).
 
 /* global Phaser */
-import { TILE, buildTextures, wallKey, waterKey, shadeKey, floorKey, oreFrame, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
+import { TILE, buildTextures, wallKey, waterKey, shadeKey, floorKey, oreFrame, dropKey, chipKey, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
 import { CHARACTERS } from '../data/characters.js';
 import { ITEMS } from '../data/items.js';
 import { T, TERRAIN, GASES, GAS_KEYS } from '../data/terrain.js';
@@ -358,7 +358,7 @@ export class DungeonScene extends Phaser.Scene {
       keep.add(key);
       let s = this.pickupSprites[key];
       if (!s) {
-        const tex = PICKUP_TEX[q.type] || ITEMS[q.type].sprite;
+        const tex = q.type === 'gold' && q.ore != null ? dropKey(q.ore) : PICKUP_TEX[q.type] || ITEMS[q.type].sprite;
         s = this.add.image(q.x * TILE, q.y * TILE, tex).setOrigin(0).setDepth(D.pickups).setData('baseY', q.y * TILE + 14);
         if (q.type === 'crystal') {
           // the relic floats shut inside a crystal above its stand
@@ -445,6 +445,7 @@ export class DungeonScene extends Phaser.Scene {
       case 'sneak': this.heavyHit(d.x, d.y, d.from); break;
       case 'snore': this.noiseRing(d.x, d.y, d.r, 0xb58cf0); break;
       case 'vein': this.onVein(d); break;
+      case 'newOre': this.onNewOre(d); break;
       case 'hangon':
         // the blow should have finished you: everything stops for a moment, and you're still standing
         this.hitStop(420);
@@ -492,7 +493,11 @@ export class DungeonScene extends Phaser.Scene {
       case 'shock': this.shock(d.tiles); break;
       case 'mine': this.onMine(d); break;
       case 'heard':
-        this.float(d.x, d.y + 1.7, `${d.list.length}마리가 들었다!`, '#ff7a7a', 250, 11);
+        // the noise rolls out from you as red rings; the ones that heard get arrows at the edge of the view
+        for (let k = 0; k < 3; k++) {
+          const ring = this.add.circle(center(d.x), center(d.y), TILE).setStrokeStyle(1.5, 0xff6a6a, 0.9).setDepth(D.fx).setScale(0.3);
+          this.tweens.add({ targets: ring, scale: 3 + d.list.length * 0.4, alpha: 0, delay: k * 180, duration: 800, ease: 'Quad.out', onComplete: () => ring.destroy() });
+        }
         this.heardMarks = d.list.map(e => ({ e, until: this.time.now + 2200 }));
         break;
       case 'say': this.say(d.who, d.text); break;
@@ -699,6 +704,8 @@ export class DungeonScene extends Phaser.Scene {
     if (last) this.cameras.main.flash(160, 244, 207, 79);
     this.noiseRing(d.x, d.y, d.r);
     const g = ORES[d.tier], tint = Phaser.Display.Color.HexStringToColor(g.vein ? g.vein[0] : '#ffffff').color;
+    // pieces of whatever is inside burst out with every swing: blue shards from diamond, red from ruby
+    this.shards(cx, cy, d.tier, last ? 18 * size : 4 + d.hits * 2, last ? 2.6 : 1.4);
     // the ore itself shudders, every tile of it
     const cells = d.cells || [{ x: d.x, y: d.y }];
     const imgs = cells.map(c => this.oreImgs[idx(c.x, c.y)]).filter(im => im?.active);
@@ -715,19 +722,46 @@ export class DungeonScene extends Phaser.Scene {
       this.fx.spark.explode(24, cx, cy);
       const ring = this.add.circle(cx, cy, TILE * 0.9).setStrokeStyle(2, tint, 1).setDepth(D.fx).setScale(0.2);
       this.tweens.add({ targets: ring, scale: 1.6, alpha: 0, duration: 420, ease: 'Quad.out', onComplete: () => ring.destroy() });
-      if (!d.nugget) this.float(d.x, d.y - 0.6, `${g.name}!`, g.vein ? g.vein[0] : '#ffffff', 60, g.gem ? 15 : 13);
+      this.shards(cx, cy, d.tier, 16, 2.2);
     }
-    // a bonanza: a fountain of gold and a big shout
+    // a bonanza: a fountain of pieces, no words needed
     if (d.nugget) {
       this.hitStop(160);
       this.cameras.main.shake(320, 0.012);
       this.cameras.main.flash(180, 244, 207, 79);
-      this.float(d.x, d.y - 1.1, d.rose ? `노다지! ${g.name}!` : '노다지!', '#f4cf4f', 140, 18);
-      for (let k = 0; k < 16; k++) this.coinFly(cx, cy, 2.4, 120 + k * 22);
+      for (let k = 0; k < 16; k++) this.coinFly(cx, cy, 2.4, 120 + k * 22, chipKey(d.tier));
     }
-    // gold chips spray out and fly into your pocket
+    // chips of the ore spray out and fly into your pocket
     const n = (last ? 14 : 2 + d.hits) * (last ? size : 1);
-    for (let k = 0; k < n; k++) this.coinFly(cx, cy, last ? 2.2 : 1.2, k * (last ? 25 : 35));
+    for (let k = 0; k < n; k++) this.coinFly(cx, cy, last ? 2.2 : 1.2, k * (last ? 25 : 35), chipKey(d.tier));
+  }
+
+  // Little pieces of the ore flying out and bouncing on the floor, in the grade's colours.
+  shards(x, y, tier, n, spread) {
+    const g = ORES[tier], cols = (g.vein || ['#ff6478', '#7aa4ff', '#6fe39a', '#f4cf4f']).map(c => Phaser.Display.Color.HexStringToColor(c).color);
+    for (let k = 0; k < n; k++) {
+      const s = this.add.rectangle(x, y, 2, 2, cols[k % cols.length]).setDepth(D.fx).setAngle(45);
+      const a = Math.random() * Math.PI * 2, dist = TILE * spread * (0.3 + Math.random() * 0.7);
+      const tx = x + Math.cos(a) * dist, ty = y + Math.sin(a) * dist * 0.5 + 4, h = TILE * (0.4 + Math.random() * 0.8);
+      this.tweens.add({
+        targets: s, x: tx, duration: 380 + Math.random() * 200, ease: 'Quad.out', angle: 45 + 360 * (Math.random() < 0.5 ? 1 : -1),
+        onUpdate: tw => { s.y = y + (ty - y) * tw.progress - Math.sin(tw.progress * Math.PI) * h; },
+        onComplete: () => this.tweens.add({ targets: s, alpha: 0, delay: 250, duration: 300, onComplete: () => s.destroy() }),
+      });
+    }
+  }
+
+  // The first time a grade turns up at all: a ring of its colour and a shower of its pieces, no words.
+  onNewOre(d) {
+    const ore = this.run.map.ores.find(o => o.tier === d.tier) || this.run.map.ores[0];
+    if (!ore) return;
+    const g = ORES[d.tier], tint = Phaser.Display.Color.HexStringToColor(g.vein ? g.vein[0] : '#ffffff').color;
+    const cx = center(ore.x), cy = center(ore.y);
+    for (let k = 0; k < 2; k++) {
+      const ring = this.add.circle(cx, cy, TILE).setStrokeStyle(2, tint, 1).setDepth(D.fx).setScale(0.2);
+      this.tweens.add({ targets: ring, scale: 2.4, alpha: 0, delay: k * 160, duration: 650, ease: 'Quad.out', onComplete: () => ring.destroy() });
+    }
+    this.shards(cx, cy, d.tier, 24, 2.8);
   }
 
   // A big vein comes into view for the first time: it shines, and you can't miss it.
@@ -738,16 +772,13 @@ export class DungeonScene extends Phaser.Scene {
     for (const c of d.cells) this.fx.spark.explode(10, center(c.x), center(c.y));
     const ring = this.add.circle(mx, my, TILE * 1.2).setStrokeStyle(2, tint, 1).setDepth(D.fx).setScale(0.2);
     this.tweens.add({ targets: ring, scale: 2, alpha: 0, duration: 600, ease: 'Quad.out', onComplete: () => ring.destroy() });
-    if (d.size >= 4) { const c = Phaser.Display.Color.IntegerToRGB(tint); this.cameras.main.flash(160, c.r, c.g, c.b); }
-    const t = this.add.text(mx, my - TILE, d.size >= 4 ? '대박 광맥!' : '큰 광맥!', {
-      fontFamily: '"Do Hyeon", sans-serif', fontSize: `${d.size >= 4 ? 18 : 14}px`, color: g.vein ? g.vein[0] : '#ffffff', stroke: '#000000', strokeThickness: 3,
-    }).setOrigin(0.5, 1).setDepth(D.text).setResolution(this.textRes()).setScale(0.3);
-    this.tweens.add({ targets: t, scale: 1, duration: 260, ease: 'Back.out' });
-    this.tweens.add({ targets: t, y: t.y - 10, alpha: 0, delay: 1300, duration: 500, onComplete: () => t.destroy() });
+    if (d.size >= 4) { const c = Phaser.Display.Color.IntegerToRGB(tint); this.cameras.main.flash(160, c.r, c.g, c.b); this.cameras.main.shake(200, 0.004); }
+    // the bigger it is, the longer it keeps glittering
+    for (let k = 0; k < d.size; k++) this.time.delayedCall(250 + k * 220, () => { const c = d.cells[k % d.cells.length]; this.shards(center(c.x), center(c.y) - 4, d.tier, 6, 0.8); });
   }
 
-  coinFly(x, y, spread, delay) {
-    const c = this.add.image(x, y, 'gold').setScale(0.45).setDepth(D.fx);
+  coinFly(x, y, spread, delay, key = 'gold') {
+    const c = this.add.image(x, y, key).setScale(key === 'gold' ? 0.45 : 0.9).setDepth(D.fx);
     const a = Math.random() * Math.PI * 2, dist = TILE * spread * (0.5 + Math.random() * 0.5);
     const tx = x + Math.cos(a) * dist, ty = y + Math.sin(a) * dist * 0.6;
     this.tweens.add({

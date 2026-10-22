@@ -22,20 +22,53 @@ function spriteCanvas(rows, recolor) {
   return c;
 }
 
-// The big ore in each grade: same rock, veins in the grade's colours (rainbow stripes for the top one).
-const veinColor = grade => (ch, i, j) => {
-  if (ch !== 'y' && ch !== 'Y') return null;
-  if (!grade.vein) return RAINBOW[(i + j) % RAINBOW.length];
-  return grade.vein[ch === 'y' ? 0 : 1];
+// The big ore in each grade: the same rock with the grade's own pieces stuck in it, so you can tell
+// at a glance what it is: round nuggets for copper, silver and gold, faceted crystals for diamond and
+// the gems (in every colour for the rainbow stone). Pieces use 1 highlight, 2 light, 3 dark, 4 glint.
+const NUGGETS = [['.12.', '1223', '.233'], ['.12', '123', '233'], ['12', '23']];
+const CRYSTALS = [['..4..', '.122.', '12223', '.233.', '..3..'], ['.4.', '122', '123', '233', '.3.'], ['.1.', '123', '.3.']];
+const pieceColor = grade => (ch, i, j) => {
+  if (ch < '1' || ch > '4') return null;
+  if (ch === '4') return '#ffffff';
+  const [light, dark] = grade.vein || [RAINBOW[(i + j) % RAINBOW.length], mix(RAINBOW[(i + j + 2) % RAINBOW.length], '#000000', 0.35)];
+  return ch === '1' ? mix(light, '#ffffff', 0.55) : ch === '2' ? light : dark;
 };
-function oreCanvas(grade) {
-  return spriteCanvas(TER_SPR.bigOre, veinColor(grade));
+// Stamps the grade's pieces onto rock rows (arrays of chars) wherever they sit fully on the rock face.
+function stampPieces(rows, grade, n, rnd, onRock = ch => ch === 'L' || ch === 'l' || ch === 'd') {
+  const shapes = grade.metal ? NUGGETS : CRYSTALS;
+  const H = rows.length, W = rows[0].length;
+  for (let k = 0, tries = 0; k < n && tries < 500; tries++) {
+    // the first pieces are the big ones
+    const pat = shapes[Math.min(shapes.length - 1, k < Math.ceil(n / 3) ? 0 : 1 + Math.floor(rnd() * (shapes.length - 1)))];
+    const px = Math.floor(rnd() * (W - pat[0].length + 1)), py = Math.floor(rnd() * (H - pat.length + 1));
+    if (!pat.every((r, j) => [...r].every((ch, i) => ch === '.' || onRock(rows[py + j][px + i])))) continue;
+    pat.forEach((r, j) => [...r].forEach((ch, i) => { if (ch !== '.') rows[py + j][px + i] = ch; }));
+    k++;
+  }
+  return rows;
 }
+const seeded = seed => () => ((seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff);
+function oreCanvas(grade) {
+  const rows = TER_SPR.bigOre.map(r => [...r.replace(/y/g, 'L').replace(/Y/g, 'l')]);
+  stampPieces(rows, grade, grade.metal ? 4 : 3, seeded(7 + ORES.indexOf(grade)));
+  return spriteCanvas(rows.map(r => r.join('')), pieceColor(grade));
+}
+// What a grade looks like lying on the floor (a little heap of its pieces), and one chip of it in the air.
+function dropCanvas(grade, chip) {
+  const S = chip ? 6 : 14, rows = Array.from({ length: S }, () => Array(S).fill('o'));
+  stampPieces(rows, grade, chip ? 1 : 3, seeded(3 + ORES.indexOf(grade)), ch => ch === 'o');
+  // a dark rim around the pieces so they read on any floor
+  const out = rows.map((r, j) => r.map((ch, i) => (ch !== 'o' ? ch : [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => rows[j + dy]?.[i + dx] > '0' && rows[j + dy]?.[i + dx] <= '4') ? 'k' : '.')));
+  const pad = chip ? 0 : 1;
+  return spriteCanvas([...Array(pad).fill('.'.repeat(S + 2 * pad)), ...out.map(r => '.'.repeat(pad) + r.join('') + '.'.repeat(pad))], pieceColor(grade));
+}
+export const dropKey = tier => `t_drop_${ORES[tier].id}`;
+export const chipKey = tier => `t_chip_${ORES[tier].id}`;
 
 // A vein spanning two to four tiles is drawn as one big rock over the whole shape, in the same
 // colours as the one-tile ore (outline k, rock L, light l, shadow d, veins y/Y, sparkle w),
 // with more veins the bigger it is. Seeded by where it lies, so it looks the same every time.
-function veinRows(cells) {
+function veinRows(cells, grade) {
   const x0 = Math.min(...cells.map(c => c.x)), y0 = Math.min(...cells.map(c => c.y));
   const bw = Math.max(...cells.map(c => c.x)) - x0 + 1, bh = Math.max(...cells.map(c => c.y)) - y0 + 1;
   const W = bw * TILE, H = bh * TILE;
@@ -85,15 +118,8 @@ function veinRows(cells) {
     const px = Math.floor(rnd() * W), py = Math.floor(rnd() * H);
     if (face(px, py) && face(px + 1, py)) { rows[py][px] = 'l'; rows[py][px + 1] = 'l'; }
   }
-  // the veins: clusters of ore glinting out of the rock, more of them the bigger it is
-  const PATTERNS = [['.yy.', 'yYYy', '.yYy'], ['yy..', 'yYY.', '.YYy', '..y.'], ['.y', 'yY', 'YY', 'y.'], ['yyY', 'YY.'], ['.yy', 'yYY', 'yY.']];
-  for (let n = 0, tries = 0; n < cells.length * 4 && tries < 600; tries++) {
-    const pat = PATTERNS[Math.floor(rnd() * PATTERNS.length)];
-    const px = Math.floor(rnd() * (W - 4)), py = Math.floor(rnd() * (H - 4));
-    if (!pat.every((r, j) => [...r].every((ch, i) => ch === '.' || face(px + i, py + j) || rows[py + j]?.[px + i] === 'l'))) continue;
-    pat.forEach((r, j) => [...r].forEach((ch, i) => { if (ch !== '.') rows[py + j][px + i] = ch; }));
-    n++;
-  }
+  // the grade's pieces stuck in the rock, more of them the bigger it is
+  stampPieces(rows, grade, cells.length * 3, rnd);
   for (let n = 0, tries = 0; n < cells.length * 2 && tries < 300; tries++) {
     const px = Math.floor(rnd() * W), py = Math.floor(rnd() * H);
     if (face(px, py)) { rows[py][px] = 'w'; n++; }
@@ -110,8 +136,8 @@ export function oreFrame(scene, ore, x, y, tier = ore.tier) {
   const key = `t_vein_${x0}_${y0}_${shape}_${grade.id}`;
   const tx = scene.textures;
   if (!tx.exists(key)) {
-    const { rows } = veinRows(ore.cells);
-    const tex = tx.addCanvas(key, spriteCanvas(rows, veinColor(grade)));
+    const { rows } = veinRows(ore.cells, grade);
+    const tex = tx.addCanvas(key, spriteCanvas(rows, pieceColor(grade)));
     for (const c of ore.cells) tex.add(`${c.x - x0}_${c.y - y0}`, 0, (c.x - x0) * TILE, (c.y - y0) * TILE, TILE, TILE);
   }
   return [key, `${x - x0}_${y - y0}`];
@@ -423,7 +449,11 @@ export function buildTextures(scene) {
   const tx = scene.textures;
   for (const [name, rows] of Object.entries(SPR)) if (!tx.exists(name)) tx.addCanvas(name, spriteCanvas(rows));
   for (const [name, rows] of Object.entries(TER_SPR)) if (!tx.exists(`t_${name}`)) tx.addCanvas(`t_${name}`, spriteCanvas(rows));
-  for (const grade of ORES) if (!tx.exists(`t_ore_${grade.id}`)) tx.addCanvas(`t_ore_${grade.id}`, oreCanvas(grade));
+  for (const grade of ORES) {
+    if (!tx.exists(`t_ore_${grade.id}`)) tx.addCanvas(`t_ore_${grade.id}`, oreCanvas(grade));
+    if (!tx.exists(`t_drop_${grade.id}`)) tx.addCanvas(`t_drop_${grade.id}`, dropCanvas(grade, false));
+    if (!tx.exists(`t_chip_${grade.id}`)) tx.addCanvas(`t_chip_${grade.id}`, dropCanvas(grade, true));
+  }
   for (let v = 0; v < 3; v++) {
     tx.addCanvas(`t_brush${v}`, tallGrass(v));
     tx.addCanvas(`t_grass${v}`, flatGrass(v));

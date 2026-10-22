@@ -154,8 +154,6 @@ export class Run {
     for (const o of this.map.ores) {
       if (o.spotted || o.size < 3 || !o.cells.some(c => this.isVisible(c.x, c.y))) continue;
       o.spotted = true;
-      const name = ORES[o.tier].name;
-      this.log(o.size >= 4 ? `엄청나게 큰 ${name} 광맥이다! 대박!` : `커다란 ${name} 광맥이 보인다!`, 'good');
       this.emit('vein', { x: o.x, y: o.y, cells: o.cells, size: o.size, tier: o.tier });
     }
   }
@@ -164,7 +162,7 @@ export class Run {
     const map = this.map, rooms = carveRooms(map), start = rooms[0];
     this.p.x = start.cx; this.p.y = start.cy;
     const dm = distMap(map, start.cx, start.cy);
-    // the layout already picked the stairs room, on a loop with the start (see dungeon.js ringUp)
+    // the layout already picked the stairs room, on a loop with the start (see dungeon.js buildLoop)
     let far = rooms.find(r => r.stairs), best = -1;
     if (!far) {
       for (const r of rooms) {
@@ -440,26 +438,22 @@ export class Run {
     if (!last) gold = Math.round(B.oreGold(this.floor) * g.mult * B.ORE_SWING[k] * s.oreMult * big * (nugget ? B.ORE_NUGGET_MULT : 1));
     this.emit('mine', { x: at.x, y: at.y, cells: ore.cells, size: ore.size, from: { x: p.x, y: p.y }, hits: ore.hits, r, last, tier: ore.tier, rose, nugget });
     if (ore.vent) addGas(this, ore.vent.x, ore.vent.y, 'mine', B.ORE_GAS);
-    if (!last) {
-      this.addGold(gold);
-      if (nugget) this.log(`노다지! ${g.name} 덩어리가 와르르 쏟아졌다!`, 'good');
-      else if (rose) this.log(`쩡! 속에서 ${josa(g.name, '이', '가')} 비친다! (${ore.hits}/${B.ORE_HITS})`, 'good');
-      else this.log(`캉! ${g.name} 조각이 떨어졌다. (${ore.hits}/${B.ORE_HITS})`);
-    } else {
+    if (!last) this.addGold(gold);
+    else {
       for (const c of ore.cells) map.tiles[idx(c.x, c.y)] = FLOOR;
       map.ores = map.ores.filter(o => o !== ore);
       this.meta.ores[g.id] = (this.meta.ores[g.id] || 0) + 1;
       // the haul lies in a heap on every tile the vein filled; a 2x2 jackpot holds a richer chest
       const haul = Math.round(B.oreJackpot(this.floor) * g.mult * s.oreMult * big / ore.size);
-      for (const c of ore.cells) this.pickups.push({ x: c.x, y: c.y, type: 'gold', amount: haul });
+      for (const c of ore.cells) this.pickups.push({ x: c.x, y: c.y, type: 'gold', amount: haul, ore: ore.tier });
       this.pickups.push({ x: ore.x, y: ore.y, type: 'chest', rich: ore.size >= 4, vein: ore.size >= 4 });
-      this.log(ore.size > 1 ? `쩌억! 커다란 ${g.name} 광맥이 통째로 무너져 내렸다!` : `쩌억! 큰 ${g.name} 광석이 통째로 쏟아졌다!`, 'good');
+      this.log('쩌억! 광석이 통째로 무너져 내렸다!', 'good');
       this.discover('ore_jackpot');
       // the blacksmith on this floor wants a chunk of it
       const smith = this.quests.smith;
       if (this.floor === smith.floor && smith.state !== 'done' && (smith.chunk === null || ore.tier > smith.chunk)) {
         smith.chunk = ore.tier;
-        this.log(`큰 ${g.name} 덩어리를 하나 챙겼다.${smith.state === 'asked' ? ' 대장장이에게 가져가자.' : ''}`, 'good');
+        this.log(`광석 덩어리를 하나 챙겼다.${smith.state === 'asked' ? ' 대장장이에게 가져가자.' : ''}`, 'good');
       }
       this.emit('tiles', { list: ore.cells.map(c => idx(c.x, c.y)) });
     }
@@ -474,8 +468,6 @@ export class Run {
       came.push(e);
     }
     if (heard.length || came.length) this.emit('heard', { x: p.x, y: p.y, list: [...heard, ...came] });
-    if (came.length) this.log(`광산 깊은 곳에서 ${came.length}마리가 소리를 따라 기어 나온다!`, 'warn');
-    if (heard.length) this.log(`${heard.length}마리가 소리를 듣고 깼다!`, 'warn');
     this.endTurn();
     return true;
   }
@@ -731,7 +723,7 @@ export class Run {
     const g = ORES[tier];
     if (g.id in this.meta.ores) return;
     this.meta.ores[g.id] = 0;
-    this.emit('banner', { text: `새 광석! ${g.name}` });
+    this.emit('newOre', { tier });
   }
 
   discover(id) {
@@ -754,6 +746,9 @@ export class Run {
     else if (rl.bolt && this.turn % 6 === 0) this.zap(1, 4 * rl.bolt);
     if (rl.moss && this.turn % [6, 4, 2][rl.moss - 1] === 0) this.heal(1);
 
+    // doors shut the moment nobody stands in them, so a chaser right behind you loses sight of you
+    // as you step through (the Shattered Pixel Dungeon door ambush)
+    this.refreshDoors();
     const dm = distMap(this.map, p.x, p.y);
     for (const e of this.enemies.slice()) {
       if (e.hp > 0 && p.hp > 0) enemyAct(this, e, dm);

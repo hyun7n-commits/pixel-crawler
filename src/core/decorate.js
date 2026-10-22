@@ -6,7 +6,7 @@
 // Corridors stay bare.
 
 import { T, TRAPS } from '../data/terrain.js';
-import { idx, inMap, FLOOR, ORE, DOOR, distMap } from './dungeon.js';
+import { idx, inMap, passable, FLOOR, ORE, DOOR, distMap } from './dungeon.js';
 import { rint, pick, shuffle, DIRS8 } from './util.js';
 import { trapsPerFloor, trapHidden, ORES_PER_FLOOR, ORE_SIZE_CHANCE } from '../data/balance.js';
 
@@ -80,6 +80,18 @@ function placeOre(map, r, keep, start) {
   const near = ([x, y]) => Math.abs(x - r.cx) + Math.abs(y - r.cy);
   spots.sort((a, b) => near(a) - near(b));
   const reach = () => { const dm = distMap(map, start.x, start.y); let n = 0; for (const d of dm) if (d < 9999) n++; return n; };
+  // the room's own floor must stay in one piece too, or a ring or cross room would be cut in half
+  const rid = map.room[idx(r.cx, r.cy)];
+  const inside = () => {
+    const tiles = []; for (let i = 0; i < map.tiles.length; i++) if (map.room[i] === rid && passable(map, i % map.w, (i / map.w) | 0)) tiles.push(i);
+    if (!tiles.length) return 0;
+    const seen = new Set([tiles[0]]), todo = [tiles[0]];
+    while (todo.length) {
+      const c = todo.pop();
+      for (const [dx, dy] of DIRS4) { const j = c + dx + dy * map.w; if (!seen.has(j) && map.room[j] === rid && passable(map, j % map.w, (j / map.w) | 0)) { seen.add(j); todo.push(j); } }
+    }
+    return seen.size === tiles.length;
+  };
   const before = reach();
   let cells = null;
   for (let size = rollSize(); size >= 1 && !cells; size--) {
@@ -88,7 +100,7 @@ function placeOre(map, r, keep, start) {
         const c = shape.map(([dx, dy]) => [x + dx, y + dy]);
         if (!c.every(([cx, cy]) => inRoom(r, cx, cy) && cx > r.x && cy > r.y && cx < r.x + r.w - 1 && cy < r.y + r.h - 1 && free(map, cx, cy) && !keep(cx, cy))) continue;
         for (const [cx, cy] of c) map.tiles[idx(cx, cy)] = ORE;
-        if (reach() === before - c.length) { cells = c; break; }
+        if (reach() === before - c.length && inside()) { cells = c; break; }
         for (const [cx, cy] of c) map.tiles[idx(cx, cy)] = FLOOR;
       }
       if (cells) break;
@@ -114,16 +126,19 @@ export function decorate(map, rooms, { start, stairs }) {
   const keep = (x, y) => (Math.abs(x - start.x) <= 1 && Math.abs(y - start.y) <= 1) || (x === stairs.x && y === stairs.y);
 
   // the ores go in the biggest rooms that are neither the start nor the stairs room
-  const oreRooms = rooms.slice(1)
-    .filter(r => !inRoom(r, stairs.x, stairs.y))
-    .sort((a, b) => b.w * b.h - a.w * a.h).slice(0, ORES_PER_FLOOR);
+  // (a room too cramped for one passes it on to the next biggest)
+  const oreRooms = new Set();
+  for (const r of rooms.slice(1).filter(r => !inRoom(r, stairs.x, stairs.y)).sort((a, b) => b.w * b.h - a.w * a.h)) {
+    if (oreRooms.size >= ORES_PER_FLOOR) break;
+    if (placeOre(map, r, keep, start)) oreRooms.add(r);
+  }
 
   rooms.forEach((r, i) => {
     if (i === 0 || Math.random() < 0.55) hangLamp(map, r);
     let theme = 'plain';
     if (i === 0) {
       if (Math.random() < 0.5) grass(map, r, rint(2, 4), keep);
-    } else if (oreRooms.includes(r) && placeOre(map, r, keep, start)) {
+    } else if (oreRooms.has(r)) {
       theme = 'ore';
       if (Math.random() < 0.6) grass(map, r, rint(2, 4), keep);
     } else {

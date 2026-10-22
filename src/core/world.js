@@ -89,7 +89,7 @@ export function springTrap(run, x, y) {
       e.last = { x: run.p.x, y: run.p.y };
       run.emit('summon', { x: s.x, y: s.y });
     }
-    if (seen || onMe) run.log(`쿠구궁! 함정에서 몬스터 ${n}마리가 튀어나왔다!`, 'warn');
+    if (seen || onMe) run.log('쿠구궁!', 'warn');
   }
 }
 
