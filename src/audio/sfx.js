@@ -149,9 +149,9 @@ const SOUNDS = {
   honey() { chime([784, 1047, 1319], 0.06, 0.12); },
   // 풀뽑기: a soft pop of roots coming loose; the screaming root's squeal, wobbling up and down
   pluck() { hiss(0.12, { vol: 0.12, freq: 1200, to: 500, q: 0.8 }); tone(520, 0.08, { type: 'triangle', vol: 0.1, to: 900, delay: 0.03 }); },
-  scream() {
-    tone(1250, 0.32, { type: 'square', vol: 0.035, to: 1700 });
-    tone(1700, 0.3, { type: 'square', vol: 0.03, to: 1150, delay: 0.3 });
+  scream(k = 1) {
+    tone(1250, 0.32 * k, { type: 'square', vol: 0.035 * k, to: 1700 });
+    tone(1700, 0.3 * k, { type: 'square', vol: 0.03 * k, to: 1150, delay: 0.3 * k });
   },
   buzz() { tone(210, 0.45, { type: 'sawtooth', vol: 0.035, to: 250 }); tone(226, 0.45, { type: 'sawtooth', vol: 0.03, to: 196, delay: 0.04 }); },
   boom() { hiss(0.8, { vol: 0.65, freq: 1800, to: 70, type: 'lowpass' }); tone(70, 0.6, { vol: 0.5, to: 28 }); },
@@ -249,7 +249,7 @@ export function onRunEvent(type, d) {
     case 'block': play('hit'); play('dodge'); break;
     case 'honey': play('honey'); break;
     case 'pluck': play('pluck'); break;
-    case 'scream': play('scream'); break;
+    case 'scream': play('scream', d.first ? 1 : 0.6); break; // softer while it runs about
     case 'burrow': play('puff'); break;
     case 'weedsDone': play('levelup'); break;
     case 'warp': play('warp'); break;
