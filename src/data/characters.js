@@ -22,8 +22,8 @@ export const CHARACTERS = {
     cost: 800, cond: { text: '적 누적 100마리 쓰러뜨리기', val: m => m.stats.kills, goal: 100 },
   },
   knight: {
-    name: '기사', sprite: 'knightP', hp: 32, atk: 3, def: 1, block: 0.2,
-    start: { shield: 1 }, note: '다섯 번에 한 번꼴로 공격을 방패로 막아 낸다',
+    name: '기사', sprite: 'knightP', hp: 32, atk: 3, def: 1, block: 0.17,
+    start: { shield: 1 }, note: '여섯 번에 한 번꼴로 공격을 방패로 막아 낸다',
     cost: 1200, cond: { text: '버섯 왕 쓰러뜨리기', val: m => (m.stats.bosses.includes('skelking') ? 1 : 0), goal: 1 },
   },
   vamp: {
