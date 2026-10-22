@@ -23,10 +23,15 @@ function openSheet(build) {
   setTimeout(() => sh.querySelector('button')?.focus(), 0);
 }
 
-// opts: [{kind:'relic', id} | {kind:'heal'} | {kind:'gold'}]
-export function showChoice({ title, sub, run, opts, onPick, onReroll }) {
+// opts: [{kind:'relic', id} | {kind:'heal'} | {kind:'gold', name?, amount?} | {kind:'ok', name, desc}]
+// `who`: a sprite shown beside the title (quest folk talking)
+export function showChoice({ title, sub, run, opts, onPick, onReroll, who }) {
   openSheet(sh => {
-    sh.append(el('h2', null, title), el('p', null, sub));
+    if (who) {
+      const head = el('div', 'talk-head');
+      head.append(icon(who, 48), el('h2', null, title));
+      sh.append(head, el('p', 'talk-text', sub));
+    } else sh.append(el('h2', null, title), el('p', null, sub));
     const wrap = el('div', 'choices');
     opts.forEach((o, i) => {
       const b = button('choice', null, () => { closeModal(); onPick(o); });
@@ -45,15 +50,17 @@ export function showChoice({ title, sub, run, opts, onPick, onReroll }) {
       } else if (o.kind === 'heal') {
         b.append(icon('heal'));
         info.append(el('span', 'nm', '응급 치료'), el('span', 'ds', '체력 50% 회복'));
+      } else if (o.kind === 'ok') {
+        info.append(el('span', 'nm', o.name), el('span', 'ds', o.desc));
       } else {
         b.append(icon('gold'));
-        info.append(el('span', 'nm', '금화 주머니'), el('span', 'ds', '골드 +25'));
+        info.append(el('span', 'nm', o.name || '금화 주머니'), el('span', 'ds', `골드 +${o.amount || 25}`));
       }
       b.append(info);
       wrap.append(b);
     });
     sh.append(wrap);
-    if (run.rerolls > 0) {
+    if (run.rerolls > 0 && onReroll) {
       const foot = el('div', 'sheet-foot');
       foot.append(button('btn', `다시 뽑기 (${run.rerolls}회 남음)`, onReroll));
       sh.append(foot);

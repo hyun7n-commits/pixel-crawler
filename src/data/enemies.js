@@ -3,6 +3,8 @@
 // ranged: aims one turn, then shoots the aimed tile (range in tiles)
 // flees: runs away when badly hurt
 // peaceful: never starts a fight, but fights back once hit · treasure: drops a chest and gold
+// gimmick: not part of a zone's roster; placed by special rooms and grows with the zone (see gimmickScale)
+// npc: someone to talk to; bumping into them talks instead of attacking, and they cannot be hurt
 
 export const ENEMIES = {
   rat:      { name: '쥐',     sprite: 'rat',    hp: 4,  atk: 1, xp: 1, flees: true },
@@ -16,6 +18,16 @@ export const ENEMIES = {
   garg:     { name: '가고일', sprite: 'garg',   hp: 15, atk: 4, xp: 8, fast: true },
   turtle:   { name: '광석 거북', sprite: 'turtle', hp: 26, atk: 5, def: 1, xp: 10, slow: true, peaceful: true, treasure: true,
               tip: '먼저 건드리지 않으면 싸우지 않는다. 튼튼하고 세지만 쓰러뜨리면 보물을 떨군다.' },
+
+  mimic:    { name: '미믹', sprite: 'mimic', hp: 10, atk: 3, xp: 6, treasure: true, gimmick: true,
+              tip: '보물 상자인 척하다가 문다. 쓰러뜨리면 진짜 보물을 떨군다.' },
+  statue:   { name: '광부 석상', sprite: 'statue', hp: 18, atk: 3, def: 1, xp: 10, slow: true, gimmick: true,
+              tip: '깨어난 석상. 느리지만 튼튼하다.', stoneTip: '보물 상자를 지키듯 서 있는 석상이다.' },
+  wraith:   { name: '원혼', sprite: 'wraith', hp: 8, atk: 3, xp: 4, gimmick: true, tip: '무덤을 파헤쳐서 깨어났다.' },
+  thief:    { name: '목걸이 도둑 쥐', sprite: 'thief', hp: 14, atk: 3, xp: 8, gimmick: true, quest: true,
+              tip: '유령 광부의 반짝돌 목걸이를 물고 있다.' },
+  ghost:    { name: '유령 광부', sprite: 'ghostNpc', hp: 1, atk: 0, xp: 0, npc: true, peaceful: true, tip: '말을 걸려면 부딪혀 보자.' },
+  smith:    { name: '두더지 대장장이', sprite: 'mole', hp: 1, atk: 0, xp: 0, npc: true, peaceful: true, tip: '말을 걸려면 부딪혀 보자.' },
 
   ratking:  { name: '왕쥐',          sprite: 'rat',  hp: 45,  atk: 3, xp: 20, boss: true, tip: '가끔 쥐를 불러낸다.' },
   skelking: { name: '해골 왕',       sprite: 'skel', hp: 80,  atk: 5, xp: 30, boss: true, tip: '붉게 표시된 칸을 내려친다. 칸 밖으로 피해야 한다.' },

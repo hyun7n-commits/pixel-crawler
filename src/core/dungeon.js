@@ -1,5 +1,6 @@
 // Map generation, path distances, line of sight and field of view.
-// Tiles: 0 = wall, 1 = floor, 2 = stairs down, 3 = door, 4 = big ore (blocks walking, not sight), 5 = stairs up.
+// Tiles: 0 = wall, 1 = floor, 2 = stairs down, 3 = door, 4 = big ore (blocks walking, not sight), 5 = stairs up,
+// 6 = grave (blocks walking, not sight), 7 = locked door (blocks both until opened with the floor's key).
 // Like Shattered Pixel Dungeon, rooms are walled boxes packed side by side, joined by doors in
 // their shared walls (see carveRooms). A door hides the room until someone stands in it.
 // Floor features (brush, water...) live in map.ter, see data/terrain.js.
@@ -8,7 +9,9 @@ import { MAP_W as W, MAP_H as H, SIGHT } from '../data/balance.js';
 import { T } from '../data/terrain.js';
 import { rint, pick, DIRS8 } from './util.js';
 
-export const WALL = 0, FLOOR = 1, STAIRS = 2, DOOR = 3, ORE = 4, UPSTAIRS = 5;
+export const WALL = 0, FLOOR = 1, STAIRS = 2, DOOR = 3, ORE = 4, UPSTAIRS = 5, GRAVE = 6, LOCKED = 7;
+// tiles you bump into to use: mine, dig, unlock
+export const isBump = t => t === ORE || t === GRAVE || t === LOCKED;
 export const isStairs = t => t === STAIRS || t === UPSTAIRS;
 
 export function createMap() {
@@ -37,12 +40,12 @@ export const inMap = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
 export const passable = (map, x, y) => {
   if (!inMap(x, y)) return false;
   const t = map.tiles[idx(x, y)];
-  return t !== WALL && t !== ORE;
+  return t !== WALL && !isBump(t);
 };
 export const opaque = (map, x, y) => {
   if (!inMap(x, y)) return true;
   const i = idx(x, y), t = map.tiles[i];
-  return t === WALL || (t === DOOR && !map.open[i]) || map.ter[i] === T.BRUSH;
+  return t === WALL || t === LOCKED || (t === DOOR && !map.open[i]) || map.ter[i] === T.BRUSH;
 };
 export const isBorder = (x, y) => x <= 0 || y <= 0 || x >= W - 1 || y >= H - 1;
 

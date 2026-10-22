@@ -59,3 +59,12 @@ export const trapHidden = floor => (floor < 2 ? 0 : Math.min(0.5, 0.15 * floor))
 export const TRAP_SPOT = 0.35;
 export const trapSpike = floor => 5 + 2 * floor;
 export const trapSummon = floor => Math.min(5, 2 + Math.floor(floor / 3) + (Math.random() < 0.5 ? 1 : 0));
+
+// Special rooms (core/specials.js) and the things in them.
+// gimmickScale: mimics, statues, wraiths and quest monsters get tougher zone by zone.
+export const gimmickScale = floor => enemyScale(floor) * (1 + 0.5 * Math.floor((floor - 1) / FLOORS_PER_ZONE));
+export const MIMIC_CHANCE = 0.18;      // a chest from floor 2 on is a mimic
+export const VAULT_CHANCE = 0.45;      // floor 2 on: a locked crystal vault, its key elsewhere on the floor
+export const LOCKED_CHEST_CHANCE = 0.55; // otherwise: a locked chest and its key
+export const SPECIAL_CHANCE = 0.55;    // each of grave room, statue room and trap room
+export const graveGold = floor => (2 + Math.floor((floor - 1) / FLOORS_PER_ZONE)) * (3 + Math.floor(Math.random() * 4));

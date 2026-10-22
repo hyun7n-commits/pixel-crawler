@@ -225,6 +225,26 @@ function glowCanvas() {
   return c;
 }
 
+// The see-through crystal a vault relic sits in (drawn over the relic, so it looks shut inside).
+const CRYSTAL = [
+  '....oooo....', '...o....o...', '..o.h....o..', '.o.h......o.', 'o.h........o', 'o.h........o', 'o..........o',
+  'o..........o', 'o..........o', 'o.........so', '.o.......so.', '..o....sso..', '...o.ss.o...', '....oooo....',
+];
+function crystalCanvas() {
+  const c = document.createElement('canvas'), w = CRYSTAL[0].length, h = CRYSTAL.length;
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  CRYSTAL.forEach((row, j) => {
+    const a = row.indexOf('o'), b = row.lastIndexOf('o');
+    g.fillStyle = 'rgba(150,220,255,0.26)'; g.fillRect(a, j, b - a + 1, 1);
+    for (let i = 0; i < w; i++) {
+      const col = { o: 'rgba(200,244,255,0.95)', h: 'rgba(255,255,255,0.8)', s: 'rgba(80,170,220,0.6)' }[row[i]];
+      if (col) { g.fillStyle = col; g.fillRect(i, j, 1, 1); }
+    }
+  });
+  return c;
+}
+
 // Wall, water and shade tiles depend on their neighbours, so they are made the first time a
 // combination is needed and then reused.
 export function wallKey(scene, zi, mask) {
@@ -328,6 +348,7 @@ export function buildTextures(scene) {
   });
   tx.addCanvas('t_lamp', spriteCanvas(LAMP));
   tx.addCanvas('glow', glowCanvas());
+  tx.addCanvas('crystalShell', crystalCanvas());
   const px = document.createElement('canvas');
   px.width = 1; px.height = 1;
   const g = px.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 1, 1);

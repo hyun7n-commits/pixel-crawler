@@ -4,7 +4,8 @@
 import { DungeonScene } from './scenes/DungeonScene.js';
 import { Run } from './core/run.js';
 import { loadMeta, saveMeta } from './core/save.js';
-import { pathTo, idx, ORE, isStairs } from './core/dungeon.js';
+import { pathTo, idx, isBump, isStairs } from './core/dungeon.js';
+import { ENEMIES } from './data/enemies.js';
 import { cheb } from './core/util.js';
 import { isTrap } from './data/terrain.js';
 import { Hud } from './ui/hud.js';
@@ -125,11 +126,16 @@ function nextChoice() {
   setAim(false);
   setBag(false);
   const q = run.queue[0];
-  const title = q.kind === 'level' ? `레벨 ${run.p.lvl}!` : '보물 상자';
-  const sub = q.kind === 'level' ? '최대 체력 +3. 유물을 하나 고르자.' : '안에 든 유물 중 하나를 가져가자.';
+  const onPick = o => { run.choose(o); hud.update(run); nextChoice(); };
+  if (q.kind === 'talk') {
+    const npc = ENEMIES[q.who];
+    showChoice({ title: npc.name, sub: q.text, run, who: npc.sprite, opts: q.smithPick ? run.smithOffers() : q.opts, onPick });
+    return;
+  }
+  const title = q.kind === 'level' ? `레벨 ${run.p.lvl}!` : q.rich ? '잠긴 상자' : '보물 상자';
+  const sub = q.kind === 'level' ? '최대 체력 +3. 유물을 하나 고르자.' : q.rich ? '좋은 상자다. 넷 중 하나를 가져가자.' : '안에 든 유물 중 하나를 가져가자.';
   const open = () => showChoice({
-    title, sub, run, opts: run.offers(),
-    onPick: o => { run.choose(o); hud.update(run); nextChoice(); },
+    title, sub, run, opts: run.offers(q.rich ? 4 : 3), onPick,
     onReroll: () => { run.rerolls--; open(); },
   });
   open();
@@ -203,8 +209,8 @@ function onTileClick(x, y) {
   }
   if (x === p.x && y === p.y) { clearPath(); run.wait(); return; }
   const m = run.map;
-  // the big ore: swing at it when next to it, otherwise walk up to it
-  if (m.tiles[idx(x, y)] === ORE && m.explored[idx(x, y)]) {
+  // the big ore, a grave, a locked door: bump it when next to it, otherwise walk up to it
+  if (isBump(m.tiles[idx(x, y)]) && m.explored[idx(x, y)]) {
     clearPath();
     if (cheb({ x, y }, p) === 1) { run.step(x - p.x, y - p.y); return; }
     const near = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => walkTo(x + dx, y + dy)).filter(q => q.length);
@@ -217,7 +223,8 @@ function onTileClick(x, y) {
   seenCount = visibleEnemies();
 }
 
-const visibleEnemies = () => run.enemies.filter(e => e.hp > 0 && run.isVisible(e.x, e.y)).length;
+// a mimic still posing as a chest, or someone to talk to, does not count as a threat
+const visibleEnemies = () => run.enemies.filter(e => e.hp > 0 && run.isVisible(e.x, e.y) && e.state !== 'hide' && e.state !== 'npc').length;
 
 function walkTo(x, y) {
   const m = run.map, p = run.p;

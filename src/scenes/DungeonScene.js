@@ -7,7 +7,7 @@ import { TILE, buildTextures, wallKey, waterKey, shadeKey, floorKey, N, E, S, W_
 import { CHARACTERS } from '../data/characters.js';
 import { ITEMS } from '../data/items.js';
 import { T, TERRAIN, GASES, GAS_KEYS } from '../data/terrain.js';
-import { idx, inMap, lineOfSight, WALL, STAIRS, DOOR, ORE, UPSTAIRS } from '../core/dungeon.js';
+import { idx, inMap, lineOfSight, WALL, STAIRS, DOOR, ORE, UPSTAIRS, GRAVE, LOCKED } from '../core/dungeon.js';
 import { WAKE_AT } from '../core/ai.js';
 import { BOMB_RANGE } from '../core/run.js';
 import { ORE_HITS } from '../data/balance.js';
@@ -15,6 +15,8 @@ import { ORES } from '../data/ores.js';
 import { cheb } from '../core/util.js';
 
 const D = { tiles: 0, ter: 1, fire: 2, gas: 3, telegraph: 4, pickups: 5, enemies: 6, player: 7, overlay: 8, fx: 9, bubble: 10, text: 11 };
+// what a pickup looks like on the floor (items use their own sprite)
+const PICKUP_TEX = { gold: 'gold', chest: 'chest', lockedChest: 'lockedChest', key: 'key', necklace: 'necklace', crystal: 'pedestal' };
 const center = v => v * TILE + TILE / 2;
 const foot = v => v * TILE + TILE;
 const hash = (x, y) => {
@@ -58,6 +60,7 @@ export class DungeonScene extends Phaser.Scene {
       gold: burst([0xf4cf4f, 0xf08c3a], { gravityY: 50 }),
       steam: burst([0xffffff, 0xc9c2b6], { gravityY: -50, speed: { min: 5, max: 20 }, alpha: { start: 0.8, end: 0 } }),
       sleep: burst([0xb58cf0, 0xd8c2ff], { gravityY: -10, speed: { min: 8, max: 30 }, alpha: { start: 0.8, end: 0 }, scale: { start: 2.5, end: 0 } }),
+      crystal: burst([0x8fd8f0, 0xc8f6ff, 0x3d8fb3], { gravityY: 120, speed: { min: 20, max: 70 } }),
       leaf: burst([0x6cc45a, 0x2f7a43, 0xb5e08a], { gravityY: 60, speed: { min: 12, max: 36 }, lifespan: { min: 300, max: 600 }, scale: { start: 1.5, end: 0.5 } }),
     };
     this.shadowGfx = this.add.graphics().setDepth(D.pickups - 0.5);
@@ -189,7 +192,7 @@ export class DungeonScene extends Phaser.Scene {
   clearFloor() {
     (this.tileImgs || []).forEach(list => list && list.forEach(i => i.destroy()));
     Object.values(this.enemySprites || {}).forEach(s => { s.crown?.destroy(); s.destroy(); });
-    Object.values(this.pickupSprites || {}).forEach(s => s.destroy());
+    Object.values(this.pickupSprites || {}).forEach(s => { s.extra?.destroy(); s.destroy(); });
     this.bubbles.forEach(b => b.destroy());
     this.playerSprite?.destroy();
     (this.lamps || []).forEach(l => { l.lamp.destroy(); l.glow.destroy(); });
@@ -278,6 +281,8 @@ export class DungeonScene extends Phaser.Scene {
       if (t === STAIRS) add('t_stairs', D.ter);
       if (t === UPSTAIRS) add('t_upStairs', D.ter);
       if (t === DOOR) this.doorImgs[i] = add(map.open[i] ? 't_doorOpen' : 't_door', D.ter);
+      if (t === LOCKED) add('t_doorLocked', D.ter);
+      if (t === GRAVE) add(map.bigGrave === i ? 't_graveBig' : 't_grave', D.ter);
       if (t === ORE) this.oreImg = add(`t_ore_${ORES[map.ore?.tier || 0].id}`, D.ter);
     }
     this.tileImgs[i] = imgs;
@@ -322,14 +327,16 @@ export class DungeonScene extends Phaser.Scene {
       alive.add(e.id);
       let s = this.enemySprites[e.id];
       if (!s) {
-        s = this.makeActor(e.d.sprite, e.x, e.y).setDepth(D.enemies);
+        s = this.makeActor(e.state === 'hide' ? 'chest' : e.d.sprite, e.x, e.y).setDepth(D.enemies);
         if (e.d.boss) {
           s.setScale(1.25);
           s.crown = this.add.image(0, 0, 'crown').setOrigin(0.5, 1).setDepth(D.enemies + 0.1);
         }
         this.enemySprites[e.id] = s;
       }
-      s.setVisible(run.isVisible(e.x, e.y));
+      // things that stand still (a "chest", a statue, quest folk) stay drawn once seen, like items
+      const still = e.state === 'hide' || e.state === 'stone' || e.state === 'npc';
+      s.setVisible(run.isVisible(e.x, e.y) || (still && !!map.explored[idx(e.x, e.y)]));
       this.moveTo(s, e.x, e.y, dur);
     }
     for (const id of Object.keys(this.enemySprites)) {
@@ -343,15 +350,23 @@ export class DungeonScene extends Phaser.Scene {
       keep.add(key);
       let s = this.pickupSprites[key];
       if (!s) {
-        const tex = q.type === 'gold' ? 'gold' : q.type === 'chest' ? 'chest' : ITEMS[q.type].sprite;
+        const tex = PICKUP_TEX[q.type] || ITEMS[q.type].sprite;
         s = this.add.image(q.x * TILE, q.y * TILE, tex).setOrigin(0).setDepth(D.pickups).setData('baseY', q.y * TILE + 14);
-        this.tweens.add({ targets: s, y: q.y * TILE - 2, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.inOut', delay: (q.x * 97) % 600 });
+        if (q.type === 'crystal') {
+          // the relic floats shut inside a crystal above its stand
+          s.extra = this.add.container(q.x * TILE, q.y * TILE - 2, [
+            this.add.image(4, 1, q.relic).setOrigin(0),
+            this.add.image(2, -2, 'crystalShell').setOrigin(0),
+          ]).setDepth(D.pickups + 0.1);
+          this.tweens.add({ targets: s.extra, y: q.y * TILE - 4, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+        } else this.tweens.add({ targets: s, y: q.y * TILE - 2, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.inOut', delay: (q.x * 97) % 600 });
         this.pickupSprites[key] = s;
       }
       s.setVisible(!!map.explored[idx(q.x, q.y)]);
+      s.extra?.setVisible(s.visible);
     }
     for (const key of Object.keys(this.pickupSprites)) {
-      if (!keep.has(key)) { this.pickupSprites[key].destroy(); delete this.pickupSprites[key]; }
+      if (!keep.has(key)) { this.pickupSprites[key].extra?.destroy(); this.pickupSprites[key].destroy(); delete this.pickupSprites[key]; }
     }
   }
 
@@ -431,6 +446,21 @@ export class DungeonScene extends Phaser.Scene {
       case 'gasboom': this.gasBoom(d.tiles); break;
       case 'puff': this.fx[d.kind].explode(30, center(d.x), center(d.y)); break;
       case 'rustle': this.fx.leaf.explode(7, center(d.x), center(d.y) + 3); break;
+      case 'dig': this.fx.dust.explode(14, center(d.x), center(d.y)); this.fx.rock.explode(6, center(d.x), center(d.y)); this.cameras.main.shake(90, 0.004); break;
+      case 'shatter': this.fx.crystal.explode(16, center(d.x), center(d.y)); break;
+      case 'unlock': this.fx.spark.explode(14, center(d.x), center(d.y)); break;
+      case 'locked': this.float(d.x, d.y, '잠김', '#b8bccb'); break;
+      case 'vanish': this.fx.magic.explode(26, center(d.x), center(d.y)); this.float(d.x, d.y, '고마워!', '#c8f6ff', 0, 11); break;
+      case 'reveal': {
+        const s = this.enemySprites[d.enemy.id];
+        if (s) {
+          s.setTexture(d.enemy.d.sprite);
+          this.tweens.add({ targets: s, hop: 7, duration: 110, yoyo: true, ease: 'Quad.out' });
+        }
+        this.fx.dust.explode(10, center(d.enemy.x), center(d.enemy.y));
+        this.cameras.main.shake(160, 0.008);
+        break;
+      }
       case 'trap': this.onTrap(d); break;
       case 'summon': this.fx.magic.explode(16, center(d.x), center(d.y)); break;
       case 'alarm':
@@ -704,6 +734,7 @@ export class DungeonScene extends Phaser.Scene {
     // soft shadows under everyone standing on the floor (they stay put when an actor hops)
     const shadow = (s, w) => {
       if (!s || !s.visible || s.dying) return;
+      if (s.flat) { this.shadowGfx.fillStyle(0x000000, 0.25); this.shadowGfx.fillEllipse(s.x, s.y - 2, 9, 3); return; }
       const lift = Math.min(1, (s.hop || 0) / 6);
       this.shadowGfx.fillStyle(0x000000, 0.32 * (1 - 0.5 * lift));
       this.shadowGfx.fillEllipse(s.x, s.y - 1.5, w * (1 - 0.3 * lift), 4);
@@ -797,7 +828,13 @@ export class DungeonScene extends Phaser.Scene {
       if (!s.visible) continue;
       if (s.crown) s.crown.setPosition(s.x, s.y - TILE * 1.25 + 2 - s.hop);
       const top = s.y - TILE * s.scaleY * (e.d.boss ? 1.25 : 1) - s.hop;
+      if (['hide', 'stone', 'npc'].includes(e.state)) continue; // no marks: a chest, a statue, a friend
       this.drawStatus(g, s, e, top, flip ? -1 : 1, time);
+      if (e.d.quest) { // the necklace glints over the thief
+        const gy = top - 6 + Math.sin(time / 200) * 1;
+        g.fillStyle(0xf4cf4f, 1); g.fillTriangle(s.x, gy - 3, s.x + 3, gy, s.x - 3, gy); g.fillTriangle(s.x, gy + 3, s.x + 3, gy, s.x - 3, gy);
+        g.fillStyle(0x8fd8f0, 1); g.fillRect(s.x - 0.5, gy - 0.5, 1, 1);
+      }
       if (e.state !== 'sleep' || e.hp < e.maxHp) {
         g.fillStyle(0x000000, 0.8); g.fillRect(s.x - 6, top - 3, 12, 2);
         g.fillStyle(e.d.boss ? 0xf4cf4f : run.calm(e) ? 0x8fd36a : 0xe0525a, 1); g.fillRect(s.x - 6, top - 3, 12 * Math.max(0, e.hp) / e.maxHp, 2);
@@ -835,9 +872,19 @@ export class DungeonScene extends Phaser.Scene {
 
   // Body language: breathing while asleep, crouching before a hit, hopping when on fire.
   pose(s, who, flip, time) {
-    s.setFlipX(flip);
     const id = who.id || 0;
+    if (who.state === 'hide' || who.state === 'stone') {
+      // a mimic gives itself away with a twitch now and then; a statue just stands there, grey
+      const twitch = who.state === 'hide' && (time + id * 977) % 5200 < 160 ? 1.5 : 0;
+      s.flat = who.state === 'hide';
+      s.setFlipX(false).setScale(1).setOrigin(0.5, 1 + twitch / TILE);
+      if (time >= s.flashUntil) s.setTint(who.state === 'stone' ? 0xa8a8b8 : 0xffffff);
+      return;
+    }
+    s.setFlipX(flip);
+    s.flat = false;
     let sx = 1, sy = 1, hop = s.hop || 0;
+    if (who.d?.npc && who.type === 'ghost') hop = Math.max(hop, 2 + 1.5 * Math.sin(time / 380));
     if (who.sleep || who.state === 'sleep') sy = 1 + 0.05 * Math.sin(time / 450 + id);
     else if (who.d && this.run.willHit(who)) { sx = 1.08; sy = 0.86; }
     if (who.burn > 0) hop = Math.max(hop, Math.abs(Math.sin(time / 90 + id)) * 3);

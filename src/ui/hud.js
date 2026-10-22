@@ -9,6 +9,17 @@ import { LAST_FLOOR, xpToLevel } from '../data/balance.js';
 import { zoneOf, isBossFloor } from '../core/run.js';
 import { playerStatus } from './tip.js';
 
+// What the quest folk asked of you and have not had back yet.
+function questLines(run) {
+  const { ghost, smith } = run.quests, out = [];
+  if (ghost.state === 'asked') out.push(`유령 광부의 부탁: 목걸이 도둑 쥐를 잡자 (${ghost.floor}층)`);
+  if (ghost.state === 'found') out.push(`유령 광부에게 목걸이를 돌려주자 (${ghost.floor}층)`);
+  if (smith.state === 'asked') {
+    out.push(smith.chunk === null ? `대장장이의 부탁: ${smith.floor}층 큰 광석을 끝까지 캐자` : `대장장이에게 광석 덩어리를 가져가자 (${smith.floor}층)`);
+  }
+  return out;
+}
+
 export class Hud {
   constructor({ onUseItem, onWait, onBag }) {
     this.onUseItem = onUseItem;
@@ -67,8 +78,11 @@ export class Hud {
     $('atkText').textContent = `공격 ${s.atk} · 방어 ${s.def}`;
     $('xpbar').firstElementChild.style.width = `${(p.xp / xpToLevel(p.lvl)) * 100}%`;
     const st = playerStatus(p);
+    if (run.map?.keyHeld) st.push('열쇠');
     $('pstatus').innerHTML = '';
     for (const t of st) $('pstatus').append(el('span', 'chip', t));
+    $('quests').innerHTML = '';
+    for (const t of questLines(run)) $('quests').append(el('div', 'quest', t));
 
     $('mFloor').innerHTML = `${run.floor}층<small>${isBossFloor(run.floor) ? '보스' : zoneOf(run.floor).name}</small>`;
     $('mGold').textContent = `${run.gold}G`;

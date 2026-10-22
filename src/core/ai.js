@@ -4,9 +4,12 @@
 //   hunt   - chasing and attacking you
 //   search - lost you, goes to where it last saw you and looks around
 //   flee   - badly hurt and running away (only enemies with `flees`)
+//   hide   - a mimic posing as a chest · stone - a statue standing still · npc - quest folk
+//            (none of these act; a hit, or reaching for the mimic or the statue's chest, wakes them up)
 
 import { lineOfSight, distMap, idx } from './dungeon.js';
 import { SLEEP_MIN } from '../data/terrain.js';
+import { NPC_TEXT } from '../data/npcs.js';
 import { cheb, shuffle, josa, DIRS8 } from './util.js';
 import { onEnter } from './world.js';
 
@@ -20,6 +23,11 @@ export function canSee(run, e, range) {
 
 export function enemyAct(run, e, dmP) {
   const d = e.d, p = run.p;
+  if (e.state === 'npc') {
+    if (!e.greeted && run.isVisible(e.x, e.y) && cheb(e, p) <= 6) { e.greeted = true; run.say(e, NPC_TEXT[e.type].greet); }
+    return;
+  }
+  if (e.state === 'hide' || e.state === 'stone') return;
   if (e.stun > 0) { e.stun--; return; }
   if (run.calm(e)) { calmAct(run, e); return; }
   if (e.state === 'sleep') { sleepTick(run, e); return; }
@@ -76,8 +84,24 @@ function calmAct(run, e) {
   wander(run, e);
 }
 
+// A mimic drops its act, or a statue comes to life, and goes straight for you.
+export function awaken(run, e) {
+  if (e.state !== 'hide' && e.state !== 'stone') return;
+  run.log(e.state === 'hide' ? '상자가 입을 쩍 벌렸다! 미믹이다!' : '석상이 쿠르릉 움직이기 시작했다!', 'warn');
+  e.state = 'hunt';
+  e.last = { x: run.p.x, y: run.p.y };
+  run.say(e, '!');
+  run.emit('reveal', { enemy: e });
+  run.emit('alert', { enemy: e });
+}
+
 // Woken by a hit (`by` = 'hit') or a noise at (x, y)
 export function rouse(run, e, by, x, y) {
+  if (e.state === 'npc') return false;
+  if (e.state === 'hide' || e.state === 'stone') {
+    if (by === 'hit') awaken(run, e);
+    return false;
+  }
   if (run.calm(e)) {
     if (by !== 'hit') return false; // noise doesn't bother it
     e.angry = true;

@@ -6,6 +6,7 @@
 export const T = {
   NONE: 0, BRUSH: 1, ASH: 2, WATER: 3, VENT: 4, GRASS: 5,
   TRAP_SLEEP: 6, TRAP_SUMMON: 7, TRAP_ALARM: 8, TRAP_SPIKE: 9, TRAP_OFF: 10,
+  DUG: 11, ANVIL: 12,
 };
 // Like Shattered Pixel Dungeon traps: a plate that goes off once when stepped on (or blown up).
 // Some are hidden (map.hidden) until you spot them standing next to them.
@@ -25,12 +26,17 @@ export const TERRAIN = {
   [T.TRAP_ALARM]: { name: '경보 함정',    sprite: 'trapAlarm',  tip: '밟으면 종이 울려 층 전체의 적이 몰려온다.' },
   [T.TRAP_SPIKE]: { name: '가시 함정',    sprite: 'trapSpike',  tip: '밟으면 가시가 솟는다.' },
   [T.TRAP_OFF]:   { name: '망가진 함정',  sprite: 'trapOff',    tip: '이미 작동한 함정이다.' },
+  [T.DUG]:        { name: '파헤친 무덤',  sprite: 'dug',        tip: '누군가 파헤친 자리다.' },
+  [T.ANVIL]:      { name: '모루',         sprite: 'anvil',      tip: '대장장이의 모루다.' },
 };
 
 export const TILE_INFO = {
   stairs:  { name: '내려가는 계단', tip: '아래층으로 내려간다.' },
   upStairs: { name: '올라가는 계단', tip: '위층으로 돌아간다. 지나온 층은 떠날 때 모습 그대로 남아 있다.' },
   door:    { name: '문', tip: '열기 전에는 안이 안 보인다.' },
+  grave:   { name: '옛 광부의 무덤', tip: '부딪히면 파헤친다. 보물이 나오기도 하고, 원혼이 깨기도 한다.' },
+  graveBig: { name: '큰 무덤', tip: '부딪히면 파헤친다. 큰 보물이 묻혀 있지만 원혼도 반드시 깬다.' },
+  locked:  { name: '잠긴 문', tip: '이 층 어딘가에 있는 열쇠로 연다.' },
   bigOre:  { name: '큰 광석', tip: '부딪혀서 캔다. 칠수록 더 좋은 광석이 나오기도 하지만, 소리가 커져서 적이 찾아온다.' },
   fire:    { name: '불', tip: '닿으면 몸에 불이 붙는다. 웅덩이에 들어가면 꺼진다.' },
   floor:   { name: '바닥', tip: '아무것도 없다.' },
@@ -79,6 +85,10 @@ export const GOSSIP = [
   '불꽃 검을 든 채로 땅을 흔들면 화산이 깨어난대.',
   '가시로 둘러싼 피의 왕은 죽지 않는다는 전설이 있어.',
   '금빛 번개가 금광을 휩쓸면 황금 폭풍이 분대.',
+  '보물 상자인 줄 알고 열었다가 물렸대. 미믹이라나.',
+  '석상 앞 상자를 집으면 석상이 따라온대. 느리긴 하대.',
+  '얕은 갱도 어딘가에 슬픈 유령 광부가 떠돈대.',
+  '두더지 대장장이는 큰 광석 덩어리만 보면 눈이 반짝인대.',
 ];
 export const SLEEP_TALK = ['음냐… 반짝돌…', '쿨… 쿨…', '으음… 오 분만…', '음냐… 치즈…'];
 
@@ -88,5 +98,11 @@ export const FLOOR_HINTS = [
   { has: 'ore',    text: '광석 방 틈에서 가스 샌다던데. 불은 조심해.' },
   { has: 'garden', text: '저쪽 풀숲은 키가 커서 안이 하나도 안 보여.' },
   { has: 'trap',   text: '이 층 바닥 어딘가에 함정이 숨어 있대. 발밑 조심해.' },
+  { has: 'vault',  text: '잠긴 수정 방이 있대. 열쇠는 다른 방에 있다던데.' },
+  { has: 'locked', text: '잠긴 상자가 하나 있대. 열쇠만 찾으면 좋은 게 들었대.' },
+  { has: 'grave',  text: '옛 광부 무덤을 파면 원혼이 깬대. 큰 무덤은 꼭 깬대.' },
+  { has: 'statue', text: '석상 방 상자를 집으면 석상이 깨어난대.' },
+  { has: 'traps',  text: '함정이 빼곡한 방 끝에 상자가 있대. 길이 하나는 있대.' },
+  { has: 'mimic',  text: '이 층 상자 중 하나는 이빨이 있대.' },
   { has: 'flood',  text: '물에 잠긴 방에 번개 떨어지면 다 찌릿하대.' },
 ];

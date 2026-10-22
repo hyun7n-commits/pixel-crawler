@@ -2,8 +2,9 @@
 // Like run.js these are pure rules. They change the run and emit events for the scene to draw.
 
 import { T, TERRAIN, GAS_KEYS, SLEEP_MIN, MINE_MIN, isTrap } from '../data/terrain.js';
-import { idx, inMap, passable, isBorder, WALL, FLOOR, DOOR } from './dungeon.js';
-import { DIRS8, pick, rint, shuffle } from './util.js';
+import { idx, inMap, passable, isBorder, WALL, FLOOR, DOOR, GRAVE, LOCKED } from './dungeon.js';
+import { ITEMS } from '../data/items.js';
+import { DIRS8, pick, rint, shuffle, josa } from './util.js';
 import * as B from '../data/balance.js';
 
 const { SNORE_NOISE } = B;
@@ -92,6 +93,37 @@ export function springTrap(run, x, y) {
   }
 }
 
+// ---------- graves ----------
+// Digs up an old miner's grave (bumped into, or blown open). Noisy. Usually something good,
+// sometimes a wraith; the big grave holds a chest and always wakes one.
+export function openGrave(run, x, y) {
+  const map = run.map, i = idx(x, y), big = map.bigGrave === i;
+  map.tiles[i] = FLOOR;
+  map.ter[i] = T.DUG;
+  run.emit('tiles', { list: [i], soft: true });
+  run.emit('dig', { x, y });
+  run.noise(x, y, 5);
+  const roll = Math.random();
+  if (big || roll < 0.3) {
+    const e = run.spawnEnemy('wraith', x, y, B.gimmickScale(run.floor));
+    e.state = 'hunt';
+    e.last = { x: run.p.x, y: run.p.y };
+    run.say(e, '!');
+    run.log('무덤에서 원혼이 솟아올랐다!', 'warn');
+  }
+  if (big) {
+    run.pickups.push({ x, y, type: 'chest' }, { x, y, type: 'gold', amount: B.graveGold(run.floor) * 2 });
+    run.log('큰 무덤 안에 보물 상자가 묻혀 있었다!', 'good');
+  } else if (roll >= 0.3 && roll < 0.7) {
+    run.pickups.push({ x, y, type: 'gold', amount: B.graveGold(run.floor) });
+    run.log('무덤 속에서 골드가 나왔다.', 'good');
+  } else if (roll >= 0.7 && roll < 0.9) {
+    const type = pick(['potion', 'bomb']);
+    run.pickups.push({ x, y, type });
+    run.log(`무덤 속에서 ${josa(ITEMS[type].name, '이', '가')} 나왔다.`, 'good');
+  } else if (roll >= 0.9) run.log('텅 비어 있다.');
+}
+
 // Hidden traps next to you may be spotted at the end of each turn.
 export function spotTraps(run) {
   const map = run.map, p = run.p;
@@ -116,6 +148,7 @@ export function revealTraps(run) {
 // ---------- fire ----------
 export function setBurn(run, who, n) {
   const b = body(run, who);
+  if (who !== 'player' && who.d.npc) return;
   if (b.hp <= 0 || run.map.ter[idx(b.x, b.y)] === T.WATER) return;
   const was = b.burn > 0;
   b.burn = Math.max(b.burn || 0, n);
@@ -229,7 +262,8 @@ export function explosion(run, x, y, r, { dmg, cause, selfMult = 0.5 }) {
     if (w === 'player') run.hurtPlayer(Math.max(1, Math.round(dmg * selfMult)), cause, 'bomb');
     else if (w) run.hurt(w, dmg, 'fire');
     const t = map.tiles[idx(tx, ty)];
-    if ((t === WALL && !isBorder(tx, ty)) || t === DOOR) {
+    if (t === GRAVE) { openGrave(run, tx, ty); continue; }
+    if ((t === WALL && !isBorder(tx, ty)) || t === DOOR || t === LOCKED) {
       breakWall(run, tx, ty);
       changed.push(idx(tx, ty));
       broke = broke || t === WALL;

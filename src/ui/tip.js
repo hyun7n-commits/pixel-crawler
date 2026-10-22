@@ -4,7 +4,20 @@ import { T, TERRAIN, TILE_INFO, GASES, GAS_KEYS } from '../data/terrain.js';
 import { ORE_HITS } from '../data/balance.js';
 import { ITEMS } from '../data/items.js';
 import { ORES } from '../data/ores.js';
-import { idx, inMap, STAIRS, DOOR, ORE, UPSTAIRS, WALL } from '../core/dungeon.js';
+import { idx, inMap, STAIRS, DOOR, ORE, UPSTAIRS, WALL, GRAVE, LOCKED } from '../core/dungeon.js';
+import { RELICS } from '../data/relics.js';
+
+const CHEST = '보물 상자: 열면 유물을 하나 고른다.';
+const PICKUP = {
+  chest: () => CHEST,
+  lockedChest: () => '잠긴 상자: 이 층의 열쇠로 열면 유물을 넷 중 하나 고른다.',
+  key: () => '작은 열쇠: 이 층의 잠긴 문이나 상자를 연다.',
+  necklace: () => '반짝돌 목걸이: 유령 광부의 것이다.',
+  crystal: (q, run) => {
+    const lv = (run.p.relics[q.relic] || 0) + 1;
+    return `수정 속 유물: ${RELICS[q.relic].name} Lv${lv}, ${RELICS[q.relic].desc(lv)}. 하나를 가지면 나머지 수정은 깨진다.`;
+  },
+};
 
 const STATE = {
   sleep: '자는 중. 콧방울이 작아지면 곧 깬다',
@@ -33,12 +46,17 @@ export function describeTile(run, x, y, always = false) {
   }
   const e = run.enemyAt(x, y);
   if (e && run.isVisible(x, y)) {
-    lines.push(`${e.d.name} · 체력 ${e.hp}/${e.maxHp} · 공격 ${e.atk} · ${STATE[e.state] || ''}${e.d.tip ? ` · ${e.d.tip}` : ''}`);
+    if (e.state === 'hide') lines.push(CHEST); // a mimic looks just like one
+    else if (e.state === 'stone') lines.push(`${e.d.name}: ${e.d.stoneTip}`);
+    else if (e.d.npc) lines.push(`${e.d.name}: ${e.d.tip}`);
+    else lines.push(`${e.d.name} · 체력 ${e.hp}/${e.maxHp} · 공격 ${e.atk} · ${STATE[e.state] || ''}${e.d.tip ? ` · ${e.d.tip}` : ''}`);
   }
   const t = map.tiles[i];
   if (t === STAIRS) lines.push(`${TILE_INFO.stairs.name}: ${TILE_INFO.stairs.tip}`);
   if (t === UPSTAIRS) lines.push(`${TILE_INFO.upStairs.name}: ${TILE_INFO.upStairs.tip}`);
   if (t === DOOR) lines.push(`${TILE_INFO.door.name}: ${TILE_INFO.door.tip}`);
+  if (t === LOCKED) lines.push(`${TILE_INFO.locked.name}: ${TILE_INFO.locked.tip}${map.keyHeld ? ' 열쇠가 있다!' : ''}`);
+  if (t === GRAVE) { const g = TILE_INFO[map.bigGrave === i ? 'graveBig' : 'grave']; lines.push(`${g.name}: ${g.tip}`); }
   if (t === ORE && map.ore) lines.push(`큰 ${ORES[map.ore.tier].name} 광석 (${map.ore.hits}/${ORE_HITS}): ${TILE_INFO.bigOre.tip}`);
   const ter = map.ter[i];
   if (ter !== T.NONE && TERRAIN[ter] && !map.hidden[i]) lines.push(`${TERRAIN[ter].name}: ${TERRAIN[ter].tip}`);
@@ -52,7 +70,7 @@ export function describeTile(run, x, y, always = false) {
   }
   for (const q of run.pickups) {
     if (q.x !== x || q.y !== y) continue;
-    lines.push(q.type === 'gold' ? `골드 ${q.amount}` : q.type === 'chest' ? '보물 상자: 열면 유물을 하나 고른다.' : `${ITEMS[q.type].name}: ${ITEMS[q.type].desc}`);
+    lines.push(q.type === 'gold' ? `골드 ${q.amount}` : PICKUP[q.type] ? PICKUP[q.type](q, run) : `${ITEMS[q.type].name}: ${ITEMS[q.type].desc}`);
   }
   // a long press on a phone should always answer with something
   if (!lines.length && always) lines.push(t === WALL ? `${TILE_INFO.wall.name}: ${TILE_INFO.wall.tip}` : `${TILE_INFO.floor.name}: ${TILE_INFO.floor.tip}`);
