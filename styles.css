@@ -82,6 +82,31 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #phaser { position: absolute; inset: 0; }
 #banner { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); font-family: var(--font-display); font-size: clamp(22px, 4vw, 34px); color: var(--gold); text-shadow: 3px 3px 0 #000; pointer-events: none; white-space: nowrap; opacity: 0; transition: opacity .3s; }
 #banner.show { opacity: 1; }
+/* the circle the view closes to when you dive into a burrow (DungeonScene.iris) */
+#iris { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+#iris[hidden] { display: none; }
+/* the evolution moment (ui/evo.js): two relics slide together, flash, and the new one pops out */
+.evocard { position: absolute; left: 50%; top: 27%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; z-index: 5; animation: evo-life var(--ms) linear forwards; --c: #f4cf4f; }
+.evocard.t2 { --c: #f08c3a; } .evocard.t3 { --c: #c48cff; } .evocard.tf { --c: #6fe0e0; }
+.evo-row { position: relative; width: 200px; height: 88px; }
+.evo-row > span { position: absolute; left: 50%; top: 50%; display: flex; gap: 2px; transform: translate(-50%, -50%); }
+.evo-row canvas { width: 52px; height: 52px; filter: drop-shadow(2px 2px 0 #000); }
+.evo-a { animation: evo-a var(--ms) ease-in forwards; }
+.evo-b { animation: evo-b var(--ms) ease-in forwards; }
+.evo-r { opacity: 0; animation: evo-r var(--ms) linear forwards; }
+.evo-r canvas { width: 72px; height: 72px; }
+.evocard.tf .evo-r canvas { width: 40px; height: 40px; }
+.evo-flash { width: 30px; height: 30px; border-radius: 50%; background: #fff; box-shadow: 0 0 24px 10px var(--c); opacity: 0; animation: evo-flash var(--ms) linear forwards; }
+.evo-rays { width: 180px; height: 180px; border-radius: 50%; opacity: 0; background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--c) 55%, transparent) 0 12deg, transparent 12deg 30deg); -webkit-mask: radial-gradient(circle, #000 25%, transparent 70%); mask: radial-gradient(circle, #000 25%, transparent 70%); animation: evo-rays var(--ms) linear forwards; }
+.evo-name { font-family: var(--font-display); font-size: clamp(20px, 3.6vw, 30px); color: var(--c); text-shadow: 3px 3px 0 #000; white-space: nowrap; opacity: 0; animation: evo-name var(--ms) ease-out forwards; }
+.evo-new { font-size: 13px; font-weight: 700; color: #1b1424; background: var(--c); padding: 2px 10px; border-radius: 10px; opacity: 0; animation: evo-name var(--ms) ease-out forwards; animation-delay: calc(var(--ms) * 0.08); box-shadow: 2px 2px 0 #000; }
+@keyframes evo-life { 0%, 88% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes evo-a { 0% { transform: translate(-260%, -50%); opacity: 0; } 8% { opacity: 1; } 30% { transform: translate(-150%, -50%) rotate(-8deg); } 34% { transform: translate(-145%, -50%) rotate(8deg); } 38% { transform: translate(-150%, -50%) rotate(-8deg); } 46% { transform: translate(-50%, -50%) scale(.6); opacity: 1; } 47%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(.6); } }
+@keyframes evo-b { 0% { transform: translate(160%, -50%); opacity: 0; } 8% { opacity: 1; } 30% { transform: translate(50%, -50%) rotate(8deg); } 34% { transform: translate(45%, -50%) rotate(-8deg); } 38% { transform: translate(50%, -50%) rotate(8deg); } 46% { transform: translate(-50%, -50%) scale(.6); opacity: 1; } 47%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(.6); } }
+@keyframes evo-flash { 0%, 44% { opacity: 0; transform: translate(-50%, -50%) scale(.2); } 48% { opacity: 1; transform: translate(-50%, -50%) scale(1.6); } 62%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(3); } }
+@keyframes evo-r { 0%, 47% { opacity: 0; transform: translate(-50%, -50%) scale(0); } 55% { opacity: 1; transform: translate(-50%, -50%) scale(1.45); } 62%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+@keyframes evo-rays { 0%, 46% { opacity: 0; transform: translate(-50%, -50%) rotate(0); } 55% { opacity: 1; } 90% { opacity: .8; } 100% { opacity: 0; transform: translate(-50%, -50%) rotate(60deg); } }
+@keyframes evo-name { 0%, 50% { opacity: 0; transform: translateY(8px); } 58%, 100% { opacity: 1; transform: none; } }
 #tip { position: absolute; left: 10px; right: 10px; bottom: 10px; max-width: 560px; background: rgba(12,11,17,.92); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: 13px; line-height: 1.5; white-space: pre-line; pointer-events: none; color: var(--fg); }
 #pstatus { display: flex; flex-wrap: wrap; gap: 4px; min-height: 0; }
 #pstatus:empty { display: none; }
@@ -106,6 +131,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .relic.legend { border-color: #f08c3a; box-shadow: inset 0 0 0 1px #f08c3a, 0 0 6px #f08c3a; }
 .relic.myth { border-color: #c48cff; box-shadow: inset 0 0 0 1px #c48cff, 0 0 8px #9a5fd1; animation: mythglow 1.6s ease-in-out infinite alternate; }
 .relic.fused { border-color: #6fe0e0; box-shadow: inset 0 0 0 1px #6fe0e0; }
+.relic.ding { animation: ding .3s ease-out; }
+@keyframes ding { 0% { transform: scale(1); } 35% { transform: scale(1.25); box-shadow: 0 0 10px var(--gold); border-color: var(--gold); } 100% { transform: scale(1); } }
 @keyframes mythglow { from { box-shadow: inset 0 0 0 1px #c48cff, 0 0 4px #9a5fd1; } to { box-shadow: inset 0 0 0 1px #c48cff, 0 0 12px #c48cff; } }
 /* a fused relic: its two halves overlapping, the second a little lower */
 .fused-icon { position: relative; width: 80%; height: 80%; display: block; }
@@ -151,6 +178,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .book-tier.t3 { color: #c48cff; }
 .new-recipes { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .new-recipes canvas { width: 28px; height: 28px; }
+.new-recipes .crit-pic, .new-recipes .crit-pic canvas:first-child { width: 28px; height: 28px; }
+.new-recipes .crit-pic canvas + canvas { width: 14px; height: 14px; left: 7px; top: -7px; }
 @keyframes pipblink { 50% { opacity: .25; } }
 .items { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .item { display: flex; flex-direction: column; align-items: center; gap: 2px; background: #0f0e15; border: 1px solid var(--line); border-radius: 5px; padding: 6px 2px; font-size: 11.5px; }
@@ -182,8 +211,19 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .choice .nm { font-family: var(--font-display); font-size: 19px; }
 .choice .tag { font-size: 11.5px; font-weight: 700; padding: 1px 7px; border-radius: 3px; background: var(--panel-2); color: var(--accent); }
 .choice .tag.new { background: var(--accent); color: var(--accent-ink); }
+.rc-count { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+.choice.ready { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), 0 0 14px rgba(244,207,79,.45); animation: readyglow 1.2s ease-in-out infinite alternate; }
+.choice .tag.ready { background: var(--gold); color: #1b1424; }
+@keyframes readyglow { from { box-shadow: 0 0 0 1px var(--gold), 0 0 6px rgba(244,207,79,.3); } to { box-shadow: 0 0 0 1px var(--gold), 0 0 16px rgba(244,207,79,.6); } }
 .choice .ds { font-size: 12.5px; color: var(--fg); line-height: 1.4; }
 .choice .recipe { justify-content: center; }
+.sheet-box { position: relative; width: min(640px, 100%); max-height: 100%; display: flex; }
+/* a sheet never grows past the screen; the rest scrolls (a % max-height doesn't resolve in the modal's grid) */
+.sheet, .sheet-box { max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); }
+.sheet-box .sheet { width: 100%; }
+.x-close { position: absolute; top: 8px; right: 8px; width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--line); background: var(--panel-2); color: var(--fg); font-size: 18px; line-height: 1; display: grid; place-items: center; padding: 0; z-index: 2; cursor: pointer; }
+.x-close:hover { border-color: var(--gold); color: var(--gold); }
+.sheet.talk .talk-head { padding-right: 40px; }
 .sheet-foot { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
 .summary .stat b { font-size: 24px; }
@@ -196,6 +236,17 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ore-cell b { font-family: var(--font-display); font-weight: 400; font-size: 17px; }
 .ore-cell span { font-size: 11.5px; color: var(--muted); min-height: 1em; }
 .ore-cell.unknown b { color: var(--muted); letter-spacing: .1em; }
+.book-gift .bar { margin-top: 6px; }
+.book-gift .bar > i { background: var(--gold); }
+.book-gift.ready { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+.book-gift.ready .row-name { color: var(--gold); }
+.critter-book .ore-cell { cursor: pointer; }
+.crit-pic { position: relative; display: block; width: 40px; height: 40px; }
+.crit-pic canvas:first-child { width: 40px; height: 40px; }
+.crit-pic canvas + canvas { position: absolute; width: 20px; height: 20px; left: 10px; top: -9px; }
+.critter-book .ore-cell.boss { border-color: #8a6d2a; }
+.critter-book .ore-cell.picked { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+.sheet p.book-note { position: sticky; bottom: -18px; font-size: 14px; color: var(--fg); background: var(--panel); border-top: 1px solid var(--line); margin: 10px -2px -2px; padding: 10px 4px 14px; min-height: 2.8em; line-height: 1.45; }
 .unlock-note { background: #2a2410; border: 1px solid #6a5a1c; color: var(--gold); padding: 10px 12px; border-radius: 6px; line-height: 1.5; }
 
 /* Phone (or any narrow window): the map takes the screen like SPD. A slim status bar on top,
@@ -310,7 +361,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .vh-place small { margin-left: 6px; font-family: var(--font-body); font-size: 11px; color: #d8e8c8; text-shadow: 1px 1px 0 #10301c; }
 #vhud .purse { font-size: 19px; padding: 3px 10px; gap: 6px; background: rgba(20,18,26,.82); }
 #vhud .btn { pointer-events: auto; }
-#vSound { background: rgba(20,18,26,.82); font-size: 13px; }
+#vSound, #vArt { background: rgba(20,18,26,.82); font-size: 13px; }
 #vGo { align-self: center; width: min(420px, 100%); font-size: 22px; padding: 10px 18px; }
 #game.village #tip { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 44px); bottom: auto; }
 /* talking: the gossip as speech, the rival's race */
@@ -324,3 +375,82 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .race-row .bar { height: 12px; }
 .race-row.them .bar > i { background: #b48cff; }
 .race-row b { font-family: var(--font-display); font-weight: 400; font-size: 17px; text-align: right; }
+
+/* ---------- Story (v0.19) ----------
+   The picture book over the stage: a diorama on the canvas, the line in a box at the bottom, a dot
+   per panel on top and a skip button. A tap anywhere moves on. */
+#game.story #vhud, #game.story #tip { display: none; }
+#story {
+  position: absolute; inset: 0; z-index: 6; cursor: pointer; user-select: none; -webkit-user-select: none;
+  padding: max(10px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(14px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+}
+.st-dots { position: absolute; top: max(16px, calc(env(safe-area-inset-top, 0px) + 8px)); left: 50%; transform: translateX(-50%); display: flex; gap: 6px; }
+.st-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(244,240,232,.3); transition: background .2s; }
+.st-dots i.on { background: var(--gold); }
+.st-skip {
+  position: absolute; top: max(10px, env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
+  font: inherit; font-size: 14px; color: #f4f0e8; background: rgba(20,18,26,.75); border: 2px solid rgba(244,240,232,.25);
+  border-radius: 999px; padding: 6px 14px; cursor: pointer;
+}
+.st-skip:hover { border-color: var(--gold); color: var(--gold); }
+.st-box {
+  position: relative; width: min(640px, 100%); min-height: 96px; box-sizing: border-box;
+  background: rgba(20,18,26,.92); border: 2px solid var(--line); border-radius: 16px; padding: 16px 20px 18px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.45);
+}
+.st-who {
+  position: absolute; top: -15px; left: 16px; font-family: var(--font-display); font-weight: normal; font-size: 16px;
+  color: var(--accent-ink); background: var(--gold); border-radius: 999px; padding: 3px 12px;
+}
+.st-text { margin: 0; font-family: var(--font-display); font-size: 21px; line-height: 1.45; color: #f4f0e8; word-break: keep-all; }
+.st-next { position: absolute; right: 16px; bottom: 8px; font-size: 12px; color: var(--gold); animation: st-bob .8s ease-in-out infinite; }
+@keyframes st-bob { 50% { transform: translateY(3px); } }
+@media (max-width: 520px) { .st-text { font-size: 18px; } .st-box { padding: 14px 16px 16px; min-height: 88px; } }
+/* the guild's license row */
+.licenses { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
+.lic-title { font-family: var(--font-display); font-size: 16px; color: var(--muted); margin-right: 4px; }
+.lic { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; border-radius: 999px; background: var(--panel-2); border: 2px solid var(--line); color: var(--muted); font-size: 14px; }
+.lic i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 12px; color: #6b6780; background: #2e2a3c; border: 2px solid #3d3850; }
+.lic.got { color: var(--fg); border-color: var(--gold); }
+.lic.got i { color: #fff3b0; background: var(--c); border-color: var(--gold); }
+/* the guild's request of the day in the log, on the phone's status row, and on the summary */
+#log .quest, #mlog .quest { color: #ffe08a; }
+#mStatus .chip.req { background: rgba(244, 207, 79, 0.16); color: #ffe08a; }
+.unlock-note.req-done { color: #ffe08a; }
+/* a boss steps into view (ui/bosscard.js): a dark band slides across with the boss, its name and a line */
+.bosscard { position: absolute; inset: 0; z-index: 6; display: flex; align-items: center; background: rgba(8, 6, 14, .45); animation: bc-in .25s ease-out; cursor: pointer; }
+.bosscard.out { animation: bc-out .3s ease-in forwards; }
+.bc-band { width: 100%; display: flex; align-items: center; justify-content: center; gap: 16px; padding: 12px 16px; background: linear-gradient(90deg, #1b1424, #3a1730 50%, #1b1424); border-top: 3px solid var(--gold); border-bottom: 3px solid var(--gold); animation: bc-slide .4s cubic-bezier(.2, .9, .3, 1.15); }
+.bc-pic { position: relative; flex: none; width: 104px; height: 104px; transform: scaleX(-1); animation: bc-hop .45s .35s ease-out; }
+.bc-pic .bc-crown { position: absolute; left: 32px; top: -22px; }
+.bc-text { min-width: 0; }
+.bc-text small { display: block; color: #ff8080; font-family: var(--font-display); font-size: 15px; letter-spacing: .15em; }
+.bc-text b { display: block; font-family: var(--font-display); font-weight: normal; font-size: clamp(30px, 7vw, 46px); line-height: 1.1; color: var(--gold); text-shadow: 3px 3px 0 #000; }
+.bc-text p { margin: 6px 0 0; color: #f4f0e8; font-size: clamp(14px, 3.8vw, 18px); }
+@keyframes bc-in { from { opacity: 0; } }
+@keyframes bc-out { to { opacity: 0; transform: translateX(6%); } }
+@keyframes bc-slide { from { transform: translateX(-105%); } }
+@keyframes bc-hop { 0%, 100% { transform: scaleX(-1); } 40% { transform: scaleX(-1) translateY(-12px); } }
+/* the shopkeeper's stall in the fields (Run.buy): prices in gold, greyed out when you can't pay */
+.choice .tag.price { background: #3a2e10; color: var(--gold); }
+.choice.poor { opacity: .45; cursor: not-allowed; }
+.stall-purse { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; color: var(--gold); font-weight: 700; }
+/* the relic packed for the next run (ui/hub.js shop) */
+.pack-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; }
+.pack { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 4px; background: #0f0e15; border: 2px solid var(--line); border-radius: 6px; color: var(--fg); font-size: 11.5px; word-break: keep-all; cursor: pointer; }
+.pack:disabled { opacity: .45; cursor: not-allowed; }
+.pack.on { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), 0 0 10px rgba(244,207,79,.4); }
+.go-wrap { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.packed-note { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--gold); font-weight: 700; font-size: 13px; }
+/* 토벌 단계 at the guild (ui/hub.js stepRow) */
+.steps { display: flex; align-items: center; gap: 8px; padding: 10px 12px; margin: 4px 0 10px; background: #0f0e15; border: 1px solid var(--line); border-radius: 6px; }
+.steps .btn { min-width: 40px; }
+.step-stars { display: inline-flex; gap: 2px; margin-left: 8px; vertical-align: middle; }
+.step-stars i { width: 10px; height: 10px; background: #2a2636; clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+.step-stars i.open { background: #6b5a2a; }
+.step-stars i.on { background: var(--gold); }
+
+/* 집 꾸미기: each piece's picture in a little frame */
+.decor-frame { flex: 0 0 48px; height: 40px; display: grid; place-items: center; background: rgba(111, 191, 78, 0.18); border-radius: 8px; }
+.row.owned .row-name::after { content: ' ✓'; color: #8fd86f; }

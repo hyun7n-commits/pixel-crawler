@@ -1,19 +1,27 @@
 // Special rooms, like Shattered Pixel Dungeon's: small set pieces, each with one choice in it.
-//   vault  - a locked room with three relics in crystal. Take one and the others shatter.
+//   vault  - a locked secret garden with three relics under glass cloches. Take one and the others shatter.
 //            Its key lies in another room of the same floor (or bomb your way in).
-//   grave  - old miners' graves to dig up: gold, an item, or an angry wraith.
-//            The big grave always holds a chest, and always wakes a wraith.
-//   statue - a stone miner stands over a chest. Take the chest and the statue starts to walk.
+//   grave  - the squirrels' acorn stash: dirt mounds to dig up (gold, an item, or an angry squirrel),
+//            and the big oak stump, which always holds a chest (plus any gold the acorn squirrels
+//            stole on this floor) and always lets its keeper out.
+//   statue - a scarecrow stands over a chest. Take the chest and the scarecrow starts to walk.
 //   traps  - a little trap puzzle between the door and a chest (see traps below).
+//   weeds  - 풀뽑기 밭: weeds in rows to pull, a little pay each. One (two in a big patch) is a screaming
+//            root that trembles now and then; pull it and it runs off yelling. The last weed hides a star candy.
+//   hive   - a honey stump in a grassy patch, its bees humming round it. Bump it for the honey pot
+//            (more max HP for the run) and every bee that is awake comes after you, until you get
+//            far enough away. Smoke from a fire next to it, or sleepy pollen, puts them to sleep first.
 // Floors without a vault sometimes have a locked chest instead, with its key elsewhere.
+// Some floors (most in the deep forest) also get a pair of fairy rings in two far-apart rooms:
+// step into one and you pop out of the other (world.js warp).
 // Nothing here touches the run directly: placeSpecials returns what to add.
 
 import { T } from '../data/terrain.js';
-import { idx, FLOOR, DOOR, GRAVE, LOCKED, distMap } from './dungeon.js';
+import { idx, FLOOR, DOOR, GRAVE, LOCKED, HIVE, WEED, distMap } from './dungeon.js';
 import { pick, shuffle, DIRS8 } from './util.js';
 import * as B from '../data/balance.js';
 
-export const SET_PIECES = new Set(['vault', 'grave', 'statue', 'traps']);
+export const SET_PIECES = new Set(['vault', 'grave', 'statue', 'traps', 'hive', 'weeds']);
 
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 const inRoom = (r, x, y) => x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
@@ -107,11 +115,16 @@ export function placeSpecials(map, rooms, deco, ctx) {
     grave: (r) => r.w >= 4 && r.h >= 4,
     statue: (r) => r.w >= 5 && r.h >= 5 && ctx.floor >= 2,
     traps: (r, i) => leaf(i) && Math.min(r.w, r.h) >= 3 && Math.max(r.w, r.h) >= 5 && r.w * r.h <= 35,
+    hive: (r) => r.w >= 4 && r.h >= 4 && hiveSpots(map, r).length > 0,
+    weeds: (r) => r.w >= 4 && r.h >= 3,
   };
-  const make = { grave, statue, traps };
+  const make = { grave, statue, traps, hive, weeds };
+  const zone = Math.min(2, Math.floor((ctx.floor - 1) / B.FLOORS_PER_ZONE));
+  const chance = { hive: B.HIVE_CHANCE, weeds: B.WEED_CHANCE[zone] };
   let made = 0;
-  for (const kind of shuffle(['grave', 'statue', 'traps'])) {
-    if (made >= (ctx.floor === 1 ? 1 : 2) || Math.random() > B.SPECIAL_CHANCE) continue;
+  // the weed patch, the meadow's everyday job, gets the first pick of the rooms
+  for (const kind of ['weeds', ...shuffle(['grave', 'statue', 'traps', 'hive'])]) {
+    if (made >= (ctx.floor === 1 ? 1 : 2) || Math.random() > (chance[kind] ?? B.SPECIAL_CHANCE)) continue;
     const fits = ids().filter(i => fit[kind](rooms[i], i));
     if (!fits.length) continue;
     const i = pick(fits);
@@ -119,7 +132,22 @@ export function placeSpecials(map, rooms, deco, ctx) {
     make[kind](map, rooms[i], out, ctx);
     made++;
   }
+  if (Math.random() < B.RING_CHANCE[zone]) rings(map, rooms, ids());
   return out;
+}
+
+// two fairy rings on open ground, as far apart as the free rooms allow (never set pieces, never by a door)
+function rings(map, rooms, free) {
+  const spot = i => {
+    const doors = doorsOf(map, rooms[i]);
+    return pick(floorTiles(map, rooms[i]).filter(t => map.ter[idx(t.x, t.y)] === T.NONE && !doors.some(d => cheb(t, d.in) <= 1)));
+  };
+  const spots = free.map(spot).filter(Boolean);
+  let best = null;
+  for (const a of spots) for (const b of spots) if (cheb(a, b) >= 12 && (!best || cheb(a, b) > cheb(best[0], best[1]))) best = [a, b];
+  if (!best) return;
+  for (const t of best) map.ter[idx(t.x, t.y)] = T.RING;
+  map.rings = best.map(t => ({ x: t.x, y: t.y }));
 }
 
 function vault(map, r, out, ctx) {
@@ -138,7 +166,7 @@ function vault(map, r, out, ctx) {
 function grave(map, r, out) {
   const door = doorsOf(map, r)[0];
   const nearDoor = t => doorsOf(map, r).some(d => cheb(t, d.in) <= 1);
-  // rows of graves on every other tile, so there is always a way between them
+  // rows of mounds on every other tile, so there is always a way between them
   const spots = shuffle(floorTiles(map, r).filter(t => (t.x - r.x) % 2 === 1 && (t.y - r.y) % 2 === 1 && !nearDoor(t)));
   const n = Math.min(spots.length, Math.max(3, Math.min(5, Math.round(r.w * r.h / 8))));
   const graves = spots.slice(0, n);
@@ -146,7 +174,7 @@ function grave(map, r, out) {
   for (const t of graves) map.tiles[idx(t.x, t.y)] = GRAVE;
   const big = graves.reduce((b, t) => (cheb(t, door.in) > cheb(b, door.in) ? t : b));
   map.bigGrave = idx(big.x, big.y);
-  // a little grass between the graves
+  // a little grass between the mounds
   for (const t of floorTiles(map, r)) if (Math.random() < 0.3) map.ter[idx(t.x, t.y)] = T.GRASS;
   // never wall anything off
   for (const t of graves) {
@@ -166,6 +194,47 @@ function statue(map, r, out) {
   if (!behind) return;
   out.enemies.push({ type: 'statue', x: at.x, y: at.y, state: 'stone' });
   out.pickups.push({ x: behind.x, y: behind.y, type: 'chest', guarded: true });
+}
+
+// 풀뽑기 밭: rows of weeds on every other line, broken every third tile (so there is always a way
+// between them), a little grass round them. Which ones are screaming roots is kept in map.weeds.roots; the scene makes them tremble.
+function weeds(map, r) {
+  const nearDoor = t => doorsOf(map, r).some(d => cheb(t, d.in) <= 1);
+  const spots = shuffle(floorTiles(map, r).filter(t => (t.y - r.y) % 2 === 1 && (t.x - r.x) % 3 !== 0 && !nearDoor(t)));
+  const list = spots.slice(0, Math.min(spots.length, Math.max(4, Math.min(9, Math.round(r.w * r.h / 5)))));
+  if (list.length < 3) return;
+  for (const t of list) map.tiles[idx(t.x, t.y)] = WEED;
+  // never wall anything off
+  const door = doorsOf(map, r)[0];
+  for (const t of list) {
+    const dm = distMap(map, door.in.x, door.in.y);
+    if (floorTiles(map, r).every(f => dm[idx(f.x, f.y)] < 9999)) break;
+    map.tiles[idx(t.x, t.y)] = FLOOR;
+  }
+  const ids = list.map(t => idx(t.x, t.y)).filter(i => map.tiles[i] === WEED);
+  map.weeds = { left: ids.length, roots: shuffle(ids.slice()).slice(0, ids.length >= 7 ? 2 : 1) };
+  for (const t of floorTiles(map, r)) if (Math.random() < 0.3) map.ter[idx(t.x, t.y)] = T.GRASS;
+}
+
+// where the stump can stand: open ground all round it (so it never cuts a way off), not by a door
+function hiveSpots(map, r) {
+  const doors = doorsOf(map, r);
+  return floorTiles(map, r).filter(t => DIRS8.every(([dx, dy]) => map.tiles[idx(t.x + dx, t.y + dy)] === FLOOR) &&
+    !doors.some(d => cheb(t, d.in) <= 1));
+}
+
+function hive(map, r, out, ctx) {
+  const door = doorsOf(map, r)[0];
+  const spots = hiveSpots(map, r);
+  // as deep in the room as it can be, so you see the bees before you reach them
+  const at = spots.reduce((b, t) => (cheb(t, door.in) > cheb(b, door.in) ? t : b));
+  map.tiles[idx(at.x, at.y)] = HIVE;
+  map.hive = { x: at.x, y: at.y, honey: true };
+  // a meadow round it: grass that burns, which is the smoke that calms the bees
+  for (const t of floorTiles(map, r)) if (cheb(t, at) <= 2 ? Math.random() < 0.6 : Math.random() < 0.25) map.ter[idx(t.x, t.y)] = T.GRASS;
+  const zone = Math.floor((ctx.floor - 1) / B.FLOORS_PER_ZONE);
+  const round = shuffle(DIRS8.map(([dx, dy]) => ({ x: at.x + dx, y: at.y + dy })));
+  for (const t of round.slice(0, 3 + zone)) out.enemies.push({ type: 'bee', x: t.x, y: t.y, state: 'wander' });
 }
 
 // A trap room is a little puzzle you can read from the door: one kind of trap, laid in a pattern.

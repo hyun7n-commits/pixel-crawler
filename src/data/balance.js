@@ -12,6 +12,11 @@ export const xpToLevel = lvl => 3 + lvl;
 export const TWIN_CHANCE = 0.35;
 // chance a card is the unseen other half of a recipe for a relic you are growing (nothing says so)
 export const PARTNER_CHANCE = 0.55;
+// 별사탕, BALL x PIT's fission: one candy grows this many relic levels in a row (다다다닥).
+// Bosses, treasure critters, the oak stump and sparkle boulders (by vein size) drop them.
+export const candySteps = floor => 3 + Math.floor((floor - 1) / FLOORS_PER_ZONE);
+export const CANDY_BOSS = 2;              // extra steps in a boss's candy
+export const CANDY_ORE = [0.3, 0.45, 0.65, 1];
 export const HP_PER_LEVEL = 1;
 export const LEVEL_UP_HEAL = 0.1;  // share of max HP restored on level up (levels come often since v0.15)
 
@@ -19,13 +24,24 @@ export const LEVEL_UP_HEAL = 0.1;  // share of max HP restored on level up (leve
 // (enemies.js), so walking in and trading blows with two at once loses;
 // doorways, surprise hits, bombs and backing off are what win.
 export const enemiesPerFloor = floor => 5 + floor;
-// stat multiplier for enemies: grows within a zone and a little per zone
-export const enemyScale = floor => 1 + 0.2 * ((floor - 1) % 3) + 0.15 * Math.floor((floor - 1) / 3);
+// stat multiplier for enemies: grows within a zone and a lot per zone, because relics, candies and
+// evolutions make you much stronger as you go (v0.19). Attack grows by ATK_SHARE of it, health in full.
+export const enemyScale = floor => 1 + 0.25 * ((floor - 1) % 3) + 0.55 * Math.floor((floor - 1) / 3);
+export const ATK_SHARE = 1.6;
 export const POTION_CHANCE = 0.45;  // a potion lying somewhere on a floor
-export const bossScale = floor => 1 + 0.1 * (floor / 3 - 1);
+export const bossScale = floor => 1 + 0.5 * (floor / 3 - 1);
 
 export const GOLD_DROP_CHANCE = 0.4;
 export const VICTORY_BONUS = 200;
+
+// 토벌 단계: after the first win the fields get rowdier, one step per win, up to STEP_MAX. Picked at
+// the guild (ui/hub.js). Each step makes every critter tougher and pays more gold.
+export const STEP_MAX = 5;
+export const stepFoe = s => 1 + 0.15 * s;   // critters' health and attack
+export const stepGold = s => 1 + 0.2 * s;   // gold you pick up
+// the highest step won so far (-1 before the first win; saves from before steps count a win as step 0)
+export const topStep = m => m.stats.topStep ?? (m.stats.wins > 0 ? 0 : -1);
+export const stepsOpen = m => Math.min(STEP_MAX, topStep(m) + 1);
 
 export const POTION_HEAL = 0.6;
 
@@ -94,4 +110,27 @@ export const MIMIC_CHANCE = 0.18;      // a chest from floor 2 on is a mimic
 export const VAULT_CHANCE = 0.45;      // floor 2 on: a locked crystal vault, its key elsewhere on the floor
 export const LOCKED_CHEST_CHANCE = 0.55; // otherwise: a locked chest and its key
 export const SPECIAL_CHANCE = 0.55;    // each of grave room, statue room and trap room
+export const HIVE_CHANCE = 0.35;       // the honey stump, a little rarer
+// the honey stump: its honey pot adds max HP for the run; its bees (normal zone strength, not a
+// gimmick's) give up once you are farther than BEE_HOME from it; a fire within HIVE_SMOKE smokes them to sleep
+export const honeyHp = floor => 3 + Math.floor((floor - 1) / FLOORS_PER_ZONE);
+export const BEE_HOME = 6;
+// 요정 고리: the chance a field has a pair of fairy rings, by zone (most in the deep forest)
+export const RING_CHANCE = [0.2, 0.7, 0.3];
+// 온천: the chance a flooded room's pool is a hot spring, by zone (most up the rocky hills); anyone
+// standing in it gets SPRING_HEAL back every other turn, critters too
+export const SPRING_CHANCE = [0, 0.25, 0.7];
+export const SPRING_HEAL = 1;
+export const HIVE_SMOKE = 2;
+// 풀뽑기 밭: the chance a field has a weed patch, by zone (most out on the meadow); each weed pulled
+// pays a little, one or two are screaming roots that run off yelling (heard SCREAM_RANGE away) for
+// ROOT_TURNS turns before they dig back in, and the last weed of the patch hides a star candy
+export const WEED_CHANCE = [0.65, 0.35, 0.15];
+export const weedGold = floor => (1 + Math.floor((floor - 1) / FLOORS_PER_ZONE)) * (2 + Math.floor(Math.random() * 2));
+export const SCREAM_RANGE = 7;
+// the smith's gift for every BOOK_GIFT_EVERY recipes in the book: the k-th one (from 1) is bookGift(k) gold
+export const BOOK_GIFT_EVERY = 10;
+export const bookGift = k => 100 + 100 * k;
+export const bookGiftsDue = (found, claimed) => Math.floor(found / BOOK_GIFT_EVERY) - (claimed || 0);
+export const ROOT_TURNS = 8;
 export const graveGold = floor => (2 + Math.floor((floor - 1) / FLOORS_PER_ZONE)) * (3 + Math.floor(Math.random() * 4));

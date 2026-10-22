@@ -5,6 +5,8 @@ import { RELICS, recipeKey, tierOf } from '../data/relics.js';
 import { recipeFor } from './recipe.js';
 import { josa } from '../core/util.js';
 import { DISCOVERIES } from '../data/terrain.js';
+import { STALL } from '../data/npcs.js';
+import { ENEMIES } from '../data/enemies.js';
 
 export const modalOpen = () => !$('modal').hidden;
 let talkClose = null; // set while a villager's talk sheet is open
@@ -17,12 +19,18 @@ export function closeModal() {
   talkClose = null;
 }
 
-function openSheet(build) {
+// `onX`: the sheet gets a ✕ in its top right corner that stays put while the sheet scrolls
+function openSheet(build, onX) {
   const m = $('modal');
   m.innerHTML = '';
   const sh = el('div', 'sheet');
   build(sh);
-  m.append(sh);
+  if (onX) {
+    const box = el('div', 'sheet-box'), x = button('x-close', '✕', onX);
+    x.setAttribute('aria-label', '닫기');
+    box.append(sh, x);
+    m.append(box);
+  } else m.append(sh);
   m.hidden = false;
   setTimeout(() => sh.querySelector('button')?.focus({ preventScroll: true }), 0);
 }
@@ -36,17 +44,24 @@ export function showChoice({ title, sub, run, opts, onPick, onReroll, who }) {
       head.append(icon(who, 48), el('h2', null, title));
       sh.append(head, el('p', 'talk-text', sub));
     } else sh.append(el('h2', null, title), el('p', null, sub));
+    if (opts.some(o => o.kind === 'buy')) {
+      const purse = el('p', 'stall-purse');
+      purse.append(icon('gold', 18), el('span', null, `가진 골드 ${run.gold}G`));
+      sh.append(purse);
+    }
     const wrap = el('div', 'choices');
     opts.forEach((o, i) => {
       const b = button('choice', null, () => { closeModal(); onPick(o); });
       b.dataset.key = String(i + 1);
       const info = el('div');
       if (o.kind === 'relic') {
-        const r = RELICS[o.id], cur = run.p.relics[o.id] || 0;
+        const r = RELICS[o.id], cur = run.p.relics[o.id] || 0, evo = run.evolvesWith(o.id);
         b.append(icon(o.id));
+        // a card that completes a recipe you know glows, and says what it turns into
+        if (evo) b.classList.add('ready');
         info.append(
           el('span', 'nm', r.name),
-          el('span', cur ? 'tag' : 'tag new', cur ? `Lv${cur} → Lv${cur + 1}` : '새 유물'),
+          el('span', evo ? 'tag ready' : cur ? 'tag' : 'tag new', evo ? `진화! → ${RELICS[evo.id].name}` : cur ? `Lv${cur} → Lv${cur + 1}` : '새 유물'),
           el('span', 'ds', r.desc(cur + 1)),
         );
         const rc = recipeFor(run, o.id, o.id);
@@ -66,6 +81,12 @@ export function showChoice({ title, sub, run, opts, onPick, onReroll, who }) {
         const lv = id => run.p.relics[id] || 0;
         info.append(el('span', 'nm', '둘 다 쑥쑥'), el('span', 'tag', '두 개 +1'),
           el('span', 'ds', `${RELICS[o.a].name} Lv${lv(o.a)} → Lv${lv(o.a) + 1}, ${RELICS[o.b].name} Lv${lv(o.b)} → Lv${lv(o.b) + 1}`));
+      } else if (o.kind === 'buy') {
+        // the stall: what it is and its price; greyed out when your purse is short
+        const it = STALL[o.what];
+        b.append(icon(it.icon));
+        info.append(el('span', 'nm', it.name), el('span', 'tag price', `${o.price}G`), el('span', 'ds', it.desc));
+        if (run.gold < o.price) { b.disabled = true; b.classList.add('poor'); }
       } else if (o.kind === 'heal') {
         b.append(icon('heal'));
         info.append(el('span', 'nm', '응급 치료'), el('span', 'ds', '체력 50% 회복'));
@@ -100,10 +121,7 @@ export function showTalk({ who, name, line, build, onClose }) {
     const redraw = () => { const y = sh.scrollTop; body.innerHTML = ''; build(body, redraw); sh.scrollTop = y; };
     redraw();
     sh.append(body);
-    const foot = el('div', 'sheet-foot');
-    foot.append(button('btn', '닫기', () => closeTalk()));
-    sh.append(foot);
-  });
+  }, () => closeTalk());
   talkClose = onClose || (() => {});
   $('modal').onclick = ev => { if (ev.target === $('modal')) closeTalk(); };
 }
@@ -116,7 +134,7 @@ export function closeTalk() {
   return true;
 }
 
-export function showSummary({ won, run, newlyUnlockable, onClose }) {
+export function showSummary({ won, run, newlyUnlockable, stepOpened, onClose }) {
   openSheet(sh => {
     sh.append(el('h2', null, won ? '들판을 모두 토벌했다!' : '쓰러졌다'));
     if (!won && run.cause) sh.append(el('p', 'cause', `마지막 순간: ${run.cause}`));
@@ -130,11 +148,25 @@ export function showSummary({ won, run, newlyUnlockable, onClose }) {
       sum.append(s);
     }
     sh.append(sum);
+    const q = run.request;
+    if (q) sh.append(el('div', 'unlock-note' + (q.done ? ' req-done' : ''), q.done ? `조합 의뢰 완료: ${q.text} · 일당 ${q.pay}G를 받았다` : `조합 의뢰 미완료: ${q.text} (${q.got}/${q.n})`));
     if (run.newRecipes.length) {
       const made = run.newRecipes.map(k => k.split(':')[0]);
       const row = el('div', 'unlock-note new-recipes');
       row.append(el('span', null, '새로 찾은 조합'));
       for (const id of made) { const c = icon(id); c.classList.add('t' + tierOf(id)); row.append(c); }
+      sh.append(row);
+    }
+    if (run.newCritters?.length) {
+      const row = el('div', 'unlock-note new-recipes');
+      row.append(el('span', null, '새로 만난 친구'));
+      // a boss shares its kind's picture, so it wears its crown here as in the critter book
+      for (const t of run.newCritters) {
+        if (!ENEMIES[t].boss) { row.append(icon(ENEMIES[t].sprite)); continue; }
+        const pic = el('span', 'crit-pic');
+        pic.append(icon(ENEMIES[t].sprite), icon('crown'));
+        row.append(pic);
+      }
       sh.append(row);
     }
     if (run.found.length) {
@@ -144,6 +176,7 @@ export function showSummary({ won, run, newlyUnlockable, onClose }) {
     if (newlyUnlockable.length) {
       sh.append(el('div', 'unlock-note', `새 캐릭터 조건 달성: ${newlyUnlockable.join(', ')}. 마을의 조합장에게 가면 골드로 데려올 수 있다.`));
     }
+    if (stepOpened) sh.append(el('div', 'unlock-note', `토벌 단계 ★${stepOpened} 열림! 들판이 더 사나워진 대신 골드를 더 준다. 조합장에게서 고른다.`));
     const foot = el('div', 'sheet-foot');
     foot.append(button('btn primary', '마을로 돌아가기', () => { closeModal(); onClose(); }));
     sh.append(foot);

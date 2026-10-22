@@ -2,6 +2,7 @@
 // Each sound is a few short tones and noise bursts. Swap these for recorded sounds later
 // by changing SOUNDS only; the rest of the game just calls onRunEvent.
 import { T } from '../data/terrain.js';
+import { wait, fissionMs, evolveMs, FISSION_LEAD, FISSION_STEP, EVOLVE_FLASH } from '../ui/beat.js';
 
 const VOLUME = 0.4;
 const MUTE_KEY = 'pixel-crawler-muted';
@@ -11,6 +12,8 @@ let muted = false;
 try { muted = localStorage.getItem(MUTE_KEY) === '1'; } catch (e) { /* storage blocked */ }
 
 export const isMuted = () => muted;
+// the music (audio/music.js) plays through the same output, so the sound button mutes it too
+export const audioOut = () => (ctx && ctx.state === 'running' ? { ctx, out, noiseBuf } : null);
 export function setMuted(m) {
   muted = m;
   try { localStorage.setItem(MUTE_KEY, m ? '1' : '0'); } catch (e) { /* storage blocked */ }
@@ -136,15 +139,56 @@ const SOUNDS = {
   talk() { tone(660, 0.07, { type: 'triangle', vol: 0.12 }); tone(880, 0.09, { type: 'triangle', vol: 0.12, delay: 0.08 }); },
   welcome() { chime([523, 659, 784, 659, 784, 1047], 0.1, 0.12, 0.2, 0.1); },
   swap() { chime([784, 1175], 0.07, 0.1); },
+  // the puppy: a small "멍!" (a quick falling yap with a puff of breath)
+  bark() { tone(900, 0.07, { type: 'square', vol: 0.05, to: 520 }); hiss(0.05, { vol: 0.04, freq: 1800 }); tone(820, 0.06, { type: 'square', vol: 0.04, to: 500, delay: 0.11 }); },
+  // a letter: paper rustling open
+  letter() { hiss(0.12, { vol: 0.06, freq: 3000, to: 5000, type: 'highpass' }); tone(1047, 0.08, { type: 'triangle', vol: 0.08, delay: 0.1 }); },
+  // through a fairy ring: a quick rising sparkle
+  warp() { chime([1047, 1319, 1568, 2093], 0.035, 0.09); hiss(0.18, { vol: 0.05, freq: 4000, to: 8000, type: 'highpass' }); },
+  // the honey stump: a sweet glug, the swarm's angry buzz
+  honey() { chime([784, 1047, 1319], 0.06, 0.12); },
+  // 풀뽑기: a soft pop of roots coming loose; the screaming root's squeal, wobbling up and down
+  pluck() { hiss(0.12, { vol: 0.12, freq: 1200, to: 500, q: 0.8 }); tone(520, 0.08, { type: 'triangle', vol: 0.1, to: 900, delay: 0.03 }); },
+  scream(k = 1) {
+    tone(1250, 0.32 * k, { type: 'square', vol: 0.035 * k, to: 1700 });
+    tone(1700, 0.3 * k, { type: 'square', vol: 0.03 * k, to: 1150, delay: 0.3 * k });
+  },
+  buzz() { tone(210, 0.45, { type: 'sawtooth', vol: 0.035, to: 250 }); tone(226, 0.45, { type: 'sawtooth', vol: 0.03, to: 196, delay: 0.04 }); },
   boom() { hiss(0.8, { vol: 0.65, freq: 1800, to: 70, type: 'lowpass' }); tone(70, 0.6, { vol: 0.5, to: 28 }); },
   alert() { tone(880, 0.05, { type: 'square', vol: 0.05 }); tone(1320, 0.07, { type: 'square', vol: 0.05, delay: 0.05 }); },
   snore() { hiss(0.55, { vol: 0.14, freq: 320, to: 160, type: 'lowpass', attack: 0.25 }); },
   zap() { tone(1400, 0.12, { type: 'sawtooth', vol: 0.06, to: 300 }); hiss(0.1, { vol: 0.15, freq: 5000, type: 'highpass' }); },
-  stairs() { hiss(0.45, { vol: 0.16, freq: 300, to: 1500, q: 2, attack: 0.08 }); },
-  dodge() { hiss(0.12, { vol: 0.12, freq: 2000, to: 4500, q: 2 }); },
+  // into a burrow: a scuffle of dirt and a sliding whistle down (쏙)
+  dive() {
+    hiss(0.18, { vol: 0.16, freq: 900, to: 300, q: 0.7, delay: 0.12 });
+    tone(900, 0.3, { type: 'triangle', vol: 0.12, to: 180, delay: 0.16 });
+  },
+  // and out the other end with a pop (뿅)
+  pop(delay = 0) {
+    hiss(0.12, { vol: 0.14, freq: 700, to: 1600, q: 0.8, delay });
+    tone(320, 0.14, { type: 'triangle', vol: 0.16, to: 900, delay: delay + 0.04 });
+  },  dodge() { hiss(0.12, { vol: 0.12, freq: 2000, to: 4500, q: 2 }); },
   puff() { hiss(0.35, { vol: 0.15, freq: 900, to: 300, q: 0.6, attack: 0.02 }); },
   levelup() { chime([659, 784, 988, 1319], 0.07, 0.13); },
-  evolve() { chime([523, 659, 784, 1047, 1319, 1568], 0.08, 0.14, 0.3); },
+  // a star candy: a pop, then one bright pip per relic it grows, climbing the scale (다다다닥)
+  candy(n, delay) {
+    hiss(0.2, { vol: 0.14, freq: 5200, type: 'highpass', delay });
+    tone(1800, 0.06, { type: 'triangle', vol: 0.12, to: 900, delay });
+    const scale = [784, 880, 988, 1175, 1319, 1568, 1760, 1976, 2349, 2637];
+    for (let k = 0; k < n; k++) {
+      const f = scale[Math.min(k, scale.length - 1)], t = delay + (FISSION_LEAD + k * FISSION_STEP) / 1000;
+      tone(f, 0.08, { type: 'square', vol: 0.04, delay: t });
+      tone(f * 2, 0.14, { type: 'triangle', vol: 0.11, delay: t });
+    }
+  },
+  // two relics wind up as they slide together, then the flash: a thump and a chime, brighter for legends
+  evolve(tier, start, flash) {
+    const b = [1, 1, 1.12, 1.26][tier || 0];
+    hiss(flash, { vol: 0.12, freq: 300, to: 2600, q: 1.2, attack: flash * 0.8, delay: start });
+    tone(130 * b, 0.6, { vol: 0.3, to: 60, delay: start + flash });
+    chime([523, 659, 784, 1047, 1319, 1568].map(f => f * b), 0.06, 0.14, 0.3, start + flash);
+    if (tier >= 2) chime([1568, 1976, 2349, 3136].map(f => f * b), 0.05, 0.09, 0.35, start + flash + 0.42);
+  },
 };
 
 export function play(name, ...args) {
@@ -180,16 +224,17 @@ export function onRunEvent(type, d) {
     case 'sneak': play('sneak'); break;
     case 'phit': play('hurt'); break;
     case 'kill': play('kill'); break;
-    case 'pickup': play(d.type === 'chest' ? 'chest' : 'gold'); break;
+    case 'pickup': if (d.type !== 'candy') play(d.type === 'chest' ? 'chest' : 'gold'); break;
     case 'boom': case 'gasboom': play('boom'); break;
     case 'alert': play('alert'); break;
     case 'snore': play('snore'); break;
     case 'zap': play('zap'); break;
-    case 'floor': play('stairs'); break;
+    case 'floor': if (d.dir) play('dive'); play('pop', d.dir ? 0.62 : 0.05); break;
     case 'dodge': play('dodge'); break;
     case 'puff': play('puff'); break;
     case 'levelup': play('levelup'); break;
-    case 'evolve': play('evolve'); break;
+    case 'evolve': { const ms = evolveMs(d); play('evolve', d.fused ? 0 : d.tier, wait(d, ms) / 1000, EVOLVE_FLASH * ms / 1000); break; }
+    case 'fission': play('candy', d.steps.length, wait(d, fissionMs(d.steps.length)) / 1000); break;
     case 'steal': play('gold'); play('dodge'); break;
     case 'escape': play('puff'); break;
     case 'bones': play('kill'); play('hit'); break;
@@ -197,8 +242,19 @@ export function onRunEvent(type, d) {
     case 'aimCharge': play('alert'); break;
     case 'charge': if (!d.hit) play('boom'); break;
     case 'meteor': play('boom'); break;
+    case 'rage': play('boom'); play('alert'); break;
+    case 'request': play('jackpot'); break;
+    case 'buy': play('gold'); play('chest'); break;
     case 'sunbeam': play('rise', 2); break;
     case 'block': play('hit'); play('dodge'); break;
+    case 'honey': play('honey'); break;
+    case 'pluck': play('pluck'); break;
+    case 'scream': play('scream', d.first ? 1 : 0.6); break; // softer while it runs about
+    case 'burrow': play('puff'); break;
+    case 'weedsDone': play('levelup'); break;
+    case 'warp': play('warp'); break;
+    case 'swarm': play('buzz'); break;
+    case 'smoke': play('puff'); play('snore'); break;
     default: break;
   }
 }

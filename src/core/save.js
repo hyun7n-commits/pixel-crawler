@@ -14,8 +14,14 @@ export function freshMeta() {
     found: {},  // discovered combinations, see data/terrain.js
     recipes: {},  // relic recipes found at least once, by recipeKey, see data/relics.js
     ores: {},     // ore grades seen: id -> how many broken open, see data/ores.js
+    critters: {}, // kinds of critter met: type -> how many knocked out, see data/enemies.js
     village: { seen: {} },  // villagers who have already moved in with a hello, see data/village.js
     lastRun: null,          // how the last run went, for the village gossip
+    story: {},              // picture-book scenes already shown: intro, ratking, skelking, ending (ui/story.js)
+    pack: null,             // a basic relic paid for in the shop to take on the next run (data/upgrades.js PACK_COST)
+    step: 0,                // the 토벌 단계 picked at the guild (data/balance.js)
+    home: [],               // 집 꾸미기 pieces put up round your house (data/home.js)
+    bookGifts: 0,           // the smith's recipe-book gifts already taken (data/balance.js bookGift)
   };
 }
 
@@ -37,7 +43,11 @@ export function loadMeta() {
         found: { ...m.found },
         recipes: { ...m.recipes, ...oldLegends(m.legends) },
         ores: { ...m.ores },
+        // saves from before the critter book already knew the bosses they beat
+        critters: m.critters ? { ...m.critters } : Object.fromEntries((m.stats?.bosses || []).map(b => [b, 1])),
         village: { seen: { ...m.village?.seen } },
+        story: { ...m.story },
+        home: Array.isArray(m.home) ? m.home : [],
       };
     }
   } catch (e) { /* storage blocked or corrupt: start fresh */ }

@@ -12,13 +12,14 @@ import { T, DISCOVERIES, GOSSIP, SLEEP_TALK, FLOOR_HINTS, isTrap } from '../data
 import { rnd, rint, pick, shuffle, cheb, josa, DIRS8 } from './util.js';
 import {
   createMap, carveRooms, carveArena, idx, inMap, passable, distMap, lineOfSight, computeFOV,
-  FLOOR, STAIRS, ORE, UPSTAIRS, GRAVE, LOCKED, DOOR,
+  FLOOR, STAIRS, ORE, UPSTAIRS, GRAVE, LOCKED, DOOR, HIVE, WEED,
 } from './dungeon.js';
 import { decorate, decorateArena, placeTraps } from './decorate.js';
 import { placeSpecials, SET_PIECES } from './specials.js';
-import { NPC_TEXT } from '../data/npcs.js';
-import { enemyAct, rouse, awaken } from './ai.js';
-import { onEnter, explosion, envTick, waterBody, ignite, addGas, spotTraps, revealTraps, openGrave, setBurn } from './world.js';
+import { NPC_TEXT, PEDDLER_FLOORS, STALL } from '../data/npcs.js';
+import { REQUESTS, pickRequest } from '../data/requests.js';
+import { enemyAct, rouse, awaken, angerSwarm } from './ai.js';
+import { onEnter, explosion, envTick, waterBody, ignite, addGas, spotTraps, revealTraps, openGrave, setBurn, springTrap } from './world.js';
 
 export const zoneOf = floor => ZONES[Math.floor((floor - 1) / B.FLOORS_PER_ZONE)];
 export const isBossFloor = floor => floor % B.FLOORS_PER_ZONE === 0;
@@ -40,6 +41,7 @@ export class Run {
     this.cause = '';        // what knocked you out, for the summary
     this.found = [];        // discoveries made this run
     this.newRecipes = [];   // recipes found for the first time this run
+    this.newCritters = [];  // kinds of critter met for the first time this run
     this.told = {};         // one-time hints already shown
     this.floors = {};       // floors you left, kept as they were so you can go back for what you missed
     this.trail = [];        // your last steps on this floor; hunting enemies follow them
@@ -47,7 +49,11 @@ export class Run {
     this.quests = {
       ghost: { floor: rint(1, 2), state: 'idle' },              // idle -> asked -> found -> done
       smith: { floor: rint(4, 5), state: 'idle', chunk: null },  // chunk: grade of the big ore you broke there
+      peddler: { met: false },
     };
+    this.stall = [];
+    this.request = pickRequest(meta);   // the guild's request of the day (data/requests.js)
+    this.danger = Math.max(0, Math.min(meta.step || 0, B.stepsOpen(meta)));   // 토벌 단계 (meta.step)
     this.startStats = JSON.parse(JSON.stringify(meta.stats));
     this.listeners = [];
     this.p = {
@@ -56,6 +62,13 @@ export class Run {
       relics: { ...this.char.start },
       items: { potion: meta.up.pot, bomb: 1, map: 0 },
     };
+    // the relic packed in town for this run (paid for already)
+    if (meta.pack && RELICS[meta.pack] && !tierOf(meta.pack)) {
+      const id = meta.pack;
+      this.p.relics[id] = Math.min(maxLevelOf(id), (this.p.relics[id] || 0) + 1);
+      this.packed = id;
+      meta.pack = null;
+    }
     this.p.hp = this.stat().maxHp;
     meta.stats.runs++;
     meta.stats.maxFloor = Math.max(meta.stats.maxFloor, 1);
@@ -63,7 +76,24 @@ export class Run {
 
   // ---------- events ----------
   on(fn) { this.listeners.push(fn); }
-  emit(type, data = {}) { for (const fn of this.listeners) fn(type, data); }
+  emit(type, data = {}) {
+    for (const fn of this.listeners) fn(type, data);
+    if (this.request && !this.request.done) this.trackRequest(type, data);
+  }
+
+  // the request of the day: count what it asks for, and pay the moment it is met
+  trackRequest(type, d) {
+    const q = this.request, c = REQUESTS[q.id].count(type, d, this);
+    if (!c) return;
+    q.got = c.set ?? q.got + 1;
+    if (q.got < q.n) { this.emit('requestStep', q); return; }
+    q.got = q.n;
+    q.done = true;
+    this.gold += q.pay;
+    this.emit('gold', { x: this.p.x, y: this.p.y, n: q.pay });
+    this.emit('request', q);
+    this.log(`조합 의뢰 완료! ${q.text}. 일당 ${q.pay}G를 받았다.`, 'good');
+  }
   log(text, cls) { this.emit('log', { text, cls }); }
   say(who, text) { this.emit('say', { who, text }); }
 
@@ -80,9 +110,9 @@ export class Run {
       def: ch.def + lv('shield') + f('fortress', 2, 1) + lv('undying') + lv('ironheart') + f('embermail', 1, 1) + lv('guardian'),
       maxHp: ch.hp + up.hp * 4 + 8 * lv('heart') + f('bloodcrown', 15, 5) + 10 * lv('lifetree') + (on('eternity') ? 30 : 0) +
         f('ironheart', 10, 5) + f('pillow', 16, 4) + f('giantfist', 12, 4) + 10 * lv('guardian') + (on('bloodking') ? 20 : 0) +
-        (this.p.lvl - 1) * B.HP_PER_LEVEL,
-      goldMult: 1 + 0.4 * lv('coin') + f('goldbolt', 0.75, 0.25) + 0.25 * lv('goldstorm') + (on('minecrown') ? 0.5 : 0) + 0.1 * up.greed +
-        f('luckycharm', 1, 0.25) + f('goldfang', 0.8, 0.2) + 0.25 * lv('fortune') + (on('dawnstar') ? 0.5 : 0),
+        (this.p.lvl - 1) * B.HP_PER_LEVEL + (this.p.honey || 0),
+      goldMult: (1 + 0.4 * lv('coin') + f('goldbolt', 0.75, 0.25) + 0.25 * lv('goldstorm') + (on('minecrown') ? 0.5 : 0) + 0.1 * up.greed +
+        f('luckycharm', 1, 0.25) + f('goldfang', 0.8, 0.2) + 0.25 * lv('fortune') + (on('dawnstar') ? 0.5 : 0)) * B.stepGold(this.danger || 0),
       // never more than 60%: something always gets through
       dodge: Math.min(0.6, (ch.dodge || 0) + 0.08 * lv('cloak') + f('shadow', 0.15, 0.05) + 0.05 * lv('phantom') +
         f('luckycharm', 0.2, 0.05) + f('spikecloak', 0.2, 0.05) + 0.05 * lv('fortune') + (on('dawnstar') ? 0.1 : 0)),
@@ -143,8 +173,11 @@ export class Run {
 
   // ---------- floors ----------
   start() {
+    this.arrival = { dir: 0 };
     this.genFloor();
-    this.log(`${josa(this.char.name, '으로', '로')} 들판에 나왔다. 표지판을 찾아 앞으로 가자.`, 'good');
+    this.log(`${josa(this.char.name, '으로', '로')} 들판에 나왔다. 깃발 꽂힌 땅굴을 찾아 앞으로 가자.`, 'good');
+    this.log(`오늘의 조합 의뢰: ${this.request.text} (일당 ${this.request.pay}G)`, 'quest');
+    if (this.packed) this.log(`챙겨 온 ${RELICS[this.packed].name} Lv${this.p.relics[this.packed]}`, 'good');
     this.emit('banner', { text: `1구역 · ${this.zone.name}` });
     this.afterTurn();
   }
@@ -166,11 +199,16 @@ export class Run {
 
   enterFloor() {
     this.telegraph = [];
+    this.puffs = [];
     this.trail = [{ x: this.p.x, y: this.p.y }];
     this.bandageUsed = 0;
     this.refreshDoors();
     computeFOV(this.map, this.p.x, this.p.y, this.stat().sight);
-    this.emit('floor');
+    // 반딧불 모자: every sparkle boulder on the field glows through the dark from the moment you arrive
+    if (this.lv('headlamp')) for (const o of this.map.ores) for (const c of o.cells) this.map.explored[idx(c.x, c.y)] = 1;
+    // `dir`: 1 down a burrow to the next field, -1 back, 0 the first field; `from`: the hole you went into
+    this.emit('floor', this.arrival || {});
+    this.arrival = null;
     this.spotVeins();
   }
 
@@ -206,6 +244,15 @@ export class Run {
       floor: this.floor, start: this.p, stairs,
       relicOffers: n => this.offers(n).filter(o => o.kind === 'relic').map(o => o.id),
     });
+    // 온천: up in the hills, a flooded room's pool may be warm (map.spring: its tiles); set pieces
+    // have taken their rooms by now, so a flooded room is still flooded
+    const flood = rooms.findIndex((r, i) => deco.themes[i] === 'flood');
+    if (flood >= 0 && Math.random() < B.SPRING_CHANCE[Math.min(2, zi)]) {
+      const r = rooms[flood];
+      map.spring = [];
+      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (map.ter[idx(x, y)] === T.WATER) map.spring.push(idx(x, y));
+      if (!map.spring.length) delete map.spring;
+    }
     // loose traps, enemies and loot stay out of the set pieces
     const open = rooms.filter((r, i) => !SET_PIECES.has(deco.themes[i]));
     if (placeTraps(map, open, { start: this.p, stairs }, this.floor)) this.has.add('trap');
@@ -250,10 +297,16 @@ export class Run {
     if (Math.random() < 0.3) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'map' }));
 
     this.pickups.push(...sp.pickups);
-    for (const o of sp.enemies) this.spawnEnemy(o.type, o.x, o.y, B.gimmickScale(this.floor)).state = o.state;
+    for (const o of sp.enemies) this.spawnEnemy(o.type, o.x, o.y, ENEMIES[o.type].swarm ? B.enemyScale(this.floor) : B.gimmickScale(this.floor)).state = o.state;
     // the quest folk, on their floors
     const q = this.quests;
     if (this.floor === q.ghost.floor) place(s => { this.spawnEnemy('ghost', s.x, s.y).state = 'npc'; });
+    // the shopkeeper's stall, the floor before each boss: what's for sale, priced for the zone
+    this.stall = [];
+    if (PEDDLER_FLOORS.includes(this.floor)) {
+      this.stall = Object.entries(STALL).map(([what, it]) => ({ what, price: it.price * (zi + 1), sold: false }));
+      place(s => { this.spawnEnemy('peddler', s.x, s.y).state = 'npc'; });
+    }
     if (this.floor === q.smith.floor) {
       place(s => {
         this.spawnEnemy('smith', s.x, s.y).state = 'npc';
@@ -286,10 +339,10 @@ export class Run {
   }
 
   spawnEnemy(type, x, y, scale = 1) {
-    const d = ENEMIES[type];
+    const d = ENEMIES[type], k = d.npc ? 1 : B.stepFoe(this.danger || 0);
     const e = {
       id: Run.nextId++, type, d, x, y,
-      hp: Math.round(d.hp * scale), maxHp: Math.round(d.hp * scale), atk: Math.round(d.atk * scale),
+      hp: Math.round(d.hp * scale * k), maxHp: Math.round(d.hp * scale * k), atk: Math.round(d.atk * (1 + (scale - 1) * B.ATK_SHARE) * k),
       def: d.def || 0, aim: false, aimAt: null, skip: false, slam: false, timer: 0, face: -1,
       state: d.boss ? 'hunt' : Math.random() < 0.65 ? 'sleep' : 'wander',
       wake: 0, doze: 0, last: null, target: null, searchT: 0,
@@ -302,9 +355,10 @@ export class Run {
 
   // dir = 1 down, -1 up. Floors you have been on come back exactly as you left them.
   changeFloor(dir) {
+    this.arrival = { dir, from: { x: this.p.x, y: this.p.y } };
     this.floors[this.floor] = {
       map: this.map, enemies: this.enemies.filter(e => e.hp > 0), pickups: this.pickups,
-      boss: this.boss, has: this.has, gasActive: this.gasActive, overheard: this.overheard, respawnT: this.respawnT,
+      boss: this.boss, has: this.has, gasActive: this.gasActive, overheard: this.overheard, respawnT: this.respawnT, stall: this.stall,
     };
     this.floor += dir;
     this.p.burn = 0; this.p.sleep = 0;
@@ -370,6 +424,8 @@ export class Run {
     if (map.tiles[i] === ORE) return this.mineOre(this.oreAt(nx, ny), { x: nx, y: ny });
     if (map.tiles[i] === GRAVE) { openGrave(this, nx, ny); this.endTurn(); return true; }
     if (map.tiles[i] === LOCKED) return this.unlock(nx, ny);
+    if (map.tiles[i] === HIVE) return this.takeHoney(nx, ny);
+    if (map.tiles[i] === WEED) return this.pullWeed(nx, ny);
     if (!this.passable(nx, ny)) return false;
     p.x = nx; p.y = ny;
     this.trail.push({ x: nx, y: ny });
@@ -385,6 +441,12 @@ export class Run {
 
   wait() {
     if (!this.canAct()) return false;
+    // 꿀잠 베개: a proper rest, as long as nobody is in sight
+    const L = this.levels(), p = this.p;
+    if (L.pillow && p.hp < this.stat().maxHp && !this.enemies.some(e => e.hp > 0 && !e.d.npc && !this.calm(e) && e.state !== 'hide' && e.state !== 'stone' && this.isVisible(e.x, e.y))) {
+      this.heal(1 + L.pillow);
+      this.emit('snooze', { x: p.x, y: p.y });
+    }
     this.endTurn();
     return true;
   }
@@ -403,6 +465,54 @@ export class Run {
     this.emit('tiles', { list: [i], soft: true });
     this.emit('unlock', { x, y });
     this.log('열쇠로 잠긴 문을 열었다.', 'good');
+    this.endTurn();
+    return true;
+  }
+
+  // 벌집 그루터기: the honey pot is eaten on the spot (max HP for the rest of the run), and every bee
+  // that is awake comes after you. Bees put to sleep by smoke or pollen first don't notice.
+  takeHoney(x, y) {
+    const h = this.map.hive;
+    if (!h || !h.honey) { this.log('꿀을 다 꺼낸 벌집이다.'); return false; }
+    h.honey = false;
+    const n = B.honeyHp(this.floor);
+    this.withMaxHpDelta(() => { this.p.honey = (this.p.honey || 0) + n; });
+    this.emit('tiles', { list: [idx(x, y)], soft: true });
+    this.emit('honey', { x, y, n });
+    this.log(`벌집에서 꿀단지를 꺼내 먹었다! 최대 체력 +${n}`, 'good');
+    if (angerSwarm(this)) this.log('윙윙! 벌들이 화났다! 벌집에서 멀리 달아나면 돌아간다.', 'warn');
+    else if (this.enemies.some(e => e.d.swarm && e.hp > 0)) this.log('벌들이 쿨쿨 자는 사이에 살짝 꺼냈다.', 'good');
+    this.endTurn();
+    return true;
+  }
+
+  // 풀뽑기: pull a weed for a little pay, leaving loose soil. A screaming root jumps out yelling and
+  // runs (ai.js scream); the last weed of the patch has a star candy under it.
+  pullWeed(x, y) {
+    const map = this.map, i = idx(x, y), patch = map.weeds || { left: 1, roots: [] };
+    map.tiles[i] = FLOOR;
+    map.ter[i] = T.DUG;
+    patch.left--;
+    this.weeds = (this.weeds || 0) + 1;
+    this.emit('tiles', { list: [i], soft: true });
+    const root = patch.roots.includes(i);
+    this.emit('pluck', { x, y, root });
+    if (root) {
+      const e = this.spawnEnemy('root', x, y);
+      Object.assign(e, { state: 'flee', left: B.ROOT_TURNS });
+      this.screams = (this.screams || 0) + 1;
+      this.emit('scream', { x, y, first: true });
+      this.noise(x, y, B.SCREAM_RANGE);
+      this.log('잡초를 뽑았더니 비명 뿌리였다! 꺄아아 소리에 적들이 몰려온다!', 'warn');
+    } else {
+      this.addGold(B.weedGold(this.floor));
+      if (!this.told.weed) { this.told.weed = true; this.log('잡초를 쏙 뽑았다. 풀뽑기 일당이 조금 나온다.', 'good'); }
+    }
+    if (patch.left === 0) {
+      this.pickups.push({ x, y, type: 'candy' });
+      this.log('밭을 다 뽑았다! 마지막 풀 밑에서 별사탕이 나왔다!', 'good');
+      this.emit('weedsDone', { x, y });
+    }
     this.endTurn();
     return true;
   }
@@ -427,6 +537,12 @@ export class Run {
         this.emit('vanish', { x: e.x, y: e.y });
         this.log(text.bye, 'good');
       } else this.say(e, text.wait);
+    } else if (e.type === 'peddler') {
+      const canGrow = Object.keys(this.p.relics).some(id => this.p.relics[id] < maxLevelOf(id));
+      const stock = this.stall.filter(s => !s.sold && (s.what !== 'grow' || canGrow));
+      if (!stock.length) this.say(e, text.empty);
+      else sheet(q.met ? text.again : text.greet, [...stock.map(s => ({ kind: 'buy', what: s.what, price: s.price })), ...ok()], { noReroll: true });
+      q.met = true;
     } else if (e.type === 'smith') {
       if (q.state === 'idle' && q.chunk === null) { q.state = 'asked'; sheet(text.ask, ok()); }
       else if (q.state === 'done') this.say(e, text.after);
@@ -468,18 +584,22 @@ export class Run {
     const g = ORES[ore.tier];
     const r = Math.round((B.ORE_NOISE[k] + (nugget ? 2 : 0)) * (this.char.quiet ? 0.75 : 1));
     let gold;
-    if (!last) gold = Math.round(B.oreGold(this.floor) * g.mult * B.ORE_SWING[k] * s.oreMult * big * (nugget ? B.ORE_NUGGET_MULT : 1));
+    // the pickaxe and the coin relics add up on sparkle rocks rather than multiply: a gold build pays
+    // well without one lucky run buying out the whole village
+    const oreCut = s.goldMult + (s.oreMult - 1) * B.stepGold(this.danger || 0);
+    if (!last) gold = Math.round(B.oreGold(this.floor) * g.mult * B.ORE_SWING[k] * oreCut * big * (nugget ? B.ORE_NUGGET_MULT : 1));
     this.emit('mine', { x: at.x, y: at.y, cells: ore.cells, size: ore.size, from: { x: p.x, y: p.y }, hits: ore.hits, r, last, tier: ore.tier, rose, nugget });
     if (ore.vent) addGas(this, ore.vent.x, ore.vent.y, 'mine', B.ORE_GAS);
-    if (!last) this.addGold(gold);
+    if (!last) this.addGold(gold, true);
     else {
       for (const c of ore.cells) map.tiles[idx(c.x, c.y)] = FLOOR;
       map.ores = map.ores.filter(o => o !== ore);
       this.meta.ores[g.id] = (this.meta.ores[g.id] || 0) + 1;
       // the haul lies in a heap on every tile the vein filled; a 2x2 jackpot holds a richer chest
-      const haul = Math.round(B.oreJackpot(this.floor) * g.mult * s.oreMult * big / ore.size);
-      for (const c of ore.cells) this.pickups.push({ x: c.x, y: c.y, type: 'gold', amount: haul, ore: ore.tier });
+      const haul = Math.round(B.oreJackpot(this.floor) * g.mult * oreCut * big / ore.size);
+      for (const c of ore.cells) this.pickups.push({ x: c.x, y: c.y, type: 'gold', amount: haul, ore: ore.tier, raw: true });
       this.pickups.push({ x: ore.x, y: ore.y, type: 'chest', rich: ore.size >= 4, vein: ore.size >= 4 });
+      if (Math.random() < B.CANDY_ORE[ore.size - 1]) { const c = ore.cells[ore.cells.length - 1]; this.pickups.push({ x: c.x, y: c.y, type: 'candy' }); }
       this.discover('ore_jackpot', true);
       // the blacksmith on this floor wants a chunk of it
       const smith = this.quests.smith;
@@ -492,7 +612,8 @@ export class Run {
     const heard = this.noise(ore.x, ore.y, r);
     // the deeper you dig, the more the mine answers: monsters crawl out of the dark toward the sound
     const came = [];
-    const wave = B.ORE_WAVE[k] + (B.ORE_WAVE[k] ? B.ORE_SIZE_WAVE[ore.size - 1] : 0);
+    // the first floor answers more softly: it is where you learn that digging is heard
+    const wave = B.ORE_WAVE[k] + (B.ORE_WAVE[k] ? B.ORE_SIZE_WAVE[ore.size - 1] : 0) - (this.floor === 1 && B.ORE_WAVE[k] ? 1 : 0);
     for (let n = 0; n < (this.char.quiet ? wave - 1 : wave); n++) {
       const t = this.waveSpot(ore);
       if (!t) break;
@@ -521,7 +642,7 @@ export class Run {
         if (near) m.explored[idx(x, y)] = 1;
       }
       const traps = revealTraps(this);
-      this.log(`지도를 펼쳤다. 표지판 위치가 보인다.${traps ? ` 숨은 함정 ${traps}개도 표시돼 있다.` : ''}`, 'good');
+      this.log(`지도를 펼쳤다. 땅굴 위치가 보인다.${traps ? ` 숨은 함정 ${traps}개도 표시돼 있다.` : ''}`, 'good');
     }
     this.endTurn();
     return true;
@@ -551,7 +672,7 @@ export class Run {
       this.pickups.splice(this.pickups.indexOf(q), 1);
       this.emit('pickup', { x, y, type: q.type });
       if (q.type === 'gold' && q.stolen) { this.gold += q.amount; this.emit('gold', { x, y, n: q.amount }); }
-      else if (q.type === 'gold') this.addGold(q.amount);
+      else if (q.type === 'gold') this.addGold(q.amount, q.raw);
       else if (q.type === 'chest') {
         this.queue.push({ kind: 'chest', rich: !!q.rich, vein: !!q.vein });
         this.log('보물 상자를 열었다!', 'good');
@@ -563,10 +684,11 @@ export class Run {
       } else if (q.type === 'key') {
         map.keyHeld = true;
         this.log('작은 열쇠를 주웠다. 이 구역의 잠긴 곳을 연다.', 'good');
-      } else if (q.type === 'crystal') this.takeCrystal(q);
+      } else if (q.type === 'candy') this.fission(q.n || B.candySteps(this.floor), x, y);
+      else if (q.type === 'crystal') this.takeCrystal(q);
       else if (q.type === 'necklace') {
         this.quests.ghost.state = 'found';
-        this.log('반짝돌 목걸이를 찾았다! 꼬마 유령에게 돌려주자.', 'good');
+        this.log('아기새 리본을 찾았다! 울보 아기새에게 돌려주자.', 'good');
       } else { this.p.items[q.type]++; this.log(`${josa(ITEMS[q.type].name, '을', '를')} 주웠다.`); }
     }
   }
@@ -576,12 +698,12 @@ export class Run {
     const rl = this.p.relics, id = q.relic;
     const fits = rl[id] ? rl[id] < maxLevelOf(id) : Object.keys(rl).length < MAX_SLOTS;
     if (fits) this.gainRelic(id);
-    else { this.addGold(40); this.log('유물을 더 담을 수 없어서 수정이 골드로 부서졌다.'); }
+    else { this.addGold(40); this.log('유물을 더 담을 수 없어서 유리 종 속 유물을 골드로 바꿨다.'); }
     for (const o of this.pickups.filter(o => o.type === 'crystal' && o.vault === q.vault)) {
       this.pickups.splice(this.pickups.indexOf(o), 1);
       this.emit('shatter', { x: o.x, y: o.y });
     }
-    this.log('나머지 수정은 산산조각 났다.');
+    this.log('나머지 유리 종은 와장창 깨졌다.');
   }
 
   // Taking the chest a statue guards wakes every statue in that room.
@@ -595,12 +717,17 @@ export class Run {
   unaware(e) { return ['sleep', 'wander', 'search'].includes(e.state) || this.calm(e); }
 
   playerAttack(e) {
-    const s = this.stat(), L = this.levels();
+    const s = this.stat(), L = this.levels(), p = this.p;
     const base = s.atk + rnd(2);
-    if (this.unaware(e)) {
-      this.emit('sneak', { x: e.x, y: e.y, from: { x: this.p.x, y: this.p.y } });
-      this.log(`${e.state === 'sleep' ? '자고 있는' : '나를 못 본'} ${josa(e.d.name, '을', '를')} 세게 내리쳤다!`, 'good');
+    // 그림자 걸음: right after a kill you are still in the shadows, so the next blow is a surprise too
+    const shade = p.shade > 0 && !this.unaware(e);
+    if (this.unaware(e) || shade) {
+      p.shade = 0;
+      this.emit('sneak', { x: e.x, y: e.y, from: { x: p.x, y: p.y } });
+      this.log(shade ? `그림자 속에서 튀어나와 ${josa(e.d.name, '을', '를')} 내리쳤다!` : `${e.state === 'sleep' ? '자고 있는' : '나를 못 본'} ${josa(e.d.name, '을', '를')} 세게 내리쳤다!`, 'good');
       this.strike(e, Math.round(base * s.sneak), 'sneak');
+      // 암살 단검: a surprise kill is over before anyone can react; they all lose this turn
+      if (e.hp <= 0 && L.dagger) { this.quick = true; this.emit('quick', { x: p.x, y: p.y }); }
     } else this.strike(e, base, 'normal');
     // the swing carries on into everyone else standing next to you
     const share = L.quake || L.whirlwind ? 1 : L.whirl ? 0.6 + 0.1 * L.whirl : 0.3 * (L.sweep || 0);
@@ -628,7 +755,30 @@ export class Run {
       if (t === T.BRUSH) ignite(this, e.x, e.y);
     }
     const stun = Math.max(0.15 * (L.hammer || 0), L.quake ? 0.15 + 0.05 * L.quake : 0, L.thunder ? 0.3 + 0.05 * L.thunder : 0, L.giantfist ? 0.25 + 0.05 * L.giantfist : 0);
-    if (e.hp > 0 && !e.d.boss && Math.random() < stun) { e.stun = 1; this.emit('stun', { x: e.x, y: e.y }); }
+    if (e.hp > 0 && !e.d.boss && Math.random() < stun) {
+      e.stun = 1;
+      this.emit('stun', { x: e.x, y: e.y });
+      if (L.giantfist) this.knock(e, 4 + 2 * L.giantfist);
+    }
+  }
+
+  // 거인의 주먹: a dazed monster flies one tile away from you. Into a wall or another monster it takes a
+  // knock (and so does the other one); onto a trap it sets it off; through fire it catches; into water
+  // it is put out.
+  knock(e, dmg) {
+    const dx = Math.sign(e.x - this.p.x), dy = Math.sign(e.y - this.p.y), x = e.x + dx, y = e.y + dy;
+    const other = this.enemyAt(x, y);
+    if (!this.passable(x, y) || other || (x === this.p.x && y === this.p.y)) {
+      this.emit('bonk', { x: e.x, y: e.y, dx, dy });
+      this.hurt(e, dmg, 'bonk');
+      if (other) this.hurt(other, dmg, 'bonk');
+      return;
+    }
+    const from = { x: e.x, y: e.y };
+    e.x = x; e.y = y;
+    this.emit('push', { enemy: e, from, to: { x, y } });
+    onEnter(this, e, x, y);
+    if (isTrap(this.map.ter[idx(x, y)])) springTrap(this, x, y);
   }
 
   hurt(e, dmg, kind) {
@@ -638,7 +788,8 @@ export class Run {
     this.emit('hit', { enemy: e, x: e.x, y: e.y, dmg, kind });
     if (e.hp <= 0) this.onKill(e);
     else {
-      rouse(this, e, 'hit');
+      // bees singed by fire are in its smoke too (world.js smokeHive): dozy, not angry
+      if (!(kind === 'fire' && e.d.swarm)) rouse(this, e, 'hit');
       if (e.d.splits && e.hp >= 4) this.split(e);
     }
   }
@@ -655,16 +806,23 @@ export class Run {
     this.emit('split', { enemy: e, child: c, from: { x: e.x, y: e.y } });
   }
 
-  // A thief that got out of sight with your gold is gone, and the gold with it.
+  // A thief that got out of sight with your gold is gone, and the gold with it; on a floor with an
+  // acorn stash, it takes the gold home to the big oak stump, where you can still dig it up.
   escape(e) {
     e.hp = 0;
     this.emit('escape', { enemy: e });
-    this.log(`${josa(e.d.name, '이', '가')} 골드를 들고 사라졌다…`, 'warn');
+    const stash = this.map.bigGrave;
+    if (e.loot && stash != null && this.map.tiles[stash] === GRAVE) {
+      this.map.stash = (this.map.stash || 0) + e.loot;
+      this.log(`${josa(e.d.name, '이', '가')} 골드를 들고 큰 참나무 그루터기 쪽으로 사라졌다…`, 'warn');
+    } else this.log(`${josa(e.d.name, '이', '가')} 골드를 들고 사라졌다…`, 'warn');
   }
 
   onKill(e) {
     const L = this.levels(), stats = this.meta.stats;
     this.kills++; stats.kills++;
+    const book = this.meta.critters ||= {};
+    book[e.type] = (book[e.type] || 0) + 1;
     this.emit('kill', { enemy: e });
     if (e.d.boss) {
       if (!stats.bosses.includes(e.type)) stats.bosses.push(e.type);
@@ -679,32 +837,46 @@ export class Run {
         this.map.tiles[idx(up.x, up.y)] = UPSTAIRS;
         this.map.ter[idx(up.x, up.y)] = T.NONE;
         this.emit('stairs', { x: up.x, y: up.y });
-        this.log('다음 구역 표지판이 나타나고, 돌아가는 길도 열렸다.', 'good');
+        this.log('다음 구역으로 가는 땅굴이 뚫리고, 돌아가는 굴도 열렸다.', 'good');
       }
       this.addGold(30 * (this.floor / 3));
+      this.dropNear(e.x, e.y, { type: 'candy', n: B.candySteps(this.floor) + B.CANDY_BOSS });
     } else if (e.d.treasure) {
       this.pickups.push({ x: e.x, y: e.y, type: 'chest' }, { x: e.x, y: e.y, type: 'gold', amount: B.turtleGold(this.floor) });
+      this.dropNear(e.x, e.y, { type: 'candy' });
       this.log(`${josa(e.d.name, '이', '가')} 등에 지고 있던 보물을 떨궜다!`, 'good');
     } else if (e.d.quest) {
       this.pickups.push({ x: e.x, y: e.y, type: 'necklace' });
-      this.log('도둑 쥐가 반짝돌 목걸이를 떨궜다!', 'good');
+      this.log('도둑 들쥐가 리본을 떨궜다!', 'good');
     } else if (e.loot) {
       this.pickups.push({ x: e.x, y: e.y, type: 'gold', amount: e.loot, stolen: true });
     } else if (L.goldfang || Math.random() < B.GOLD_DROP_CHANCE) {
       this.pickups.push({ x: e.x, y: e.y, type: 'gold', amount: (Math.floor((this.floor - 1) / 3) + 1) * rint(1, 4) });
     }
-    if (e.d.bones) this.boneBurst(e);
+    if (e.d.bones) this.swell(e);
+    if (L.shadow && !e.d.npc) { this.p.shade = 3; this.emit('shade', { x: this.p.x, y: this.p.y }); }
     const heal = 2 * (L.fang || 0) + (L.bloodcrown ? 4 + 2 * L.bloodcrown : 0) + (L.goldfang ? 5 + L.goldfang : 0);
     if (heal) this.heal(heal);
     this.gainXp(e.xp ?? e.d.xp);
   }
 
-  // A skeleton falls apart in a burst of bone: everyone next to it takes a hit, monsters too.
-  boneBurst(e) {
-    const dmg = e.atk + rint(1, 3);
-    this.emit('bones', { x: e.x, y: e.y });
-    for (const o of this.enemies.filter(o => o !== e && o.hp > 0 && cheb(o, e) === 1)) this.hurt(o, dmg * 2, 'bones');
-    if (cheb(this.p, e) === 1) this.hurtPlayer(Math.max(1, dmg - this.stat().def), '독버섯 포자에 맞았다', 'bones');
+  // A poison mushroom that falls swells up, and bursts after your next move: everyone next to it then
+  // takes a hit, monsters too. The tiles around it glow, so one step away keeps you out of it.
+  swell(e) {
+    this.puffs.push({ x: e.x, y: e.y, dmg: e.atk + rint(1, 3), t: 1 });
+    this.emit('swell', { x: e.x, y: e.y });
+    if (this.isVisible(e.x, e.y)) this.log('독버섯이 부풀어 오른다. 곧 터진다!', 'warn');
+  }
+
+  burstPuffs() {
+    const due = this.puffs.filter(f => f.t-- <= 0);
+    if (!due.length) return;
+    this.puffs = this.puffs.filter(f => f.t >= 0);
+    for (const f of due) {
+      this.emit('bones', { x: f.x, y: f.y });
+      for (const o of this.enemies.filter(o => o.hp > 0 && cheb(o, f) <= 1)) this.hurt(o, f.dmg * 2, 'bones');
+      if (cheb(this.p, f) <= 1) this.hurtPlayer(Math.max(1, f.dmg - this.stat().def), '독버섯 포자에 맞았다', 'bones');
+    }
   }
 
   damagePlayer(raw, src, kind = 'melee') {
@@ -713,11 +885,15 @@ export class Run {
       this.emit('dodge', { x: p.x, y: p.y });
       // the hedgehog cloak pricks whoever lunged at you, hit or miss
       if (L.spikecloak && src && kind === 'melee') this.hurt(src, 4 + 2 * L.spikecloak, 'thorns');
+      // 네잎 클로버: a near miss is lucky money
+      if (L.luckycharm) this.addGold(2 + L.luckycharm);
       return false;
     }
     if (this.char.block && Math.random() < this.char.block) { this.emit('block', { x: p.x, y: p.y, from: { x: src.x, y: src.y } }); return false; }
     const roll = raw * (B.HIT_ROLL[0] + Math.random() * (B.HIT_ROLL[1] - B.HIT_ROLL[0]));
-    const dmg = Math.max(1, Math.round(roll) + rnd(2) - s.def);
+    let dmg = Math.max(1, Math.round(roll) + rnd(2) - s.def);
+    // 강철 심장: with a third of your health or less, blows glance off at half strength
+    if (L.ironheart && p.hp <= s.maxHp / 3) { dmg = Math.max(1, Math.ceil(dmg / 2)); this.emit('iron', { x: p.x, y: p.y }); }
     this.hurtPlayer(dmg, `${src.d.name}에게 당했다`, kind);
     if (src && (kind === 'melee' || kind === 'charge')) {
       const thorn = (L.fortress ? 4 + 2 * L.fortress : 2 * (L.thorns || 0)) + (L.spikecloak ? 4 + 2 * L.spikecloak : 0);
@@ -766,8 +942,9 @@ export class Run {
     if (this.p.hp > before) this.emit('heal', { x: this.p.x, y: this.p.y, n: this.p.hp - before });
   }
 
-  addGold(n) {
-    const g = Math.max(1, Math.round(n * this.stat().goldMult));
+  // `raw`: the amount already has the gold bonuses in it (sparkle-rock gold)
+  addGold(n, raw = false) {
+    const g = Math.max(1, Math.round(raw ? n : n * this.stat().goldMult));
     this.gold += g;
     this.emit('gold', { x: this.p.x, y: this.p.y, n: g });
   }
@@ -790,7 +967,7 @@ export class Run {
     let woke = 0;
     const heard = [];
     for (const e of this.enemies) {
-      if (e.hp <= 0 || cheb(e, { x, y }) > r) continue;
+      if (e.hp <= 0 || e.d.screams || cheb(e, { x, y }) > r) continue;
       const before = e.state;
       if (rouse(this, e, 'noise', x, y)) woke++;
       if (e.state === 'search' && before !== 'search') heard.push(e);
@@ -820,8 +997,10 @@ export class Run {
 
   // ---------- turn ----------
   endTurn() {
-    const p = this.p, L = this.levels();
+    const p = this.p, L = this.levels(), quick = this.quick;
+    this.quick = false;
     this.turn++;
+    if (p.shade > 0) p.shade--;
     if (!this.char.noRegen && this.turn % B.REGEN_TURNS === 0 && p.hp > 0 && p.hp < this.stat().maxHp) p.hp++;
     if (L.goldbolt && this.turn % (L.goldstorm ? 2 : 3) === 0) this.zap(L.goldbolt + 1 + (L.goldstorm ? 1 : 0), 6 + 2 * L.goldbolt);
     else if (L.bolt && this.turn % 6 === 0) this.zap(1, 4 * L.bolt);
@@ -837,8 +1016,10 @@ export class Run {
     // doors shut the moment nobody stands in them, so a chaser right behind you loses sight of you
     // as you step through (the Shattered Pixel Dungeon door ambush)
     this.refreshDoors();
+    this.burstPuffs();
+    if (p.hp <= 0) { this.afterTurn(); return; }
     const dm = distMap(this.map, p.x, p.y);
-    for (const e of this.enemies.slice()) {
+    if (!quick) for (const e of this.enemies.slice()) {
       if (e.hp > 0 && p.hp > 0) enemyAct(this, e, dm);
     }
     if (p.hp > 0) envTick(this);
@@ -856,9 +1037,12 @@ export class Run {
     for (const q of this.pickups.filter(q => q.type === 'gold' && cheb(q, p) <= r && this.isVisible(q.x, q.y))) {
       this.pickups.splice(this.pickups.indexOf(q), 1);
       this.emit('pickup', { x: q.x, y: q.y, type: 'gold' });
-      this.addGold(q.amount);
+      this.addGold(q.amount, q.raw);
     }
   }
+
+  // 부엉이 눈: a sleeping monster out of sight but not far is felt through the walls
+  sensed(e) { return e.state === 'sleep' && !this.isVisible(e.x, e.y) && cheb(e, this.p) <= 12 && this.lv('owleye') > 0; }
 
   // a peaceful monster nobody has picked a fight with yet
   calm(e) { return !!e.d.peaceful && !e.angry; }
@@ -981,10 +1165,21 @@ export class Run {
   afterTurn() {
     this.refreshDoors();
     computeFOV(this.map, this.p.x, this.p.y, this.stat().sight);
+    this.meetCritters();
     if (this.p.hp <= 0) { this.p.hp = 0; this.finish(false); return; }
     if (this.victory) { this.finish(true); return; }
     this.emit('turn');
     this.spotVeins();
+  }
+
+  // the critter book (구조대원) fills in each kind the first time you see one
+  meetCritters() {
+    const book = this.meta.critters ||= {};
+    for (const e of this.enemies) {
+      if (e.hp <= 0 || e.d.npc || e.type in book || !this.isVisible(e.x, e.y)) continue;
+      book[e.type] = 0;
+      (this.newCritters ||= []).push(e.type);
+    }
   }
 
   // Returns true if the boss used its whole turn on a special move.
@@ -995,15 +1190,23 @@ export class Run {
         e.slam = false;
         const hit = this.telegraph.some(t => t.x === p.x && t.y === p.y);
         this.emit('slam', { tiles: this.telegraph, hit });
-        this.telegraph = [];
-        if (hit) { this.hurtPlayer(10 + this.floor, '버섯 왕의 버섯 망치에 맞았다', 'slam'); this.log('버섯 왕의 내려치기에 맞았다!', 'warn'); }
+        if (hit) { this.hurtPlayer(12 + 2 * this.floor, '버섯 왕의 버섯 망치에 맞았다', 'slam'); this.log('버섯 왕의 내려치기에 맞았다!', 'warn'); }
         else this.log('내려치기를 피했다!', 'good');
+        // the slam shakes spores loose: a little mushroom pops up where the hammer fell (one at a time)
+        const spot = shuffle(this.telegraph.length ? this.telegraph.slice() : []).find(t => this.canEnemyEnter(t.x, t.y));
+        if (spot && this.enemies.filter(m => m.hp > 0 && m.sprout).length < 1) {
+          const m = this.spawnEnemy('skel', spot.x, spot.y, B.enemyScale(this.floor));
+          Object.assign(m, { hp: Math.ceil(m.hp / 2), maxHp: Math.ceil(m.maxHp / 2), state: 'hunt', last: { x: p.x, y: p.y }, small: true, sprout: true, xp: 1 });
+          this.log('내려친 자리에서 꼬마 독버섯이 솟아났다!', 'warn');
+        }
+        this.telegraph = [];
         return true;
       }
-      if (e.timer % 4 === 0) {
+      if (e.timer % 3 === 0) {
         e.slam = true;
         this.telegraph = [];
-        for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+        // a cross on you: one step on the slant takes you out of it (a 3x3 square could not be left in one step)
+        for (const [i, j] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
           if (passable(this.map, p.x + i, p.y + j)) this.telegraph.push({ x: p.x + i, y: p.y + j });
         }
         this.log('버섯 왕이 커다란 버섯 망치를 들어 올렸다. 붉은 칸에서 벗어나야 한다!', 'warn');
@@ -1021,7 +1224,18 @@ export class Run {
       }
       if (n) this.log('왕쥐가 쥐를 불러냈다.', 'warn');
     }
-    if (e.type === 'lord' && e.timer % 6 === 0 && !e.aim) {
+    // the last boss gets angry at half health: a swarm of bats, and it blinks around twice as often
+    if (e.type === 'lord' && !e.rage && e.hp <= e.maxHp / 2) {
+      e.rage = true;
+      let n = 0;
+      for (const [dx, dy] of shuffle(DIRS8.slice())) {
+        if (n < 3 && this.canEnemyEnter(e.x + dx, e.y + dy)) { this.spawnEnemy('bat', e.x + dx, e.y + dy).state = 'hunt'; n++; }
+      }
+      this.emit('rage', { enemy: e });
+      this.log('박쥐 대왕이 화났다! 박쥐 떼가 몰려온다!', 'warn');
+      return true;
+    }
+    if (e.type === 'lord' && e.timer % (e.rage ? 4 : 6) === 0 && !e.aim) {
       const spots = [];
       for (let y = p.y - 6; y <= p.y + 6; y++) for (let x = p.x - 6; x <= p.x + 6; x++) {
         const dd = Math.max(Math.abs(x - p.x), Math.abs(y - p.y));
@@ -1093,6 +1307,14 @@ export class Run {
     return pairs.length ? pick(pairs) : null;
   }
 
+  // The recipe a relic card would set off at once, but only one you have found before: an unknown
+  // recipe stays a surprise.
+  evolvesWith(id) {
+    const rl = { ...this.p.relics, [id]: (this.p.relics[id] || 0) + 1 };
+    const ready = r => rl[r] && (tierOf(r) > 0 || rl[r] >= MAX_LEVEL);
+    return RECIPES.find(rc => (rc.a === id || rc.b === id) && !rl[rc.id] && ready(rc.a) && ready(rc.b) && this.meta.recipes[recipeKey(rc)]) || null;
+  }
+
   // Called by the UI after the player picks one of `offers()`.
   choose(o) {
     this.queue.shift();
@@ -1100,8 +1322,22 @@ export class Run {
     else if (o.kind === 'gold') this.addGold(o.amount || 25);
     else if (o.kind === 'relic') this.gainRelic(o.id);
     else if (o.kind === 'fuse') this.fuse(o.a, o.b);
+    else if (o.kind === 'buy') this.buy(o.what);
     else if (o.kind === 'twin') for (const id of [o.a, o.b]) if (this.p.relics[id] && this.p.relics[id] < maxLevelOf(id)) this.gainRelic(id);
     this.emit('relics');
+  }
+
+  // Buying at the stall: the gold goes now (it won't come home with you); a relic buy opens its pick.
+  buy(what) {
+    const s = this.stall.find(s => s.what === what), it = STALL[what], text = NPC_TEXT.peddler;
+    if (!s || s.sold || this.gold < s.price) { this.log('골드가 모자라다.', 'bad'); return; }
+    this.gold -= s.price;
+    s.sold = true;
+    this.log(`${josa(it.name, '을', '를')} 샀다. -${s.price}G`, 'good');
+    this.emit('buy', { what, price: s.price });
+    if (what === 'potion' || what === 'bomb') this.p.items[what] = (this.p.items[what] || 0) + 1;
+    else if (what === 'grow') this.queue.push({ kind: 'talk', who: 'peddler', text: text.grow, smithPick: true, noReroll: true });
+    else if (what === 'box') this.queue.push({ kind: 'talk', who: 'peddler', text: text.box, opts: this.offers(3), noReroll: true });
   }
 
   gainRelic(id) {
@@ -1120,6 +1356,38 @@ export class Run {
     this.emit('evolve', { id, tier: 0, fused: true, x: this.p.x, y: this.p.y });
   }
 
+  // A pickup beside (x, y): the first free floor tile around it, or right there.
+  dropNear(x, y, q) {
+    const t = DIRS8.map(([dx, dy]) => ({ x: x + dx, y: y + dy }))
+      .find(t => this.passable(t.x, t.y) && this.map.tiles[idx(t.x, t.y)] === FLOOR && !isTrap(this.map.ter[idx(t.x, t.y)]) && !this.pickups.some(o => o.x === t.x && o.y === t.y));
+    this.pickups.push({ ...(t || { x, y }), ...q });
+  }
+
+  // 별사탕, BALL x PIT's fission: several of your relics grow one after another (다다다닥), and whatever
+  // that completes evolves at the end. A relic whose recipe partner you also hold is likelier to be
+  // picked, so a candy tends to finish something (nothing on screen says which). With nothing left to
+  // grow, a step pays gold.
+  fission(n, x, y) {
+    const rl = this.p.relics, steps = [];
+    let gold = 0;
+    for (let k = 0; k < n; k++) {
+      const ids = Object.keys(rl).filter(id => rl[id] < maxLevelOf(id));
+      if (!ids.length) { gold += 6 + 4 * Math.floor((this.floor - 1) / B.FLOORS_PER_ZONE); steps.push({ gold: true }); continue; }
+      const w = ids.map(id => (recipesWith(id).some(rc => rl[rc.a === id ? rc.b : rc.a]) ? 3 : 1));
+      let r = Math.random() * w.reduce((a, b) => a + b, 0), id = ids[0];
+      for (let i = 0; i < ids.length; i++) if ((r -= w[i]) < 0) { id = ids[i]; break; }
+      this.withMaxHpDelta(() => { rl[id]++; });
+      steps.push({ id, lvl: rl[id] });
+    }
+    this.meta.stats.candies = (this.meta.stats.candies || 0) + 1;
+    const grown = steps.filter(t => t.id).map(t => `${RELICS[t.id].name} Lv${t.lvl}`);
+    this.log(`별사탕! ${grown.length ? grown.join(', ') : '더 자랄 유물이 없다'}`, 'evo');
+    this.emit('fission', { x, y, steps });
+    if (gold) this.addGold(gold);
+    this.checkRecipes();
+    this.emit('relics');
+  }
+
   // Any recipe you now hold the two halves of goes off by itself, the first time as a discovery.
   checkRecipes() {
     const rl = this.p.relics, ready = id => rl[id] && (tierOf(id) > 0 || rl[id] >= MAX_LEVEL);
@@ -1133,8 +1401,7 @@ export class Run {
         this.meta.stats.evos++;
         if (first) { this.newRecipes.push(key); this.gold += DISCOVERY_GOLD[tier]; }
         this.log(`${['', '진화', '전설', '신화'][tier]}! ${RELICS[rc.a].name} + ${RELICS[rc.b].name} → ${RELICS[rc.id].name}`, 'evo');
-        this.emit('evolve', { id: rc.id, tier, first, x: this.p.x, y: this.p.y });
-        this.emit('banner', { text: RELICS[rc.id].name });
+        this.emit('evolve', { id: rc.id, a: rc.a, b: rc.b, tier, first, known: RECIPES.filter(r => this.meta.recipes[recipeKey(r)]).length, x: this.p.x, y: this.p.y });
         again = true;
       }
     }
@@ -1146,14 +1413,22 @@ export class Run {
     this.over = true;
     this.queue = [];
     const stats = this.meta.stats;
-    if (won) { stats.wins++; this.gold += B.VICTORY_BONUS; }
+    let stepOpened = 0;
+    if (won) {
+      stats.wins++;
+      this.gold += B.VICTORY_BONUS;
+      // winning at the top step opens the next one
+      const before = B.stepsOpen(this.meta);
+      stats.topStep = Math.max(B.topStep(this.meta), this.danger || 0);
+      if (B.stepsOpen(this.meta) > before) stepOpened = B.stepsOpen(this.meta);
+    }
     this.meta.gold += this.gold;
     stats.bestGold = Math.max(stats.bestGold, this.gold);
     const before = { stats: this.startStats };
     const newlyUnlockable = Object.entries(CHARACTERS)
       .filter(([id, c]) => c.cond && !this.meta.chars[id] && c.cond.val(this.meta) >= c.cond.goal && c.cond.val(before) < c.cond.goal)
       .map(([, c]) => c.name);
-    this.emit('end', { won, newlyUnlockable });
+    this.emit('end', { won, newlyUnlockable, stepOpened });
   }
 }
 Run.nextId = 1;

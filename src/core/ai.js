@@ -10,8 +10,8 @@
 import { lineOfSight, distMap, idx, passable } from './dungeon.js';
 import { SLEEP_MIN } from '../data/terrain.js';
 import { NPC_TEXT } from '../data/npcs.js';
-import { MAP_W } from '../data/balance.js';
-import { cheb, shuffle, josa, rint, DIRS8 } from './util.js';
+import { MAP_W, BEE_HOME, SCREAM_RANGE } from '../data/balance.js';
+import { cheb, shuffle, josa, rint, pick, DIRS8 } from './util.js';
 import { onEnter } from './world.js';
 
 export const WAKE_AT = 10;
@@ -25,14 +25,18 @@ export function canSee(run, e, range) {
 export function enemyAct(run, e, dmP) {
   const d = e.d, p = run.p;
   if (e.state === 'npc') {
-    if (!e.greeted && run.isVisible(e.x, e.y) && cheb(e, p) <= 6) { e.greeted = true; run.say(e, NPC_TEXT[e.type].greet); }
+    if (!e.greeted && run.isVisible(e.x, e.y) && cheb(e, p) <= 6) { e.greeted = true; run.say(e, NPC_TEXT[e.type].call || NPC_TEXT[e.type].greet); }
     return;
   }
   if (e.state === 'hide' || e.state === 'stone') return;
   if (e.stun > 0) { e.stun--; return; }
   if (e.stoneT > 0) { e.stoneT--; return; }
-  if (run.calm(e)) { calmAct(run, e); return; }
+  // bees after you turn back once you are far enough from their stump
+  const hive = d.swarm && run.map.hive;
+  if (hive && !run.calm(e) && cheb(p, hive) > BEE_HOME) { e.angry = false; e.state = 'wander'; e.aim = false; }
+  if (run.calm(e)) { if (hive && e.state !== 'sleep') hover(run, e, hive); else calmAct(run, e); return; }
   if (e.state === 'sleep') { sleepTick(run, e); return; }
+  if (d.screams) { scream(run, e, dmP); return; }
   if (d.slow) { e.skip = !e.skip; if (e.skip) return; }
   e.timer++;
   if (e.burn > 0 && !d.boss && Math.random() < 0.5) { randomStep(run, e); return; }
@@ -87,10 +91,32 @@ function calmAct(run, e) {
   wander(run, e);
 }
 
+// A calm bee buzzes about its stump, never more than a couple of steps away.
+function hover(run, e, hive) {
+  if (cheb(e, hive) > 2) { stepToward(run, e, distMap(run.map, hive.x, hive.y)); return; }
+  if (Math.random() < 0.4) return;
+  const steps = DIRS8.map(([dx, dy]) => ({ x: e.x + dx, y: e.y + dy })).filter(t => canStep(run, e, t.x, t.y) && cheb(t, hive) <= 2);
+  const t = steps[Math.floor(Math.random() * steps.length)];
+  if (t) moveEnemy(run, e, t.x, t.y);
+}
+
+// The stump was robbed (or a bee was hit): every bee that is awake comes after you. Returns how many.
+export function angerSwarm(run) {
+  let n = 0;
+  for (const b of run.enemies) {
+    if (!b.d.swarm || b.hp <= 0 || b.state === 'sleep') continue;
+    b.angry = true; b.state = 'hunt'; b.wake = 0; b.doze = 0;
+    b.last = { x: run.p.x, y: run.p.y };
+    n++;
+  }
+  if (n) run.emit('swarm', { x: run.map.hive?.x, y: run.map.hive?.y });
+  return n;
+}
+
 // A mimic drops its act, or a statue comes to life, and goes straight for you.
 export function awaken(run, e) {
   if (e.state !== 'hide' && e.state !== 'stone') return;
-  run.log(e.state === 'hide' ? '상자가 입을 쩍 벌렸다! 미믹이다!' : '허수아비가 삐걱삐걱 움직이기 시작했다!', 'warn');
+  run.log(e.state === 'hide' ? '상자에서 집게가 튀어나왔다! 소라게다!' : '허수아비가 삐걱삐걱 움직이기 시작했다!', 'warn');
   e.state = 'hunt';
   e.last = { x: run.p.x, y: run.p.y };
   run.say(e, '!');
@@ -107,6 +133,7 @@ export function rouse(run, e, by, x, y) {
   }
   if (run.calm(e)) {
     if (by !== 'hit') return false; // noise doesn't bother it
+    if (e.d.swarm) angerSwarm(run);
     e.angry = true;
     e.state = 'hunt'; e.wake = 0; e.doze = 0;
     e.last = { x: run.p.x, y: run.p.y };
@@ -288,6 +315,27 @@ function flee(run, e, dm, sees) {
     run.damagePlayer(e.atk, e, 'melee');
   }
   if (!sees && dm[idx(e.x, e.y)] >= 8) { e.state = 'wander'; e.target = null; }
+}
+
+// A screaming root runs from you yelling every turn, so everyone near comes to see. Caught, it goes
+// quiet; asleep (pollen), it hushes; left alone, it digs back into the ground after a while.
+function scream(run, e, dm) {
+  if (--e.left <= 0) {
+    e.hp = 0;
+    run.emit('burrow', { enemy: e });
+    if (run.isVisible(e.x, e.y)) run.log('비명 뿌리가 땅속으로 쏙 숨었다. 조용해졌다.');
+    return;
+  }
+  const safe = safetyMap(dm);
+  let best = null, bs = safe[idx(e.x, e.y)];
+  for (const [dx, dy] of shuffle(DIRS8.slice())) {
+    const nx = e.x + dx, ny = e.y + dy;
+    if (canStep(run, e, nx, ny) && safe[idx(nx, ny)] < bs) { bs = safe[idx(nx, ny)]; best = [nx, ny]; }
+  }
+  if (best) moveEnemy(run, e, ...best);
+  if (e.left % 2 === 0) run.say(e, pick(['꺄아아!', '꺄악!', '으아앙!', '살려줘!']));
+  run.emit('scream', { x: e.x, y: e.y });
+  run.noise(e.x, e.y, SCREAM_RANGE);
 }
 
 // Brogue's "safety map": start from your distance times -1.2, then let every tile settle to at most

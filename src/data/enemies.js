@@ -11,6 +11,10 @@
 //   blink: teleports away when you get next to it, then aims · stoneSkin: after it attacks it turns to
 //   stone for a turn and barely feels hits
 // gimmick: not part of a zone's roster; placed by special rooms and grows with the zone (see gimmickScale)
+// swarm: bees of the honey stump (map.hive); anger one and every one awake comes, and they all go
+//   home once you are far enough from the stump
+// screams: a screaming root pulled from a weed patch; it never fights, only runs off yelling (every
+//   critter nearby hears it) until it is caught or digs back in (ai.js scream)
 // npc: someone to talk to; bumping into them talks instead of attacking, and they cannot be hurt
 
 export const ENEMIES = {
@@ -18,7 +22,7 @@ export const ENEMIES = {
   slime:    { name: '슬라임', sprite: 'slime',  hp: 12, atk: 5, xp: 3, slow: true, splits: true, tip: '느리지만, 때리면 둘로 갈라진다.' },
   goblin:   { name: '도토리 다람쥐', sprite: 'goblin', hp: 10, atk: 4, xp: 4, thief: true, tip: '골드를 훔쳐 달아난다. 잡으면 돌려받는다.' },
   bat:      { name: '박쥐',   sprite: 'bat',    hp: 8,  atk: 4, xp: 4, fast: true, hitAndRun: true, tip: '빠르다. 물고 나면 물러났다가 다시 온다.' },
-  skel:     { name: '독버섯', sprite: 'skel',   hp: 15, atk: 5, xp: 6, bones: true, tip: '쓰러질 때 포자가 터져 옆 칸을 다치게 한다.' },
+  skel:     { name: '독버섯', sprite: 'skel',   hp: 15, atk: 5, xp: 6, bones: true, tip: '쓰러지면 부풀었다가 다음 턴에 터진다. 한 걸음 물러나면 안 맞는다.' },
   spider:   { name: '거미',   sprite: 'spider', hp: 9,  atk: 4, xp: 5, ranged: 5, tip: '조준선을 그은 다음 턴에 쏜다. 그 칸에서 벗어나면 피할 수 있다.' },
   knight:   { name: '멧돼지', sprite: 'knight', hp: 23, atk: 6, def: 1, xp: 10, charge: 5, tip: '붉은 길을 그은 다음 돌진한다. 옆으로 비키면 부딪혀 어지러워한다.' },
   wizard:   { name: '여우',   sprite: 'wizard', hp: 12, atk: 6, xp: 9, ranged: 6, blink: true, tip: '조준한 다음 턴에 여우불을 쏜다. 다가가면 둔갑해서 달아난다.' },
@@ -26,19 +30,24 @@ export const ENEMIES = {
   turtle:   { name: '반짝 거북', sprite: 'turtle', hp: 26, atk: 5, def: 1, xp: 10, slow: true, peaceful: true, treasure: true,
               tip: '먼저 건드리지 않으면 싸우지 않는다. 튼튼하고 세지만 쓰러뜨리면 보물을 떨군다.' },
 
-  mimic:    { name: '미믹', sprite: 'mimic', hp: 10, atk: 3, xp: 6, treasure: true, gimmick: true,
-              tip: '보물 상자인 척하다가 문다. 쓰러뜨리면 진짜 보물을 떨군다.' },
+  mimic:    { name: '소라게 상자', sprite: 'mimic', hp: 10, atk: 3, xp: 6, treasure: true, gimmick: true,
+              tip: '보물 상자에 눌러 사는 소라게. 열려고 하면 집게로 문다. 쓰러뜨리면 진짜 보물을 떨군다.' },
   statue:   { name: '허수아비', sprite: 'statue', hp: 18, atk: 3, def: 1, xp: 10, slow: true, gimmick: true,
               tip: '움직이는 허수아비. 느리지만 튼튼하다.', stoneTip: '보물 상자를 지키듯 서 있는 허수아비다.' },
-  wraith:   { name: '원혼', sprite: 'wraith', hp: 8, atk: 3, xp: 4, gimmick: true, tip: '무덤을 파헤쳐서 깨어났다.' },
-  thief:    { name: '목걸이 도둑 쥐', sprite: 'thief', hp: 14, atk: 3, xp: 8, gimmick: true, quest: true,
-              tip: '꼬마 유령의 반짝돌 목걸이를 물고 있다.' },
-  ghost:    { name: '꼬마 유령', sprite: 'ghostNpc', hp: 1, atk: 0, xp: 0, npc: true, peaceful: true, tip: '말을 걸려면 부딪혀 보자.' },
+  wraith:   { name: '화난 청설모', sprite: 'wraith', hp: 8, atk: 3, xp: 4, gimmick: true, tip: '도토리 창고를 파헤쳐서 화가 났다.' },
+  thief:    { name: '리본 도둑 들쥐', sprite: 'thief', hp: 14, atk: 3, xp: 8, gimmick: true, quest: true,
+              tip: '울보 아기새의 리본을 물고 있다.' },
+  root:     { name: '비명 뿌리', sprite: 'root', hp: 3, atk: 0, xp: 2, screams: true, gimmick: true,
+              tip: '풀밭에 숨어 있다가 뽑히면 꺄아아 소리치며 달아난다. 그 소리에 적이 몰려온다. 잡으면 조용해지고, 놔두면 잠시 뒤 땅속으로 숨는다.' },
+  bee:      { name: '꿀벌', sprite: 'bee', hp: 4, atk: 1, xp: 1, fast: true, peaceful: true, swarm: true, gimmick: true,
+              tip: '벌집 둘레를 윙윙 맴돈다. 벌집이나 벌을 건드리면 떼로 덤비지만, 멀리 달아나면 집으로 돌아간다.' },
+  ghost:    { name: '울보 아기새', sprite: 'ghostNpc', hp: 1, atk: 0, xp: 0, npc: true, peaceful: true, tip: '말을 걸려면 부딪혀 보자.' },
   smith:    { name: '두더지 대장장이', sprite: 'mole', hp: 1, atk: 0, xp: 0, npc: true, peaceful: true, tip: '말을 걸려면 부딪혀 보자.' },
+  peddler:  { name: '상점 주인', sprite: 'peddler', hp: 1, atk: 0, xp: 0, npc: true, peaceful: true, tip: '보스 앞에 좌판을 폈다. 부딪히면 물건을 판다. 여기서 쓴 골드는 마을로 못 가져간다.' },
 
-  ratking:  { name: '왕쥐',          sprite: 'rat',  hp: 45,  atk: 3, xp: 20, boss: true, tip: '가끔 쥐를 불러낸다.' },
-  skelking: { name: '버섯 왕',       sprite: 'skel', hp: 80,  atk: 5, xp: 30, boss: true, tip: '붉게 표시된 칸을 내려친다. 칸 밖으로 피해야 한다.' },
-  lord:     { name: '박쥐 대왕', sprite: 'vampLord', hp: 120, atk: 6, xp: 40, boss: true, ranged: 7, tip: '순간이동한 뒤 조준한다. 때리면 체력을 빨아들인다.' },
+  ratking:  { name: '왕쥐',          sprite: 'rat',  hp: 45,  atk: 3, xp: 20, boss: true, intro: '찍찍! 이 들판은 내 거다!', tip: '가끔 쥐를 불러낸다.' },
+  skelking: { name: '버섯 왕',       sprite: 'skel', hp: 100, atk: 6, xp: 30, boss: true, intro: '포자 냄새 좋지? 후후후…', tip: '붉게 표시된 칸을 내려친다. 칸 밖으로 피해야 한다. 내려친 자리엔 꼬마 독버섯이 솟는다.' },
+  lord:     { name: '박쥐 대왕', sprite: 'vampLord', hp: 140, atk: 8, xp: 40, boss: true, ranged: 7, intro: '밤마다 들판이 왜 뒤척였는지 궁금했지?', tip: '순간이동한 뒤 조준한다. 때리면 체력을 빨아들인다. 반쯤 다치면 화가 나서 박쥐 떼를 부른다.' },
 };
 
 // Three floors per zone; the third floor of each zone is the boss.

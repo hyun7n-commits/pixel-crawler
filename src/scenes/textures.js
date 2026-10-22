@@ -5,8 +5,25 @@ import { FACES, faceRows, faceKey } from '../data/faces.js';
 import { CHARACTERS } from '../data/characters.js';
 import { ZONES } from '../data/enemies.js';
 import { ORES, RAINBOW } from '../data/ores.js';
+import { ENEMIES } from '../data/enemies.js';
+import { FOLK } from '../data/village.js';
+import { HI, faceRows32, up2 } from '../data/sprites32.js';
 
 export const TILE = 16; // world pixels per tile
+
+// Characters (heroes, villagers, critters) can be drawn at 32px and shown at half scale (data/sprites32.js).
+// The choice is kept per browser; on by default.
+export const HIRES = (() => { try { return localStorage.getItem('pixel-crawler-hires') !== '0'; } catch { return true; } })();
+export function setHires(on) { try { localStorage.setItem('pixel-crawler-hires', on ? '1' : '0'); } catch { /* private mode */ } }
+const HEROES = new Set(Object.values(CHARACTERS).map(c => c.sprite));
+const CHARS = new Set([...HEROES, ...Object.values(ENEMIES).map(e => e.sprite), ...Object.values(FOLK).map(f => f.sprite)]);
+const hiCache = {};
+function charRows(name) {
+  if (!HIRES || !CHARS.has(name.replace(/_walk\d$/, ''))) return SPR[name] || TER_SPR[name];
+  return (hiCache[name] ||= HI[name] || up2(SPR[name]));
+}
+// how much to scale a sprite so it takes one tile whatever its texture size
+export const texScale = s => TILE / s.frame.height;
 
 // `recolor(ch, i, j)` may return a different colour for a pixel (used for the ore grades).
 function spriteCanvas(rows, recolor) {
@@ -149,7 +166,7 @@ export function oreFrame(scene, ore, x, y, tier = ore.tier) {
 const domCache = {};
 export function spriteForDom(name) {
   const grade = name.startsWith('t_ore_') && ORES.find(o => `t_ore_${o.id}` === name);
-  return (domCache[name] ||= grade ? oreCanvas(grade) : spriteCanvas(SPR[name]));
+  return (domCache[name] ||= grade ? oreCanvas(grade) : spriteCanvas(charRows(name)));
 }
 
 // Small deterministic noise so tiles look hand-drawn but never flicker.
@@ -383,10 +400,10 @@ function glowCanvas() {
   return c;
 }
 
-// The see-through crystal a vault relic sits in (drawn over the relic, so it looks shut inside).
+// The glass cloche a secret-garden relic sits under (drawn over the relic, so it looks shut inside).
 const CRYSTAL = [
-  '....oooo....', '...o....o...', '..o.h....o..', '.o.h......o.', 'o.h........o', 'o.h........o', 'o..........o',
-  'o..........o', 'o..........o', 'o.........so', '.o.......so.', '..o....sso..', '...o.ss.o...', '....oooo....',
+  '.....oo.....', '.....oo.....', '...oooooo...', '..o.h....o..', '.o.h......o.', '.o.h......o.', 'o.h........o',
+  'o.h........o', 'o..........o', 'o.........so', 'o........sso', 'o.......ss.o', 'oooooooooooo', '.oooooooooo.',
 ];
 function crystalCanvas() {
   const c = document.createElement('canvas'), w = CRYSTAL[0].length, h = CRYSTAL.length;
@@ -410,9 +427,11 @@ export function wallKey(scene, zi, mask, v = 0) {
   if (!scene.textures.exists(key)) scene.textures.addCanvas(key, wallTile(ZONES[zi], zi, mask, v));
   return key;
 }
-export function waterKey(scene, zi, frame, mask) {
-  const key = `z${zi}_water${frame}_${mask}`;
-  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, waterTile(ZONES[zi], frame, mask));
+// `warm`: a hot spring's pool, milky jade instead of the zone's blue
+export function waterKey(scene, zi, frame, mask, warm = false) {
+  const key = `z${zi}_water${frame}_${mask}${warm ? '_warm' : ''}`;
+  const z = warm ? { ...ZONES[zi], water: '#5fb8b0', waterLight: '#d2f4ec' } : ZONES[zi];
+  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, waterTile(z, frame, mask));
   return key;
 }
 export function shadeKey(scene, mask) {
@@ -467,38 +486,15 @@ function flatGrass(variant) {
   return c;
 }
 
-// A pressure plate with the trap's sign in the middle, readable at a glance.
-const TRAP_SIGNS = {
-  trapSpike: ['#e6e9f2', ['.w..w..w', 'www.www.', '........', '..w..w..', '.wwwwww.', '........', '.w..w..w', 'www.www.']],
-  trapSleep: ['#c49af2', ['wwwww...', '...w....', '..w.....', '.w......', 'wwwww...', '....www.', '.....w..', '....www.']],
-  trapAlarm: ['#f4cf4f', ['...ww...', '..wwww..', '.wwwwww.', '.wwwwww.', '.wwwwww.', 'wwwwwwww', '........', '...ww...']],
-  trapSummon: ['#ff6b8a', ['..wwww..', '.w....w.', 'w..ww..w', 'w.wwww.w', 'w.wwww.w', 'w..ww..w', '.w....w.', '..wwww..']],
-  trapOff: [null, []],
-};
-function trapPlate(color, sign) {
-  const [c, g] = canvas();
-  g.fillStyle = '#15111c'; g.fillRect(2, 2, 12, 12);
-  g.fillStyle = '#3a3646'; g.fillRect(3, 3, 10, 10);
-  g.fillStyle = '#58536a'; g.fillRect(3, 3, 10, 1); g.fillRect(3, 3, 1, 10);
-  g.fillStyle = '#26222f'; g.fillRect(4, 12, 9, 1); g.fillRect(12, 4, 1, 9);
-  if (!color) { // spent: a dull cracked plate
-    g.fillStyle = '#15111c';
-    [[5, 5], [6, 6], [7, 6], [8, 7], [8, 8], [9, 9], [10, 9]].forEach(([x, y]) => g.fillRect(x, y, 1, 1));
-    return c;
-  }
-  g.fillStyle = color;
-  sign.forEach((row, j) => { for (let i = 0; i < 8; i++) if (row[i] === 'w') g.fillRect(4 + i, 4 + j, 1, 1); });
-  return c;
-}
 
 export function buildTextures(scene) {
   const tx = scene.textures;
-  for (const [name, rows] of Object.entries(SPR)) if (!tx.exists(name)) tx.addCanvas(name, spriteCanvas(rows));
+  for (const name of Object.keys(SPR)) if (!tx.exists(name)) tx.addCanvas(name, spriteCanvas(charRows(name)));
   // every hero frame (standing and both walk steps) gets one copy per face: hit, grit, teary, sparkle, shock
-  const heroes = new Set(Object.values(CHARACTERS).map(c => c.sprite));
   for (const [name, rows] of Object.entries(SPR)) {
-    if (!heroes.has(name.replace(/_walk\d$/, ''))) continue;
-    for (const expr of Object.keys(FACES)) if (!tx.exists(faceKey(name, expr))) tx.addCanvas(faceKey(name, expr), spriteCanvas(faceRows(rows, expr)));
+    if (!HEROES.has(name.replace(/_walk\d$/, ''))) continue;
+    const face = expr => (!HIRES ? faceRows(rows, expr) : HI[name] ? faceRows32(HI[name], expr) : up2(faceRows(rows, expr)));
+    for (const expr of Object.keys(FACES)) if (!tx.exists(faceKey(name, expr))) tx.addCanvas(faceKey(name, expr), spriteCanvas(face(expr)));
   }
   for (const [name, rows] of Object.entries(TER_SPR)) if (!tx.exists(`t_${name}`)) tx.addCanvas(`t_${name}`, spriteCanvas(rows));
   for (const grade of ORES) {
@@ -510,7 +506,6 @@ export function buildTextures(scene) {
     tx.addCanvas(`t_brush${v}`, tallGrass(v));
     tx.addCanvas(`t_grass${v}`, flatGrass(v));
   }
-  for (const [name, [color, sign]] of Object.entries(TRAP_SIGNS)) tx.addCanvas(`t_${name}`, trapPlate(color, sign));
   ZONES.forEach((z, zi) => {
     for (let v = 0; v < FLOOR_VARIANTS; v++) tx.addCanvas(`z${zi}_floor${v}`, floorTile(z, zi, v));
   });

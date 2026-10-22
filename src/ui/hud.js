@@ -2,7 +2,7 @@
 // On a phone the same panel is a bag sheet, with a slim status bar on top and a toolbar below.
 
 import { $, el, button, icon } from './dom.js';
-import { RELICS, MAX_SLOTS, MAX_LEVEL, tierOf, maxLevelOf, isFused, fusedParts, relicName } from '../data/relics.js';
+import { RELICS, MAX_SLOTS, MAX_LEVEL, tierOf, maxLevelOf, isFused, fusedParts, relicName, recipesWith, recipeKey } from '../data/relics.js';
 import { recipeFor, relicIcon } from './recipe.js';
 
 const TIER_CLASS = ['', ' evo', ' legend', ' myth'];
@@ -12,12 +12,14 @@ import { ITEMS } from '../data/items.js';
 import { LAST_FLOOR, xpToLevel } from '../data/balance.js';
 import { zoneOf, isBossFloor } from '../core/run.js';
 import { playerStatus } from './tip.js';
+import { wait, fissionMs, FISSION_LEAD, FISSION_STEP } from './beat.js';
 
 // What the quest folk asked of you and have not had back yet.
 function questLines(run) {
-  const { ghost, smith } = run.quests, out = [];
-  if (ghost.state === 'asked') out.push(`꼬마 유령의 부탁: 목걸이 도둑 쥐를 잡자 (${ghost.floor}구역)`);
-  if (ghost.state === 'found') out.push(`꼬마 유령에게 목걸이를 돌려주자 (${ghost.floor}구역)`);
+  const { ghost, smith } = run.quests, out = [], q = run.request;
+  if (q) out.push(q.done ? `조합 의뢰 완료! ${q.text} (+${q.pay}G)` : `조합 의뢰: ${q.text} (${q.got}/${q.n}) · 일당 ${q.pay}G`);
+  if (ghost.state === 'asked') out.push(`울보 아기새의 부탁: 리본 도둑 들쥐를 잡자 (${ghost.floor}구역)`);
+  if (ghost.state === 'found') out.push(`울보 아기새에게 리본을 돌려주자 (${ghost.floor}구역)`);
   if (smith.state === 'asked') {
     out.push(smith.chunk === null ? `대장장이의 부탁: ${smith.floor}구역 반짝 바위를 끝까지 캐자` : `대장장이에게 반짝돌 덩어리를 가져가자 (${smith.floor}구역)`);
   }
@@ -64,6 +66,18 @@ export class Hud {
     }
   }
 
+  // A star candy's burst: each relic it grows gives its slot a little bounce, in step with the field.
+  fission(d) {
+    const delay = wait(d, fissionMs(d.steps.length));
+    d.steps.forEach((st, k) => st.id && setTimeout(() => {
+      const b = $('relics').querySelector(`[data-id="${st.id}"]`);
+      if (!b) return;
+      b.classList.remove('ding');
+      void b.offsetWidth;
+      b.classList.add('ding');
+    }, delay + FISSION_LEAD + k * FISSION_STEP));
+  }
+
   banner(text) {
     const b = $('banner');
     b.textContent = text;
@@ -74,7 +88,8 @@ export class Hud {
 
   update(run) {
     const s = run.stat(), p = run.p;
-    $('floorLabel').innerHTML = `${run.floor}구역<small>${isBossFloor(run.floor) ? '보스' : zoneOf(run.floor).name} · ${LAST_FLOOR}구역까지</small>`;
+    const star = run.danger ? ` ★${run.danger}` : '';
+    $('floorLabel').innerHTML = `${run.floor}구역<small>${isBossFloor(run.floor) ? '보스' : zoneOf(run.floor).name} · ${LAST_FLOOR}구역까지${star}</small>`;
     $('goldNow').textContent = `${run.gold}G`;
     $('hpText').textContent = `${Math.max(0, p.hp)} / ${s.maxHp}`;
     $('hpbar').firstElementChild.style.width = `${(Math.max(0, p.hp) / s.maxHp) * 100}%`;
@@ -92,13 +107,16 @@ export class Hud {
     $('quests').innerHTML = '';
     for (const t of questLines(run)) $('quests').append(el('div', 'quest', t));
 
-    $('mFloor').innerHTML = `${run.floor}구역<small>${isBossFloor(run.floor) ? '보스' : zoneOf(run.floor).name}</small>`;
+    $('mFloor').innerHTML = `${run.floor}구역<small>${isBossFloor(run.floor) ? '보스' : zoneOf(run.floor).name}${run.danger ? ` ★${run.danger}` : ''}</small>`;
     $('mGold').textContent = `${run.gold}G`;
     $('mHpText').textContent = `${Math.max(0, p.hp)} / ${s.maxHp}`;
     $('mHp').firstElementChild.style.width = $('hpbar').firstElementChild.style.width;
     $('mXp').firstElementChild.style.width = $('xpbar').firstElementChild.style.width;
     $('mStatus').innerHTML = '';
     for (const t of st) $('mStatus').append(el('span', 'chip', t));
+    // phone: the request of the day as a small chip until it is done
+    const q = run.request;
+    if (q && !q.done) $('mStatus').append(el('span', 'chip req', `의뢰 ${q.got}/${q.n}`));
     this.renderBar(run);
 
     const ids = Object.keys(p.relics);
@@ -114,6 +132,7 @@ export class Hud {
       });
       b.append(relicIcon(id), el('span', 'lv', maxLevelOf(id) === 1 ? '★' : String(p.relics[id])));
       b.setAttribute('aria-label', relicName(id));
+      b.dataset.id = id;
       b.setAttribute('aria-pressed', String(this.selected === id));
       box.append(b);
     }
@@ -123,6 +142,9 @@ export class Hud {
       const id = this.selected, lv = p.relics[id];
       const tag = isFused(id) ? ' (합체)' : maxLevelOf(id) === 1 ? TIER_NAME[tierOf(id)] : `${TIER_NAME[tierOf(id)]} Lv${lv}`;
       info.innerHTML = `<b>${relicName(id)}${tag}</b> · ${relicDesc(id, lv)}`;
+      // how many of the recipes this relic goes into you have found; the rest stay a secret
+      const uses = isFused(id) ? [] : recipesWith(id);
+      if (uses.length) info.append(el('div', 'rc-count', `이 유물이 들어가는 조합 ${uses.filter(rc => run.meta.recipes[recipeKey(rc)]).length}/${uses.length} 찾음`));
       const rc = recipeFor(run, id);
       if (rc) info.append(rc);
     } else {

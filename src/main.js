@@ -3,20 +3,29 @@
 /* global Phaser */
 import { DungeonScene } from './scenes/DungeonScene.js';
 import { VillageScene } from './scenes/VillageScene.js';
-import { Run } from './core/run.js';
+import { StoryScene } from './scenes/StoryScene.js';
+import { playStory } from './ui/story.js';
+import { Run, isBossFloor, BOMB_RANGE } from './core/run.js';
 import { loadMeta, saveMeta } from './core/save.js';
+import { suspend, resume, clearSuspended } from './core/suspend.js';
 import { pathTo, idx, isBump, isStairs } from './core/dungeon.js';
 import { ENEMIES } from './data/enemies.js';
 import { cheb } from './core/util.js';
-import { isTrap } from './data/terrain.js';
+import { T, isTrap } from './data/terrain.js';
 import { Hud, lowHealth } from './ui/hud.js';
 import { renderPanel, renderVillageHud } from './ui/hub.js';
 import { showChoice, showSummary, showTalk, closeTalk, closeModal, modalOpen } from './ui/modal.js';
+import { showEvolve } from './ui/evo.js';
+import { showsLeft } from './ui/beat.js';
+import { bossCard } from './ui/bosscard.js';
 import { FOLK } from './data/village.js';
+import { DECOR } from './data/home.js';
 import { CHARACTERS } from './data/characters.js';
 import { describeTile } from './ui/tip.js';
 import { $ } from './ui/dom.js';
 import * as sfx from './audio/sfx.js';
+import { setMusic, musicOff, setMusicOff } from './audio/music.js';
+import { HIRES, setHires } from './scenes/textures.js';
 
 let meta = loadMeta();
 let run = null;
@@ -38,7 +47,7 @@ const hud = new Hud({
   onBag: () => setBag(!$('game').classList.contains('bag-open')),
 });
 
-const canAct = () => run && !run.over && !modalOpen() && run.canAct();
+const canAct = () => run && !run.over && !modalOpen() && run.canAct() && !scene?.busy();
 const clearPath = () => { path = []; chase = null; if (scene) scene.path = path; };
 const tipAt = () => pinned || scene?.hover;
 
@@ -65,6 +74,7 @@ function showTip(h) {
   let text = '';
   if (run && aiming) {
     text = '폭탄을 던질 곳을 고른다 · 취소: Esc 또는 폭탄 버튼';
+    if (!matchMedia('(pointer: coarse)').matches) text += ' · 방향키로 옮기고 Enter로 던진다';
     if (h && run.canThrowAt(h.x, h.y) && cheb(h, run.p) <= 1) text += '\n바로 옆이라 나도 맞는다!';
   } else if (run && h) text = describeTile(run, h.x, h.y, h === pinned);
   tip.textContent = text;
@@ -78,6 +88,7 @@ const village = () => game.scene.getScene('village');
 
 function showVillage(from) {
   sfx.setHeartbeat(0);
+  setMusic('village');
   inVillage = true;
   pinned = null;
   showTip(null);
@@ -93,11 +104,42 @@ function showVillage(from) {
   renderVillageHud(meta);
 }
 
-function startRun() {
+// The picture book (ui/story.js): the opening on the very first launch, a license from the guild the
+// first time each zone boss falls, and the ending after the first win. Each is shown once.
+function showStory(id, then) {
+  sfx.setHeartbeat(0);
+  setMusic(id === 'ending' ? 'meadow' : 'village');
+  inVillage = false;
+  showTip(null);
+  const g = $('game');
+  g.hidden = false;
+  g.classList.add('village');
+  g.classList.remove('low', 'bag-open');
+  fitCanvas();
+  playStory(game, id, () => {
+    meta.story[id] = true;
+    saveMeta(meta);
+    then?.();
+  });
+}
+
+function afterRunStory() {
+  const st = meta.story, beat = meta.stats.bosses;
+  const id = meta.stats.wins && !st.ending ? 'ending' : ['ratking', 'skelking'].find(b => beat.includes(b) && !st[b]);
+  // the ending covers the licenses that came with it
+  if (id === 'ending') st.ratking = st.skelking = true;
+  if (id) showStory(id, () => showVillage('run'));
+  else showVillage('run');
+}
+
+// `restored`: a run left off last time (core/suspend.js), picked up where it was
+function startRun(left) {
   if (run) return;
+  const restored = left instanceof Run ? left : null;   // a click passes its event here
   sfx.unlockAudio();
   closeModal();
   inVillage = false;
+  $('game').hidden = false;   // a run picked up at launch comes straight here
   $('game').classList.remove('village');
   game.scene.sleep('village');
   game.scene.run('dungeon');
@@ -106,10 +148,16 @@ function startRun() {
   showVillageTip('');
   // the stage changed shape, so measure it again before drawing
   fitCanvas();
-  run = new Run(meta, meta.sel);
+  run = restored || new Run(meta, meta.sel);
   hud.reset();
   run.on(onRunEvent);
   scene.attach(run);
+  if (restored) {
+    setMusic(isBossFloor(run.floor) ? 'boss' : run.zone.style);
+    run.log('하던 토벌을 이어서 한다.', 'good');
+    run.emit('turn');
+    return;
+  }
   run.start();
   // no manual up front: the first runs get one line on how to ask about anything
   if (meta.stats.runs < 2) run.log(TOUCH ? '모르는 게 보이면 꾹 눌러 보자. 설명이 나온다.' : '모르는 게 보이면 마우스를 올려 보자. 설명이 나온다.');
@@ -128,12 +176,39 @@ function talkTo(id, line) {
       onStart: startRun,
       changed: () => { saveMeta(meta); redraw(); renderVillageHud(meta); village().resync(); },
       setMeta: m => { meta = m; closeModal(); showVillage(); },
+      onStory: () => { closeTalk(); showStory('intro', () => showVillage()); },
+    }),
+  });
+}
+
+// Bumping into your own house: the 집 꾸미기 list. Buying a piece closes the sheet so you can watch
+// it go up beside the house.
+function openHome() {
+  const n = (meta.home || []).length, all = n >= DECOR.length;
+  sfx.play('talk');
+  showVillageTip('');
+  showTalk({
+    who: CHARACTERS[meta.sel].sprite, name: '내 집',
+    line: all ? '더 바랄 게 없는 내 집이다!' : n ? '조금씩 내 집 같아진다. 다음엔 뭘 놓을까?' : '조합에서 받은 내 집. 아직 휑하다… 뭐부터 놓을까?',
+    build: (box, redraw) => renderPanel('home', box, {
+      meta,
+      changed: () => { saveMeta(meta); redraw(); renderVillageHud(meta); },
+      onDecor: id => { closeTalk(); sfx.play('buy'); village().showDecor(id); },
     }),
   });
 }
 
 const villageHooks = {
   onTalk: talkTo,
+  onHome: openHome,
+  onPet: () => sfx.play('bark'),
+  // a letter from the mailbox (data/home.js LETTERS)
+  onMail: letter => {
+    const f = FOLK[letter.from];
+    sfx.play('letter');
+    showVillageTip('');
+    showTalk({ who: f.sprite, name: `${f.name}의 편지`, line: letter.text, build: () => {} });
+  },
   onSwap: id => {
     meta.sel = id;
     saveMeta(meta);
@@ -141,6 +216,7 @@ const villageHooks = {
     sfx.play('swap');
     renderVillageHud(meta);
   },
+  onDive: () => { sfx.unlockAudio(); sfx.play('dive'); },
   onLeave: () => startRun(),
   onArrive: id => {
     meta.village.seen[id] = true;
@@ -150,6 +226,12 @@ const villageHooks = {
   },
   onStep: alt => sfx.play('step', alt),
   onHover: (text, flash) => showVillageTip(text, flash),
+  onFind: n => {
+    meta.gold += n;
+    saveMeta(meta);
+    sfx.play('nugget');
+    renderVillageHud(meta);
+  },
 };
 
 // The village's tip line: who someone is when the mouse rests on them, or a short note after a tap.
@@ -167,26 +249,39 @@ function onRunEvent(type, d) {
   sfx.onRunEvent(type, d);
   sfx.setHeartbeat(lowHealth(run));
   if (type === 'log') hud.log(d.text, d.cls);
-  if (type === 'banner') hud.banner(d.text);
+  // a new field's name shows once you have popped out of the burrow
+  if (type === 'banner') setTimeout(() => hud.banner(d.text), Math.max(scene?.busy() ? 650 : 0, showsLeft()));
   if (type === 'discover') hud.banner(`새 발견! ${d.d.combo}`);
-  if (type === 'floor') { clearPath(); seenCount = 0; }
+  if (type === 'request') setTimeout(() => hud.banner(`조합 의뢰 완료! +${d.pay}G`), 300);
+  if (type === 'evolve') showEvolve(d);
+  if (type === 'fission') hud.fission(d);
+  if (type === 'floor') { clearPath(); seenCount = 0; setMusic(isBossFloor(run.floor) ? 'boss' : run.zone.style); }
+  if (type === 'kill' && d.enemy.d.boss && !run.victory) setMusic(run.zone.style);
   if (type === 'phit') clearPath();
   if (type === 'turn') afterTurn();
+  // written down now and then, so closing the page mid-run loses nothing (core/suspend.js)
+  if ((type === 'floor' || (type === 'turn' && run.turn % 10 === 0)) && !run.over) setTimeout(putAway, 0);
   if (type === 'end') {
+    clearSuspended();
+    setMusic(null);
     clearPath();
     setAim(false);
     // what the neighbour will be talking about when you get back
     meta.lastRun = {
       won: d.won, floor: run.floor, zone: run.zone.name, cause: run.cause, kills: run.kills, gold: run.gold,
       recipes: run.newRecipes.length, who: CHARACTERS[meta.sel].name,
+      honey: run.p.honey || 0, ring: !!run.told.ring, spring: !!run.told.spring, weeds: run.weeds || 0, screams: run.screams || 0,
     };
     saveMeta(meta);
     hud.update(run);
-    showSummary({ won: d.won, run, newlyUnlockable: d.newlyUnlockable, onClose: () => { scene.detach(); run = null; showVillage('run'); } });
+    showSummary({ won: d.won, run, newlyUnlockable: d.newlyUnlockable, stepOpened: d.stepOpened, onClose: () => { scene.detach(); run = null; afterRunStory(); } });
   }
 }
 
 function afterTurn() {
+  // a boss comes into view for the first time this floor: it steps out on its card
+  const boss = run.enemies.find(e => e.d.boss && e.hp > 0 && run.isVisible(e.x, e.y));
+  if (boss && run.bossShown !== boss.id) { run.bossShown = boss.id; clearPath(); bossCard(boss); sfx.play('boom'); sfx.play('alert'); }
   // stop walking when a new enemy comes into view or something holds you
   const seen = visibleEnemies();
   if (path.length && (seen > seenCount || run.p.sleep)) clearPath();
@@ -245,7 +340,22 @@ document.addEventListener('keydown', ev => {
     if (ev.key === 'Escape' && closeTalk()) return;
     const n = parseInt(ev.key, 10);
     const b = n && $('modal').querySelector(`.choice[data-key="${n}"]`);
-    if (b) { ev.preventDefault(); b.click(); }
+    if (b) { ev.preventDefault(); b.click(); return; }
+    // keyboard (or a pad through Steam Input): arrows walk the focus through the sheet's buttons,
+    // Enter or Space presses the one in focus, and Enter the sheet's main button when none is (not
+    // Space, which you may still be tapping to wait when the run ends)
+    const buttons = [...$('modal').querySelectorAll('button:not([disabled])')].filter(x => x.offsetParent);
+    const at = buttons.indexOf(document.activeElement);
+    if (ev.key.startsWith('Arrow') && buttons.length) {
+      ev.preventDefault();
+      const back = ev.key === 'ArrowUp' || ev.key === 'ArrowLeft';
+      const next = buttons[at < 0 ? 0 : (at + (back ? -1 : 1) + buttons.length) % buttons.length];
+      next.focus();
+      next.scrollIntoView({ block: 'nearest' });
+    } else if (ev.key === 'Enter' && !ev.repeat && at < 0) {
+      const main = $('modal').querySelector('.btn.primary:not([disabled])');
+      if (main) { ev.preventDefault(); main.click(); }
+    }
     return;
   }
   const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
@@ -258,6 +368,17 @@ document.addEventListener('keydown', ev => {
   }
   if (!run || $('game').hidden) return;
   if (k === 'Escape') { setAim(false); clearPath(); return; }
+  // aiming a bomb from the keyboard: arrows move the mark, Enter or Space throws
+  if (aiming && (KEYS[k] || k === 'Enter' || k === ' ')) {
+    ev.preventDefault();
+    const h = scene.hover && cheb(scene.hover, run.p) <= BOMB_RANGE ? scene.hover : { x: run.p.x, y: run.p.y };
+    if (KEYS[k]) {
+      const t = { x: h.x + KEYS[k][0], y: h.y + KEYS[k][1] };
+      if (cheb(t, run.p) <= BOMB_RANGE) scene.hover = t;
+      showTip(scene.hover);
+    } else if (run.canThrowAt(h.x, h.y) && canAct()) { clearPath(); run.throwBomb(h.x, h.y); setAim(false); }
+    return;
+  }
   if (ARROWS.has(k)) {
     ev.preventDefault(); clearPath(); setAim(false);
     held.add(k); tapped.add(k);
@@ -266,7 +387,16 @@ document.addEventListener('keydown', ev => {
   }
   if (KEYS[k]) { ev.preventDefault(); clearPath(); setAim(false); if (canAct()) run.step(...KEYS[k]); return; }
   if (k === ' ' || k === '.') { ev.preventDefault(); clearPath(); setAim(false); if (canAct()) run.wait(); return; }
-  if (k === '2') { setAim(!aiming); return; }
+  if (k === '2') {
+    setAim(!aiming);
+    // the mark starts on the nearest critter you could hit
+    if (aiming) {
+      const t = run.enemies.filter(e => e.hp > 0 && !e.d.npc && run.isVisible(e.x, e.y) && run.canThrowAt(e.x, e.y)).sort((a, b) => cheb(a, run.p) - cheb(b, run.p))[0];
+      scene.hover = t ? { x: t.x, y: t.y } : { x: run.p.x, y: run.p.y };
+      showTip(scene.hover);
+    }
+    return;
+  }
   if (k === 'm') { toggleSound(); return; }
   const item = { 1: 'potion', 3: 'map' }[k];
   if (item && canAct()) { clearPath(); setAim(false); run.useItem(item); }
@@ -315,7 +445,7 @@ function walkTo(x, y) {
   const m = run.map, p = run.p;
   if (!run.passable(x, y) || !m.explored[idx(x, y)]) return [];
   return pathTo(m, p.x, p.y, x, y,
-    (tx, ty) => (isTrap(m.ter[idx(tx, ty)]) && !m.hidden[idx(tx, ty)]) || m.fire[idx(tx, ty)] > 0,
+    (tx, ty) => (isTrap(m.ter[idx(tx, ty)]) && !m.hidden[idx(tx, ty)]) || m.fire[idx(tx, ty)] > 0 || m.ter[idx(tx, ty)] === T.RING,
     // never change floors by walking over stairs on the way somewhere else
     (tx, ty) => isStairs(m.tiles[idx(tx, ty)]));
 }
@@ -340,11 +470,23 @@ setInterval(() => {
   if (run && !run.over && !modalOpen() && run.queue.length === 0 && (run.p.sleep || run.p.stun)) run.passTurn();
 }, 380);
 
-// sound on/off, remembered between visits
-function showSoundState() { for (const id of ['soundBtn', 'vSound']) $(id).textContent = sfx.isMuted() ? '소리 끔' : '소리 켬'; }
-function toggleSound() { sfx.unlockAudio(); sfx.setMuted(!sfx.isMuted()); showSoundState(); }
+// sound: all on → effects only (no music) → all off, remembered between visits
+function showSoundState() {
+  const t = sfx.isMuted() ? '소리 끔' : musicOff() ? '효과음만' : '소리 켬';
+  for (const id of ['soundBtn', 'vSound']) $(id).textContent = t;
+}
+function toggleSound() {
+  sfx.unlockAudio();
+  if (sfx.isMuted()) { sfx.setMuted(false); setMusicOff(false); }
+  else if (!musicOff()) setMusicOff(true);
+  else sfx.setMuted(true);
+  showSoundState();
+}
 $('soundBtn').addEventListener('click', toggleSound);
 $('vSound').addEventListener('click', toggleSound);
+// 32px or 16px characters: the textures are built once, so switching reloads the page (the save is kept)
+$('vArt').textContent = HIRES ? '그림 32' : '그림 16';
+$('vArt').addEventListener('click', () => { setHires(!HIRES); location.reload(); });
 $('vGo').addEventListener('click', () => startRun());
 showSoundState();
 // browsers allow sound only after the first click or key press
@@ -387,9 +529,17 @@ const game = new Phaser.Game({
       showTip(pinned);
       if (!$('tip').hidden) navigator.vibrate?.(12);
     };
-    // the dungeon scene builds every texture; once it is up, open in the village
-    setTimeout(() => showVillage(), 0);
-  }), new VillageScene(villageHooks)],
+    // the dungeon scene builds every texture; once it is up, open in the village (the very first
+    // time, after the opening picture book)
+    // a run left off last time picks up where it was; otherwise the village
+    setTimeout(() => {
+      const left = meta.story.intro && resume(meta);
+      if (left) {
+        try { startRun(left); return; } catch (e) { clearSuspended(); run = null; console.warn('could not pick the run up again', e); }
+      }
+      meta.story.intro ? showVillage() : showStory('intro', () => showVillage());
+    }, 0);
+  }), new VillageScene(villageHooks), new StoryScene()],
 });
 
 function fitCanvas() {
@@ -402,4 +552,14 @@ function fitCanvas() {
 new ResizeObserver(fitCanvas).observe($('phaser'));
 
 // test hook for automated play-testing; harmless in normal play
-window.__game = { get run() { return run; }, get meta() { return meta; }, get scene() { return scene; }, get village() { return village(); }, startRun, setAim, showVillage };
+// the page going away (tab closed, app switched, phone locked): write the run down, and the save with
+// it (kills, finds and recipes count as they happen, so they must match the run that comes back)
+function putAway() {
+  if (!run || run.over) return;
+  suspend(run);
+  saveMeta(meta);
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) putAway(); });
+window.addEventListener('pagehide', putAway);
+
+window.__game = { get run() { return run; }, get meta() { return meta; }, get scene() { return scene; }, get village() { return village(); }, startRun, setAim, showVillage, showStory };
