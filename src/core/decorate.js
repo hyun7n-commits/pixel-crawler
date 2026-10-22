@@ -1,5 +1,5 @@
 // Gives each room of a freshly carved floor one theme, so every feature is there for a reason:
-//   ore    - the floor's big ore, with a gas crack beside it (mining makes noise and leaks gas)
+//   ore    - one of the floor's big ores, with a gas crack beside it (mining makes noise and leaks gas)
 //   garden - a room overgrown with tall grass you cannot see through (one per floor at most)
 //   flood  - groundwater with a little grass around the edges
 //   plain  - nothing much, maybe a patch of grass
@@ -8,7 +8,7 @@
 import { T, TRAPS } from '../data/terrain.js';
 import { idx, inMap, FLOOR, ORE, DOOR } from './dungeon.js';
 import { rint, pick, shuffle, DIRS8 } from './util.js';
-import { trapsPerFloor, trapHidden } from '../data/balance.js';
+import { trapsPerFloor, trapHidden, ORES_PER_FLOOR } from '../data/balance.js';
 
 const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const free = (map, x, y) => inMap(x, y) && map.tiles[idx(x, y)] === FLOOR && map.ter[idx(x, y)] === T.NONE;
@@ -65,11 +65,13 @@ function placeOre(map, r, keep) {
   spots.sort((a, b) => (Math.abs(a[0] - r.cx) + Math.abs(a[1] - r.cy)) - (Math.abs(b[0] - r.cx) + Math.abs(b[1] - r.cy)));
   const [x, y] = spots[0];
   map.tiles[idx(x, y)] = ORE;
-  map.ore = { x, y, hits: 0 };
+  const ore = { x, y, hits: 0, tier: 0, vent: null };
+  map.ores.push(ore);
   const crack = DIRS4.map(([dx, dy]) => [x + dx, y + dy]).find(([cx, cy]) => free(map, cx, cy) && !keep(cx, cy));
   if (crack) {
     map.ter[idx(...crack)] = T.VENT;
-    map.vents.push({ x: crack[0], y: crack[1] });
+    ore.vent = { x: crack[0], y: crack[1] };
+    map.vents.push(ore.vent);
   }
   return true;
 }
@@ -79,17 +81,17 @@ export function decorate(map, rooms, { start, stairs }) {
   const has = new Set(), themes = [];
   const keep = (x, y) => (Math.abs(x - start.x) <= 1 && Math.abs(y - start.y) <= 1) || (x === stairs.x && y === stairs.y);
 
-  // the ore goes in the biggest room that is neither the start nor the stairs room
-  const oreRoom = rooms.slice(1)
+  // the ores go in the biggest rooms that are neither the start nor the stairs room
+  const oreRooms = rooms.slice(1)
     .filter(r => !inRoom(r, stairs.x, stairs.y))
-    .sort((a, b) => b.w * b.h - a.w * a.h)[0];
+    .sort((a, b) => b.w * b.h - a.w * a.h).slice(0, ORES_PER_FLOOR);
 
   rooms.forEach((r, i) => {
     if (i === 0 || Math.random() < 0.55) hangLamp(map, r);
     let theme = 'plain';
     if (i === 0) {
       if (Math.random() < 0.5) grass(map, r, rint(2, 4), keep);
-    } else if (r === oreRoom && placeOre(map, r, keep)) {
+    } else if (oreRooms.includes(r) && placeOre(map, r, keep)) {
       theme = 'ore';
       if (Math.random() < 0.6) grass(map, r, rint(2, 4), keep);
     } else {

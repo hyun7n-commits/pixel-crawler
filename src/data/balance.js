@@ -22,11 +22,15 @@ export const POTION_HEAL = 0.6;
 
 // The big ore on each floor: how many swings it takes, how far each swing is heard,
 // how much mine gas the crack beside it puffs per swing, and what it pays.
+// Two big ores a floor, each paying a bit less than the old single one did.
+// From the third swing the mine answers: monsters crawl out of the dark and head for the sound.
+export const ORES_PER_FLOOR = 2;
 export const ORE_HITS = 5;
 export const ORE_NOISE = [3, 5, 7, 10, 14];
+export const ORE_WAVE = [0, 0, 1, 2, 2];
 export const ORE_GAS = 10;
-export const oreGold = floor => 2 + floor;
-export const oreJackpot = floor => 18 + 5 * floor;
+export const oreGold = floor => 0.75 * (2 + floor);
+export const oreJackpot = floor => 0.75 * (18 + 5 * floor);
 // Ore grades (data/ores.js): each zone starts one grade higher, sometimes one more.
 // Every swing but the last may crack into the next grade (harder for each grade above the
 // zone's own; the pick relics' bonus is not reduced, so gems are what an ore build hunts),

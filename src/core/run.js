@@ -76,7 +76,7 @@ export class Run {
       maxHp: ch.hp + up.hp * 4 + 8 * lv('heart') + (rl.bloodcrown ? 30 : 0) + (rl.undying ? 40 : 0) + (this.p.lvl - 1) * B.HP_PER_LEVEL,
       goldMult: 1 + 0.4 * lv('coin') + (rl.goldbolt ? 1.5 : 0) + (rl.goldstorm ? 2 : 0) + 0.1 * up.greed,
       dodge: (ch.dodge || 0) + 0.08 * lv('cloak') + (rl.shadow ? 0.3 : 0),
-      sneak: rl.shadow ? 4 : 2 + 0.5 * lv('boots'),           // damage multiplier on a surprise attack
+      sneak: rl.shadow ? 3 : 1.5 + 0.25 * lv('boots'),        // damage multiplier on a surprise attack
       sight: B.SIGHT + lv('lantern'),
       oreMult: rl.goldrush || rl.goldstorm ? 3 : 1 + 0.5 * lv('pick'),
       oreRise: rl.goldrush || rl.goldstorm ? 0.25 : 0.05 * lv('pick'),   // extra chance a swing finds a better grade
@@ -152,10 +152,13 @@ export class Run {
     const map = this.map, rooms = carveRooms(map), start = rooms[0];
     this.p.x = start.cx; this.p.y = start.cy;
     const dm = distMap(map, start.cx, start.cy);
-    let far = rooms[1], best = -1;
-    for (const r of rooms) {
-      const d = dm[idx(r.cx, r.cy)];
-      if (d > best && d < 9999) { best = d; far = r; }
+    // the layout already picked the stairs room, on a loop with the start (see dungeon.js ringUp)
+    let far = rooms.find(r => r.stairs), best = -1;
+    if (!far) {
+      for (const r of rooms) {
+        const d = dm[idx(r.cx, r.cy)];
+        if (d > best && d < 9999) { best = d; far = r; }
+      }
     }
     map.tiles[idx(far.cx, far.cy)] = STAIRS;
     map.down = { x: far.cx, y: far.cy };
@@ -171,7 +174,7 @@ export class Run {
     // loose traps, enemies and loot stay out of the set pieces
     const open = rooms.filter((r, i) => !SET_PIECES.has(deco.themes[i]));
     if (placeTraps(map, open, { start: this.p, stairs }, this.floor)) this.has.add('trap');
-    if (map.ore) map.ore.tier = Math.min(ORES.length - 1, zi + (Math.random() < B.ORE_START_BONUS ? 1 : 0));
+    for (const o of map.ores) o.tier = Math.min(ORES.length - 1, zi + (Math.random() < B.ORE_START_BONUS ? 1 : 0));
 
     // a free spot in a room other than the start; returns the spot and its room
     const free = () => {
@@ -321,7 +324,7 @@ export class Run {
       return true;
     }
     const i = idx(nx, ny);
-    if (map.tiles[i] === ORE) return this.mineOre();
+    if (map.tiles[i] === ORE) return this.mineOre(this.oreAt(nx, ny));
     if (map.tiles[i] === GRAVE) { openGrave(this, nx, ny); this.endTurn(); return true; }
     if (map.tiles[i] === LOCKED) return this.unlock(nx, ny);
     if (!this.passable(nx, ny)) return false;
@@ -405,8 +408,10 @@ export class Run {
   // Bump the big ore to mine it. Every swing pays a little more than the last, is louder,
   // and makes the crack beside it puff mine gas. A swing may crack into a better grade
   // underneath, or hit a bonanza. The last swing breaks it wide open.
-  mineOre() {
-    const map = this.map, ore = map.ore, p = this.p, s = this.stat();
+  oreAt(x, y) { return this.map.ores.find(o => o.x === x && o.y === y); }
+
+  mineOre(ore) {
+    const map = this.map, p = this.p, s = this.stat();
     ore.hits++;
     const k = ore.hits - 1, last = ore.hits >= B.ORE_HITS, top = ORES.length - 1;
     if (ore.hits === 1) this.meetOre(ore.tier);
@@ -420,7 +425,7 @@ export class Run {
     let gold;
     if (!last) gold = Math.round(B.oreGold(this.floor) * g.mult * B.ORE_SWING[k] * s.oreMult * (nugget ? B.ORE_NUGGET_MULT : 1));
     this.emit('mine', { x: ore.x, y: ore.y, from: { x: p.x, y: p.y }, hits: ore.hits, r, last, tier: ore.tier, rose, nugget });
-    for (const v of map.vents) addGas(this, v.x, v.y, 'mine', B.ORE_GAS);
+    if (ore.vent) addGas(this, ore.vent.x, ore.vent.y, 'mine', B.ORE_GAS);
     if (!last) {
       this.addGold(gold);
       if (nugget) this.log(`노다지! ${g.name} 덩어리가 와르르 쏟아졌다!`, 'good');
@@ -429,7 +434,7 @@ export class Run {
     } else {
       const i = idx(ore.x, ore.y);
       map.tiles[i] = FLOOR;
-      map.ore = null;
+      map.ores = map.ores.filter(o => o !== ore);
       this.meta.ores[g.id] = (this.meta.ores[g.id] || 0) + 1;
       this.pickups.push({ x: ore.x, y: ore.y, type: 'gold', amount: Math.round(B.oreJackpot(this.floor) * g.mult * s.oreMult) });
       this.pickups.push({ x: ore.x, y: ore.y, type: 'chest' });
@@ -437,17 +442,25 @@ export class Run {
       this.discover('ore_jackpot');
       // the blacksmith on this floor wants a chunk of it
       const smith = this.quests.smith;
-      if (this.floor === smith.floor && smith.state !== 'done') {
+      if (this.floor === smith.floor && smith.state !== 'done' && (smith.chunk === null || ore.tier > smith.chunk)) {
         smith.chunk = ore.tier;
         this.log(`큰 ${g.name} 덩어리를 하나 챙겼다.${smith.state === 'asked' ? ' 대장장이에게 가져가자.' : ''}`, 'good');
       }
       this.emit('tiles', { list: [i] });
     }
     const heard = this.noise(ore.x, ore.y, r);
-    if (heard.length) {
-      this.emit('heard', { x: p.x, y: p.y, list: heard });
-      this.log(`${heard.length}마리가 소리를 듣고 깼다!`, 'warn');
+    // the deeper you dig, the more the mine answers: monsters crawl out of the dark toward the sound
+    const came = [];
+    for (let n = 0; n < B.ORE_WAVE[k]; n++) {
+      const t = this.waveSpot(ore);
+      if (!t) break;
+      const e = this.spawnEnemy(pick(this.zone.enemies), t.x, t.y, B.enemyScale(this.floor));
+      e.state = 'search'; e.searchT = 0; e.last = { x: ore.x, y: ore.y };
+      came.push(e);
     }
+    if (heard.length || came.length) this.emit('heard', { x: p.x, y: p.y, list: [...heard, ...came] });
+    if (came.length) this.log(`광산 깊은 곳에서 ${came.length}마리가 소리를 따라 기어 나온다!`, 'warn');
+    if (heard.length) this.log(`${heard.length}마리가 소리를 듣고 깼다!`, 'warn');
     this.endTurn();
     return true;
   }
@@ -543,8 +556,8 @@ export class Run {
     const s = this.stat(), rl = this.p.relics, lv = id => rl[id] || 0;
     const base = s.atk + rnd(2);
     if (this.unaware(e)) {
-      this.emit('sneak', { x: e.x, y: e.y });
-      this.log(`${e.state === 'sleep' ? '자고 있는 ' : ''}${e.d.name}에게 기습! 피해 ×${s.sneak}`, 'good');
+      this.emit('sneak', { x: e.x, y: e.y, from: { x: this.p.x, y: this.p.y } });
+      this.log(`${e.state === 'sleep' ? '자고 있는' : '나를 못 본'} ${josa(e.d.name, '을', '를')} 세게 내리쳤다!`, 'good');
       this.strike(e, Math.round(base * s.sneak), 'sneak');
     } else this.strike(e, base, 'normal');
     // the swing carries on into everyone else standing next to you
@@ -753,6 +766,18 @@ export class Run {
     if (!spot) return;
     this.respawnT = 0;
     this.spawnEnemy(pick(this.zone.enemies), spot.x, spot.y, B.enemyScale(this.floor)).state = 'wander';
+  }
+
+  // Where a monster answering the ore comes from: out of sight, a good walk from the ore.
+  waveSpot(ore) {
+    const map = this.map, dm = distMap(map, ore.x, ore.y, { block: (x, y) => !this.canEnemyEnter(x, y) });
+    const spots = [];
+    for (let i = 0; i < dm.length; i++) {
+      if (dm[i] < 8 || dm[i] > 20 || map.visible[i] || map.tiles[i] !== FLOOR) continue;
+      const x = i % map.w, y = (i / map.w) | 0;
+      if (!this.enemyAt(x, y) && !map.fire[i]) spots.push({ x, y });
+    }
+    return pick(spots) || null;
   }
 
   hiddenSpot() {

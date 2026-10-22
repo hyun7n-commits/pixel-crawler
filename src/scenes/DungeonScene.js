@@ -203,6 +203,7 @@ export class DungeonScene extends Phaser.Scene {
     this.enemySprites = {};
     this.pickupSprites = {};
     this.doorImgs = {};
+    this.oreImgs = {};
     this.bubbles = [];
     this.playerSprite = null;
   }
@@ -256,6 +257,7 @@ export class DungeonScene extends Phaser.Scene {
       return img;
     };
     delete this.doorImgs[i];
+    delete this.oreImgs[i];
     // which neighbours pass `test`, as N/E/S/W and diagonal bits
     const around = test => (test(x, y - 1) && N) | (test(x + 1, y) && E) | (test(x, y + 1) && S) | (test(x - 1, y) && W_) |
       (test(x + 1, y - 1) && NE) | (test(x + 1, y + 1) && SE) | (test(x - 1, y + 1) && SW) | (test(x - 1, y - 1) && NW);
@@ -283,7 +285,7 @@ export class DungeonScene extends Phaser.Scene {
       if (t === DOOR) this.doorImgs[i] = add(map.open[i] ? 't_doorOpen' : 't_door', D.ter);
       if (t === LOCKED) add('t_doorLocked', D.ter);
       if (t === GRAVE) add(map.bigGrave === i ? 't_graveBig' : 't_grave', D.ter);
-      if (t === ORE) this.oreImg = add(`t_ore_${ORES[map.ore?.tier || 0].id}`, D.ter);
+      if (t === ORE) this.oreImgs[i] = add(`t_ore_${ORES[map.ores.find(o => idx(o.x, o.y) === i)?.tier || 0].id}`, D.ter);
     }
     this.tileImgs[i] = imgs;
   }
@@ -429,11 +431,7 @@ export class DungeonScene extends Phaser.Scene {
         this.fx.blood.explode(8, center(d.x), center(d.y));
         this.float(d.x, d.y, `-${d.dmg}`, '#ff6b6b');
         break;
-      case 'sneak':
-        this.float(d.x, d.y - 1.1, '기습!', '#f4cf4f', 0, 12);
-        this.fx.spark.explode(12, center(d.x), center(d.y));
-        this.cameras.main.shake(90, 0.004);
-        break;
+      case 'sneak': this.heavyHit(d.x, d.y, d.from); break;
       case 'snore': this.noiseRing(d.x, d.y, d.r, 0xb58cf0); break;
       case 'dodge': this.float(d.x, d.y, '회피', '#6fe0e0'); break;
       case 'heal': this.float(d.x, d.y, `+${d.n}`, '#8fd36a'); this.fx.heal.explode(6, center(d.x), center(d.y)); break;
@@ -529,8 +527,27 @@ export class DungeonScene extends Phaser.Scene {
     if (this.run.isVisible(d.x, d.y)) {
       this.fx[fx].explode(d.kind === 'normal' ? 6 : 10, center(d.x), center(d.y));
       const first = d.kind === 'normal' || d.kind === 'sneak';
-      this.float(d.x, d.y, String(d.dmg), color, first ? 0 : 120, d.kind === 'sneak' ? 13 : 10);
+      this.float(d.x, d.y, String(d.dmg), color, first ? 0 : 120, d.kind === 'sneak' ? 16 : 10);
     }
+  }
+
+  // A blow the target never saw coming: a frozen beat, a slash across it and a thump, no words.
+  heavyHit(x, y, from) {
+    const cx = center(x), cy = center(y);
+    this.hitStop(90);
+    this.cameras.main.shake(150, 0.009);
+    // the slash crosses the line of the swing
+    const ang = Math.atan2(y - from.y, x - from.x) + Math.PI / 4;
+    for (const [w, col, len] of [[5, 0xf4cf4f, 24], [2, 0xffffff, 30]]) {
+      const s = this.add.rectangle(cx, cy, len, w, col).setRotation(ang).setDepth(D.fx).setScale(0.2, 1);
+      this.tweens.add({
+        targets: s, scaleX: 1, duration: 70, ease: 'Quad.out',
+        onComplete: () => this.tweens.add({ targets: s, alpha: 0, scaleY: 0.2, duration: 200, onComplete: () => s.destroy() }),
+      });
+    }
+    const ring = this.add.circle(cx, cy, TILE * 0.7).setStrokeStyle(2, 0xffffff, 1).setDepth(D.fx).setScale(0.3);
+    this.tweens.add({ targets: ring, scale: 1.5, alpha: 0, duration: 300, ease: 'Quad.out', onComplete: () => ring.destroy() });
+    this.fx.spark.explode(16, cx, cy);
   }
 
   onKill(e) {
@@ -662,7 +679,7 @@ export class DungeonScene extends Phaser.Scene {
     this.noiseRing(d.x, d.y, d.r);
     const g = ORES[d.tier], tint = Phaser.Display.Color.HexStringToColor(g.vein ? g.vein[0] : '#ffffff').color;
     // the ore itself shudders
-    const img = this.oreImg?.active ? this.oreImg : null;
+    const img = this.oreImgs[idx(d.x, d.y)]?.active ? this.oreImgs[idx(d.x, d.y)] : null;
     if (img && !last) this.tweens.add({ targets: img, x: img.x + 1.5, duration: 30, yoyo: true, repeat: 2 + d.hits });
     // cracked into a better grade: the veins change colour with a glittering pop
     if (d.rose) {
@@ -782,9 +799,9 @@ export class DungeonScene extends Phaser.Scene {
     this.pathGfx.fillStyle(0x8fd36a, 0.55);
     for (const [x, y] of this.path) this.pathGfx.fillRect(x * TILE + 6, y * TILE + 6, 4, 4);
 
-    // the big ore: cracks and pips show how many swings it has taken
-    const ore = map.ore;
-    if (ore && map.explored[idx(ore.x, ore.y)]) {
+    // the big ores: cracks and pips show how many swings each has taken
+    for (const ore of map.ores) {
+      if (!map.explored[idx(ore.x, ore.y)]) continue;
       const x0 = ore.x * TILE, y0 = ore.y * TILE;
       g.lineStyle(1, 0x1b1424, 0.9);
       const cracks = [[8, 2, 6, 7], [6, 7, 9, 11], [3, 9, 6, 7], [9, 11, 12, 13], [10, 4, 12, 8]];
@@ -794,8 +811,8 @@ export class DungeonScene extends Phaser.Scene {
         g.fillRect(x0 + 2 + k * 2.6, y0 - 3, 2, 2);
       }
       // a glint now and then, so it catches your eye from across the room
-      if (map.visible[idx(ore.x, ore.y)] && time > (this.nextGlint || 0)) {
-        this.nextGlint = time + 900 + Math.random() * 900;
+      if (map.visible[idx(ore.x, ore.y)] && time > (ore.glint || 0)) {
+        ore.glint = time + 900 + Math.random() * 900;
         this.fx.spark.explode(2, x0 + 3 + Math.random() * 10, y0 + 3 + Math.random() * 9);
       }
     }

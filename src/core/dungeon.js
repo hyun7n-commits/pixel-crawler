@@ -30,7 +30,7 @@ export function createMap() {
     doors: [],
     vents: [],
     lights: [],                   // miners' lamps hung on wall faces: { x, y } of the wall tile
-    ore: null,                    // the floor's big ore: { x, y, hits }
+    ores: [],                     // the floor's big ores: { x, y, hits, tier, vent }
     up: null, down: null,         // where the stairs are, for arriving from above or below
   };
 }
@@ -114,7 +114,7 @@ function addDoor(map, a, b) {
 
 // Returns the proper rooms (not halls or tunnels), ordered from the start room outward.
 export function carveRooms(map) {
-  for (let attempt = 0; attempt < 20; attempt++) {
+  for (let attempt = 0; attempt < 60; attempt++) {
     map.tiles.fill(WALL); map.room.fill(-1); map.doors = [];
     const rooms = buildLayout(map);
     if (rooms) return rooms;
@@ -157,11 +157,19 @@ function buildLayout(map) {
     if (a.kind === 'hall' && b.kind === 'hall') continue;
     if (sharedWall(a, b).length && Math.random() < 0.3) addDoor(map, a, b);
   }
+  // the stairs go in the proper room the longest walk away, and it sits on one loop with the start
+  const walk = walkFrom(boxes[0]);
+  // (a room stuck out on its own with nothing beside it can't be looped, so the next farthest is tried)
+  const far = boxes.filter(b => b.kind === 'room' || b.kind === 'large')
+    .sort((a, b) => walk.get(b) - walk.get(a)).slice(0, 4)
+    .find(b => ringUp(map, boxes, boxes[0], b));
+  if (!far) return null;
+  far.stairs = true;
 
   // carve
   const rooms = [];
   for (const b of boxes) {
-    const r = { x: b.x0 + 1, y: b.y0 + 1, w: b.x1 - b.x0 - 1, h: b.y1 - b.y0 - 1, kind: b.kind };
+    const r = { x: b.x0 + 1, y: b.y0 + 1, w: b.x1 - b.x0 - 1, h: b.y1 - b.y0 - 1, kind: b.kind, stairs: !!b.stairs };
     r.cx = r.x + (r.w >> 1); r.cy = r.y + (r.h >> 1);
     b.r = r;
     if (b.kind === 'tunnel') continue;
@@ -196,6 +204,78 @@ function buildLayout(map) {
     for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (map.room[idx(x, y)] >= 0) map.room[idx(x, y)] = i;
   });
   return rooms;
+}
+
+// Makes two separate ways between the start and the stairs room, so the floor is a loop you can walk
+// round instead of one corridor out and the same one back: every door the only route depends on
+// gets a second way around it, through a new door between two boxes on either side of it.
+// A new hall or tunnel off a box outside `side` that also touches a box inside it, with a door to each.
+function bridgeWith(map, boxes, side) {
+  const out = boxes.filter(b => !side.has(b) && b.kind !== 'hall');
+  for (let t = 0; t < 300; t++) {
+    const b = pick(out), c = growFrom(b, Math.random() < 0.5 ? 'hall' : 'tunnel');
+    if (!fits(c) || boxes.some(o => clash(o, c))) continue;
+    const a = [...side].find(o => o.kind !== 'hall' && sharedWall(o, c).length);
+    if (!a || !addDoor(map, b, c)) continue;
+    if (!addDoor(map, c, a)) {
+      map.doors.pop(); b.links.pop(); c.links.length = 0;
+      continue;
+    }
+    boxes.push(c);
+    return true;
+  }
+  return false;
+}
+
+// Rough walking distance from box `from` to every box, going door to door between box middles.
+function walkFrom(from) {
+  const mid = b => [(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2];
+  const walk = new Map([[from, 0]]), todo = [from];
+  while (todo.length) {
+    const b = todo.shift();
+    for (const o of b.links) {
+      const d = walk.get(b) + Math.abs(mid(b)[0] - mid(o)[0]) + Math.abs(mid(b)[1] - mid(o)[1]);
+      if (!walk.has(o) || d < walk.get(o)) { walk.set(o, d); todo.push(o); }
+    }
+  }
+  return walk;
+}
+
+function ringUp(map, boxes, start, far) {
+  const same = (e, a, b) => (e[0] === a && e[1] === b) || (e[0] === b && e[1] === a);
+  const reach = cut => {
+    const seen = new Set([start]), todo = [start];
+    while (todo.length) {
+      const b = todo.pop();
+      for (const o of b.links) if (!seen.has(o) && !(cut && same(cut, b, o))) { seen.add(o); todo.push(o); }
+    }
+    return seen;
+  };
+  const route = () => {
+    const from = new Map([[start, null]]), todo = [start];
+    while (todo.length) {
+      const b = todo.shift();
+      for (const o of b.links) if (!from.has(o)) { from.set(o, b); todo.push(o); }
+    }
+    const edges = [];
+    for (let b = far; from.get(b); b = from.get(b)) edges.push([from.get(b), b]);
+    return edges;
+  };
+  for (let tries = 0; tries < 12; tries++) {
+    const bridge = route().find(e => !reach(e).has(far));
+    if (!bridge) return true;
+    const side = reach(bridge), pairs = [];
+    // the way round should be a real second way, not a shortcut: prefer a door far from both ends
+    const fromStart = walkFrom(start), fromFar = walkFrom(far);
+    for (const a of side) for (const b of boxes) {
+      if (side.has(b) || a.links.includes(b) || (a.kind === 'hall' && b.kind === 'hall')) continue;
+      if (sharedWall(a, b).length) pairs.push([a, b, fromStart.get(a) + fromFar.get(b) + 6 * Math.random()]);
+    }
+    if (pairs.sort((p, q) => q[2] - p[2]).some(([a, b]) => addDoor(map, a, b))) continue;
+    // nothing on the two sides touches: dig a short hall or tunnel that joins them
+    if (!bridgeWith(map, boxes, side)) return false;
+  }
+  return false;
 }
 
 const onBoxWall = (b, x, y) => ((x === b.x0 || x === b.x1) && y > b.y0 && y < b.y1) || ((y === b.y0 || y === b.y1) && x > b.x0 && x < b.x1);

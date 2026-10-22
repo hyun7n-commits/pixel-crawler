@@ -16,7 +16,7 @@ export const RELICS = {
   thorns: { name: '가시 갑옷',   desc: l => `맞으면 때린 적에게 ${2 * l} 피해`, locked: true, cost: 150 },
   bolt:   { name: '번개 부적',   desc: l => `6턴마다 가장 가까운 적에게 번개 ${4 * l}`, locked: true, cost: 200 },
   moss:   { name: '재생 이끼',   desc: l => `${[6, 4, 2][l - 1]}턴마다 체력 +1`, locked: true, cost: 120 },
-  boots:  { name: '살금 신발',   desc: l => `기습 피해 ×${2 + 0.5 * l} (기본 ×2)` },
+  boots:  { name: '살금 신발',   desc: l => `나를 못 본 적을 치면 피해 ×${1.5 + 0.25 * l} (기본 ×1.5)` },
   lantern: { name: '광부 랜턴',  desc: l => `시야 +${l}칸` },
   hammer: { name: '진동 망치',   desc: l => `공격할 때 ${15 * l}% 확률로 적이 한 턴 기절` },
   pick:   { name: '금 곡괭이',   desc: l => `큰 광석에서 나오는 골드 +${50 * l}%, 더 좋은 광석이 나올 확률 +${5 * l}%` },
@@ -31,7 +31,7 @@ export const RELICS = {
   fortress:   { name: '가시 요새', evo: true, desc: () => '받는 피해 -5, 맞으면 때린 적에게 8 피해' },
   bloodcrown: { name: '피의 왕관', evo: true, desc: () => '최대 체력 +30, 적을 쓰러뜨리면 체력 +10' },
   goldbolt:   { name: '황금 번개', evo: true, desc: () => '3턴마다 적 3마리에게 번개 10, 얻는 골드 +150%' },
-  shadow:     { name: '그림자 걸음', evo: true, desc: () => '기습 피해 ×4, 적의 공격을 30% 확률로 피한다' },
+  shadow:     { name: '그림자 걸음', evo: true, desc: () => '나를 못 본 적을 치면 피해 ×3, 적의 공격을 30% 확률로 피한다' },
   quake:      { name: '지진 망치', evo: true, desc: () => '공격하면 옆의 모든 적에게 같은 피해, 맞은 적은 30% 확률로 기절' },
   goldrush:   { name: '골드 러시', evo: true, desc: () => '큰 광석에서 나오는 골드 ×3, 더 좋은 광석이 나올 확률 +25%, 4칸 안의 골드를 저절로 줍는다' },
 
