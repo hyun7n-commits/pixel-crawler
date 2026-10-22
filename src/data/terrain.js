@@ -19,7 +19,7 @@ export const TERRAIN = {
   [T.BRUSH]:      { name: '키 큰 풀',     sprite: 'brush',     burn: 4, tip: '앞을 가린다. 누가 밟으면 쓰러진다. 불에 잘 탄다.' },
   [T.GRASS]:      { name: '쓰러진 풀',    sprite: 'grass',     burn: 2, tip: '누가 밟고 지나간 풀이다. 이제 앞을 가리지 않는다.' },
   [T.ASH]:        { name: '탄 자국',      sprite: 'ash',       tip: '불에 타고 남은 자리다.' },
-  [T.WATER]:      { name: '지하수 웅덩이', tip: '몸에 불이 붙었을 때 들어가면 꺼진다.' },
+  [T.WATER]:      { name: '물웅덩이', tip: '몸에 불이 붙었을 때 들어가면 꺼진다.' },
   [T.VENT]:       { name: '가스 틈',      sprite: 'vent',      tip: '반짝 바위를 캘 때마다 늪 가스가 샌다.' },
   [T.TRAP_SLEEP]: { name: '졸음 가스 함정', sprite: 'trapSleep',  tip: '밟으면 졸음 가스가 뿜어져 나온다.' },
   [T.TRAP_SUMMON]: { name: '소환 함정',   sprite: 'trapSummon', tip: '밟으면 몬스터가 우르르 나타난다.' },
