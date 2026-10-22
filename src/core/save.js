@@ -22,7 +22,7 @@ export function freshMeta() {
     lastRun: null,          // how the last run went, for the village gossip
     story: {},              // picture-book scenes already shown: intro, ratking, skelking, ending (ui/story.js)
     pack: null,             // a basic relic paid for in the shop to take on the next run (data/upgrades.js PACK_COST)
-    step: 0,                // the 토벌 단계 picked at the guild (data/balance.js)
+    step: 0,                // the 탐험 단계 picked at the guild (data/balance.js)
     home: [],               // 집 꾸미기 pieces put up round your house (data/home.js)
     bookGifts: 0,           // the smith's recipe-book gifts already taken (data/balance.js bookGift)
   };

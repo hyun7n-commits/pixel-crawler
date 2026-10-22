@@ -34,7 +34,7 @@ export const bossScale = floor => 1 + 0.5 * (floor / 3 - 1);
 export const GOLD_DROP_CHANCE = 0.4;
 export const VICTORY_BONUS = 200;
 
-// 토벌 단계: after the first win the fields get rowdier, one step per win, up to STEP_MAX. Picked at
+// 탐험 단계: after the first win the fields get rowdier, one step per win, up to STEP_MAX. Picked at
 // the guild (ui/hub.js). Each step makes every critter tougher and pays more gold.
 export const STEP_MAX = 5;
 export const stepFoe = s => 1 + 0.15 * s;   // critters' health and attack

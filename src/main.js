@@ -153,7 +153,7 @@ function startRun(left) {
   scene.attach(run);
   if (restored) {
     setMusic(isBossFloor(run.floor) ? 'boss' : run.zone.style);
-    run.log('하던 토벌을 이어서 한다.', 'good');
+    run.log('하던 탐험을 이어서 한다.', 'good');
     run.emit('turn');
     return;
   }

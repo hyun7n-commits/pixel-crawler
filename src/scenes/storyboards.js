@@ -5,7 +5,7 @@
 //
 // The story in short: a new worker moves to the little village at the edge of the fields with nothing
 // but a straw hat and a debt. The fields toss and turn every night, so every morning the paths are
-// new. The guild pays for 토벌 jobs and the sparkle boulders are money; whoever faints out there is
+// new. The guild pays for 탐험 jobs and the sparkle boulders are money; whoever faints out there is
 // carried home by the guild. Beat the boss at the end of a zone and you get that zone's license;
 // all three, and there is a big prize. (The prize is a house of your own.)
 
@@ -81,7 +81,7 @@ const intro = [
     lines: [
       { who: '조합장', text: '일하러 왔다고? 마침 잘됐네.', at: (k, c) => k.hop(c.boss) },
       {
-        who: '조합장', text: '들판엔 말썽쟁이들이 산다네. 토벌하고 오면 일당을 주지.',
+        who: '조합장', text: '들판엔 말썽쟁이들이 산다네. 탐험하고 오면 일당을 주지.',
         at: (k, c) => {
           const rat = k.actor('rat', 0.5, 2.4), slime = k.actor('slime', 7, 2.4, { flip: true });
           for (const m of [rat, slime]) { m.setAlpha(0); m.y -= 10; k.tweens.add({ targets: m, alpha: 1, y: m.y + 10, duration: 260, ease: 'Back.out' }); }
@@ -149,9 +149,9 @@ const intro = [
   { // the licenses, and the big prize
     build: atGuild,
     lines: [
-      { who: '조합장', text: '구역 끝의 대장을 잡으면 토벌 자격증을 주지.', at: k => { k.badge(4.8, 2.7, LICENSE.ratking); k.badge(5.9, 2.7, LICENSE.skelking, 250); k.badge(7, 2.7, LICENSE.lord, 500); } },
+      { who: '조합장', text: '구역 끝의 대장을 잡으면 탐험 자격증을 주지.', at: k => { k.badge(4.8, 2.7, LICENSE.ratking); k.badge(5.9, 2.7, LICENSE.skelking, 250); k.badge(7, 2.7, LICENSE.lord, 500); } },
       { who: '조합장', text: '초원, 깊은숲, 돌산. 셋 다 따 오면… 큰 상이 있다네.', at: (k, c) => k.hop(c.boss) },
-      { text: '좋아, 첫 토벌 나가 보자!', at: (k, c) => { k.face(c.hero, 'sparkle'); k.hop(c.hero, 3, 6); k.sparkle(3, 3, 20); } },
+      { text: '좋아, 첫 탐험 나가 보자!', at: (k, c) => { k.face(c.hero, 'sparkle'); k.hop(c.hero, 3, 6); k.sparkle(3, 3, 20); } },
     ],
   },
 ];
@@ -161,14 +161,14 @@ const ratking = [{
   build: atGuild,
   lines: [
     { who: '조합장', text: '왕쥐를 잡았다고? 합격이네!', at: (k, c) => { k.badge(3, 1.9, LICENSE.ratking); k.hop(c.boss); } },
-    { who: '조합장', text: '초원 토벌 자격증이야. 이제 깊은숲도 맡겨 보지.', at: (k, c) => { k.face(c.hero, 'sparkle'); k.hop(c.hero, 2); } },
+    { who: '조합장', text: '초원 탐험 자격증이야. 이제 깊은숲도 맡겨 보지.', at: (k, c) => { k.face(c.hero, 'sparkle'); k.hop(c.hero, 2); } },
   ],
 }];
 
 const skelking = [{
   build: atGuild,
   lines: [
-    { who: '조합장', text: '버섯 왕까지! 깊은숲 토벌 자격증이네.', at: (k, c) => { k.badge(3, 1.9, LICENSE.skelking); k.hop(c.boss); k.face(c.hero, 'sparkle'); } },
+    { who: '조합장', text: '버섯 왕까지! 깊은숲 탐험 자격증이네.', at: (k, c) => { k.badge(3, 1.9, LICENSE.skelking); k.hop(c.boss); k.face(c.hero, 'sparkle'); } },
     { who: '조합장', text: '…그런데 말이야. 돌산 꼭대기에서 누가 뒤척일 때마다 들판도 같이 뒤척인다는 소문이 있네.', at: (k, c) => { k.face(c.hero, 'shock'); } },
     { who: '조합장', text: '마지막 자격증은 돌산에 있다네. 조심하게.' },
   ],
@@ -218,7 +218,7 @@ const ending = [
       return { gm, hero, home };
     },
     lines: [
-      { who: '조합장', text: '돌산 토벌 자격증. 이걸로 셋 다 땄군!', at: k => { k.badge(-0.2, 0.6, LICENSE.ratking); k.badge(1, 0.3, LICENSE.skelking, 200); k.badge(2.2, 0.6, LICENSE.lord, 400); } },
+      { who: '조합장', text: '돌산 탐험 자격증. 이걸로 셋 다 땄군!', at: k => { k.badge(-0.2, 0.6, LICENSE.ratking); k.badge(1, 0.3, LICENSE.skelking, 200); k.badge(2.2, 0.6, LICENSE.lord, 400); } },
       {
         who: '조합장', text: '약속한 큰 상이네. 창고 구석 말고… 자네 집이야!',
         at: (k, c) => { k.tweens.add({ targets: c.home, alpha: 1, duration: 600 }); k.sparkle(5.5, 0.5, 40); k.face(c.hero, 'sparkle'); k.hop(c.hero, 3, 6); k.mark(c.hero, '내 집!', 0); },
@@ -239,7 +239,7 @@ const ending = [
     lines: [
       { text: '…그리고 다음 날 아침.' },
       { text: '들판은 또 뒤척였다.', at: (k, c) => { k.toss(c.hedges); k.face(c.hero, 'shock'); } },
-      { who: '조합장', text: '돌산 너머에 뭐가 또 있는 모양이군. 자, 오늘도 토벌 부탁하네!', at: (k, c) => { k.hop(c.gm, 2); k.face(c.hero); } },
+      { who: '조합장', text: '돌산 너머에 뭐가 또 있는 모양이군. 자, 오늘도 탐험 부탁하네!', at: (k, c) => { k.hop(c.gm, 2); k.face(c.hero); } },
     ],
   },
 ];

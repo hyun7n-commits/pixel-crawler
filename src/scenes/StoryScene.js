@@ -1,4 +1,4 @@
-// Picture-book scenes: the opening, each 토벌 license, the ending. Every panel is a little diorama
+// Picture-book scenes: the opening, each 탐험 license, the ending. Every panel is a little diorama
 // built from the game's own tiles, houses and sprites (scenes/storyboards.js), with a line or two of
 // text under it (ui/story.js). A tap moves on; the text box and the skip button are DOM.
 
@@ -173,7 +173,7 @@ export class StoryScene extends Phaser.Scene {
     return pic;
   }
 
-  // a 토벌 license: a round badge on a ribbon, in the zone's colour
+  // a 탐험 license: a round badge on a ribbon, in the zone's colour
   badge(x, y, color, delay = 0) {
     const g = this.keep(this.add.graphics().setDepth(D.fx));
     g.fillStyle(0x1b1424, 1).fillTriangle(-6, 2, -1, 2, -7, 16).fillTriangle(6, 2, 1, 2, 7, 16);

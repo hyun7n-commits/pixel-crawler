@@ -40,13 +40,13 @@ const startButton = (meta, onStart) => {
   return wrap;
 };
 
-// 토벌 단계 (data/balance.js): after the first win, how rowdy the fields are this time
+// 탐험 단계 (data/balance.js): after the first win, how rowdy the fields are this time
 function stepRow(meta, changed) {
   const open = stepsOpen(meta), cur = Math.min(meta.step || 0, open);
   const row = el('div', 'steps'), main = el('div', 'row-main');
   const stars = el('span', 'step-stars');
   for (let i = 1; i <= STEP_MAX; i++) stars.append(el('i', i <= cur ? 'on' : i <= open ? 'open' : ''));
-  const name = el('span', 'row-name', `토벌 단계 ${cur ? `★${cur}` : '보통'}`);
+  const name = el('span', 'row-name', `탐험 단계 ${cur ? `★${cur}` : '보통'}`);
   name.append(stars);
   main.append(name, el('span', 'row-sub', cur
     ? `들판의 적 체력과 공격 +${Math.round((stepFoe(cur) - 1) * 100)}%, 얻는 골드 +${Math.round((stepGold(cur) - 1) * 100)}%`
@@ -58,15 +58,15 @@ function stepRow(meta, changed) {
   return row;
 }
 
-// the three 토벌 licenses (one per zone boss), greyed out until earned; see scenes/storyboards.js
+// the three 탐험 licenses (one per zone boss), greyed out until earned; see scenes/storyboards.js
 const LICENSES = [['ratking', '초원', '#6fbf4e'], ['skelking', '깊은숲', '#2f7a46'], ['lord', '돌산', '#8a7aa8']];
 function licenses(meta) {
   const row = el('div', 'licenses');
-  row.append(el('span', 'lic-title', '토벌 자격증'));
+  row.append(el('span', 'lic-title', '탐험 자격증'));
   for (const [boss, name, color] of LICENSES) {
     const got = meta.stats.bosses.includes(boss);
     const b = el('span', 'lic' + (got ? ' got' : ''), `<i style="--c:${color}">★</i>${name}`);
-    b.title = got ? `${name} 토벌 자격증` : `${name} 끝의 대장을 잡으면 받는다`;
+    b.title = got ? `${name} 탐험 자격증` : `${name} 끝의 대장을 잡으면 받는다`;
     row.append(b);
   }
   return row;

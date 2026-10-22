@@ -54,7 +54,7 @@ export class Run {
     };
     this.stall = [];
     this.request = isOpen(meta, 'request') ? pickRequest(meta) : null;   // the guild's request of the day (data/requests.js)
-    this.danger = Math.max(0, Math.min(meta.step || 0, B.stepsOpen(meta)));   // 토벌 단계 (meta.step)
+    this.danger = Math.max(0, Math.min(meta.step || 0, B.stepsOpen(meta)));   // 탐험 단계 (meta.step)
     this.startStats = JSON.parse(JSON.stringify(meta.stats));
     this.listeners = [];
     this.p = {

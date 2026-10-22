@@ -384,7 +384,7 @@ export class VillageScene extends Phaser.Scene {
   houseAt(x, y) { return HOUSES.find(h => x >= h.x && x < h.x + h.w && y >= h.y && y < h.y + h.h); }
   homeAt(x, y) { return x >= HOME.x && x < HOME.x + HOME.w && y >= HOME.y && y < HOME.y + HOME.h; }
   homeLine() {
-    return ownsHome(this.meta) ? '내 집: 토벌 자격증 셋을 따고 조합에서 받은 내 집이다! 문 앞에서 부딪히면 꾸밀 수 있다.' : '빈 집터: 언젠가 여기에 내 집을… 조합장이 말한 큰 상이 이건가?';
+    return ownsHome(this.meta) ? '내 집: 탐험 자격증 셋을 따고 조합에서 받은 내 집이다! 문 앞에서 부딪히면 꾸밀 수 있다.' : '빈 집터: 언젠가 여기에 내 집을… 조합장이 말한 큰 상이 이건가?';
   }
   pupAt(x, y) { return this.pup && this.pup.x === x && this.pup.y === y ? this.pup : null; }
   decorAt(x, y) { return DECOR.find(d => this.decor[d.id] && d.at.some(([ax, ay]) => ax === x && ay === y)); }
@@ -403,7 +403,7 @@ export class VillageScene extends Phaser.Scene {
     if (d) return `${d.name}: ${d.desc}`;
     const hero = this.heroAt(x, y);
     if (hero) return `${CHARACTERS[hero.id].name}: 부딪히면 오늘은 이 친구가 나간다.`;
-    if (this.ch(x, y) === '>') return '들판 가는 땅굴: 쏙 들어가면 토벌을 나간다.';
+    if (this.ch(x, y) === '>') return '들판 가는 땅굴: 쏙 들어가면 탐험을 나간다.';
     if (this.ch(x, y) === 'L') return '반딧불 등';
     return '';
   }
