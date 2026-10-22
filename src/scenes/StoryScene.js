@@ -24,7 +24,10 @@ export class StoryScene extends Phaser.Scene {
       emitting: false, lifespan: { min: 350, max: 750 }, speed: { min: 20, max: 70 }, scale: { start: 1.5, end: 0 },
       gravityY: 50, tint: [0xf4cf4f, 0xffffff, 0xf29bb2],
     }).setDepth(D.fx);
-    this.scale.on('resize', () => this.fit());
+    // the scene is stopped after each story: let go of the screen's resize then
+    const onResize = () => this.fit();
+    this.scale.on('resize', onResize);
+    this.events.once('shutdown', () => this.scale.off('resize', onResize));
     this.fit();
   }
 
@@ -33,6 +36,7 @@ export class StoryScene extends Phaser.Scene {
   // the biggest whole-number zoom that shows the whole diorama above the text box
   fit() {
     const cam = this.cameras.main, box = this.game.registry.get('storyBox') || 0.3;
+    if (!cam) return;
     let z = Math.floor(Math.min(cam.width / (VIEW.w * TILE), cam.height * (1 - box) / (VIEW.h * TILE)));
     if (HIRES && z > 2 && z % 2) z--;
     cam.setZoom(Math.max(1, z));
