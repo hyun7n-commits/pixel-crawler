@@ -117,5 +117,9 @@ export const honeyHp = floor => 3 + Math.floor((floor - 1) / FLOORS_PER_ZONE);
 export const BEE_HOME = 6;
 // 요정 고리: the chance a field has a pair of fairy rings, by zone (most in the deep forest)
 export const RING_CHANCE = [0.2, 0.7, 0.3];
+// 온천: the chance a flooded room's pool is a hot spring, by zone (most up the rocky hills); anyone
+// standing in it gets SPRING_HEAL back every other turn, critters too
+export const SPRING_CHANCE = [0, 0.25, 0.7];
+export const SPRING_HEAL = 1;
 export const HIVE_SMOKE = 2;
 export const graveGold = floor => (2 + Math.floor((floor - 1) / FLOORS_PER_ZONE)) * (3 + Math.floor(Math.random() * 4));

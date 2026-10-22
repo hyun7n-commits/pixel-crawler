@@ -427,9 +427,11 @@ export function wallKey(scene, zi, mask, v = 0) {
   if (!scene.textures.exists(key)) scene.textures.addCanvas(key, wallTile(ZONES[zi], zi, mask, v));
   return key;
 }
-export function waterKey(scene, zi, frame, mask) {
-  const key = `z${zi}_water${frame}_${mask}`;
-  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, waterTile(ZONES[zi], frame, mask));
+// `warm`: a hot spring's pool, milky jade instead of the zone's blue
+export function waterKey(scene, zi, frame, mask, warm = false) {
+  const key = `z${zi}_water${frame}_${mask}${warm ? '_warm' : ''}`;
+  const z = warm ? { ...ZONES[zi], water: '#5fb8b0', waterLight: '#d2f4ec' } : ZONES[zi];
+  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, waterTile(z, frame, mask));
   return key;
 }
 export function shadeKey(scene, mask) {

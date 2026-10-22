@@ -387,6 +387,17 @@ function creatureTick(run, who) {
     run.noise(b.x, b.y, SNORE_NOISE);
   }
 
+  // 온천: a warm pool soaks the aches away, a little every other turn (critters' too)
+  if (map.spring?.includes(i) && run.turn % 2 === 0) {
+    if (who === 'player') {
+      if (run.p.hp < run.stat().maxHp) {
+        run.heal(B.SPRING_HEAL);
+        if (!run.told.spring) { run.told.spring = true; run.log('따끈한 온천이다. 몸이 노곤노곤 풀린다.', 'good'); }
+        run.emit('soak', { x: b.x, y: b.y });
+      }
+    } else if (b.hp < b.maxHp) b.hp = Math.min(b.maxHp, b.hp + B.SPRING_HEAL);
+  }
+
   if (b.burn > 0) {
     if (map.ter[i] === T.WATER) { b.burn = 0; return; }
     const dmg = 2 + Math.floor(run.floor / 3);

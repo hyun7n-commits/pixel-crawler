@@ -22,6 +22,8 @@ import { wait, fissionMs, evolveMs, FISSION_LEAD, FISSION_STEP, EVOLVE_FLASH } f
 const D = { tiles: 0, ter: 1, fire: 2, gas: 3, telegraph: 4, pickups: 5, enemies: 6, player: 7, overlay: 8, fx: 9, bubble: 10, text: 11 };
 // what a pickup looks like on the floor (items use their own sprite)
 const PICKUP_TEX = { gold: 'gold', chest: 'chest', lockedChest: 'lockedChest', key: 'key', necklace: 'necklace', candy: 'candy', crystal: 'pedestal' };
+// critters on the wing, who never wade
+const FLIERS = new Set(['bat', 'vampLord', 'bee', 'ghostNpc']);
 const center = v => v * TILE + TILE / 2;
 const foot = v => v * TILE + TILE;
 const hash = (x, y) => {
@@ -66,6 +68,8 @@ export class DungeonScene extends Phaser.Scene {
       steam: burst([0xffffff, 0xc9c2b6], { gravityY: -50, speed: { min: 5, max: 20 }, alpha: { start: 0.8, end: 0 } }),
       sleep: burst([0xb58cf0, 0xd8c2ff], { gravityY: -10, speed: { min: 8, max: 30 }, alpha: { start: 0.8, end: 0 }, scale: { start: 2.5, end: 0 } }),
       crystal: burst([0x8fd8f0, 0xc8f6ff, 0x3d8fb3], { gravityY: 120, speed: { min: 20, max: 70 } }),
+      // a hot spring's steam: soft wisps drifting up and fading
+      warm: burst([0xffffff, 0xe8f6f2], { gravityY: -18, speed: { min: 2, max: 8 }, angle: { min: 250, max: 290 }, lifespan: { min: 900, max: 1500 }, scale: { start: 2.5, end: 4.5 }, alpha: { start: 0.6, end: 0 } }),
       leaf: burst([0x6cc45a, 0x2f7a43, 0xb5e08a], { gravityY: 60, speed: { min: 12, max: 36 }, lifespan: { min: 300, max: 600 }, scale: { start: 1.5, end: 0.5 } }),
     };
     this.shadowGfx = this.add.graphics().setDepth(D.pickups - 0.5);
@@ -338,8 +342,10 @@ export class DungeonScene extends Phaser.Scene {
     } else {
       if (ter === T.WATER) {
         const shore = around((nx, ny) => wall(nx, ny) || map.ter[idx(nx, ny)] !== T.WATER);
-        const img = add(waterKey(this, zi, this.waterFrame, shore));
+        const warm = !!map.spring?.includes(i);
+        const img = add(waterKey(this, zi, this.waterFrame, shore, warm));
         img.shore = shore;
+        img.warm = warm;
         this.waterImgs.add(img);
       } else {
         add(floorKey(zi, hash(x, y) & 31));
@@ -560,6 +566,9 @@ export class DungeonScene extends Phaser.Scene {
       }
       case 'snooze': this.fx.sleep.explode(5, center(d.x), center(d.y) - 10); break;
       case 'heal': this.float(d.x, d.y, `+${d.n}`, '#8fd36a'); this.fx.heal.explode(6, center(d.x), center(d.y)); break;
+      case 'soak': // humming in the hot spring
+        if (this.time.now > (this.playerSprite.soakAt || 0)) { this.playerSprite.soakAt = this.time.now + 2600; this.emote(this.playerSprite, '♪', 1300); this.face('sparkle', 900); }
+        break;
       case 'gold': this.float(d.x, d.y, `+${d.n}G`, '#f4cf4f', 300); break;
       case 'pickup':
         this.fx[d.type === 'gold' ? 'gold' : 'spark'].explode(d.type === 'chest' ? 20 : 6, center(d.x), center(d.y));
@@ -1101,7 +1110,7 @@ export class DungeonScene extends Phaser.Scene {
 
     // soft shadows under everyone standing on the floor (they stay put when an actor hops)
     const shadow = (s, w) => {
-      if (!s || !s.visible || s.dying) return;
+      if (!s || !s.visible || s.dying || s.wet) return;
       if (s.flat) { this.shadowGfx.fillStyle(0x000000, 0.25); this.shadowGfx.fillEllipse(s.x, s.y - 2, 9, 3); return; }
       const lift = Math.min(1, (s.lift ?? s.hop ?? 0) / 6);
       this.shadowGfx.fillStyle(0x000000, 0.32 * (1 - 0.5 * lift));
@@ -1115,7 +1124,13 @@ export class DungeonScene extends Phaser.Scene {
     const wf = Math.floor(time / 650) % 2;
     if (wf !== this.waterFrame) {
       this.waterFrame = wf;
-      for (const img of this.waterImgs) img.setTexture(waterKey(this, this.zi, wf, img.shore));
+      for (const img of this.waterImgs) img.setTexture(waterKey(this, this.zi, wf, img.shore, img.warm));
+    }
+    // a hot spring steams
+    if (map.spring && time > (this.steamAt || 0)) {
+      this.steamAt = time + 140;
+      const i = map.spring[Math.floor(Math.random() * map.spring.length)];
+      if (map.visible[i]) this.fx.warm.explode(1, (i % map.w) * TILE + 2 + Math.random() * 12, ((i / map.w) | 0) * TILE + 6 + Math.random() * 6);
     }
 
     // gas clouds and fire on tiles you can see
@@ -1403,6 +1418,11 @@ export class DungeonScene extends Phaser.Scene {
     if (who.d?.bones && who.hp <= who.maxHp * 0.4 && who.state !== 'sleep') jitter = Math.sin(time / 28 + id) * 0.8;
     if (who.charge) jitter = Math.sin(time / 40) * 1.2;
     if (who.stoneT > 0) { sx = 1; sy = 1; hop = 0; }
+    // wading: in water the bottom of a body is under the surface
+    const wet = !s.dying && !who.d?.boss && !FLIERS.has(who.d?.sprite) && this.run.map.ter[idx(who.x, who.y)] === T.WATER;
+    const fh = s.frame.height, cut = wet ? Math.round(fh * 0.22) : 0;
+    if (cut) { s.setCrop(0, 0, s.frame.width, fh - cut); hop -= cut * TILE / fh - 1; } else if (s.isCropped) s.setCrop();
+    s.wet = wet;
     const base = (who.d?.boss ? 1.25 : 1) * (who.small ? 0.8 : 1);
     const k = texScale(s);
     if (!s.dying) s.setScale(base * sx * k * (s.sqx ?? 1), base * sy * k * (s.sqy ?? 1));

@@ -65,7 +65,8 @@ export function describeTile(run, x, y, always = false) {
     lines.push(`${what} (${ore.hits}/${ORE_HITS}): ${TILE_INFO.bigOre.tip}${ore.size > 1 ? ' 바위가 클수록 많이 나온다.' : ''}`);
   }
   const ter = map.ter[i];
-  if (ter !== T.NONE && TERRAIN[ter] && !map.hidden[i]) lines.push(`${TERRAIN[ter].name}: ${TERRAIN[ter].tip}`);
+  if (map.spring?.includes(i)) lines.push('온천: 따끈한 물. 들어가 있으면 체력이 조금씩 찬다. 적도 마찬가지다. 불도 꺼진다.');
+  else if (ter !== T.NONE && TERRAIN[ter] && !map.hidden[i]) lines.push(`${TERRAIN[ter].name}: ${TERRAIN[ter].tip}`);
   if (map.fire[i] && map.visible[i]) lines.push(`${TILE_INFO.fire.name}: ${TILE_INFO.fire.tip}`);
   if (map.visible[i]) {
     for (const k of GAS_KEYS) {

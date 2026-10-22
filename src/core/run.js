@@ -243,6 +243,15 @@ export class Run {
       floor: this.floor, start: this.p, stairs,
       relicOffers: n => this.offers(n).filter(o => o.kind === 'relic').map(o => o.id),
     });
+    // 온천: up in the hills, a flooded room's pool may be warm (map.spring: its tiles); set pieces
+    // have taken their rooms by now, so a flooded room is still flooded
+    const flood = rooms.findIndex((r, i) => deco.themes[i] === 'flood');
+    if (flood >= 0 && Math.random() < B.SPRING_CHANCE[Math.min(2, zi)]) {
+      const r = rooms[flood];
+      map.spring = [];
+      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (map.ter[idx(x, y)] === T.WATER) map.spring.push(idx(x, y));
+      if (!map.spring.length) delete map.spring;
+    }
     // loose traps, enemies and loot stay out of the set pieces
     const open = rooms.filter((r, i) => !SET_PIECES.has(deco.themes[i]));
     if (placeTraps(map, open, { start: this.p, stairs }, this.floor)) this.has.add('trap');
