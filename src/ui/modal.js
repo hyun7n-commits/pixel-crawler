@@ -43,6 +43,11 @@ export function showChoice({ title, sub, run, opts, onPick, onReroll, who }) {
       head.append(icon(who, 48), el('h2', null, title));
       sh.append(head, el('p', 'talk-text', sub));
     } else sh.append(el('h2', null, title), el('p', null, sub));
+    if (opts.some(o => o.kind === 'buy')) {
+      const purse = el('p', 'stall-purse');
+      purse.append(icon('gold', 18), el('span', null, `가진 골드 ${run.gold}G`));
+      sh.append(purse);
+    }
     const wrap = el('div', 'choices');
     opts.forEach((o, i) => {
       const b = button('choice', null, () => { closeModal(); onPick(o); });
