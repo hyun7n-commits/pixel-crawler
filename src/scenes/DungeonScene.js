@@ -947,9 +947,11 @@ export class DungeonScene extends Phaser.Scene {
     this.tweens.add({ targets: ring, scale: 2 + d.tier * 0.5, alpha: 0, duration: 600, ease: 'Quad.out', onComplete: () => ring.destroy() });
   }
 
+  // `size` in world pixels picks the pixel font whose grid matches the art: 10 (small), 12, 15 (big)
   float(x, y, text, color, delay = 0, size = 10) {
+    const [family, px] = size >= 14 ? ['Galmuri14', 15] : size >= 11 ? ['Galmuri11', 12] : ['Galmuri9', 10];
     const t = this.add.text(center(x), y * TILE, text, {
-      fontFamily: '"Do Hyeon", sans-serif', fontSize: `${size}px`, color, stroke: '#000000', strokeThickness: 2,
+      fontFamily: `${family}, sans-serif`, fontSize: `${px}px`, color, stroke: '#000000', strokeThickness: 2,
     }).setOrigin(0.5, 1).setDepth(D.text).setResolution(this.textRes()).setAlpha(delay ? 0 : 1);
     this.tweens.add({ targets: t, alpha: 1, duration: 1, delay });
     this.tweens.add({ targets: t, y: t.y - 10, alpha: 0, duration: 800, delay: delay + 150, ease: 'Quad.in', onComplete: () => t.destroy() });
@@ -966,7 +968,7 @@ export class DungeonScene extends Phaser.Scene {
     while (this.bubbles.length >= 2) this.bubbles.shift().destroy();
     const k = (this.game.registry.get('dpr') || 1) / (this.cameras.main.zoom || 3);
     const b = this.add.text(target.x, target.y - 18, text, {
-      fontFamily: '"Do Hyeon", sans-serif', fontSize: `${14 * k}px`, color: '#1b1424', backgroundColor: '#f4f0e8',
+      fontFamily: 'Galmuri11, sans-serif', fontSize: `${12 * k}px`, color: '#1b1424', backgroundColor: '#f4f0e8',
       padding: { x: 7 * k, y: 4 * k }, align: 'center', wordWrap: { width: 190 * k, useAdvancedWrap: true },
     }).setOrigin(0.5, 1).setDepth(D.bubble).setResolution(this.textRes());
     b.target = target;

@@ -282,7 +282,7 @@ export class VillageScene extends Phaser.Scene {
     this.tweens.add({ targets: f.img, y: f.img.y - 14, alpha: 0, duration: 380, ease: 'Quad.out', onComplete: () => f.img.destroy() });
     const k = this.dpr / (this.cameras.main.zoom || 3);
     const t = this.keep(this.add.text(f.img.x, f.img.y - 8, `+${n}G`, {
-      fontFamily: '"Do Hyeon", sans-serif', fontSize: `${15 * k}px`, color: '#f4cf4f', stroke: '#1b1424', strokeThickness: 3 * k,
+      fontFamily: 'Galmuri14, sans-serif', fontSize: `${15 * k}px`, color: '#f4cf4f', stroke: '#1b1424', strokeThickness: 3 * k,
     }).setOrigin(0.5, 1).setDepth(D.bubble).setResolution(this.cameras.main.zoom || 3));
     this.tweens.add({ targets: t, y: t.y - 12, alpha: 0, delay: 350, duration: 700, ease: 'Quad.in' });
     this.ps.expr = 'sparkle';
@@ -606,7 +606,7 @@ export class VillageScene extends Phaser.Scene {
     while (this.bubbles.length >= 3) this.bubbles.shift().destroy();
     const z = this.cameras.main.zoom || 3, k = this.dpr / z;
     const b = this.add.text(target.x, target.y - 18, text, {
-      fontFamily: '"Do Hyeon", sans-serif', fontSize: `${14 * k}px`, color: '#1b1424', backgroundColor: '#f4f0e8',
+      fontFamily: 'Galmuri11, sans-serif', fontSize: `${12 * k}px`, color: '#1b1424', backgroundColor: '#f4f0e8',
       padding: { x: 7 * k, y: 4 * k }, align: 'center', wordWrap: { width: 190 * k, useAdvancedWrap: true },
     }).setOrigin(0.5, 1).setDepth(D.bubble).setResolution(z);
     b.target = target;

@@ -153,7 +153,7 @@ export class StoryScene extends Phaser.Scene {
   mark(im, text, ms = 1400) {
     const z = this.cameras.main.zoom || 3, k = this.dpr / z;
     const b = this.keep(this.add.text(im.x, im.y - im.displayHeight - 2, text, {
-      fontFamily: '"Do Hyeon", sans-serif', fontSize: `${16 * k}px`, color: '#1b1424', backgroundColor: '#f4f0e8',
+      fontFamily: 'Galmuri11, sans-serif', fontSize: `${12 * k}px`, color: '#1b1424', backgroundColor: '#f4f0e8',
       padding: { x: 6 * k, y: 3 * k },
     }).setOrigin(0.5, 1).setDepth(D.bubble).setResolution(z));
     b.setScale(0.2);
