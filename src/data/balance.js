@@ -48,3 +48,14 @@ export const SNORE_NOISE = 8;
 // The ore turtle: a calm, tough monster that carries treasure
 export const TURTLE_CHANCE = 0.5;
 export const turtleGold = floor => 15 + 5 * floor;
+
+// Tall grass: chance that flattening it turns up a few coins.
+export const GRASS_COIN = 0.04;
+
+// Traps (data/terrain.js). How many per floor, how many of them start hidden,
+// the chance per turn to spot a hidden one next to you, and what they do.
+export const trapsPerFloor = floor => Math.min(5, 1 + Math.floor(floor / 2));
+export const trapHidden = floor => (floor < 2 ? 0 : Math.min(0.5, 0.15 * floor));
+export const TRAP_SPOT = 0.35;
+export const trapSpike = floor => 5 + 2 * floor;
+export const trapSummon = floor => Math.min(5, 2 + Math.floor(floor / 3) + (Math.random() < 0.5 ? 1 : 0));

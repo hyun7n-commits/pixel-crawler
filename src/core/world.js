@@ -1,10 +1,12 @@
 // The living dungeon: fire, gas, explosions and what happens when you step on things.
 // Like run.js these are pure rules. They change the run and emit events for the scene to draw.
 
-import { T, TERRAIN, GAS_KEYS, SLEEP_MIN, MINE_MIN } from '../data/terrain.js';
+import { T, TERRAIN, GAS_KEYS, SLEEP_MIN, MINE_MIN, isTrap } from '../data/terrain.js';
 import { idx, inMap, passable, isBorder, WALL, FLOOR, DOOR } from './dungeon.js';
-import { DIRS8 } from './util.js';
-import { SNORE_NOISE } from '../data/balance.js';
+import { DIRS8, pick, rint, shuffle } from './util.js';
+import * as B from '../data/balance.js';
+
+const { SNORE_NOISE } = B;
 
 const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const GAS_DECAY = { sleep: 0.8, mine: 0.97 };
@@ -31,11 +33,84 @@ export function onEnter(run, who, x, y) {
     run.emit('steam', { x, y });
     if (who === 'player') { run.log('웅덩이에 뛰어들어 불을 껐다.', 'good'); run.discover('water_fire'); }
   }
-  if (ter === T.MUSH_SLEEP) burstMushroom(run, x, y);
-  if (who === 'player' && ter === T.BRUSH && !run.told.brush) {
-    run.told.brush = true;
-    run.log('버섯 덤불 속에 숨었다. 멀리 있는 적은 나를 못 본다.', 'good');
+  // tall grass is flattened by whoever walks into it, like in Shattered Pixel Dungeon
+  if (ter === T.BRUSH) trample(run, who, x, y);
+  if (who === 'player' && isTrap(ter)) springTrap(run, x, y);
+}
+
+function trample(run, who, x, y) {
+  const i = idx(x, y);
+  run.map.ter[i] = T.GRASS;
+  run.emit('tiles', { list: [i], soft: true });
+  if (run.isVisible(x, y)) run.emit('rustle', { x, y });
+  // now and then something glints in the grass
+  if (who === 'player' && Math.random() < B.GRASS_COIN) {
+    const n = rint(1, 3) * (1 + Math.floor((run.floor - 1) / B.FLOORS_PER_ZONE));
+    run.addGold(n, x, y);
+    run.log(`풀 속에서 동전 ${n}개를 주웠다.`, 'good');
   }
+}
+
+// ---------- traps ----------
+// Sets off the trap at (x, y): stepped on by you, or caught in a blast.
+export function springTrap(run, x, y) {
+  const map = run.map, i = idx(x, y), t = map.ter[i];
+  if (!isTrap(t)) return;
+  map.ter[i] = T.TRAP_OFF;
+  map.hidden[i] = 0;
+  run.emit('tiles', { list: [i], soft: true });
+  run.emit('trap', { x, y, kind: t });
+  const seen = run.isVisible(x, y), onMe = run.p.x === x && run.p.y === y;
+  if (t === T.TRAP_SLEEP) {
+    addGas(run, x, y, 'sleep', 60);
+    for (const [dx, dy] of DIRS8) addGas(run, x + dx, y + dy, 'sleep', 30);
+    run.emit('puff', { x, y, kind: 'sleep' });
+    if (seen) run.log('딸깍! 졸음 가스가 뿜어져 나왔다!', 'warn');
+  } else if (t === T.TRAP_SPIKE) {
+    if (seen) run.log('푹! 바닥에서 가시가 솟았다!', 'warn');
+    damageAt(run, x, y, B.trapSpike(run.floor), '가시 함정을 밟았다', 'spike');
+  } else if (t === T.TRAP_ALARM) {
+    run.log('따르르릉! 요란한 종소리가 층 전체에 울렸다!', 'warn');
+    run.emit('alarm', { x, y });
+    run.noise(x, y, 99);
+  } else if (t === T.TRAP_SUMMON) {
+    const spots = [];
+    for (let r = 1; r <= 2 && spots.length < 6; r++) {
+      for (const [dx, dy] of shuffle([...DIRS8])) {
+        const sx = x + dx * r, sy = y + dy * r;
+        if (run.canEnemyEnter(sx, sy) && !whoAt(run, sx, sy) && !spots.some(o => o.x === sx && o.y === sy)) spots.push({ x: sx, y: sy });
+      }
+    }
+    const n = Math.min(spots.length, B.trapSummon(run.floor));
+    for (const s of spots.slice(0, n)) {
+      const e = run.spawnEnemy(pick(run.zone.enemies), s.x, s.y, B.enemyScale(run.floor));
+      e.state = 'hunt';
+      e.last = { x: run.p.x, y: run.p.y };
+      run.emit('summon', { x: s.x, y: s.y });
+    }
+    if (seen || onMe) run.log(`쿠구궁! 함정에서 몬스터 ${n}마리가 튀어나왔다!`, 'warn');
+  }
+}
+
+// Hidden traps next to you may be spotted at the end of each turn.
+export function spotTraps(run) {
+  const map = run.map, p = run.p;
+  for (const [dx, dy] of DIRS8) {
+    const x = p.x + dx, y = p.y + dy, i = idx(x, y);
+    if (!inMap(x, y) || !map.hidden[i] || Math.random() > B.TRAP_SPOT) continue;
+    map.hidden[i] = 0;
+    run.emit('tiles', { list: [i], soft: true });
+    run.emit('spot', { x, y });
+    run.log(`숨은 함정을 찾았다! ${TERRAIN[map.ter[i]].name}이다.`, 'good');
+  }
+}
+
+// Shows every hidden trap on the floor (the map item).
+export function revealTraps(run) {
+  const map = run.map, list = [];
+  for (let i = 0; i < map.hidden.length; i++) if (map.hidden[i]) { map.hidden[i] = 0; list.push(i); }
+  if (list.length) run.emit('tiles', { list, soft: true });
+  return list.length;
 }
 
 // ---------- fire ----------
@@ -55,7 +130,6 @@ export function ignite(run, x, y, flash = false) {
   if (!passable(map, x, y) || map.ter[i] === T.WATER) return;
   if (map.gas.mine[i] >= MINE_MIN) gasExplode(run, x, y);
   const ter = map.ter[i];
-  if (ter === T.MUSH_SLEEP) { burstMushroom(run, x, y); return; }
   const burn = TERRAIN[ter]?.burn || 0;
   if (burn) map.fire[i] = Math.max(map.fire[i], burn);
   else if (flash) map.fire[i] = Math.max(map.fire[i], 1);
@@ -79,11 +153,11 @@ function fireTick(run) {
       if (map.gas.mine[j] >= MINE_MIN) spread.add(j);
       else if (TERRAIN[map.ter[j]]?.burn && Math.random() < 0.45) spread.add(j);
     }
-    if (--map.fire[i] === 0 && map.ter[i] === T.BRUSH) { map.ter[i] = T.ASH; changed.push(i); }
+    if (--map.fire[i] === 0 && (map.ter[i] === T.BRUSH || map.ter[i] === T.GRASS)) { map.ter[i] = T.ASH; changed.push(i); }
   }
   for (const j of spread) {
     const x = j % map.w, y = (j / map.w) | 0;
-    if (map.ter[j] === T.BRUSH && run.isVisible(x, y)) run.discover('fire_brush');
+    if ((map.ter[j] === T.BRUSH || map.ter[j] === T.GRASS) && run.isVisible(x, y)) run.discover('fire_brush');
     ignite(run, x, y);
   }
   if (changed.length) run.emit('tiles', { list: changed });
@@ -94,16 +168,6 @@ export function addGas(run, x, y, kind, amount) {
   if (!passable(run.map, x, y)) return;
   run.map.gas[kind][idx(x, y)] += amount;
   run.gasActive = true;
-}
-
-export function burstMushroom(run, x, y) {
-  const map = run.map, i = idx(x, y);
-  map.ter[i] = T.NONE;
-  addGas(run, x, y, 'sleep', 40);
-  for (const [dx, dy] of DIRS4) addGas(run, x + dx, y + dy, 'sleep', 20);
-  run.emit('puff', { x, y, kind: 'sleep' });
-  run.emit('tiles', { list: [i] });
-  if (run.isVisible(x, y)) run.log('졸음 버섯이 터졌다! 보라 가스를 마시면 잠든다.', 'warn');
 }
 
 function diffuse(map, kind) {
@@ -172,6 +236,12 @@ export function explosion(run, x, y, r, { dmg, cause, selfMult = 0.5 }) {
     }
   }
   for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) ignite(run, x + i, y + j, true);
+  // a blast sets off any trap it reaches, so you can spring one from a distance
+  for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) {
+    if (!inMap(x + i, y + j) || !isTrap(map.ter[idx(x + i, y + j)])) continue;
+    springTrap(run, x + i, y + j);
+    run.discover('bomb_trap');
+  }
   if (broke) run.discover('bomb_wall');
   if (changed.length) run.emit('tiles', { list: changed });
   run.noise(x, y, 9);
@@ -181,6 +251,7 @@ export function explosion(run, x, y, r, { dmg, cause, selfMult = 0.5 }) {
 export function breakWall(run, x, y) {
   const map = run.map, i = idx(x, y);
   if (map.tiles[i] === DOOR) map.doors = map.doors.filter(d => d.x !== x || d.y !== y);
+  map.lights = map.lights.filter(l => l.x !== x || l.y !== y);
   map.tiles[i] = FLOOR;
   map.open[i] = 0;
   map.ter[i] = T.NONE;

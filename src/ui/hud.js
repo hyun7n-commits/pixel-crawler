@@ -2,7 +2,8 @@
 // On a phone the same panel is a bag sheet, with a slim status bar on top and a toolbar below.
 
 import { $, el, button, icon } from './dom.js';
-import { RELICS, MAX_SLOTS, evolutionOf, legendOf } from '../data/relics.js';
+import { RELICS, MAX_SLOTS } from '../data/relics.js';
+import { recipeFor } from './recipe.js';
 import { ITEMS } from '../data/items.js';
 import { LAST_FLOOR, xpToLevel } from '../data/balance.js';
 import { zoneOf, isBossFloor } from '../core/run.js';
@@ -56,19 +57,6 @@ export class Hud {
     this.bannerTimer = setTimeout(() => b.classList.remove('show'), 1600);
   }
 
-  evolutionLine(run, id) {
-    const lg = legendOf(id);
-    if (lg) {
-      if (!run.meta.legends[lg.id]) return `전설 조합: ??? · 소문: "${lg.hint}"`;
-      const part = x => `${RELICS[x].name}${run.p.relics[x] ? ' ✓' : ''}`;
-      return `전설: ${part(lg.a)} + ${part(lg.b)} → ${RELICS[lg.id].name}`;
-    }
-    const ev = evolutionOf(id);
-    if (!ev) return '';
-    const part = x => `${RELICS[x].name} Lv${run.p.relics[x] || 0}/3`;
-    return `진화: ${part(ev.a)} + ${part(ev.b)} → ${RELICS[ev.id].name}`;
-  }
-
   update(run) {
     const s = run.stat(), p = run.p;
     $('floorLabel').innerHTML = `${run.floor}층<small>${isBossFloor(run.floor) ? '보스' : zoneOf(run.floor).name} · ${LAST_FLOOR}층까지</small>`;
@@ -78,7 +66,7 @@ export class Hud {
     $('lvText').textContent = `Lv${p.lvl} · 경험치 ${p.xp}/${xpToLevel(p.lvl)}`;
     $('atkText').textContent = `공격 ${s.atk} · 방어 ${s.def}`;
     $('xpbar').firstElementChild.style.width = `${(p.xp / xpToLevel(p.lvl)) * 100}%`;
-    const st = playerStatus(p, run.playerHidden());
+    const st = playerStatus(p);
     $('pstatus').innerHTML = '';
     for (const t of st) $('pstatus').append(el('span', 'chip', t));
 
@@ -112,11 +100,11 @@ export class Hud {
     const info = $('relicInfo');
     if (this.selected && p.relics[this.selected]) {
       const id = this.selected, r = RELICS[id];
-      const ev = this.evolutionLine(run, id);
-      info.innerHTML = `<b>${r.name}${r.legend ? ' (전설)' : r.evo ? ' (진화)' : ` Lv${p.relics[id]}`}</b> · ${r.desc(p.relics[id])}` +
-        (ev ? `<br><span class="evo-line">${ev}</span>` : '');
+      info.innerHTML = `<b>${r.name}${r.legend ? ' (전설)' : r.evo ? ' (진화)' : ` Lv${p.relics[id]}`}</b> · ${r.desc(p.relics[id])}`;
+      const rc = recipeFor(run, id);
+      if (rc) info.append(rc);
     } else {
-      info.textContent = '유물을 누르면 효과와 진화 조합이 보인다.';
+      info.textContent = '유물을 누르면 효과와 짝꿍 유물이 보인다.';
     }
 
     const items = $('items');

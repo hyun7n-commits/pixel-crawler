@@ -3,11 +3,11 @@
 // Characters stand on the bottom middle of their tile (origin 0.5, 1).
 
 /* global Phaser */
-import { TILE, buildTextures } from './textures.js';
+import { TILE, buildTextures, wallKey, waterKey, shadeKey, floorKey, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
 import { CHARACTERS } from '../data/characters.js';
 import { ITEMS } from '../data/items.js';
 import { T, TERRAIN, GASES, GAS_KEYS } from '../data/terrain.js';
-import { idx, inMap, WALL, STAIRS, DOOR, ORE, UPSTAIRS } from '../core/dungeon.js';
+import { idx, inMap, lineOfSight, WALL, STAIRS, DOOR, ORE, UPSTAIRS } from '../core/dungeon.js';
 import { WAKE_AT } from '../core/ai.js';
 import { BOMB_RANGE } from '../core/run.js';
 import { ORE_HITS } from '../data/balance.js';
@@ -58,7 +58,9 @@ export class DungeonScene extends Phaser.Scene {
       gold: burst([0xf4cf4f, 0xf08c3a], { gravityY: 50 }),
       steam: burst([0xffffff, 0xc9c2b6], { gravityY: -50, speed: { min: 5, max: 20 }, alpha: { start: 0.8, end: 0 } }),
       sleep: burst([0xb58cf0, 0xd8c2ff], { gravityY: -10, speed: { min: 8, max: 30 }, alpha: { start: 0.8, end: 0 }, scale: { start: 2.5, end: 0 } }),
+      leaf: burst([0x6cc45a, 0x2f7a43, 0xb5e08a], { gravityY: 60, speed: { min: 12, max: 36 }, lifespan: { min: 300, max: 600 }, scale: { start: 1.5, end: 0.5 } }),
     };
+    this.shadowGfx = this.add.graphics().setDepth(D.pickups - 0.5);
     this.gasGfx = this.add.graphics().setDepth(D.gas);
     this.fireGfx = this.add.graphics().setDepth(D.fire);
     this.teleGfx = this.add.graphics().setDepth(D.telegraph);
@@ -190,6 +192,9 @@ export class DungeonScene extends Phaser.Scene {
     Object.values(this.pickupSprites || {}).forEach(s => s.destroy());
     this.bubbles.forEach(b => b.destroy());
     this.playerSprite?.destroy();
+    (this.lamps || []).forEach(l => { l.lamp.destroy(); l.glow.destroy(); });
+    this.lamps = [];
+    this.light = null;
     this.tileImgs = [];
     this.waterImgs = new Set();
     this.enemySprites = {};
@@ -205,6 +210,7 @@ export class DungeonScene extends Phaser.Scene {
     this.clearFloor();
     const run = this.run, map = run.map;
     for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) this.buildTile(x, y);
+    this.buildLamps();
     this.playerSprite = this.makeActor(CHARACTERS[run.charId].sprite, run.p.x, run.p.y).setDepth(D.player);
     this.cameras.main.startFollow(this.playerSprite, true, 0.25, 0.25, 0, TILE / 2);
     this.cameras.main.centerOn(center(run.p.x), foot(run.p.y) - TILE / 2);
@@ -218,9 +224,22 @@ export class DungeonScene extends Phaser.Scene {
     return s;
   }
 
-  floorKey(x, y) {
-    const h = hash(x, y) & 15;
-    return `z${this.zi}_floor${h < 9 ? 0 : h < 12 ? 1 : h < 15 ? 2 : 3}`;
+  // Miners' lamps on the walls, and how much of their warm light reaches each tile.
+  buildLamps() {
+    const map = this.run.map, R = 3.5;
+    this.light = new Float32Array(map.w * map.h);
+    for (const l of map.lights || []) {
+      const lamp = this.add.image(l.x * TILE, l.y * TILE, 't_lamp').setOrigin(0).setDepth(D.ter).setVisible(false);
+      const glow = this.add.image(center(l.x), l.y * TILE + 6, 'glow').setDepth(D.ter + 0.5).setBlendMode(Phaser.BlendModes.ADD).setVisible(false);
+      this.lamps.push({ ...l, lamp, glow, seed: hash(l.x, l.y) % 1000 });
+      for (let y = Math.floor(l.y - R); y <= l.y + R + 1; y++) for (let x = Math.floor(l.x - R); x <= l.x + R; x++) {
+        if (!inMap(x, y)) continue;
+        const d = Math.hypot(x - l.x, y - l.y - 0.5);
+        if (d > R || !lineOfSight(map, l.x, l.y + 1, x, y)) continue;
+        const i = idx(x, y);
+        this.light[i] = Math.max(this.light[i], 1 - d / R);
+      }
+    }
   }
 
   buildTile(x, y) {
@@ -234,19 +253,28 @@ export class DungeonScene extends Phaser.Scene {
       return img;
     };
     delete this.doorImgs[i];
+    // which neighbours pass `test`, as N/E/S/W and diagonal bits
+    const around = test => (test(x, y - 1) && N) | (test(x + 1, y) && E) | (test(x, y + 1) && S) | (test(x - 1, y) && W_) |
+      (test(x + 1, y - 1) && NE) | (test(x + 1, y + 1) && SE) | (test(x - 1, y + 1) && SW) | (test(x - 1, y - 1) && NW);
+    const wall = (nx, ny) => !inMap(nx, ny) || map.tiles[idx(nx, ny)] === WALL;
     if (t === WALL) {
-      let nearFloor = false;
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-        if (inMap(x + dx, y + dy) && map.tiles[idx(x + dx, y + dy)] !== WALL) nearFloor = true;
-      }
-      if (!nearFloor) { this.tileImgs[i] = null; return; }
-      const faceBelow = inMap(x, y + 1) && map.tiles[idx(x, y + 1)] !== WALL;
-      add(`z${zi}_${faceBelow ? 'face' : 'wall'}`);
+      const open = around((nx, ny) => !wall(nx, ny));
+      if (!open) { this.tileImgs[i] = null; return; }
+      add(wallKey(this, zi, open));
     } else {
-      if (ter === T.WATER) this.waterImgs.add(add(`z${zi}_water${this.waterFrame}`));
-      else add(this.floorKey(x, y));
-      const spr = TERRAIN[ter]?.sprite;
-      if (spr) add(`t_${spr}`, D.ter);
+      if (ter === T.WATER) {
+        const shore = around((nx, ny) => wall(nx, ny) || map.ter[idx(nx, ny)] !== T.WATER);
+        const img = add(waterKey(this, zi, this.waterFrame, shore));
+        img.shore = shore;
+        this.waterImgs.add(img);
+      } else {
+        add(floorKey(zi, hash(x, y) & 31));
+        const shade = around(wall) & (N | E | W_ | NE | NW);
+        if (shade) add(shadeKey(this, shade));
+      }
+      const spr = !map.hidden[i] && TERRAIN[ter]?.sprite;
+      // grass comes in a few looks so a meadow does not look tiled
+      if (spr) add(ter === T.BRUSH || ter === T.GRASS ? `t_${spr}${hash(x, y) % 3}` : `t_${spr}`, D.ter);
       if (t === STAIRS) add('t_stairs', D.ter);
       if (t === UPSTAIRS) add('t_upStairs', D.ter);
       if (t === DOOR) this.doorImgs[i] = add(map.open[i] ? 't_doorOpen' : 't_door', D.ter);
@@ -255,7 +283,8 @@ export class DungeonScene extends Phaser.Scene {
     this.tileImgs[i] = imgs;
   }
 
-  rebuildAround(list) {
+  // `soft`: only the look of the tiles changed (grass flattened, a trap went off), so actors keep gliding
+  rebuildAround(list, soft = false) {
     const done = new Set();
     for (const i of list) {
       const x = i % this.run.map.w, y = (i / this.run.map.w) | 0;
@@ -266,7 +295,13 @@ export class DungeonScene extends Phaser.Scene {
         this.buildTile(nx, ny);
       }
     }
-    this.sync(true);
+    // a blast took a lamp's wall with it
+    if (this.lamps.length !== (this.run.map.lights || []).length) {
+      this.lamps.forEach(l => { l.lamp.destroy(); l.glow.destroy(); });
+      this.lamps = [];
+      this.buildLamps();
+    }
+    if (soft) this.paintFog(); else this.sync(true);
   }
 
   // ---------- state -> sprites ----------
@@ -278,21 +313,7 @@ export class DungeonScene extends Phaser.Scene {
 
     for (const [i, img] of Object.entries(this.doorImgs)) img.setTexture(map.open[i] ? 't_doorOpen' : 't_door');
 
-    // fog of war with light falling off from the player
-    const sight = run.stat().sight;
-    for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) {
-      const i = idx(x, y), imgs = this.tileImgs[i];
-      if (!imgs) continue;
-      if (!map.explored[i]) { imgs.forEach(im => im.setVisible(false)); continue; }
-      let v;
-      if (map.visible[i]) {
-        const d = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
-        v = Math.round(255 - Math.min(1, d / (sight + 1)) * 110);
-      } else v = 70;
-      const tint = (v << 16) | (v << 8) | Math.min(255, Math.round(v * 1.05));
-      imgs.forEach(im => im.setVisible(true).setTint(tint));
-    }
-
+    this.paintFog();
     this.moveTo(this.playerSprite, p.x, p.y, dur);
 
     const alive = new Set();
@@ -323,7 +344,7 @@ export class DungeonScene extends Phaser.Scene {
       let s = this.pickupSprites[key];
       if (!s) {
         const tex = q.type === 'gold' ? 'gold' : q.type === 'chest' ? 'chest' : ITEMS[q.type].sprite;
-        s = this.add.image(q.x * TILE, q.y * TILE, tex).setOrigin(0).setDepth(D.pickups);
+        s = this.add.image(q.x * TILE, q.y * TILE, tex).setOrigin(0).setDepth(D.pickups).setData('baseY', q.y * TILE + 14);
         this.tweens.add({ targets: s, y: q.y * TILE - 2, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.inOut', delay: (q.x * 97) % 600 });
         this.pickupSprites[key] = s;
       }
@@ -331,6 +352,33 @@ export class DungeonScene extends Phaser.Scene {
     }
     for (const key of Object.keys(this.pickupSprites)) {
       if (!keep.has(key)) { this.pickupSprites[key].destroy(); delete this.pickupSprites[key]; }
+    }
+  }
+
+  // fog of war with light falling off from the player
+  paintFog() {
+    const run = this.run, map = run.map, p = run.p;
+    const sight = run.stat().sight;
+    for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) {
+      const i = idx(x, y), imgs = this.tileImgs[i];
+      if (!imgs) continue;
+      if (!map.explored[i]) { imgs.forEach(im => im.setVisible(false)); continue; }
+      let v;
+      if (map.visible[i]) {
+        const d = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
+        v = Math.round(255 - Math.min(1, d / (sight + 1)) * 110);
+      } else v = 70;
+      // lamplight warms and brightens the tiles around a lamp, even ones you only remember
+      const L = this.light ? this.light[i] : 0;
+      v = Math.min(255, v + Math.round(L * (map.visible[i] ? 40 : 50)));
+      const r = Math.min(255, v + Math.round(L * 22)), b = Math.max(0, Math.min(255, Math.round(v * 1.05 - L * 34)));
+      const tint = (r << 16) | (v << 8) | b;
+      imgs.forEach(im => im.setVisible(true).setTint(tint));
+    }
+    for (const l of this.lamps) {
+      const seen = !!map.explored[idx(l.x, l.y)];
+      l.lamp.setVisible(seen);
+      l.glow.setVisible(seen);
     }
   }
 
@@ -355,7 +403,7 @@ export class DungeonScene extends Phaser.Scene {
       case 'floor': this.buildFloor(); break;
       case 'turn': this.sync(); this.follow(); break;
       case 'relics': this.sync(); break;
-      case 'tiles': this.rebuildAround(d.list); break;
+      case 'tiles': this.rebuildAround(d.list, d.soft); break;
       case 'stairs': this.rebuildAround([idx(d.x, d.y)]); this.fx.spark.explode(16, center(d.x), center(d.y)); break;
       case 'attack': this.bump(this.spriteFor(d.who), d.from, d.to); break;
       case 'hit': this.onHit(d); break;
@@ -382,6 +430,17 @@ export class DungeonScene extends Phaser.Scene {
       case 'boom': this.explosion(d.x, d.y, d.r); break;
       case 'gasboom': this.gasBoom(d.tiles); break;
       case 'puff': this.fx[d.kind].explode(30, center(d.x), center(d.y)); break;
+      case 'rustle': this.fx.leaf.explode(7, center(d.x), center(d.y) + 3); break;
+      case 'trap': this.onTrap(d); break;
+      case 'summon': this.fx.magic.explode(16, center(d.x), center(d.y)); break;
+      case 'alarm':
+        for (let k = 0; k < 3; k++) this.time.delayedCall(k * 220, () => this.noiseRing(d.x, d.y, 9, 0xff6b6b));
+        this.cameras.main.shake(260, 0.006);
+        break;
+      case 'spot':
+        this.float(d.x, d.y, '!', '#f4cf4f', 0, 14);
+        this.fx.spark.explode(10, center(d.x), center(d.y));
+        break;
       case 'steam': this.fx.steam.explode(14, center(d.x), center(d.y)); break;
       case 'shock': this.shock(d.tiles); break;
       case 'mine': this.onMine(d); break;
@@ -415,6 +474,20 @@ export class DungeonScene extends Phaser.Scene {
         break;
       default: break;
     }
+  }
+
+  onTrap(d) {
+    const look = {
+      [T.TRAP_SPIKE]: ['푹!', '#d8dde8', 0xd8dde8],
+      [T.TRAP_SLEEP]: ['쉬익!', '#d8c2ff', 0xb58cf0],
+      [T.TRAP_ALARM]: ['따르릉!', '#ff8a8a', 0xff6b6b],
+      [T.TRAP_SUMMON]: ['쿠궁!', '#e6a6ff', 0x9a5fd1],
+    }[d.kind];
+    if (!look) return;
+    this.float(d.x, d.y - 0.4, look[0], look[1], 0, 12);
+    this.noiseRing(d.x, d.y, 1, look[2]);
+    if (d.kind === T.TRAP_SPIKE) { this.fx.rock.explode(10, center(d.x), center(d.y)); this.cameras.main.shake(140, 0.008); }
+    if (d.kind === T.TRAP_SUMMON) { this.cameras.main.shake(220, 0.01); this.cameras.main.flash(120, 154, 95, 209); }
   }
 
   onHit(d) {
@@ -617,15 +690,33 @@ export class DungeonScene extends Phaser.Scene {
   // ---------- per-frame drawing ----------
   update(time) {
     const run = this.run, g = this.overlay;
-    g.clear(); this.teleGfx.clear(); this.pathGfx.clear(); this.gasGfx.clear(); this.fireGfx.clear();
+    g.clear(); this.teleGfx.clear(); this.pathGfx.clear(); this.gasGfx.clear(); this.fireGfx.clear(); this.shadowGfx.clear();
     if (!run || !this.playerSprite) return;
     const map = run.map, p = run.p;
+
+    // lamps flicker
+    for (const l of this.lamps) {
+      if (!l.glow.visible) continue;
+      const f = 0.85 + 0.09 * Math.sin(time / 110 + l.seed) + 0.06 * Math.sin(time / 37 + l.seed * 3);
+      l.glow.setAlpha(f).setScale(0.95 + 0.05 * f);
+    }
+
+    // soft shadows under everyone standing on the floor (they stay put when an actor hops)
+    const shadow = (s, w) => {
+      if (!s || !s.visible || s.dying) return;
+      const lift = Math.min(1, (s.hop || 0) / 6);
+      this.shadowGfx.fillStyle(0x000000, 0.32 * (1 - 0.5 * lift));
+      this.shadowGfx.fillEllipse(s.x, s.y - 1.5, w * (1 - 0.3 * lift), 4);
+    };
+    shadow(this.playerSprite, 11);
+    for (const s of Object.values(this.enemySprites)) shadow(s, s.scaleX > 1.1 ? 15 : 11);
+    for (const s of Object.values(this.pickupSprites)) if (s.visible) { this.shadowGfx.fillStyle(0x000000, 0.25); this.shadowGfx.fillEllipse(s.x + 8, s.getData?.('baseY') ?? s.y + 15, 9, 3); }
 
     // water ripples
     const wf = Math.floor(time / 650) % 2;
     if (wf !== this.waterFrame) {
       this.waterFrame = wf;
-      for (const img of this.waterImgs) img.setTexture(`z${this.zi}_water${wf}`);
+      for (const img of this.waterImgs) img.setTexture(waterKey(this, this.zi, wf, img.shore));
     }
 
     // gas clouds and fire on tiles you can see
@@ -729,7 +820,6 @@ export class DungeonScene extends Phaser.Scene {
     // you
     const ps = this.playerSprite;
     this.pose(ps, p, p.face < 0, time);
-    ps.setAlpha(run.playerHidden() ? 0.6 : 1);
     this.drawStatus(g, ps, p, ps.y - TILE - ps.hop, p.face < 0 ? -1 : 1, time);
 
     // speech bubbles follow their speaker

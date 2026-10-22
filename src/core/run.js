@@ -8,15 +8,15 @@ import { CHARACTERS } from '../data/characters.js';
 import { ENEMIES, ZONES } from '../data/enemies.js';
 import { ITEMS } from '../data/items.js';
 import { ORES } from '../data/ores.js';
-import { T, DISCOVERIES, GOSSIP, SLEEP_TALK, FLOOR_HINTS } from '../data/terrain.js';
+import { T, DISCOVERIES, GOSSIP, SLEEP_TALK, FLOOR_HINTS, isTrap } from '../data/terrain.js';
 import { rnd, rint, pick, shuffle, cheb, josa, DIRS8 } from './util.js';
 import {
   createMap, carveRooms, carveArena, idx, inMap, passable, distMap, lineOfSight, computeFOV,
   FLOOR, STAIRS, ORE, UPSTAIRS,
 } from './dungeon.js';
-import { decorate, decorateArena } from './decorate.js';
+import { decorate, decorateArena, placeTraps } from './decorate.js';
 import { enemyAct, rouse } from './ai.js';
-import { onEnter, explosion, envTick, waterBody, ignite, addGas } from './world.js';
+import { onEnter, explosion, envTick, waterBody, ignite, addGas, spotTraps, revealTraps } from './world.js';
 
 export const zoneOf = floor => ZONES[Math.floor((floor - 1) / B.FLOORS_PER_ZONE)];
 export const isBossFloor = floor => floor % B.FLOORS_PER_ZONE === 0;
@@ -89,12 +89,12 @@ export class Run {
   passable(x, y) { return passable(this.map, x, y); }
   isVisible(x, y) { return inMap(x, y) && this.map.visible[idx(x, y)] === 1; }
   enemyAt(x, y) { return this.enemies.find(e => e.hp > 0 && e.x === x && e.y === y); }
+  // enemies know the mine: they never step on a trap
   canEnemyEnter(x, y) {
-    return this.passable(x, y) && !this.enemyAt(x, y) && !(x === this.p.x && y === this.p.y);
+    return this.passable(x, y) && !this.enemyAt(x, y) && !(x === this.p.x && y === this.p.y) && !isTrap(this.map.ter[idx(x, y)]);
   }
   // next to each other: close enough to hit, diagonals and doorways included
   touching(a, b) { return cheb(a, b) === 1; }
-  playerHidden() { return this.map.ter[idx(this.p.x, this.p.y)] === T.BRUSH; }
   randomFloorTile() {
     for (let t = 0; t < 100; t++) {
       const x = rnd(this.map.w), y = rnd(this.map.h);
@@ -156,6 +156,7 @@ export class Run {
     const zi = Math.floor((this.floor - 1) / B.FLOORS_PER_ZONE);
     const deco = decorate(map, rooms, { start: this.p, stairs: { x: far.cx, y: far.cy } });
     this.has = deco.has;
+    if (placeTraps(map, rooms, { start: this.p, stairs: { x: far.cx, y: far.cy } }, this.floor)) this.has.add('trap');
     if (map.ore) map.ore.tier = Math.min(ORES.length - 1, zi + (Math.random() < B.ORE_START_BONUS ? 1 : 0));
 
     // a free spot in a room other than the start; returns the spot and its room
@@ -163,7 +164,7 @@ export class Run {
       for (let t = 0; t < 300; t++) {
         const r = pick(rooms.slice(1));
         const x = rint(r.x, r.x + r.w - 1), y = rint(r.y, r.y + r.h - 1), i = idx(x, y);
-        if (map.tiles[i] !== FLOOR || ![T.NONE, T.BRUSH, T.ASH].includes(map.ter[i])) continue;
+        if (map.tiles[i] !== FLOOR || ![T.NONE, T.BRUSH, T.GRASS, T.ASH].includes(map.ter[i])) continue;
         if (this.enemyAt(x, y) || this.pickups.some(q => q.x === x && q.y === y)) continue;
         if (Math.abs(x - this.p.x) + Math.abs(y - this.p.y) < 6) continue;
         return { x, y, theme: deco.themes[rooms.indexOf(r)] };
@@ -172,11 +173,11 @@ export class Run {
     };
     const place = (fn) => { const s = free(); if (s) fn(s); };
     const scale = B.enemyScale(this.floor);
-    // enemies in a mushroom garden are fast asleep; elsewhere about half of them are
+    // about half of them start asleep
     for (let i = 0; i < B.enemiesPerFloor(this.floor); i++) {
       place(s => {
         const e = this.spawnEnemy(pick(this.zone.enemies), s.x, s.y, scale);
-        e.state = s.theme === 'garden' || Math.random() < B.START_ASLEEP ? 'sleep' : 'wander';
+        e.state = Math.random() < B.START_ASLEEP ? 'sleep' : 'wander';
       });
     }
     if (Math.random() < B.TURTLE_CHANCE) {
@@ -355,7 +356,8 @@ export class Run {
         for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) if (passable(m, x + k, y + j) || m.tiles[idx(x, y)] === ORE) near = true;
         if (near) m.explored[idx(x, y)] = 1;
       }
-      this.log('지도를 펼쳤다. 계단 위치가 보인다.', 'good');
+      const traps = revealTraps(this);
+      this.log(`지도를 펼쳤다. 계단 위치가 보인다.${traps ? ` 숨은 함정 ${traps}개도 표시돼 있다.` : ''}`, 'good');
     }
     this.endTurn();
     return true;
@@ -571,7 +573,7 @@ export class Run {
     }
     if (p.hp > 0) envTick(this);
     this.enemies = this.enemies.filter(e => e.hp > 0);
-    if (p.hp > 0) this.chatter();
+    if (p.hp > 0) { this.chatter(); spotTraps(this); }
     this.magnetize();
     this.respawnTick();
     this.afterTurn();
@@ -609,7 +611,7 @@ export class Run {
     for (let t = 0; t < 300; t++) {
       const x = rnd(map.w), y = rnd(map.h), i = idx(x, y);
       if (map.tiles[i] !== FLOOR || map.visible[i] || cheb({ x, y }, this.p) < 10) continue;
-      if (!this.canEnemyEnter(x, y) || map.ter[i] === T.MUSH_SLEEP || map.fire[i] || map.gas.sleep[i] > 0.5) continue;
+      if (!this.canEnemyEnter(x, y) || map.fire[i] || map.gas.sleep[i] > 0.5) continue;
       return { x, y };
     }
     return null;
@@ -643,12 +645,12 @@ export class Run {
     }
   }
 
-  // Now and then, hiding in a brush, you overhear a nearby enemy. Once per floor at most.
+  // Now and then, while nothing is after you, you overhear a nearby enemy. Once per floor at most.
   chatter() {
     const p = this.p;
-    if (this.overheard || !this.playerHidden() || Math.random() > 0.06) return;
-    const near = this.enemies.filter(e => e.hp > 0 && e.state !== 'hunt' && e.state !== 'flee' &&
-      cheb(e, p) <= 5 && this.isVisible(e.x, e.y));
+    if (this.overheard || Math.random() > 0.05) return;
+    if (this.enemies.some(e => e.hp > 0 && (e.state === 'hunt' || e.state === 'flee'))) return;
+    const near = this.enemies.filter(e => e.hp > 0 && !e.d.boss && cheb(e, p) >= 2 && cheb(e, p) <= 5 && this.isVisible(e.x, e.y));
     if (!near.length) return;
     const e = pick(near);
     this.overheard = true;

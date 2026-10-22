@@ -14,12 +14,11 @@ const STATE = {
   flee: '도망치는 중',
 };
 
-export function playerStatus(p, hidden) {
+export function playerStatus(p) {
   const s = [];
   if (p.sleep) s.push('잠듦');
   if (p.stun) s.push('기절');
   if (p.burn) s.push('불붙음');
-  if (hidden) s.push('숨음');
   return s;
 }
 
@@ -29,7 +28,7 @@ export function describeTile(run, x, y, always = false) {
   if (!map.explored[i]) return '';
   const lines = [];
   if (x === p.x && y === p.y) {
-    const st = playerStatus(p, run.playerHidden());
+    const st = playerStatus(p);
     lines.push(`나${st.length ? ` · ${st.join(', ')}` : ''}`);
   }
   const e = run.enemyAt(x, y);
@@ -42,7 +41,7 @@ export function describeTile(run, x, y, always = false) {
   if (t === DOOR) lines.push(`${TILE_INFO.door.name}: ${TILE_INFO.door.tip}`);
   if (t === ORE && map.ore) lines.push(`큰 ${ORES[map.ore.tier].name} 광석 (${map.ore.hits}/${ORE_HITS}): ${TILE_INFO.bigOre.tip}`);
   const ter = map.ter[i];
-  if (ter !== T.NONE && TERRAIN[ter]) lines.push(`${TERRAIN[ter].name}: ${TERRAIN[ter].tip}`);
+  if (ter !== T.NONE && TERRAIN[ter] && !map.hidden[i]) lines.push(`${TERRAIN[ter].name}: ${TERRAIN[ter].tip}`);
   if (map.fire[i] && map.visible[i]) lines.push(`${TILE_INFO.fire.name}: ${TILE_INFO.fire.tip}`);
   if (map.visible[i]) {
     for (const k of GAS_KEYS) {

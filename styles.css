@@ -109,7 +109,23 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .relic[aria-pressed="true"] { outline: 2px solid var(--accent); }
 #relicInfo { font-size: 12.5px; line-height: 1.5; color: var(--muted); min-height: 38px; }
 #relicInfo b { color: var(--fg); }
-#relicInfo .evo-line { color: var(--gold); }
+/* a combination as a picture: relic + relic → result, with level pips under each */
+.recipe { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.rc-part { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; padding: 3px 4px 2px; border-radius: 4px; background: #0f0e15; border: 1px solid var(--line); opacity: .55; }
+.rc-part.have { opacity: 1; border-color: #4a4466; }
+.recipe .rc-part canvas { width: 22px; height: 22px; }
+.rc-result { opacity: 1; border-color: var(--gold); min-width: 30px; min-height: 34px; justify-content: center; }
+.rc-result b { font-family: var(--font-display); font-weight: 400; font-size: 18px; color: var(--gold); }
+.recipe.legend .rc-result { border-color: #f08c3a; }
+.rc-pips { display: flex; gap: 2px; }
+.rc-pips i { width: 5px; height: 5px; background: #2a2638; border-radius: 1px; }
+.rc-pips i.on { background: var(--accent); }
+.rc-pips i.next { background: var(--gold); animation: pipblink .8s steps(2) infinite; }
+.rc-pips i.star { width: 7px; background: #2a2638; }
+.rc-pips i.star.on { background: var(--gold); }
+.rc-op { color: var(--muted); font-weight: 700; }
+.rc-hint { flex-basis: 100%; font-size: 11.5px; color: var(--gold); }
+@keyframes pipblink { 50% { opacity: .25; } }
 .items { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .item { display: flex; flex-direction: column; align-items: center; gap: 2px; background: #0f0e15; border: 1px solid var(--line); border-radius: 5px; padding: 6px 2px; font-size: 11.5px; }
 .item canvas { width: 26px; height: 26px; }
@@ -141,7 +157,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .choice .tag { font-size: 11.5px; font-weight: 700; padding: 1px 7px; border-radius: 3px; background: var(--panel-2); color: var(--accent); }
 .choice .tag.new { background: var(--accent); color: var(--accent-ink); }
 .choice .ds { font-size: 12.5px; color: var(--fg); line-height: 1.4; }
-.choice .ev { font-size: 11.5px; color: var(--gold); line-height: 1.4; }
+.choice .recipe { justify-content: center; }
 .sheet-foot { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
 .summary .stat b { font-size: 24px; }
@@ -221,6 +237,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .choices { grid-template-columns: 1fr; }
   .choice { flex-direction: row; text-align: left; align-items: center; }
   .choice > div { gap: 3px; align-items: flex-start; }
+  .choice .recipe { justify-content: flex-start; }
 }
 @keyframes logfade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
 /* Phone on its side: the toolbar stands up on the right so the map keeps its height. */

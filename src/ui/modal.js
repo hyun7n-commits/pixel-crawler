@@ -1,7 +1,8 @@
 // Pop-up sheets: relic choice (level up / chest) and the end-of-run summary.
 
 import { $, el, button, icon } from './dom.js';
-import { RELICS, evolutionOf } from '../data/relics.js';
+import { RELICS } from '../data/relics.js';
+import { recipeFor } from './recipe.js';
 import { DISCOVERIES } from '../data/terrain.js';
 
 export const modalOpen = () => !$('modal').hidden;
@@ -39,8 +40,8 @@ export function showChoice({ title, sub, run, opts, onPick, onReroll }) {
           el('span', cur ? 'tag' : 'tag new', cur ? `Lv${cur} → Lv${cur + 1}` : '새 유물'),
           el('span', 'ds', r.desc(cur + 1)),
         );
-        const ev = evolutionOf(o.id);
-        if (ev) info.append(el('span', 'ev', `진화 조합: ${RELICS[ev.a].name} + ${RELICS[ev.b].name} (둘 다 Lv3)`));
+        const rc = recipeFor(run, o.id, o.id);
+        if (rc) info.append(rc);
       } else if (o.kind === 'heal') {
         b.append(icon('heal'));
         info.append(el('span', 'nm', '응급 치료'), el('span', 'ds', '체력 50% 회복'));

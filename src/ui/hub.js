@@ -23,7 +23,7 @@ export function renderHub(ctx) {
   const inner = el('div', 'hub-inner');
 
   const head = el('div', 'hub-head');
-  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.8.1 · 9층 · 보스 3마리 · 광석 등급과 노다지 · 아이폰</small>'));
+  head.append(el('div', 'logo', '픽셀 던전 크롤러<small>v0.9 · 9층 · 보스 3마리 · 녹픽던식 방 배치 · 풀과 함정</small>'));
   const purse = el('div', 'purse');
   purse.append(icon('gold', 24), el('span', null, `${meta.gold}G`));
   head.append(purse);
@@ -48,6 +48,7 @@ export function renderHub(ctx) {
           '<b>쉬기</b> 스페이스 · <b>폭탄</b> 2를 누르고 던질 곳 고르기 · 마우스를 올리면 무엇이든 한 줄 설명이 나온다. 휠로 확대, 끌어서 둘러보기.<br>') +
       '층마다 <b>큰 광석</b>이 하나 있다. 칠수록 골드가 커지고, 가끔 속에서 더 좋은 광석(동, 은, 금, 다이아몬드, 그 위로 보석)이 나오거나 <b>노다지</b>가 터진다. 대신 소리가 커져서 적이 몰려온다. ' +
       '<b>올라가는 계단</b>으로 지난 층에 돌아가 남은 것을 챙길 수 있다. 쫓아오는 적은 내 발자국을 그대로 밟는다. ' +
+      '<b>키 큰 풀</b>은 앞을 가리지만 누가 밟으면 쓰러진다. 바닥의 <b>함정</b>은 밟으면 터지고, 숨은 함정은 옆에 서 있으면 찾아낸다. ' +
       '잠들면 코를 골아서 적이 몰려온다. <b>광석 거북</b>은 먼저 싸우지 않지만, 쓰러뜨리면 보물을 준다. ' +
       '나를 눈치채지 못한 적(자거나 어슬렁거리는 적)을 치면 <b>기습</b>으로 피해가 두 배다. ' +
       '적 코에 <b>콧방울</b>이 있으면 자는 중이다. 내 칸에 <b style="color:var(--danger)">빨간 발톱 자국</b>이 보이면 다음 턴에 맞는다.'));

@@ -6,7 +6,7 @@ import { Run } from './core/run.js';
 import { loadMeta, saveMeta } from './core/save.js';
 import { pathTo, idx, ORE, isStairs } from './core/dungeon.js';
 import { cheb } from './core/util.js';
-import { T } from './data/terrain.js';
+import { isTrap } from './data/terrain.js';
 import { Hud } from './ui/hud.js';
 import { renderHub } from './ui/hub.js';
 import { showChoice, showSummary, modalOpen } from './ui/modal.js';
@@ -181,8 +181,7 @@ document.addEventListener('keydown', ev => {
   if (item && canAct()) { clearPath(); setAim(false); run.useItem(item); }
 });
 
-// Click-walking steps around things you would rather not step on by accident.
-const AVOID = new Set([T.MUSH_SLEEP]);
+// Click-walking steps around things you would rather not step on by accident: traps you know of, and fire.
 
 function onTileClick(x, y) {
   // a tap first puts away a tip left up by a long press, like closing an info window in SPD
@@ -224,7 +223,7 @@ function walkTo(x, y) {
   const m = run.map, p = run.p;
   if (!run.passable(x, y) || !m.explored[idx(x, y)]) return [];
   return pathTo(m, p.x, p.y, x, y,
-    (tx, ty) => AVOID.has(m.ter[idx(tx, ty)]) || m.fire[idx(tx, ty)] > 0,
+    (tx, ty) => (isTrap(m.ter[idx(tx, ty)]) && !m.hidden[idx(tx, ty)]) || m.fire[idx(tx, ty)] > 0,
     // never change floors by walking over stairs on the way somewhere else
     (tx, ty) => isStairs(m.tiles[idx(tx, ty)]));
 }

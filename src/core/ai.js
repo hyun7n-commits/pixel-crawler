@@ -15,7 +15,6 @@ export const WAKE_AT = 10;
 export function canSee(run, e, range) {
   const p = run.p, d = cheb(e, p);
   if (d > range) return false;
-  if (d > 1 && run.playerHidden()) return false;
   return lineOfSight(run.map, e.x, e.y, p.x, p.y);
 }
 
