@@ -137,9 +137,9 @@ export function closeTalk() {
   return true;
 }
 
-export function showSummary({ won, run, newlyUnlockable, stepOpened, onClose }) {
+export function showSummary({ won, run, newlyUnlockable, stepOpened, opened = [], onClose }) {
   openSheet(sh => {
-    sh.append(el('h2', null, won ? '들판을 모두 토벌했다!' : '쓰러졌다'));
+    sh.append(el('h2', null, won ? '들판 끝까지 탐험했다!' : '쓰러졌다'));
     if (!won && run.cause) sh.append(el('p', 'cause', `마지막 순간: ${run.cause}`));
     sh.append(el('p', null, won
       ? '박쥐 대왕을 쓰러뜨렸다. 보너스 골드 200을 받았다.'
@@ -151,6 +151,20 @@ export function showSummary({ won, run, newlyUnlockable, stepOpened, onClose }) 
       sum.append(s);
     }
     sh.append(sum);
+    // 새로 열림: what this trip opened up (data/unlocks.js), a line or two each time
+    if (opened.length) {
+      const box = el('div', 'opened');
+      box.append(el('h3', null, '새로 열림'));
+      for (const u of opened) {
+        const row = el('div', 'open-row');
+        if (u.relic || u.icon) row.append(icon(u.relic || u.icon));
+        const t = el('div');
+        t.append(el('b', null, u.relic ? RELICS[u.relic].name : u.what), el('span', null, u.relic ? `새 유물. 이제 유물 카드에 나온다. ${RELICS[u.relic].desc(1)}` : u.desc));
+        row.append(t);
+        box.append(row);
+      }
+      sh.append(box);
+    }
     const q = run.request;
     if (q) sh.append(el('div', 'unlock-note' + (q.done ? ' req-done' : ''), q.done ? `조합 의뢰 완료: ${q.text} · 일당 ${q.pay}G를 받았다` : `조합 의뢰 미완료: ${q.text} (${q.got}/${q.n})`));
     if (run.newRecipes.length) {
@@ -179,7 +193,7 @@ export function showSummary({ won, run, newlyUnlockable, stepOpened, onClose }) 
     if (newlyUnlockable.length) {
       sh.append(el('div', 'unlock-note', `새 캐릭터 조건 달성: ${newlyUnlockable.join(', ')}. 마을의 조합장에게 가면 골드로 데려올 수 있다.`));
     }
-    if (stepOpened) sh.append(el('div', 'unlock-note', `토벌 단계 ★${stepOpened} 열림! 들판이 더 사나워진 대신 골드를 더 준다. 조합장에게서 고른다.`));
+    if (stepOpened) sh.append(el('div', 'unlock-note', `탐험 단계 ★${stepOpened} 열림! 들판이 더 사나워진 대신 골드를 더 준다. 조합장에게서 고른다.`));
     const foot = el('div', 'sheet-foot');
     foot.append(button('btn primary', '마을로 돌아가기', () => { closeModal(); onClose(); }));
     sh.append(foot);

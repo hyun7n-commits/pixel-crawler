@@ -1,8 +1,10 @@
 // How enemies behave. Each enemy is in one state at a time:
 //   sleep  - snoring; wakes up bit by bit while it can see you (e.wake), or at once on a hit or a loud noise
-//   wander - awake and strolling around; notices you when you come into view
-//   hunt   - chasing and attacking you
-//   search - lost you, goes to where it last saw you and looks around
+//   wander - awake and strolling around; notices you when you come into view, but sees little behind
+//            it (BEHIND_SIGHT), and a glimpse from afar only makes it curious (? and search)
+//   hunt   - chasing and attacking you (!)
+//   search - heard something, glimpsed you, or lost you: goes to look (?); seeing you again there
+//            turns it into a hunt, while slipping out of sight behind a door or a bush loses it
 //   flee   - badly hurt and running away (only enemies with `flees`)
 //   hide   - a mimic posing as a chest · stone - a statue standing still · npc - quest folk
 //            (none of these act; a hit, or reaching for the mimic or the statue's chest, wakes them up)
@@ -15,6 +17,12 @@ import { cheb, shuffle, josa, rint, pick, DIRS8 } from './util.js';
 import { onEnter } from './world.js';
 
 export const WAKE_AT = 10;
+// Shattered Pixel Dungeon's vault (v4.0) stealth: a wanderer barely sees what is behind its back, and
+// one that only glimpses you from farther than CLOSE comes to look (?) before it gives chase (!).
+export const BEHIND_SIGHT = 3;
+const CLOSE = 2;
+// you are behind it: on the far side of the way it last walked
+const behind = (e, p) => e.dir && (p.x - e.x) * e.dir.x + (p.y - e.y) * e.dir.y < 0;
 
 export function canSee(run, e, range) {
   const p = run.p, d = cheb(e, p);
@@ -41,14 +49,23 @@ export function enemyAct(run, e, dmP) {
   e.timer++;
   if (e.burn > 0 && !d.boss && Math.random() < 0.5) { randomStep(run, e); return; }
 
-  const sees = canSee(run, e, e.state === 'hunt' ? 9 : 7);
+  const sees = canSee(run, e, e.state === 'hunt' ? 9 : e.state === 'wander' && behind(e, p) ? BEHIND_SIGHT : 7);
   if (sees) {
     e.last = { x: p.x, y: p.y };
+    // a glimpse from afar: it wonders what that was and comes to look
+    if (e.state === 'wander' && cheb(e, p) > CLOSE && !run.p.sleep && !d.boss) {
+      e.state = 'search';
+      e.searchT = 0;
+      run.say(e, '?');
+      return;
+    }
     if (e.state === 'wander' || e.state === 'search') {
+      const sure = e.state === 'search';
       e.state = 'hunt';
       run.say(e, '!');
       run.emit('alert', { enemy: e });
-      if (!run.p.sleep) return; // noticing takes its turn, unless you are asleep and easy pickings
+      // noticing takes its turn, unless it was already looking for you or you are asleep
+      if (!sure && !run.p.sleep) return;
     }
   }
   if (e.state === 'hunt' && d.flees && e.hp <= e.maxHp * 0.3) {
@@ -406,6 +423,7 @@ const canStep = (run, e, x, y) => run.canEnemyEnter(x, y);
 
 function moveEnemy(run, e, x, y) {
   e.face = x < e.x ? -1 : x > e.x ? 1 : e.face;
+  e.dir = { x: Math.sign(x - e.x), y: Math.sign(y - e.y) };
   e.x = x; e.y = y;
   run.refreshDoors();
   onEnter(run, e, x, y);

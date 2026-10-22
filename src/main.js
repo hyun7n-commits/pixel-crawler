@@ -25,7 +25,6 @@ import { describeTile } from './ui/tip.js';
 import { $ } from './ui/dom.js';
 import * as sfx from './audio/sfx.js';
 import { setMusic, musicOff, setMusicOff } from './audio/music.js';
-import { HIRES, setHires } from './scenes/textures.js';
 
 let meta = loadMeta();
 let run = null;
@@ -154,7 +153,7 @@ function startRun(left) {
   scene.attach(run);
   if (restored) {
     setMusic(isBossFloor(run.floor) ? 'boss' : run.zone.style);
-    run.log('하던 토벌을 이어서 한다.', 'good');
+    run.log('하던 탐험을 이어서 한다.', 'good');
     run.emit('turn');
     return;
   }
@@ -275,8 +274,26 @@ function onRunEvent(type, d) {
     };
     saveMeta(meta);
     hud.update(run);
-    showSummary({ won: d.won, run, newlyUnlockable: d.newlyUnlockable, stepOpened: d.stepOpened, onClose: () => { scene.detach(); run = null; afterRunStory(); } });
+    const summary = () => showSummary({ won: d.won, run, newlyUnlockable: d.newlyUnlockable, stepOpened: d.stepOpened, opened: d.opened, onClose: () => { scene.detach(); run = null; afterRunStory(); } });
+    if (d.won) summary();
+    else fallen(summary);
   }
+}
+
+// Down: the field turns grey and quiet, then one line says where and to what ("2구역 · 들쥐에게 당했다"),
+// like Shattered Pixel Dungeon's "Killed by a marsupial rat on depth 2". A tap (or a few seconds) moves on.
+function fallen(then) {
+  sfx.setHeartbeat(0);
+  sfx.play('fall');
+  const line = $('fallen');
+  let gone = false;
+  const go = () => { if (gone) return; gone = true; line.hidden = true; line.onclick = null; then(); };
+  scene.fall(() => {
+    line.textContent = `${run.floor}구역 · ${run.cause || '쓰러졌다'}`;
+    line.hidden = false;
+    line.onclick = go;
+    setTimeout(go, 2600);
+  });
 }
 
 function afterTurn() {
@@ -486,8 +503,6 @@ function toggleSound() {
 $('soundBtn').addEventListener('click', toggleSound);
 $('vSound').addEventListener('click', toggleSound);
 // 32px or 16px characters: the textures are built once, so switching reloads the page (the save is kept)
-$('vArt').textContent = HIRES ? '그림 32' : '그림 16';
-$('vArt').addEventListener('click', () => { setHires(!HIRES); location.reload(); });
 $('vGo').addEventListener('click', () => startRun());
 showSoundState();
 // browsers allow sound only after the first click or key press
@@ -513,6 +528,8 @@ $('quitBtn').addEventListener('click', () => {
 // The canvas has one pixel per screen pixel (sharp on phones), shown at the stage's CSS size.
 const DPR = Math.min(3, window.devicePixelRatio || 1);
 const TOUCH = window.matchMedia('(pointer: coarse)').matches;
+// the pixel fonts (fonts/, styles.css) are in before the first word is drawn on the canvas
+const fontsIn = Promise.all(['10px Galmuri9', '12px Galmuri11', 'bold 12px Galmuri11', '15px Galmuri14'].map(f => document.fonts.load(f))).catch(() => {});
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'phaser',
@@ -533,13 +550,13 @@ const game = new Phaser.Game({
     // the dungeon scene builds every texture; once it is up, open in the village (the very first
     // time, after the opening picture book)
     // a run left off last time picks up where it was; otherwise the village
-    setTimeout(() => {
+    fontsIn.then(() => {
       const left = meta.story.intro && resume(meta);
       if (left) {
         try { startRun(left); return; } catch (e) { clearSuspended(); run = null; console.warn('could not pick the run up again', e); }
       }
       meta.story.intro ? showVillage() : showStory('intro', () => showVillage());
-    }, 0);
+    });
   }), new VillageScene(villageHooks), new StoryScene()],
 });
 

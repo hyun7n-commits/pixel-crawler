@@ -1,4 +1,4 @@
-// Picture-book scenes: the opening, each 토벌 license, the ending. Every panel is a little diorama
+// Picture-book scenes: the opening, each 탐험 license, the ending. Every panel is a little diorama
 // built from the game's own tiles, houses and sprites (scenes/storyboards.js), with a line or two of
 // text under it (ui/story.js). A tap moves on; the text box and the skip button are DOM.
 
@@ -6,7 +6,6 @@
 import { TILE, wallKey, floorKey, texScale, S } from './textures.js';
 import { houseCanvas, lampPostCanvas } from './village-art.js';
 import { faceKey } from '../data/faces.js';
-import { HIRES } from './textures.js';
 
 const D = { sky: 0, ground: 1, back: 2, house: 3, actors: 4, fx: 5, bubble: 6 };
 // the diorama: the tiles that always fit on screen (rows from `top`, so house roofs show); more ground
@@ -38,7 +37,6 @@ export class StoryScene extends Phaser.Scene {
     const cam = this.cameras.main, box = this.game.registry.get('storyBox') || 0.3;
     if (!cam) return;
     let z = Math.floor(Math.min(cam.width / (VIEW.w * TILE), cam.height * (1 - box) / (VIEW.h * TILE)));
-    if (HIRES && z > 2 && z % 2) z--;
     cam.setZoom(Math.max(1, z));
     // the diorama stands on the text box; on a tall screen the extra room goes to the sky
     const z2 = cam.zoom, bottom = (VIEW.top + VIEW.h) * TILE + 6;
@@ -155,7 +153,7 @@ export class StoryScene extends Phaser.Scene {
   mark(im, text, ms = 1400) {
     const z = this.cameras.main.zoom || 3, k = this.dpr / z;
     const b = this.keep(this.add.text(im.x, im.y - im.displayHeight - 2, text, {
-      fontFamily: '"Do Hyeon", sans-serif', fontSize: `${16 * k}px`, color: '#1b1424', backgroundColor: '#f4f0e8',
+      fontFamily: 'Galmuri11, sans-serif', fontSize: `${12 * k}px`, color: '#1b1424', backgroundColor: '#f4f0e8',
       padding: { x: 6 * k, y: 3 * k },
     }).setOrigin(0.5, 1).setDepth(D.bubble).setResolution(z));
     b.setScale(0.2);
@@ -175,7 +173,7 @@ export class StoryScene extends Phaser.Scene {
     return pic;
   }
 
-  // a 토벌 license: a round badge on a ribbon, in the zone's colour
+  // a 탐험 license: a round badge on a ribbon, in the zone's colour
   badge(x, y, color, delay = 0) {
     const g = this.keep(this.add.graphics().setDepth(D.fx));
     g.fillStyle(0x1b1424, 1).fillTriangle(-6, 2, -1, 2, -7, 16).fillTriangle(6, 2, 1, 2, 7, 16);
@@ -210,6 +208,5 @@ export class StoryScene extends Phaser.Scene {
       this.tweens.add({ targets: im, scaleY: 1.12, duration: 260 + (i % 3) * 40, yoyo: true, repeat: 3, delay: i * 35, ease: 'Sine.inOut' });
       if (i % 3 === 1) this.tweens.add({ targets: im, x: im.x + (i % 2 ? TILE : -TILE), duration: 420, yoyo: true, hold: 500, delay: 200 + i * 30, ease: 'Quad.inOut' });
     });
-    this.cameras.main.shake(900, 0.002);
   }
 }

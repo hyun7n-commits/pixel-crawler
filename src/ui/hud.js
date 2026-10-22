@@ -9,10 +9,14 @@ const TIER_CLASS = ['', ' evo', ' legend', ' myth'];
 const TIER_NAME = ['', ' (진화)', ' (전설)', ' (신화)'];
 const relicDesc = (id, l) => (isFused(id) ? fusedParts(id).map(p => RELICS[p].desc(maxLevelOf(p))).join(' / ') : RELICS[id].desc(l));
 import { ITEMS } from '../data/items.js';
+import { isOpen } from '../data/unlocks.js';
 import { LAST_FLOOR, xpToLevel } from '../data/balance.js';
 import { zoneOf, isBossFloor } from '../core/run.js';
 import { playerStatus } from './tip.js';
 import { wait, fissionMs, FISSION_LEAD, FISSION_STEP, GROW_MS } from './beat.js';
+
+// The consumables you can have by now: bombs and maps only show once they have opened (data/unlocks.js).
+const shownItems = run => Object.entries(ITEMS).filter(([id]) => isOpen(run.meta, id) || run.p.items[id]);
 
 // What the quest folk asked of you and have not had back yet.
 function questLines(run) {
@@ -160,7 +164,7 @@ export class Hud {
 
     const items = $('items');
     items.innerHTML = '';
-    for (const [id, d] of Object.entries(ITEMS)) {
+    for (const [id, d] of shownItems(run)) {
       const aim = id === 'bomb' && this.aiming;
       const b = button('item' + (aim ? ' aiming' : ''), null, () => this.onUseItem(id));
       b.append(icon(d.sprite), el('span', null, aim ? '던질 곳 고르기…' : `${d.name} ×${p.items[id]}`), el('kbd', null, `키 ${d.key}`));
@@ -181,7 +185,7 @@ export class Hud {
       bar.append(b);
     };
     add('', 'rest', '쉬기', this.onWait);
-    for (const [id, d] of Object.entries(ITEMS)) {
+    for (const [id, d] of shownItems(run)) {
       const aim = id === 'bomb' && this.aiming;
       add(aim ? 'aiming' : '', d.sprite, aim ? '던질 곳' : `${d.name.replace('체력 ', '')} ${p.items[id]}`, () => this.onUseItem(id), !p.items[id]);
     }

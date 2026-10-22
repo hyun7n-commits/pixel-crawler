@@ -66,7 +66,8 @@ const VEINS = [
   [[[0, 0], [1, 0], [0, 1], [1, 1]]],
 ];
 
-function rollSize() {
+function rollSize(floor) {
+  if (floor === 1) return 1; // the first field's boulder is always a single block
   let roll = Math.random();
   for (let s = 0; s < ORE_SIZE_CHANCE.length; s++) if ((roll -= ORE_SIZE_CHANCE[s]) < 0) return s + 1;
   return 1;
@@ -74,7 +75,7 @@ function rollSize() {
 
 // Puts the big ore in the middle of a room, away from the walls so it never blocks a doorway.
 // A big vein that would cut the floor in two (pillars, cave corners) shrinks until it fits.
-function placeOre(map, r, keep, start) {
+function placeOre(map, r, keep, start, floor) {
   const spots = roomTiles(r, 1).filter(([x, y]) => free(map, x, y) && !keep(x, y));
   if (!spots.length) return false;
   const near = ([x, y]) => Math.abs(x - r.cx) + Math.abs(y - r.cy);
@@ -94,7 +95,7 @@ function placeOre(map, r, keep, start) {
   };
   const before = reach();
   let cells = null;
-  for (let size = rollSize(); size >= 1 && !cells; size--) {
+  for (let size = rollSize(floor); size >= 1 && !cells; size--) {
     for (const [x, y] of spots.slice(0, 6)) {
       for (const shape of shuffle(VEINS[size - 1].slice())) {
         const c = shape.map(([dx, dy]) => [x + dx, y + dy]);
@@ -121,7 +122,7 @@ function placeOre(map, r, keep, start) {
 }
 
 // Returns { has, themes }: what this floor contains (for overheard hints) and each room's theme.
-export function decorate(map, rooms, { start, stairs }) {
+export function decorate(map, rooms, { start, stairs, floor = 1 }) {
   const has = new Set(), themes = [];
   const keep = (x, y) => (Math.abs(x - start.x) <= 1 && Math.abs(y - start.y) <= 1) || (x === stairs.x && y === stairs.y);
 
@@ -130,7 +131,7 @@ export function decorate(map, rooms, { start, stairs }) {
   const oreRooms = new Set();
   for (const r of rooms.slice(1).filter(r => !inRoom(r, stairs.x, stairs.y)).sort((a, b) => b.w * b.h - a.w * a.h)) {
     if (oreRooms.size >= ORES_PER_FLOOR) break;
-    if (placeOre(map, r, keep, start)) oreRooms.add(r);
+    if (placeOre(map, r, keep, start, floor)) oreRooms.add(r);
   }
 
   rooms.forEach((r, i) => {
@@ -162,17 +163,18 @@ export function decorate(map, rooms, { start, stairs }) {
 
 // A few traps on room floors (never in the start room, a doorway's mouth or next to another trap).
 // Returns how many were placed.
-export function placeTraps(map, rooms, { start, stairs }, floor) {
+// Before the 'traps' unlock (data/unlocks.js) there are only a couple, all in plain sight, spikes and sleepy pollen.
+export function placeTraps(map, rooms, { start, stairs }, floor, all = true) {
   const near = (x, y, cond) => DIRS8.some(([dx, dy]) => inMap(x + dx, y + dy) && cond(idx(x + dx, y + dy)));
   const spots = shuffle(rooms.slice(1).flatMap(r => roomTiles(r))).filter(([x, y]) =>
     free(map, x, y) && Math.max(Math.abs(x - start.x), Math.abs(y - start.y)) > 2 && Math.max(Math.abs(x - stairs.x), Math.abs(y - stairs.y)) > 1 &&
     !near(x, y, i => map.tiles[i] === DOOR || map.tiles[i] === ORE));
   let n = 0;
   for (const [x, y] of spots) {
-    if (n >= trapsPerFloor(floor)) break;
+    if (n >= (all ? trapsPerFloor(floor) : Math.min(2, trapsPerFloor(floor)))) break;
     if (near(x, y, i => TRAPS.includes(map.ter[i]))) continue;
-    map.ter[idx(x, y)] = pick(floor === 1 ? [T.TRAP_SPIKE, T.TRAP_SLEEP] : TRAPS);
-    map.hidden[idx(x, y)] = Math.random() < trapHidden(floor) ? 1 : 0;
+    map.ter[idx(x, y)] = pick(floor === 1 || !all ? [T.TRAP_SPIKE, T.TRAP_SLEEP] : TRAPS);
+    map.hidden[idx(x, y)] = all && Math.random() < trapHidden(floor) ? 1 : 0;
     n++;
   }
   return n;

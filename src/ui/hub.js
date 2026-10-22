@@ -6,6 +6,7 @@
 import { $, el, button, icon } from './dom.js';
 import { CHARACTERS } from '../data/characters.js';
 import { UPGRADES, PACK_COST } from '../data/upgrades.js';
+import { isOpen, RELIC_GATES } from '../data/unlocks.js';
 import { RELICS, RECIPES, recipeKey, tierOf, DISCOVERY_GOLD } from '../data/relics.js';
 import { freshMeta, saveMeta } from '../core/save.js';
 import { josa } from '../core/util.js';
@@ -39,13 +40,13 @@ const startButton = (meta, onStart) => {
   return wrap;
 };
 
-// 토벌 단계 (data/balance.js): after the first win, how rowdy the fields are this time
+// 탐험 단계 (data/balance.js): after the first win, how rowdy the fields are this time
 function stepRow(meta, changed) {
   const open = stepsOpen(meta), cur = Math.min(meta.step || 0, open);
   const row = el('div', 'steps'), main = el('div', 'row-main');
   const stars = el('span', 'step-stars');
   for (let i = 1; i <= STEP_MAX; i++) stars.append(el('i', i <= cur ? 'on' : i <= open ? 'open' : ''));
-  const name = el('span', 'row-name', `토벌 단계 ${cur ? `★${cur}` : '보통'}`);
+  const name = el('span', 'row-name', `탐험 단계 ${cur ? `★${cur}` : '보통'}`);
   name.append(stars);
   main.append(name, el('span', 'row-sub', cur
     ? `들판의 적 체력과 공격 +${Math.round((stepFoe(cur) - 1) * 100)}%, 얻는 골드 +${Math.round((stepGold(cur) - 1) * 100)}%`
@@ -57,15 +58,15 @@ function stepRow(meta, changed) {
   return row;
 }
 
-// the three 토벌 licenses (one per zone boss), greyed out until earned; see scenes/storyboards.js
+// the three 탐험 licenses (one per zone boss), greyed out until earned; see scenes/storyboards.js
 const LICENSES = [['ratking', '초원', '#6fbf4e'], ['skelking', '깊은숲', '#2f7a46'], ['lord', '돌산', '#8a7aa8']];
 function licenses(meta) {
   const row = el('div', 'licenses');
-  row.append(el('span', 'lic-title', '토벌 자격증'));
+  row.append(el('span', 'lic-title', '탐험 자격증'));
   for (const [boss, name, color] of LICENSES) {
     const got = meta.stats.bosses.includes(boss);
     const b = el('span', 'lic' + (got ? ' got' : ''), `<i style="--c:${color}">★</i>${name}`);
-    b.title = got ? `${name} 토벌 자격증` : `${name} 끝의 대장을 잡으면 받는다`;
+    b.title = got ? `${name} 탐험 자격증` : `${name} 끝의 대장을 잡으면 받는다`;
     row.append(b);
   }
   return row;
@@ -84,7 +85,7 @@ function chars(box, { meta, onStart, changed, setMeta, onStory }) {
     const top = el('div', 'char-top');
     const sp = icon(c.sprite, 40);
     sp.classList.add('char-spr');
-    top.append(sp, el('span', 'char-name', c.name));
+    top.append(sp, el('span', 'char-name', `${c.name}${c.kind ? `<small>${c.kind}</small>` : ''}`));
     card.append(top);
     const startRelic = Object.entries(c.start).map(([r, l]) => `${RELICS[r].name} Lv${l}`).join(', ');
     card.append(el('div', 'char-stats', `체력 ${c.hp} · 공격 ${c.atk}${c.def ? ` · 방어 ${c.def}` : ''}<br>시작 유물: ${startRelic}<br>${c.note}`));
@@ -128,6 +129,8 @@ function shop(box, { meta, changed }) {
     row.append(main, b);
     list.append(row);
   }
+  // the relic shelf and packing a relic come once the meadow's boss has fallen (data/unlocks.js)
+  if (!isOpen(meta, 'shelf')) { box.append(list); return; }
   list.append(el('h3', null, '들판에 새 유물 추가'));
   for (const [id, r] of Object.entries(RELICS).filter(([, r]) => r.locked)) {
     const row = el('div', 'row'), main = el('div', 'row-main');
@@ -142,7 +145,7 @@ function shop(box, { meta, changed }) {
   list.append(el('h3', null, '다음 판에 챙겨 갈 유물'));
   list.append(el('p', 'row-sub', `${PACK_COST}G를 내면 기본 유물 하나를 Lv1로 들고 나간다(이미 있으면 +1). 한 판만. 궁금한 조합을 시험해 보기 좋다.`));
   const grid = el('div', 'pack-grid');
-  const pick = Object.keys(RELICS).filter(id => !tierOf(id) && (!RELICS[id].locked || meta.relicUnlock[id]));
+  const pick = Object.keys(RELICS).filter(id => !tierOf(id) && (RELICS[id].locked ? meta.relicUnlock[id] : !RELIC_GATES[id] || isOpen(meta, RELIC_GATES[id])));
   for (const id of pick) {
     const on = meta.pack === id;
     const b = button(`pack${on ? ' on' : ''}`, null, () => {

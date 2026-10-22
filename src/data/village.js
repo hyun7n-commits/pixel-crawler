@@ -66,8 +66,8 @@ const deaths = m => m.stats.runs - m.stats.wins;
 export const FOLK = {
   guild: {
     name: '조합장', sprite: 'guildBoss', panel: 'chars', when: () => true,
-    tip: '토벌 의뢰를 받고 같이 갈 동료를 고른다',
-    lines: ['오늘도 토벌 부탁하네.', '무리하지 말고, 다치면 돌아오게.', '같이 갈 동료는 골랐나?'],
+    tip: '탐험 의뢰를 받고 같이 갈 동료를 고른다',
+    lines: ['오늘도 탐험 부탁하네.', '무리하지 말고, 다치면 돌아오게.', '같이 갈 동료는 골랐나?'],
   },
   shop: {
     name: '상점 주인', sprite: 'shopkeep', panel: 'shop', when: () => true,
@@ -76,7 +76,7 @@ export const FOLK = {
   },
   neighbor: {
     name: '수다쟁이 이웃', sprite: 'neighbor', panel: 'rumor', when: m => m.stats.runs >= 1, stroll: 900,
-    tip: '지난 토벌 이야기와 소문을 들려준다',
+    tip: '지난 탐험 이야기와 소문을 들려준다',
     arrive: '안녕! 오늘 이사 왔어. 소문은 나한테 물어봐!',
     lines: ['들었어? 들었어?', '어제 그 얘기 해 줄까?', '소문 하나 알려 줄게!'],
   },

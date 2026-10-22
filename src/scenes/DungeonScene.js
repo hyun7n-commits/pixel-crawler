@@ -11,7 +11,7 @@ import { T, TERRAIN, GASES, GAS_KEYS } from '../data/terrain.js';
 import { idx, inMap, lineOfSight, WALL, STAIRS, DOOR, ORE, UPSTAIRS, GRAVE, LOCKED, HIVE, WEED } from '../core/dungeon.js';
 import { WAKE_AT } from '../core/ai.js';
 import { BOMB_RANGE } from '../core/run.js';
-import { ORE_HITS } from '../data/balance.js';
+import { ORE_HITS, HEAR_STEPS } from '../data/balance.js';
 import { ORES } from '../data/ores.js';
 import { cheb } from '../core/util.js';
 import { faceKey } from '../data/faces.js';
@@ -72,6 +72,11 @@ export class DungeonScene extends Phaser.Scene {
       warm: burst([0xffffff, 0xe8f6f2], { gravityY: -18, speed: { min: 2, max: 8 }, angle: { min: 250, max: 290 }, lifespan: { min: 900, max: 1500 }, scale: { start: 2.5, end: 4.5 }, alpha: { start: 0.6, end: 0 } }),
       leaf: burst([0x6cc45a, 0x2f7a43, 0xb5e08a], { gravityY: 60, speed: { min: 12, max: 36 }, lifespan: { min: 300, max: 600 }, scale: { start: 1.5, end: 0.5 } }),
     };
+    // Restraint: every burst is a few pixels, never a fountain (Shattered Pixel Dungeon keeps it this small).
+    for (const em of Object.values(this.fx)) {
+      const explode = em.explode.bind(em);
+      em.explode = (n, x, y) => explode(Math.max(1, Math.min(12, Math.round(n * 0.4))), x, y);
+    }
     this.shadowGfx = this.add.graphics().setDepth(D.pickups - 0.5);
     this.gasGfx = this.add.graphics().setDepth(D.gas);
     this.fireGfx = this.add.graphics().setDepth(D.fire);
@@ -80,6 +85,7 @@ export class DungeonScene extends Phaser.Scene {
     this.overlay = this.add.graphics().setDepth(D.overlay);
     this.pathGfx = this.add.graphics().setDepth(D.overlay);
     this.bubbles = [];
+    this.prints = [];
     this.waterFrame = 0;
     this.lastEmber = 0;
 
@@ -192,6 +198,10 @@ export class DungeonScene extends Phaser.Scene {
 
   detach() {
     this.run = null;
+    if (this.fallen) { this.fallen = false; this.cameras.main.postFX?.clear(); }
+    // a trip that ends mid-burrow must not leave the view closed over the village
+    const iris = document.getElementById('iris');
+    if (iris) iris.hidden = true;
     this.diving = false;
     this.aim = false;
     this.clearFloor();
@@ -214,6 +224,7 @@ export class DungeonScene extends Phaser.Scene {
     this.doorImgs = {};
     this.oreImgs = {};
     this.bubbles = [];
+    this.prints = [];
     this.playerSprite = null;
     // a tween whose sprite is gone keeps running for nothing (the bobbing ones loop forever): sweep them
     for (const t of this.tweens.getTweens()) if (t.targets?.some(o => o?.type && !o.scene)) t.remove();
@@ -438,15 +449,20 @@ export class DungeonScene extends Phaser.Scene {
       const sensed = run.sensed(e);
       s.setVisible(run.isVisible(e.x, e.y) || (still && !!map.explored[idx(e.x, e.y)]) || sensed);
       s.setAlpha(sensed ? 0.5 : 1).setDepth(sensed ? D.overlay + 0.5 : D.enemies);
+      // footsteps in the dark: an awake critter moving out of sight within earshot leaves a faint print
+      if (s.at && (s.at.x !== e.x || s.at.y !== e.y) && !s.visible && !['sleep', 'npc'].includes(e.state) && !e.d.npc && cheb(e, run.p) <= HEAR_STEPS) {
+        this.prints.push({ x: e.x, y: e.y, dx: e.x - s.at.x, dy: e.y - s.at.y, at: this.time.now });
+        if (this.prints.length > 24) this.prints.shift();
+      }
+      s.at = { x: e.x, y: e.y };
       this.moveTo(s, e.x, e.y, dur);
-      // a mark over its head when its mind changes: ! it saw you, ? it lost you, … it gave up, 💢 it got angry
+      // a mark over its head when its mind changes, and only two kinds: ! it is after you, ? it is looking
       const seen = run.isVisible(e.x, e.y);
       if (seen && s.was) {
         if (e.state === 'hunt' && !['hunt', 'flee'].includes(s.was)) this.emote(s, '!');
-        else if (e.state === 'search' && s.was === 'hunt') this.emote(s, '?', 1300);
-        else if (e.state === 'wander' && (s.was === 'search' || s.was === 'hunt')) this.emote(s, '…', 1300);
+        else if (e.state === 'search' && s.was !== 'search') this.emote(s, '?', 1300);
       }
-      if (seen && ((e.angry && !s.wasAngry) || (e.rage && !s.wasRage))) this.emote(s, 'anger', 1500);
+      if (seen && ((e.angry && !s.wasAngry) || (e.rage && !s.wasRage))) this.emote(s, '!', 1100);
       s.was = e.state; s.wasAngry = e.angry; s.wasRage = e.rage;
       if (seen && !e.d.npc && !run.calm(e) && !['hide', 'stone', 'sleep'].includes(e.state)) threat = true;
     }
@@ -490,16 +506,19 @@ export class DungeonScene extends Phaser.Scene {
       const i = idx(x, y), imgs = this.tileImgs[i];
       if (!imgs) continue;
       if (!map.explored[i]) { imgs.forEach(im => im.setVisible(false)); continue; }
-      let v;
+      // night: your lantern warms what is near and fades to cold blue at the edge of sight;
+      // what you only remember sinks into dim blue, like Shattered Pixel Dungeon's fog
+      let r, v, b;
       if (map.visible[i]) {
-        const d = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
-        v = Math.round(255 - Math.min(1, d / (sight + 1)) * 110);
-      } else v = 70;
+        const t = Math.min(1, Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2) / (sight + 1)), warm = (1 - t) * (1 - t);
+        v = 255 - t * 120;
+        r = v; b = v - warm * 38 + t * 12; v -= warm * 8;
+      } else { r = 50; v = 58; b = 76; }
       // lamplight warms and brightens the tiles around a lamp, even ones you only remember
       const L = this.light ? this.light[i] : 0;
-      v = Math.min(255, v + Math.round(L * (map.visible[i] ? 40 : 50)));
-      const r = Math.min(255, v + Math.round(L * 22)), b = Math.max(0, Math.min(255, Math.round(v * 1.05 - L * 34)));
-      const tint = (r << 16) | (v << 8) | b;
+      const k = L * (map.visible[i] ? 40 : 60);
+      const ch = n => Math.max(0, Math.min(255, Math.round(n)));
+      const tint = (ch(r + k + L * 22) << 16) | (ch(v + k) << 8) | ch(b + k - L * 34);
       imgs.forEach(im => im.setVisible(true).setTint(tint));
     }
     for (const l of this.lamps) {
@@ -543,7 +562,6 @@ export class DungeonScene extends Phaser.Scene {
       case 'phit':
         this.face('hit', 450);
         this.flash(this.playerSprite);
-        this.shake(['slam', 'bomb', 'charge'].includes(d.kind) ? 220 : 110, ['slam', 'bomb', 'charge'].includes(d.kind) ? 0.012 : 0.005);
         this.fx.blood.explode(8, center(d.x), center(d.y));
         this.float(d.x, d.y, `-${d.dmg}`, '#ff6b6b');
         break;
@@ -551,20 +569,12 @@ export class DungeonScene extends Phaser.Scene {
       case 'snore': this.noiseRing(d.x, d.y, d.r, 0xb58cf0); break;
       case 'vein': this.onVein(d); break;
       case 'newOre': this.onNewOre(d); break;
-      case 'hangon':
-        // the blow should have finished you: everything stops for a moment, and you're still standing
-        this.hitStop(420);
-        this.cameras.main.flash(260, 255, 255, 255);
-        this.shake(300, 0.015);
-        this.float(d.x, d.y - 0.4, '버텼다!', '#ffd6d6', 120, 16);
-        break;
       case 'dodge': this.float(d.x, d.y, '회피', '#6fe0e0'); break;
       // the evolved relics' own moves
       case 'shade': this.fx.magic.explode(14, center(d.x), center(d.y)); break;
       case 'quick': this.float(d.x, d.y - 0.3, '한 번 더!', '#c9f2a8', 80); this.fx.spark.explode(10, center(d.x), center(d.y)); break;
-      case 'push': this.fx.dust.explode(10, center(d.from.x), foot(d.from.y) - 2); this.shake(90, 0.003); break;
+      case 'push': this.fx.dust.explode(10, center(d.from.x), foot(d.from.y) - 2); break;
       case 'bonk': {
-        this.shake(140, 0.006);
         this.fx.spark.explode(12, center(d.x) + d.dx * 7, center(d.y) + d.dy * 7);
         const e = this.run.enemyAt(d.x, d.y), s = e && this.enemySprites[e.id];
         if (s) this.tweens.add({ targets: s, x: s.x + d.dx * 4, duration: 60, yoyo: true });
@@ -580,7 +590,7 @@ export class DungeonScene extends Phaser.Scene {
       case 'snooze': this.fx.sleep.explode(5, center(d.x), center(d.y) - 10); break;
       case 'heal': this.float(d.x, d.y, `+${d.n}`, '#8fd36a'); this.fx.heal.explode(6, center(d.x), center(d.y)); break;
       case 'soak': // humming in the hot spring
-        if (this.time.now > (this.playerSprite.soakAt || 0)) { this.playerSprite.soakAt = this.time.now + 2600; this.emote(this.playerSprite, '♪', 1300); this.face('sparkle', 900); }
+        if (this.time.now > (this.playerSprite.soakAt || 0)) { this.playerSprite.soakAt = this.time.now + 2600; this.face('sparkle', 900); }
         break;
       case 'gold': this.float(d.x, d.y, `+${d.n}G`, '#f4cf4f', 300); break;
       case 'pickup':
@@ -594,7 +604,7 @@ export class DungeonScene extends Phaser.Scene {
       case 'gasboom': this.gasBoom(d.tiles); break;
       case 'puff': this.fx[d.kind].explode(30, center(d.x), center(d.y)); break;
       case 'rustle': this.fx.leaf.explode(7, center(d.x), center(d.y) + 3); break;
-      case 'dig': this.fx.dust.explode(14, center(d.x), center(d.y)); this.fx.rock.explode(6, center(d.x), center(d.y)); this.shake(90, 0.004); break;
+      case 'dig': this.fx.dust.explode(14, center(d.x), center(d.y)); this.fx.rock.explode(6, center(d.x), center(d.y)); break;
       case 'shatter': this.fx.crystal.explode(16, center(d.x), center(d.y)); break;
       case 'unlock': this.fx.spark.explode(14, center(d.x), center(d.y)); break;
       case 'honey':
@@ -651,14 +661,12 @@ export class DungeonScene extends Phaser.Scene {
           this.tweens.add({ targets: s, hop: 7, duration: 110, yoyo: true, ease: 'Quad.out' });
         }
         this.fx.dust.explode(10, center(d.enemy.x), center(d.enemy.y));
-        this.shake(160, 0.008);
         break;
       }
       case 'trap': this.onTrap(d); break;
       case 'summon': this.fx.magic.explode(16, center(d.x), center(d.y)); break;
       case 'alarm':
-        for (let k = 0; k < 3; k++) this.time.delayedCall(k * 220, () => this.noiseRing(d.x, d.y, 9, 0xff6b6b));
-        this.shake(260, 0.006);
+        this.noiseRing(d.x, d.y, 9, 0xff6b6b);
         break;
       case 'spot':
         this.float(d.x, d.y, '!', '#f4cf4f', 0, 14);
@@ -669,9 +677,9 @@ export class DungeonScene extends Phaser.Scene {
       case 'mine': this.onMine(d); break;
       case 'heard':
         // the noise rolls out from you as red rings; the ones that heard get arrows at the edge of the view
-        for (let k = 0; k < 3; k++) {
-          const ring = this.add.circle(center(d.x), center(d.y), TILE).setStrokeStyle(1.5, 0xff6a6a, 0.9).setDepth(D.fx).setScale(0.3);
-          this.tweens.add({ targets: ring, scale: 3 + d.list.length * 0.4, alpha: 0, delay: k * 180, duration: 800, ease: 'Quad.out', onComplete: () => ring.destroy() });
+        {
+          const ring = this.add.circle(center(d.x), center(d.y), TILE).setStrokeStyle(1, 0xff6a6a, 0.9).setDepth(D.fx).setScale(0.3);
+          this.tweens.add({ targets: ring, scale: 3 + d.list.length * 0.4, alpha: 0, duration: 700, ease: 'Quad.out', onComplete: () => ring.destroy() });
         }
         this.heardMarks = d.list.map(e => ({ e, until: this.time.now + 2200 }));
         break;
@@ -686,13 +694,11 @@ export class DungeonScene extends Phaser.Scene {
       case 'discover': this.fx.spark.explode(30, center(this.run.p.x), center(this.run.p.y)); this.face('sparkle', 1000); break;
       case 'slam':
         d.tiles.forEach(t => this.fx.dust.explode(3, center(t.x), center(t.y)));
-        if (!d.hit) this.shake(120, 0.004);
         break;
       case 'rage': {
-        // the last boss loses its temper: a red flash, a shake, and its frown deepens for the rest of the fight
+        // the last boss loses its temper: a red flash, and its frown deepens for the rest of the fight
         const s = this.enemySprites[d.enemy.id];
         this.fx.magic.explode(30, center(d.enemy.x), center(d.enemy.y));
-        this.shake(300, 0.01);
         if (s) { s.setTintFill(0xff5050); s.flashUntil = this.time.now + 220; this.tweens.add({ targets: s, hop: 7, duration: 120, yoyo: true, repeat: 1 }); }
         this.face('shock', 900);
         break;
@@ -726,7 +732,6 @@ export class DungeonScene extends Phaser.Scene {
         this.fx.spore.explode(30, center(d.x), center(d.y));
         this.fx.dust.explode(10, center(d.x), center(d.y));
         this.noiseRing(d.x, d.y, 1, 0xc49aff);
-        this.shake(140, 0.006);
         break;
       case 'split': {
         this.fx.slime.explode(14, center(d.from.x), center(d.from.y));
@@ -746,7 +751,7 @@ export class DungeonScene extends Phaser.Scene {
           const x = d.from.x + Math.sign(d.to.x - d.from.x) * k, y = d.from.y + Math.sign(d.to.y - d.from.y) * k;
           this.time.delayedCall(k * 30, () => this.fx.dust.explode(5, center(x), center(y) + 4));
         }
-        if (!d.hit) { this.shake(120, 0.005); this.fx.spark.explode(8, center(d.to.x), center(d.to.y) - 8); }
+        if (!d.hit) { this.fx.spark.explode(8, center(d.to.x), center(d.to.y) - 8); }
         break;
       case 'fission': {
         // the candy bursts into stars, then each relic it grows pops up over your head, one after another
@@ -787,7 +792,6 @@ export class DungeonScene extends Phaser.Scene {
             rock.destroy();
             this.fx.fire.explode(30, tx, ty); this.fx.rock.explode(14, tx, ty);
             this.noiseRing(d.x, d.y, 1, 0xf08c3a);
-            this.shake(160, 0.007);
           },
         });
         break;
@@ -819,8 +823,7 @@ export class DungeonScene extends Phaser.Scene {
     if (!look) return;
     this.float(d.x, d.y - 0.4, look[0], look[1], 0, 12);
     this.noiseRing(d.x, d.y, 1, look[2]);
-    if (d.kind === T.TRAP_SPIKE) { this.fx.rock.explode(10, center(d.x), center(d.y)); this.shake(140, 0.008); }
-    if (d.kind === T.TRAP_SUMMON) { this.shake(220, 0.01); this.cameras.main.flash(120, 154, 95, 209); }
+    if (d.kind === T.TRAP_SPIKE) { this.fx.rock.explode(10, center(d.x), center(d.y)); }
   }
 
   onHit(d) {
@@ -840,7 +843,6 @@ export class DungeonScene extends Phaser.Scene {
   heavyHit(x, y, from) {
     const cx = center(x), cy = center(y);
     this.hitStop(90);
-    this.shake(150, 0.009);
     // the slash crosses the line of the swing
     const ang = Math.atan2(y - from.y, x - from.x) + Math.PI / 4;
     for (const [w, col, len] of [[5, 0xf4cf4f, 24], [2, 0xffffff, 30]]) {
@@ -850,8 +852,6 @@ export class DungeonScene extends Phaser.Scene {
         onComplete: () => this.tweens.add({ targets: s, alpha: 0, scaleY: 0.2, duration: 200, onComplete: () => s.destroy() }),
       });
     }
-    const ring = this.add.circle(cx, cy, TILE * 0.7).setStrokeStyle(2, 0xffffff, 1).setDepth(D.fx).setScale(0.3);
-    this.tweens.add({ targets: ring, scale: 1.5, alpha: 0, duration: 300, ease: 'Quad.out', onComplete: () => ring.destroy() });
     this.fx.spark.explode(16, cx, cy);
   }
 
@@ -859,23 +859,46 @@ export class DungeonScene extends Phaser.Scene {
     const s = this.enemySprites[e.id];
     const fx = e.d.sprite === 'skel' ? 'spore' : e.d.sprite === 'slime' ? 'slime' : 'blood';
     if (this.run.isVisible(e.x, e.y)) this.fx[fx].explode(e.d.boss ? 40 : 14, center(e.x), center(e.y));
-    if (e.d.boss) { this.shake(300, 0.01); this.fx.spark.explode(30, center(e.x), center(e.y)); }
+    if (e.d.boss) { this.fx.spark.explode(30, center(e.x), center(e.y)); }
     if (!s) return;
     s.dying = true;
     s.crown?.destroy();
     this.tweens.killTweensOf(s);
-    // that was the last one in sight: a happy little hop
+    // that was the last one in sight: a small smile
     this.later(260, () => {
-      const ps = this.playerSprite;
-      if (!ps || this.run.p.hp <= 0 || this.anyThreat()) return;
+      if (!this.playerSprite || this.run.p.hp <= 0 || this.anyThreat()) return;
       this.face('sparkle', 800);
-      this.emote(ps, '♪', 1000);
-      this.tweens.add({ targets: ps, hop: 4, duration: 110, yoyo: true, repeat: 1, ease: 'Quad.out' });
     });
     this.tweens.add({
-      targets: s, alpha: 0, scaleX: 1.4 * texScale(s), scaleY: 0.3 * texScale(s), duration: 220, ease: 'Quad.in',
+      targets: s, alpha: 0, y: s.y + 2, duration: 300, ease: 'Linear',
       onComplete: () => { s.destroy(); delete this.enemySprites[e.id]; },
     });
+  }
+
+  // Falling down (v0.20): no fanfare. Your eyes squeeze shut and you tip over where you stood, the
+  // colour drains out of the field, and it goes quiet. `done` runs once it has sunk in.
+  fall(done) {
+    const ps = this.playerSprite, cam = this.cameras.main, p = this.run.p;
+    this.fallen = true;
+    this.bubbles.forEach(b => b.destroy());
+    this.bubbles = [];
+    if (ps) {
+      this.tweens.killTweensOf(ps);
+      const key = faceKey(this.heroKey, 'hit');
+      if (this.textures.exists(key)) ps.setTexture(key);
+      ps.clearTint().setAlpha(1);
+      // a beat standing, then over onto your side (a quarter turn keeps every pixel square)
+      this.time.delayedCall(260, () => {
+        ps.setOrigin(0.5, 0.5).setPosition(center(p.x), foot(p.y) - 5).setRotation(p.face < 0 ? -Math.PI / 2 : Math.PI / 2);
+      });
+    }
+    const fx = cam.postFX?.addColorMatrix();
+    const k = { t: 0 };
+    this.tweens.add({
+      targets: k, t: 1, delay: 200, duration: 1400, ease: 'Quad.out',
+      onUpdate: () => { if (fx) { fx.grayscale(k.t); fx.brightness(1 - 0.3 * k.t, true); } },
+    });
+    this.time.delayedCall(1500, () => done?.());
   }
 
   // ---------- effect helpers ----------
@@ -921,18 +944,17 @@ export class DungeonScene extends Phaser.Scene {
     this.fx.spark.explode(30 + 20 * (d.tier || 0), x, y);
     this.fx[d.tier >= 3 ? 'magic' : d.fused ? 'crystal' : 'fire'].explode(20 + 10 * (d.tier || 0), x, y);
     // a soft burst of light around you instead of a full-screen flash
-    const glow = this.add.circle(x, y, TILE * (2 + d.tier), Phaser.Display.Color.GetColor(...col), 0.45).setDepth(D.fx).setScale(0.3).setBlendMode(Phaser.BlendModes.ADD);
+    const glow = this.add.circle(x, y, TILE * (1.2 + 0.4 * d.tier), Phaser.Display.Color.GetColor(...col), 0.3).setDepth(D.fx).setScale(0.3).setBlendMode(Phaser.BlendModes.ADD);
     this.tweens.add({ targets: glow, scale: 1.4, alpha: 0, duration: 420 + 120 * (d.tier || 0), ease: 'Quad.out', onComplete: () => glow.destroy() });
-    if (d.tier >= 2) this.shake(260, 0.004 * d.tier);
-    for (let k = 0; k < (d.first ? 3 : 1); k++) {
-      const ring = this.add.circle(x, y, TILE).setStrokeStyle(2, Phaser.Display.Color.GetColor(...col), 1).setDepth(D.fx).setScale(0.2);
-      this.tweens.add({ targets: ring, scale: 3 + d.tier, alpha: 0, delay: k * 200, duration: 700, ease: 'Quad.out', onComplete: () => ring.destroy() });
-    }
+    const ring = this.add.circle(x, y, TILE).setStrokeStyle(1, Phaser.Display.Color.GetColor(...col), 1).setDepth(D.fx).setScale(0.2);
+    this.tweens.add({ targets: ring, scale: 2 + d.tier * 0.5, alpha: 0, duration: 600, ease: 'Quad.out', onComplete: () => ring.destroy() });
   }
 
+  // `size` in world pixels picks the pixel font whose grid matches the art: 10 (small), 12, 15 (big)
   float(x, y, text, color, delay = 0, size = 10) {
+    const [family, px] = size >= 14 ? ['Galmuri14', 15] : size >= 11 ? ['Galmuri11', 12] : ['Galmuri9', 10];
     const t = this.add.text(center(x), y * TILE, text, {
-      fontFamily: '"Do Hyeon", sans-serif', fontSize: `${size}px`, color, stroke: '#000000', strokeThickness: 2,
+      fontFamily: `${family}, sans-serif`, fontSize: `${px}px`, color, stroke: '#000000', strokeThickness: 2,
     }).setOrigin(0.5, 1).setDepth(D.text).setResolution(this.textRes()).setAlpha(delay ? 0 : 1);
     this.tweens.add({ targets: t, alpha: 1, duration: 1, delay });
     this.tweens.add({ targets: t, y: t.y - 10, alpha: 0, duration: 800, delay: delay + 150, ease: 'Quad.in', onComplete: () => t.destroy() });
@@ -949,7 +971,7 @@ export class DungeonScene extends Phaser.Scene {
     while (this.bubbles.length >= 2) this.bubbles.shift().destroy();
     const k = (this.game.registry.get('dpr') || 1) / (this.cameras.main.zoom || 3);
     const b = this.add.text(target.x, target.y - 18, text, {
-      fontFamily: '"Do Hyeon", sans-serif', fontSize: `${14 * k}px`, color: '#1b1424', backgroundColor: '#f4f0e8',
+      fontFamily: 'Galmuri11, sans-serif', fontSize: `${12 * k}px`, color: '#1b1424', backgroundColor: '#f4f0e8',
       padding: { x: 7 * k, y: 4 * k }, align: 'center', wordWrap: { width: 190 * k, useAdvancedWrap: true },
     }).setOrigin(0.5, 1).setDepth(D.bubble).setResolution(this.textRes());
     b.target = target;
@@ -1002,12 +1024,9 @@ export class DungeonScene extends Phaser.Scene {
     this.tweens.add({ targets: c, radius: TILE * (r + 0.7), alpha: 0, duration: 280, ease: 'Quad.out', onComplete: () => c.destroy() });
     this.fx.fire.explode(60, center(x), center(y));
     this.fx.dust.explode(20, center(x), center(y));
-    this.shake(220, 0.012);
   }
 
   gasBoom(tiles) {
-    this.shake(400, 0.018);
-    this.cameras.main.flash(160, 255, 210, 120);
     for (const t of tiles) {
       this.time.delayedCall(t.d * 40, () => {
         if (!this.run) return;
@@ -1023,17 +1042,14 @@ export class DungeonScene extends Phaser.Scene {
     const cx = center(d.x), cy = center(d.y), last = d.last, size = d.size || 1;
     this.face(last ? 'sparkle' : 'grit', last ? 900 : 380);
     this.bump(this.playerSprite, d.from, d);
-    this.hitStop(last ? 140 + size * 30 : 35 + d.hits * 12);
     this.fx.spark.explode((last ? 30 : 6) + d.hits * 3, cx, cy);
     this.fx.rock.explode((last ? 24 : 4) + d.hits * 3, cx, cy);
     // a big vein comes down in pieces: rubble from every tile it filled
     if (last && size > 1) for (const c of d.cells) { this.fx.rock.explode(14, center(c.x), center(c.y)); this.fx.spark.explode(12, center(c.x), center(c.y)); }
-    this.shake(last ? 420 + size * 80 : 80 + d.hits * 35, last ? 0.012 + size * 0.002 : 0.002 + d.hits * 0.0014);
-    if (last) this.cameras.main.flash(160, 244, 207, 79);
     this.noiseRing(d.x, d.y, d.r);
     const g = ORES[d.tier], tint = Phaser.Display.Color.HexStringToColor(g.vein ? g.vein[0] : '#ffffff').color;
     // pieces of whatever is inside burst out with every swing: blue shards from diamond, red from ruby
-    this.shards(cx, cy, d.tier, last ? 18 * size : 4 + d.hits * 2, last ? 2.6 : 1.4);
+    this.shards(cx, cy, d.tier, last ? 6 + 2 * size : 2, last ? 2 : 1);
     // the ore itself shudders, every tile of it
     const cells = d.cells || [{ x: d.x, y: d.y }];
     const imgs = cells.map(c => this.oreImgs[idx(c.x, c.y)]).filter(im => im?.active);
@@ -1044,23 +1060,17 @@ export class DungeonScene extends Phaser.Scene {
         const im = this.oreImgs[idx(c.x, c.y)];
         if (im?.active) im.setTexture(...oreFrame(this, { cells, tier: d.tier }, c.x, c.y));
       }
-      this.hitStop(110);
-      const c = Phaser.Display.Color.IntegerToRGB(tint);
-      this.cameras.main.flash(140, c.r, c.g, c.b);
       this.fx.spark.explode(24, cx, cy);
       const ring = this.add.circle(cx, cy, TILE * 0.9).setStrokeStyle(2, tint, 1).setDepth(D.fx).setScale(0.2);
       this.tweens.add({ targets: ring, scale: 1.6, alpha: 0, duration: 420, ease: 'Quad.out', onComplete: () => ring.destroy() });
-      this.shards(cx, cy, d.tier, 16, 2.2);
+      this.shards(cx, cy, d.tier, 6, 1.6);
     }
     // a bonanza: a fountain of pieces, no words needed
     if (d.nugget) {
-      this.hitStop(160);
-      this.shake(320, 0.012);
-      this.cameras.main.flash(180, 244, 207, 79);
-      for (let k = 0; k < 16; k++) this.coinFly(cx, cy, 2.4, 120 + k * 22, chipKey(d.tier));
+      for (let k = 0; k < 6; k++) this.coinFly(cx, cy, 2, 120 + k * 40, chipKey(d.tier));
     }
     // chips of the ore spray out and fly into your pocket
-    const n = (last ? 14 : 2 + d.hits) * (last ? size : 1);
+    const n = last ? 3 + 2 * size : 1;
     for (let k = 0; k < n; k++) this.coinFly(cx, cy, last ? 2.2 : 1.2, k * (last ? 25 : 35), chipKey(d.tier));
   }
 
@@ -1085,11 +1095,9 @@ export class DungeonScene extends Phaser.Scene {
     if (!ore) return;
     const g = ORES[d.tier], tint = Phaser.Display.Color.HexStringToColor(g.vein ? g.vein[0] : '#ffffff').color;
     const cx = center(ore.x), cy = center(ore.y);
-    for (let k = 0; k < 2; k++) {
-      const ring = this.add.circle(cx, cy, TILE).setStrokeStyle(2, tint, 1).setDepth(D.fx).setScale(0.2);
-      this.tweens.add({ targets: ring, scale: 2.4, alpha: 0, delay: k * 160, duration: 650, ease: 'Quad.out', onComplete: () => ring.destroy() });
-    }
-    this.shards(cx, cy, d.tier, 24, 2.8);
+    const ring = this.add.circle(cx, cy, TILE).setStrokeStyle(1, tint, 1).setDepth(D.fx).setScale(0.2);
+    this.tweens.add({ targets: ring, scale: 2, alpha: 0, duration: 600, ease: 'Quad.out', onComplete: () => ring.destroy() });
+    this.shards(cx, cy, d.tier, 8, 2);
   }
 
   // A big vein comes into view for the first time: it shines, and you can't miss it.
@@ -1100,9 +1108,8 @@ export class DungeonScene extends Phaser.Scene {
     for (const c of d.cells) this.fx.spark.explode(10, center(c.x), center(c.y));
     const ring = this.add.circle(mx, my, TILE * 1.2).setStrokeStyle(2, tint, 1).setDepth(D.fx).setScale(0.2);
     this.tweens.add({ targets: ring, scale: 2, alpha: 0, duration: 600, ease: 'Quad.out', onComplete: () => ring.destroy() });
-    if (d.size >= 4) { const c = Phaser.Display.Color.IntegerToRGB(tint); this.cameras.main.flash(160, c.r, c.g, c.b); this.shake(200, 0.004); }
     // the bigger it is, the longer it keeps glittering
-    for (let k = 0; k < d.size; k++) this.time.delayedCall(250 + k * 220, () => { const c = d.cells[k % d.cells.length]; this.shards(center(c.x), center(c.y) - 4, d.tier, 6, 0.8); });
+    for (let k = 0; k < Math.min(3, d.size); k++) this.time.delayedCall(250 + k * 300, () => { const c = d.cells[k % d.cells.length]; this.shards(center(c.x), center(c.y) - 4, d.tier, 2, 0.6); });
   }
 
   coinFly(x, y, spread, delay, key = 'gold') {
@@ -1119,9 +1126,6 @@ export class DungeonScene extends Phaser.Scene {
       },
     });
   }
-
-  // Every shake goes through here, kept small: a nudge you feel, not a jolt that hides the board.
-  shake(ms, k) { this.cameras.main.shake(ms * 0.7, Math.min(0.0055, k * 0.4)); }
 
   // a heartbeat of stillness so a heavy hit lands
   hitStop(ms) {
@@ -1299,10 +1303,6 @@ export class DungeonScene extends Phaser.Scene {
       }
       if (['hide', 'stone', 'npc'].includes(e.state)) continue; // no marks: a chest, a statue, a friend
       this.drawStatus(g, s, e, top, flip ? -1 : 1, time);
-      if (run.calm(e) && !e.sleep && e.state !== 'sleep') {
-        if (!s.humAt) s.humAt = time + Math.random() * 4000;
-        else if (time > s.humAt) { s.humAt = time + 4500 + Math.random() * 3000; this.emote(s, '♪', 1300); }
-      }
       this.drawEmote(g, s, s.x, top - 5, time);
       if (e.loot) { // your gold, in a little sack over its head
         const gy = top - 5 + Math.sin(time / 150) * 1;
@@ -1336,8 +1336,19 @@ export class DungeonScene extends Phaser.Scene {
 
     this.clawed = claw;
 
+    // footprints you heard: two small paw marks on the tile, pointing the way it went, fading out
+    this.prints = this.prints.filter(f => time - f.at < 1800);
+    for (const f of this.prints) {
+      const a = 0.75 * (1 - (time - f.at) / 1800), cx = center(f.x), cy = center(f.y);
+      const sx = f.dy ? 2 : 0, sy = f.dx ? 2 : 0; // side by side across the direction of travel
+      g.fillStyle(0xe8e4dc, a);
+      g.fillRect(Math.round(cx - sx - 1 - f.dx), Math.round(cy - sy - f.dy), 2, 2);
+      g.fillRect(Math.round(cx + sx + f.dx), Math.round(cy + sy + f.dy), 2, 2);
+    }
+
     // you: walk frames while moving; standing still a while, you glance back over your shoulder now and then
     const ps = this.playerSprite;
+    if (this.fallen) return; // lying where you fell (fall): nothing more moves
     const walking = time < (ps.stepUntil || 0);
     let expr = time < (ps.exprUntil || 0) ? ps.expr : this.lowHp ? 'teary' : '';
     // a blink every few seconds when the face is at rest
@@ -1361,14 +1372,7 @@ export class DungeonScene extends Phaser.Scene {
     if (walking || !this.safe || this.lowHp || p.sleep || !ps.calmSince) ps.calmSince = time;
     else if (time - ps.calmSince > 4000 && time > (ps.humAt || 0)) {
       ps.humAt = time + 4500 + Math.random() * 2000;
-      ps.quirkN = (ps.quirkN || 0) + 1;
-      if (ps.quirkN % 2) this.emote(ps, '♪', 1300);
-      else {
-        ps.quirkAt = time;
-        const id = this.run.charId, side = p.face < 0 ? -5 : 5;
-        if (id === 'mage' || id === 'vamp') this.later(150, () => this.fx.magic.explode(4, ps.x, ps.y - 12));
-        if (id === 'knight') this.later(250, () => this.fx.spark.explode(4, ps.x + side, ps.y - 6));
-      }
+      ps.quirkAt = time;
     }
     this.drawEmote(g, ps, ps.x, ps.y - TILE - ps.hop - 3, time);
 

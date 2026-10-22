@@ -62,7 +62,7 @@ function spread(tiles, n, away = []) {
   return got;
 }
 
-// ctx: { floor, start, stairs, relicOffers(n) -> relic ids }
+// ctx: { floor, start, stairs, open(id) -> has that unlock come (data/unlocks.js), relicOffers(n) -> relic ids }
 // deco: { has, themes } from decorate(); set pieces take over a room's theme.
 export function placeSpecials(map, rooms, deco, ctx) {
   const out = { pickups: [], enemies: [] };
@@ -79,7 +79,8 @@ export function placeSpecials(map, rooms, deco, ctx) {
 
   // something locked, and its key
   let lockedAt = null;
-  if (ctx.floor >= 2 && Math.random() < B.VAULT_CHANCE) {
+  const open = ctx.open || (() => true);
+  if (ctx.floor >= 2 && open('vault') && Math.random() < B.VAULT_CHANCE) {
     const fits = ids().filter(i => leaf(i) && rooms[i].w >= 3 && rooms[i].h >= 3 && rooms[i].w * rooms[i].h <= 36);
     if (fits.length) {
       const i = pick(fits);
@@ -88,7 +89,7 @@ export function placeSpecials(map, rooms, deco, ctx) {
       lockedAt = rooms[i];
     }
   }
-  if (!lockedAt && ctx.floor >= 2 && Math.random() < B.LOCKED_CHEST_CHANCE) {
+  if (!lockedAt && ctx.floor >= 2 && open('keys') && Math.random() < B.LOCKED_CHEST_CHANCE) {
     const i = pick(ids());
     const t = i !== undefined && pick(floorTiles(map, rooms[i]).filter(t => map.ter[idx(t.x, t.y)] !== T.WATER));
     if (t) {
@@ -122,9 +123,10 @@ export function placeSpecials(map, rooms, deco, ctx) {
   const zone = Math.min(2, Math.floor((ctx.floor - 1) / B.FLOORS_PER_ZONE));
   const chance = { hive: B.HIVE_CHANCE, weeds: B.WEED_CHANCE[zone] };
   let made = 0;
-  // the weed patch, the meadow's everyday job, gets the first pick of the rooms
+  // one set piece a field at most, so each one gets your full attention; the weed patch, the
+  // meadow's everyday job, gets the first pick of the rooms
   for (const kind of ['weeds', ...shuffle(['grave', 'statue', 'traps', 'hive'])]) {
-    if (made >= (ctx.floor === 1 ? 1 : 2) || Math.random() > (chance[kind] ?? B.SPECIAL_CHANCE)) continue;
+    if (made >= 1 || !open(kind) || Math.random() > (chance[kind] ?? B.SPECIAL_CHANCE)) continue;
     const fits = ids().filter(i => fit[kind](rooms[i], i));
     if (!fits.length) continue;
     const i = pick(fits);
@@ -132,7 +134,7 @@ export function placeSpecials(map, rooms, deco, ctx) {
     make[kind](map, rooms[i], out, ctx);
     made++;
   }
-  if (Math.random() < B.RING_CHANCE[zone]) rings(map, rooms, ids());
+  if (open('rings') && Math.random() < B.RING_CHANCE[zone]) rings(map, rooms, ids());
   return out;
 }
 

@@ -1,7 +1,9 @@
 // Progress that survives between runs (gold, upgrades, unlocks, records).
 // Stored in the browser's localStorage; the desktop build will swap this for a file.
 
-const SAVE_KEY = 'pixel-crawler-save-v1';
+// v2 (v0.20): the game opens up one thing at a time now (data/unlocks.js), so it starts over from a
+// fresh save; the v1 save stays in storage untouched.
+const SAVE_KEY = 'pixel-crawler-save-v2';
 
 export function freshMeta() {
   return {
@@ -10,7 +12,8 @@ export function freshMeta() {
     relicUnlock: {},
     chars: { adv: true },
     sel: 'adv',
-    stats: { kills: 0, maxFloor: 0, bosses: [], evos: 0, runs: 0, wins: 0, bestGold: 0 },
+    stats: { kills: 0, maxFloor: 0, bosses: [], evos: 0, runs: 0, wins: 0, bestGold: 0, chests: 0 },
+    open: {},   // what has opened so far, by unlock id (data/unlocks.js)
     found: {},  // discovered combinations, see data/terrain.js
     recipes: {},  // relic recipes found at least once, by recipeKey, see data/relics.js
     ores: {},     // ore grades seen: id -> how many broken open, see data/ores.js
@@ -19,7 +22,7 @@ export function freshMeta() {
     lastRun: null,          // how the last run went, for the village gossip
     story: {},              // picture-book scenes already shown: intro, ratking, skelking, ending (ui/story.js)
     pack: null,             // a basic relic paid for in the shop to take on the next run (data/upgrades.js PACK_COST)
-    step: 0,                // the 토벌 단계 picked at the guild (data/balance.js)
+    step: 0,                // the 탐험 단계 picked at the guild (data/balance.js)
     home: [],               // 집 꾸미기 pieces put up round your house (data/home.js)
     bookGifts: 0,           // the smith's recipe-book gifts already taken (data/balance.js bookGift)
   };
@@ -46,6 +49,7 @@ export function loadMeta() {
         // saves from before the critter book already knew the bosses they beat
         critters: m.critters ? { ...m.critters } : Object.fromEntries((m.stats?.bosses || []).map(b => [b, 1])),
         village: { seen: { ...m.village?.seen } },
+        open: { ...m.open },
         story: { ...m.story },
         home: Array.isArray(m.home) ? m.home : [],
       };
