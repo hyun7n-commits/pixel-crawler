@@ -7,6 +7,7 @@ import { StoryScene } from './scenes/StoryScene.js';
 import { playStory } from './ui/story.js';
 import { Run, isBossFloor } from './core/run.js';
 import { loadMeta, saveMeta } from './core/save.js';
+import { suspend, resume, clearSuspended } from './core/suspend.js';
 import { pathTo, idx, isBump, isStairs } from './core/dungeon.js';
 import { ENEMIES } from './data/enemies.js';
 import { cheb } from './core/util.js';
@@ -128,11 +129,14 @@ function afterRunStory() {
   else showVillage('run');
 }
 
-function startRun() {
+// `restored`: a run left off last time (core/suspend.js), picked up where it was
+function startRun(left) {
   if (run) return;
+  const restored = left instanceof Run ? left : null;   // a click passes its event here
   sfx.unlockAudio();
   closeModal();
   inVillage = false;
+  $('game').hidden = false;   // a run picked up at launch comes straight here
   $('game').classList.remove('village');
   game.scene.sleep('village');
   game.scene.run('dungeon');
@@ -141,10 +145,16 @@ function startRun() {
   showVillageTip('');
   // the stage changed shape, so measure it again before drawing
   fitCanvas();
-  run = new Run(meta, meta.sel);
+  run = restored || new Run(meta, meta.sel);
   hud.reset();
   run.on(onRunEvent);
   scene.attach(run);
+  if (restored) {
+    setMusic(isBossFloor(run.floor) ? 'boss' : run.zone.style);
+    run.log('하던 토벌을 이어서 한다.', 'good');
+    run.emit('turn');
+    return;
+  }
   run.start();
   // no manual up front: the first runs get one line on how to ask about anything
   if (meta.stats.runs < 2) run.log(TOUCH ? '모르는 게 보이면 꾹 눌러 보자. 설명이 나온다.' : '모르는 게 보이면 마우스를 올려 보자. 설명이 나온다.');
@@ -220,7 +230,10 @@ function onRunEvent(type, d) {
   if (type === 'kill' && d.enemy.d.boss && !run.victory) setMusic(run.zone.style);
   if (type === 'phit') clearPath();
   if (type === 'turn') afterTurn();
+  // written down now and then, so closing the page mid-run loses nothing (core/suspend.js)
+  if ((type === 'floor' || (type === 'turn' && run.turn % 10 === 0)) && !run.over) setTimeout(putAway, 0);
   if (type === 'end') {
+    clearSuspended();
     setMusic(null);
     clearPath();
     setAim(false);
@@ -453,7 +466,14 @@ const game = new Phaser.Game({
     };
     // the dungeon scene builds every texture; once it is up, open in the village (the very first
     // time, after the opening picture book)
-    setTimeout(() => (meta.story.intro ? showVillage() : showStory('intro', () => showVillage())), 0);
+    // a run left off last time picks up where it was; otherwise the village
+    setTimeout(() => {
+      const left = meta.story.intro && resume(meta);
+      if (left) {
+        try { startRun(left); return; } catch (e) { clearSuspended(); run = null; console.warn('could not pick the run up again', e); }
+      }
+      meta.story.intro ? showVillage() : showStory('intro', () => showVillage());
+    }, 0);
   }), new VillageScene(villageHooks), new StoryScene()],
 });
 
@@ -467,4 +487,14 @@ function fitCanvas() {
 new ResizeObserver(fitCanvas).observe($('phaser'));
 
 // test hook for automated play-testing; harmless in normal play
+// the page going away (tab closed, app switched, phone locked): write the run down, and the save with
+// it (kills, finds and recipes count as they happen, so they must match the run that comes back)
+function putAway() {
+  if (!run || run.over) return;
+  suspend(run);
+  saveMeta(meta);
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) putAway(); });
+window.addEventListener('pagehide', putAway);
+
 window.__game = { get run() { return run; }, get meta() { return meta; }, get scene() { return scene; }, get village() { return village(); }, startRun, setAim, showVillage, showStory };
