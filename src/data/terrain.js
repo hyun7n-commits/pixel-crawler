@@ -70,6 +70,7 @@ export const DISCOVERIES = [
   { id: 'bomb_trap',   combo: '폭탄 + 함정',        result: '멀리서 함정을 터뜨린다', hint: '함정에 폭탄 던지면 멀리서도 터진대.' },
   { id: 'bolt_water',  combo: '번개 + 웅덩이',      result: '웅덩이에 있는 모두가 감전', hint: '웅덩이에 번개 떨어지면 다 찌릿하대.' },
   { id: 'smoke_bees',  combo: '연기 + 벌집',        result: '벌들이 꾸벅꾸벅 존다', hint: '벌집 옆에 불을 피우면 벌들이 졸린대.' },
+  { id: 'hush_root',   combo: '졸음 꽃가루 + 비명 뿌리', result: '비명 뿌리가 쿨쿨 잠들어 조용해진다', hint: '꺄아아 우는 뿌리도 졸음 꽃가루엔 못 버틴대.' },
 ];
 
 // Things enemies mutter when you overhear them unseen

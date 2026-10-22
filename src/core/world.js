@@ -376,7 +376,7 @@ function creatureTick(run, who) {
       }
     } else if (who.state !== 'sleep') {
       who.state = 'sleep'; who.wake = 0; who.doze = 2; who.aim = false;
-      if (run.isVisible(b.x, b.y)) run.discover('sleep_enemy');
+      if (run.isVisible(b.x, b.y)) run.discover(who.d.screams ? 'hush_root' : 'sleep_enemy');
     } else who.doze = 2;
   } else if (who === 'player' && run.p.sleep > 0 && --run.p.sleep === 0) {
     run.log('잠에서 깼다.', 'good');
