@@ -146,6 +146,18 @@ export class Run {
     this.refreshDoors();
     computeFOV(this.map, this.p.x, this.p.y, this.stat().sight);
     this.emit('floor');
+    this.spotVeins();
+  }
+
+  // A big vein (three tiles or more) catches your eye the first time it comes into view.
+  spotVeins() {
+    for (const o of this.map.ores) {
+      if (o.spotted || o.size < 3 || !o.cells.some(c => this.isVisible(c.x, c.y))) continue;
+      o.spotted = true;
+      const name = ORES[o.tier].name;
+      this.log(o.size >= 4 ? `엄청나게 큰 ${name} 광맥이다! 대박!` : `커다란 ${name} 광맥이 보인다!`, 'good');
+      this.emit('vein', { x: o.x, y: o.y, cells: o.cells, size: o.size, tier: o.tier });
+    }
   }
 
   genNormalFloor() {
@@ -324,13 +336,14 @@ export class Run {
       return true;
     }
     const i = idx(nx, ny);
-    if (map.tiles[i] === ORE) return this.mineOre(this.oreAt(nx, ny));
+    if (map.tiles[i] === ORE) return this.mineOre(this.oreAt(nx, ny), { x: nx, y: ny });
     if (map.tiles[i] === GRAVE) { openGrave(this, nx, ny); this.endTurn(); return true; }
     if (map.tiles[i] === LOCKED) return this.unlock(nx, ny);
     if (!this.passable(nx, ny)) return false;
     p.x = nx; p.y = ny;
     this.trail.push({ x: nx, y: ny });
     if (this.trail.length > 40) this.trail.shift();
+    this.emit('move', { x: nx, y: ny, ter: map.ter[i] });
     onEnter(this, 'player', nx, ny);
     this.pickupAt(nx, ny);
     if (map.tiles[i] === STAIRS) { this.changeFloor(1); return true; }
@@ -408,10 +421,11 @@ export class Run {
   // Bump the big ore to mine it. Every swing pays a little more than the last, is louder,
   // and makes the crack beside it puff mine gas. A swing may crack into a better grade
   // underneath, or hit a bonanza. The last swing breaks it wide open.
-  oreAt(x, y) { return this.map.ores.find(o => o.x === x && o.y === y); }
+  oreAt(x, y) { return this.map.ores.find(o => o.cells.some(c => c.x === x && c.y === y)); }
 
-  mineOre(ore) {
-    const map = this.map, p = this.p, s = this.stat();
+  // `at`: the tile of the vein you swung at (a big vein spans up to four)
+  mineOre(ore, at = ore) {
+    const map = this.map, p = this.p, s = this.stat(), big = B.ORE_SIZE_MULT[ore.size - 1];
     ore.hits++;
     const k = ore.hits - 1, last = ore.hits >= B.ORE_HITS, top = ORES.length - 1;
     if (ore.hits === 1) this.meetOre(ore.tier);
@@ -423,8 +437,8 @@ export class Run {
     const g = ORES[ore.tier];
     const r = B.ORE_NOISE[k] + (nugget ? 2 : 0);
     let gold;
-    if (!last) gold = Math.round(B.oreGold(this.floor) * g.mult * B.ORE_SWING[k] * s.oreMult * (nugget ? B.ORE_NUGGET_MULT : 1));
-    this.emit('mine', { x: ore.x, y: ore.y, from: { x: p.x, y: p.y }, hits: ore.hits, r, last, tier: ore.tier, rose, nugget });
+    if (!last) gold = Math.round(B.oreGold(this.floor) * g.mult * B.ORE_SWING[k] * s.oreMult * big * (nugget ? B.ORE_NUGGET_MULT : 1));
+    this.emit('mine', { x: at.x, y: at.y, cells: ore.cells, size: ore.size, from: { x: p.x, y: p.y }, hits: ore.hits, r, last, tier: ore.tier, rose, nugget });
     if (ore.vent) addGas(this, ore.vent.x, ore.vent.y, 'mine', B.ORE_GAS);
     if (!last) {
       this.addGold(gold);
@@ -432,13 +446,14 @@ export class Run {
       else if (rose) this.log(`쩡! 속에서 ${josa(g.name, '이', '가')} 비친다! (${ore.hits}/${B.ORE_HITS})`, 'good');
       else this.log(`캉! ${g.name} 조각이 떨어졌다. (${ore.hits}/${B.ORE_HITS})`);
     } else {
-      const i = idx(ore.x, ore.y);
-      map.tiles[i] = FLOOR;
+      for (const c of ore.cells) map.tiles[idx(c.x, c.y)] = FLOOR;
       map.ores = map.ores.filter(o => o !== ore);
       this.meta.ores[g.id] = (this.meta.ores[g.id] || 0) + 1;
-      this.pickups.push({ x: ore.x, y: ore.y, type: 'gold', amount: Math.round(B.oreJackpot(this.floor) * g.mult * s.oreMult) });
-      this.pickups.push({ x: ore.x, y: ore.y, type: 'chest' });
-      this.log(`쩌억! 큰 ${g.name} 광석이 통째로 쏟아졌다!`, 'good');
+      // the haul lies in a heap on every tile the vein filled; a 2x2 jackpot holds a richer chest
+      const haul = Math.round(B.oreJackpot(this.floor) * g.mult * s.oreMult * big / ore.size);
+      for (const c of ore.cells) this.pickups.push({ x: c.x, y: c.y, type: 'gold', amount: haul });
+      this.pickups.push({ x: ore.x, y: ore.y, type: 'chest', rich: ore.size >= 4, vein: ore.size >= 4 });
+      this.log(ore.size > 1 ? `쩌억! 커다란 ${g.name} 광맥이 통째로 무너져 내렸다!` : `쩌억! 큰 ${g.name} 광석이 통째로 쏟아졌다!`, 'good');
       this.discover('ore_jackpot');
       // the blacksmith on this floor wants a chunk of it
       const smith = this.quests.smith;
@@ -446,12 +461,12 @@ export class Run {
         smith.chunk = ore.tier;
         this.log(`큰 ${g.name} 덩어리를 하나 챙겼다.${smith.state === 'asked' ? ' 대장장이에게 가져가자.' : ''}`, 'good');
       }
-      this.emit('tiles', { list: [i] });
+      this.emit('tiles', { list: ore.cells.map(c => idx(c.x, c.y)) });
     }
     const heard = this.noise(ore.x, ore.y, r);
     // the deeper you dig, the more the mine answers: monsters crawl out of the dark toward the sound
     const came = [];
-    for (let n = 0; n < B.ORE_WAVE[k]; n++) {
+    for (let n = 0; n < B.ORE_WAVE[k] + (B.ORE_WAVE[k] ? B.ORE_SIZE_WAVE[ore.size - 1] : 0); n++) {
       const t = this.waveSpot(ore);
       if (!t) break;
       const e = this.spawnEnemy(pick(this.zone.enemies), t.x, t.y, B.enemyScale(this.floor));
@@ -511,7 +526,7 @@ export class Run {
       this.emit('pickup', { x, y, type: q.type });
       if (q.type === 'gold') this.addGold(q.amount);
       else if (q.type === 'chest') {
-        this.queue.push({ kind: 'chest' });
+        this.queue.push({ kind: 'chest', rich: !!q.rich, vein: !!q.vein });
         this.log('보물 상자를 열었다!', 'good');
         if (q.guarded) this.wakeStatues(x, y);
       } else if (q.type === 'lockedChest') {
@@ -632,7 +647,8 @@ export class Run {
   damagePlayer(raw, src, kind = 'melee') {
     const s = this.stat(), rl = this.p.relics, p = this.p;
     if (s.dodge && Math.random() < s.dodge) { this.emit('dodge', { x: p.x, y: p.y }); return; }
-    const dmg = Math.max(1, raw + rnd(2) - s.def);
+    const roll = raw * (B.HIT_ROLL[0] + Math.random() * (B.HIT_ROLL[1] - B.HIT_ROLL[0]));
+    const dmg = Math.max(1, Math.round(roll) + rnd(2) - s.def);
     this.hurtPlayer(dmg, `${src.d.name}에게 당했다`, kind);
     if (src && kind === 'melee') {
       const thorn = rl.undying ? 10 : rl.fortress ? 8 : 2 * (rl.thorns || 0);
@@ -645,10 +661,18 @@ export class Run {
   hurtPlayer(dmg, cause, kind = 'env') {
     const p = this.p;
     if (p.hp <= 0) return;
+    const before = p.hp;
     p.hp -= dmg;
+    // hanging on: one blow never takes you from a good share of your health straight to the floor
+    const hung = p.hp <= 0 && before > this.stat().maxHp * B.HANG_ON;
+    if (hung) p.hp = 1;
     this.cause = cause;
     if (p.sleep) { p.sleep = 0; p.wokeAt = this.turn; this.log('아파서 잠이 확 깼다!', 'warn'); }
-    this.emit('phit', { x: p.x, y: p.y, dmg, kind });
+    this.emit('phit', { x: p.x, y: p.y, dmg: hung ? before - 1 : dmg, kind });
+    if (hung) {
+      this.log('으윽... 간신히 버텼다! 한 대만 더 맞으면 끝이다.', 'warn');
+      this.emit('hangon', { x: p.x, y: p.y });
+    }
     const rl = p.relics, maxHp = this.stat().maxHp;
     if (p.hp <= 0 && rl.undying && !this.revived) {
       this.revived = true;
@@ -724,6 +748,7 @@ export class Run {
   endTurn() {
     const p = this.p, rl = p.relics;
     this.turn++;
+    if (this.turn % B.REGEN_TURNS === 0 && p.hp > 0 && p.hp < this.stat().maxHp) p.hp++;
     if (rl.goldstorm && this.turn % 2 === 0) this.zap(4, 12);
     else if (rl.goldbolt && this.turn % 3 === 0) this.zap(3, 10);
     else if (rl.bolt && this.turn % 6 === 0) this.zap(1, 4 * rl.bolt);
@@ -853,6 +878,7 @@ export class Run {
     if (this.p.hp <= 0) { this.p.hp = 0; this.finish(false); return; }
     if (this.victory) { this.finish(true); return; }
     this.emit('turn');
+    this.spotVeins();
   }
 
   // Returns true if the boss used its whole turn on a special move.

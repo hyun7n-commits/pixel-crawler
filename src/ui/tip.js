@@ -57,8 +57,11 @@ export function describeTile(run, x, y, always = false) {
   if (t === DOOR) lines.push(`${TILE_INFO.door.name}: ${TILE_INFO.door.tip}`);
   if (t === LOCKED) lines.push(`${TILE_INFO.locked.name}: ${TILE_INFO.locked.tip}${map.keyHeld ? ' 열쇠가 있다!' : ''}`);
   if (t === GRAVE) { const g = TILE_INFO[map.bigGrave === i ? 'graveBig' : 'grave']; lines.push(`${g.name}: ${g.tip}`); }
-  const ore = t === ORE && map.ores.find(o => idx(o.x, o.y) === i);
-  if (ore) lines.push(`큰 ${ORES[ore.tier].name} 광석 (${ore.hits}/${ORE_HITS}): ${TILE_INFO.bigOre.tip}`);
+  const ore = t === ORE && map.ores.find(o => o.cells.some(c => idx(c.x, c.y) === i));
+  if (ore) {
+    const what = ore.size > 1 ? `${['', '', '두 칸짜리', '세 칸짜리', '네 칸짜리'][ore.size]} ${ORES[ore.tier].name} 광맥` : `큰 ${ORES[ore.tier].name} 광석`;
+    lines.push(`${what} (${ore.hits}/${ORE_HITS}): ${TILE_INFO.bigOre.tip}${ore.size > 1 ? ' 광맥이 클수록 많이 나온다.' : ''}`);
+  }
   const ter = map.ter[i];
   if (ter !== T.NONE && TERRAIN[ter] && !map.hidden[i]) lines.push(`${TERRAIN[ter].name}: ${TERRAIN[ter].tip}`);
   if (map.fire[i] && map.visible[i]) lines.push(`${TILE_INFO.fire.name}: ${TILE_INFO.fire.tip}`);

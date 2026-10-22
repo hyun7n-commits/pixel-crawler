@@ -1,6 +1,7 @@
 // Sound effects, made on the fly with the Web Audio API, so there are no sound files yet.
 // Each sound is a few short tones and noise bursts. Swap these for recorded sounds later
 // by changing SOUNDS only; the rest of the game just calls onRunEvent.
+import { T } from '../data/terrain.js';
 
 const VOLUME = 0.4;
 const MUTE_KEY = 'pixel-crawler-muted';
@@ -97,6 +98,22 @@ const SOUNDS = {
     hiss(0.25, { vol: 0.12, freq: 6000, type: 'highpass', delay: 0.05 });
   },
   // a bonanza: a cascade of coins
+  heartbeat() {
+    tone(62, 0.12, { vol: 0.32, to: 44, attack: 0.01 });
+    tone(58, 0.1, { vol: 0.22, to: 42, attack: 0.01, delay: 0.17 });
+  },
+  // you'd have gone down, but you hang on at 1: a thump, and the world holds its breath
+  hangon() {
+    tone(80, 0.5, { vol: 0.5, to: 30 });
+    hiss(0.6, { vol: 0.2, freq: 300, to: 80, type: 'lowpass' });
+    chime([523, 392], 0.18, 0.1, 0.4, 0.25);
+  },
+  // a big vein comes into view: a bright shimmer that climbs, longer for a 2x2
+  vein(size) {
+    const notes = size >= 4 ? [784, 988, 1175, 1568, 1976, 2349, 3136] : [880, 1109, 1319, 1760];
+    chime(notes, 0.06, 0.14, 0.18, 0.02);
+    hiss(0.5, { vol: 0.1, freq: 7000, type: 'highpass', delay: 0.05 });
+  },
   nugget() {
     for (let i = 0; i < 9; i++) tone(1800 + ((i * 397) % 900), 0.07, { type: 'triangle', vol: 0.09, delay: 0.08 + i * 0.045 });
     chime([784, 1047, 1319, 1568, 2093], 0.07, 0.13, 0.22, 0.12);
@@ -106,6 +123,9 @@ const SOUNDS = {
     tone(98, 0.24, { type: 'triangle', vol: 0.28, delay: 0.14 });
     tone(92.5, 0.4, { type: 'triangle', vol: 0.28, delay: 0.38 });
   },
+  // footsteps: a soft scuff on stone, a splash in water; `alt` swaps feet so steps don't sound identical
+  step(alt) { hiss(0.05, { vol: 0.09, freq: alt ? 520 : 430, type: 'lowpass', attack: 0.004 }); tone(alt ? 110 : 95, 0.04, { vol: 0.05, to: 60 }); },
+  splash() { hiss(0.12, { vol: 0.14, freq: 1400, to: 500, q: 0.9 }); },
   hit() { hiss(0.06, { vol: 0.3, freq: 1500, q: 0.8 }); tone(180, 0.08, { vol: 0.25, to: 90 }); },
   sneak() { hiss(0.14, { vol: 0.4, freq: 3200, to: 800, q: 0.7 }); tone(280, 0.16, { vol: 0.4, to: 60 }); },
   hurt() { tone(230, 0.14, { type: 'square', vol: 0.1, to: 110 }); hiss(0.08, { vol: 0.2, freq: 700 }); },
@@ -128,6 +148,17 @@ export function play(name, ...args) {
   try { SOUNDS[name]?.(...args); } catch (e) { /* never let a sound break the game */ }
 }
 
+let stepN = false;
+
+// A heartbeat while your health is low: lub-dub, faster when it's really close (see lowHealth in hud.js).
+let beatTimer = null, beatLevel = 0;
+export function setHeartbeat(level) {
+  if (level === beatLevel) return;
+  beatLevel = level;
+  clearInterval(beatTimer);
+  beatTimer = level ? setInterval(() => play('heartbeat'), level > 1 ? 700 : 1050) : null;
+  if (level) play('heartbeat');
+}
 // Which sound goes with which game event (see the emit calls in core/).
 export function onRunEvent(type, d) {
   switch (type) {
@@ -137,6 +168,9 @@ export function onRunEvent(type, d) {
       if (d.nugget) play('nugget'); else if (d.rose) play('rise', d.tier);
       break;
     case 'heard': play('heard'); break;
+    case 'vein': play('vein', d.size); break;
+    case 'hangon': play('hangon'); break;
+    case 'move': if (d.ter === T.WATER) play('splash'); else play('step', (stepN = !stepN)); break;
     case 'hit': if (d.kind !== 'sneak') play('hit'); break;
     case 'sneak': play('sneak'); break;
     case 'phit': play('hurt'); break;

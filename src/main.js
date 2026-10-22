@@ -8,7 +8,7 @@ import { pathTo, idx, isBump, isStairs } from './core/dungeon.js';
 import { ENEMIES } from './data/enemies.js';
 import { cheb } from './core/util.js';
 import { isTrap } from './data/terrain.js';
-import { Hud } from './ui/hud.js';
+import { Hud, lowHealth } from './ui/hud.js';
 import { renderHub } from './ui/hub.js';
 import { showChoice, showSummary, modalOpen } from './ui/modal.js';
 import { describeTile } from './ui/tip.js';
@@ -69,6 +69,7 @@ function showTip(h) {
 
 // ---------- screens ----------
 function showHub() {
+  sfx.setHeartbeat(0);
   $('hub').hidden = false;
   $('game').hidden = true;
   game.loop.sleep();
@@ -96,6 +97,7 @@ function startRun() {
 
 function onRunEvent(type, d) {
   sfx.onRunEvent(type, d);
+  sfx.setHeartbeat(lowHealth(run));
   if (type === 'log') hud.log(d.text, d.cls);
   if (type === 'banner') hud.banner(d.text);
   if (type === 'discover') hud.banner(`새 발견! ${d.d.combo}`);
@@ -134,7 +136,7 @@ function nextChoice() {
     showChoice({ title: npc.name, sub: q.text, run, who: npc.sprite, opts: q.smithPick ? run.smithOffers() : q.opts, onPick });
     return;
   }
-  const title = q.kind === 'level' ? `레벨 ${run.p.lvl}!` : q.rich ? '잠긴 상자' : '보물 상자';
+  const title = q.kind === 'level' ? `레벨 ${run.p.lvl}!` : q.vein ? '광맥 속 상자' : q.rich ? '잠긴 상자' : '보물 상자';
   const sub = q.kind === 'level' ? '최대 체력 +3. 유물을 하나 고르자.' : q.rich ? '좋은 상자다. 넷 중 하나를 가져가자.' : '안에 든 유물 중 하나를 가져가자.';
   const open = () => showChoice({
     title, sub, run, opts: run.offers(q.rich ? 4 : 3), onPick,

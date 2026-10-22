@@ -4,18 +4,17 @@
 //   grave  - old miners' graves to dig up: gold, an item, or an angry wraith.
 //            The big grave always holds a chest, and always wakes a wraith.
 //   statue - a stone miner stands over a chest. Take the chest and the statue starts to walk.
-//   traps  - a room paved with traps and one safe path to a chest at the far end.
+//   traps  - a little trap puzzle between the door and a chest (see traps below).
 // Floors without a vault sometimes have a locked chest instead, with its key elsewhere.
 // Nothing here touches the run directly: placeSpecials returns what to add.
 
 import { T } from '../data/terrain.js';
 import { idx, FLOOR, DOOR, GRAVE, LOCKED, distMap } from './dungeon.js';
-import { pick, shuffle } from './util.js';
+import { pick, shuffle, DIRS8 } from './util.js';
 import * as B from '../data/balance.js';
 
 export const SET_PIECES = new Set(['vault', 'grave', 'statue', 'traps']);
 
-const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 const inRoom = (r, x, y) => x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
 const mid = r => ({ x: r.cx, y: r.cy });
@@ -169,28 +168,97 @@ function statue(map, r, out) {
   out.pickups.push({ x: behind.x, y: behind.y, type: 'chest', guarded: true });
 }
 
+// A trap room is a little puzzle you can read from the door: one kind of trap, laid in a pattern.
+//   stones - every other tile, like a chessboard: the safe way is to walk diagonally
+//   slalom - lines of traps across the room, each with one gap, the gaps on alternate sides
+//   ring   - the chest walled in by traps all round, and a bomb by the door to blast a way in
+// Every layout is checked: the chest can be reached without stepping on a trap (the ring, once
+// one of its traps is sprung), the walk straight at it would step on one, and the room stays whole.
+const PUZZLE_TRAPS = [T.TRAP_SPIKE, T.TRAP_SPIKE, T.TRAP_SLEEP, T.TRAP_ALARM, T.TRAP_SUMMON];
+
 function traps(map, r, out) {
   const door = doorsOf(map, r)[0];
-  const tiles = floorTiles(map, r), at = new Map(tiles.map(t => [idx(t.x, t.y), t]));
-  const goal = tiles.reduce((b, t) => (cheb(t, door.in) > cheb(b, door.in) ? t : b));
-  // a winding safe path: step toward the goal most of the time, sideways now and then
-  let path = null;
-  for (let tries = 0; tries < 60 && !path; tries++) {
-    const p = [door.in], seen = new Set([idx(door.in.x, door.in.y)]);
-    let cur = door.in;
-    for (let steps = 0; steps < 80 && (cur.x !== goal.x || cur.y !== goal.y); steps++) {
-      const next = DIRS4.map(([dx, dy]) => at.get(idx(cur.x + dx, cur.y + dy))).filter(t => t && !seen.has(idx(t.x, t.y)));
-      if (!next.length) break;
-      const toward = next.filter(t => Math.abs(t.x - goal.x) + Math.abs(t.y - goal.y) < Math.abs(cur.x - goal.x) + Math.abs(cur.y - goal.y));
-      cur = toward.length && Math.random() < 0.7 ? pick(toward) : pick(next);
-      seen.add(idx(cur.x, cur.y));
-      p.push(cur);
-    }
-    if (cur.x === goal.x && cur.y === goal.y) path = p;
+  const tiles = floorTiles(map, r);
+  for (const kind of shuffle(['stones', 'slalom', 'ring'])) {
+    const plan = LAYOUTS[kind](tiles, door.in, r);
+    if (!plan || !fairTraps(tiles, door.in, plan, kind === 'ring')) continue;
+    const trap = kind === 'ring' ? pick([T.TRAP_SPIKE, T.TRAP_SLEEP]) : pick(PUZZLE_TRAPS);
+    for (const i of plan.traps) map.ter[i] = trap;
+    out.pickups.push({ x: plan.goal.x, y: plan.goal.y, type: 'chest' });
+    if (kind === 'ring') out.pickups.push({ x: door.in.x, y: door.in.y, type: 'bomb' });
+    return;
   }
-  if (!path) return;
-  const safe = new Set(path.map(t => idx(t.x, t.y)));
-  const kinds = [T.TRAP_SPIKE, T.TRAP_SPIKE, T.TRAP_SLEEP, T.TRAP_SLEEP, T.TRAP_ALARM, T.TRAP_SUMMON];
-  for (const t of tiles) if (!safe.has(idx(t.x, t.y))) map.ter[idx(t.x, t.y)] = pick(kinds);
-  out.pickups.push({ x: goal.x, y: goal.y, type: 'chest' });
+}
+
+// steps (8 ways) from `from` over the room's tiles, keeping off `traps`
+function safeSteps(tiles, from, traps) {
+  const at = new Map(tiles.map(t => [idx(t.x, t.y), t]));
+  const d = new Map([[idx(from.x, from.y), 0]]), q = [from];
+  for (let h = 0; h < q.length; h++) {
+    const c = q[h], k = d.get(idx(c.x, c.y));
+    for (const [dx, dy] of DIRS8) {
+      const i = idx(c.x + dx, c.y + dy);
+      if (!at.has(i) || d.has(i) || traps.has(i)) continue;
+      d.set(i, k + 1);
+      q.push(at.get(i));
+    }
+  }
+  return d;
+}
+
+const farthest = (tiles, d) => tiles.filter(t => d.has(idx(t.x, t.y))).reduce((b, t) => (!b || d.get(idx(t.x, t.y)) > d.get(idx(b.x, b.y)) ? t : b), null);
+
+const LAYOUTS = {
+  stones(tiles, start) {
+    const odd = (start.x + start.y) & 1;
+    const traps = new Set(tiles.filter(t => ((t.x + t.y) & 1) !== odd).map(t => idx(t.x, t.y)));
+    const goal = farthest(tiles, safeSteps(tiles, start, traps));
+    return goal && cheb(goal, start) >= 3 ? { traps, goal } : null;
+  },
+  slalom(tiles, start, r) {
+    // lines run across the room, one every other step going in from the door
+    const alongX = start.x === r.x || start.x === r.x + r.w - 1;
+    const depth = t => (alongX ? Math.abs(t.x - start.x) : Math.abs(t.y - start.y));
+    const across = t => (alongX ? t.y : t.x);
+    const deep = Math.max(...tiles.map(depth));
+    if (deep < 4) return null;
+    const lo = alongX ? r.y : r.x, hi = alongX ? r.y + r.h - 1 : r.x + r.w - 1;
+    if (hi - lo < 2) return null;
+    // the first gap is on the side away from where you come in
+    let gapHigh = across(start) - lo < hi - across(start);
+    const traps = new Set();
+    for (let k = 1; k < deep; k += 2) {
+      const line = tiles.filter(t => depth(t) === k);
+      const gap = line.reduce((b, t) => (!b || (gapHigh ? across(t) > across(b) : across(t) < across(b)) ? t : b), null);
+      for (const t of line) if (t !== gap) traps.add(idx(t.x, t.y));
+      gapHigh = !gapHigh;
+    }
+    const goal = farthest(tiles, safeSteps(tiles, start, traps));
+    return goal ? { traps, goal } : null;
+  },
+  ring(tiles, start) {
+    const floor = new Set(tiles.map(t => idx(t.x, t.y)));
+    const spots = tiles.filter(c => cheb(c, start) >= 3 && DIRS8.every(([dx, dy]) => floor.has(idx(c.x + dx, c.y + dy))));
+    if (!spots.length) return null;
+    const goal = spots.reduce((b, t) => (cheb(t, start) > cheb(b, start) ? t : b));
+    const traps = new Set(DIRS8.map(([dx, dy]) => idx(goal.x + dx, goal.y + dy)));
+    return { traps, goal };
+  },
+};
+
+function fairTraps(tiles, start, { traps, goal }, walledIn) {
+  const gi = idx(goal.x, goal.y);
+  if (traps.has(idx(start.x, start.y)) || traps.has(gi)) return false;
+  const d = safeSteps(tiles, start, traps);
+  // every tile that is not a trap is still part of the room (only the ring's chest sits apart)
+  if (tiles.some(t => !traps.has(idx(t.x, t.y)) && !d.has(idx(t.x, t.y)) && !(walledIn && idx(t.x, t.y) === gi))) return false;
+  if (walledIn) return !d.has(gi);
+  if (!d.has(gi)) return false;
+  // the puzzle part: going straight at the chest would step on a trap
+  const n = cheb(goal, start);
+  for (let k = 1; k < n; k++) {
+    const x = Math.round(start.x + ((goal.x - start.x) * k) / n), y = Math.round(start.y + ((goal.y - start.y) * k) / n);
+    if (traps.has(idx(x, y))) return true;
+  }
+  return d.get(gi) > n + 1;
 }

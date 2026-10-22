@@ -23,12 +23,98 @@ function spriteCanvas(rows, recolor) {
 }
 
 // The big ore in each grade: same rock, veins in the grade's colours (rainbow stripes for the top one).
+const veinColor = grade => (ch, i, j) => {
+  if (ch !== 'y' && ch !== 'Y') return null;
+  if (!grade.vein) return RAINBOW[(i + j) % RAINBOW.length];
+  return grade.vein[ch === 'y' ? 0 : 1];
+};
 function oreCanvas(grade) {
-  return spriteCanvas(TER_SPR.bigOre, (ch, i, j) => {
-    if (ch !== 'y' && ch !== 'Y') return null;
-    if (!grade.vein) return RAINBOW[(i + j) % RAINBOW.length];
-    return grade.vein[ch === 'y' ? 0 : 1];
-  });
+  return spriteCanvas(TER_SPR.bigOre, veinColor(grade));
+}
+
+// A vein spanning two to four tiles is drawn as one big rock over the whole shape, in the same
+// colours as the one-tile ore (outline k, rock L, light l, shadow d, veins y/Y, sparkle w),
+// with more veins the bigger it is. Seeded by where it lies, so it looks the same every time.
+function veinRows(cells) {
+  const x0 = Math.min(...cells.map(c => c.x)), y0 = Math.min(...cells.map(c => c.y));
+  const bw = Math.max(...cells.map(c => c.x)) - x0 + 1, bh = Math.max(...cells.map(c => c.y)) - y0 + 1;
+  const W = bw * TILE, H = bh * TILE;
+  let seed = (x0 * 7919 + y0 * 104729 + cells.length * 31) | 0;
+  const rnd = () => ((seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff);
+  const has = (cx, cy) => cells.some(c => c.x - x0 === cx && c.y - y0 === cy);
+  // a lumpy top edge, so the rock is not a box
+  const bump = Array.from({ length: Math.ceil(W / 3) + 1 }, () => (rnd() < 0.4 ? 1 : 0));
+  // the rock: the vein's tiles pulled in from the outside, a round dome on top, smaller corners below
+  const inside = (px, py) => {
+    if (px < 0 || py < 0 || px >= W || py >= H) return false;
+    const cx = Math.floor(px / TILE), cy = Math.floor(py / TILE), lx = px % TILE, ly = py % TILE;
+    if (!has(cx, cy)) return false;
+    const l = has(cx - 1, cy) ? 99 : lx - 1, r = has(cx + 1, cy) ? 99 : TILE - 2 - lx;
+    const u = has(cx, cy - 1) ? 99 : ly - 2 - bump[Math.floor(px / 3)], d = has(cx, cy + 1) ? 99 : TILE - 3 - ly;
+    if (Math.min(l, r, u, d) < 0) return false;
+    const round = (a, b, rad) => a < rad && b < rad && (rad - a) ** 2 + (rad - b) ** 2 > rad * rad;
+    return !(round(l, u, 6) || round(r, u, 6) || round(l, d, 3) || round(r, d, 3));
+  };
+  const out = (px, py) => !inside(px, py);
+  const rows = [];
+  for (let py = 0; py < H; py++) {
+    const row = [];
+    for (let px = 0; px < W; px++) {
+      if (out(px, py)) row.push('.');
+      else if (out(px - 1, py) || out(px + 1, py) || out(px, py - 1) || out(px, py + 1)) row.push('k');
+      else if (out(px, py + 2) || out(px + 2, py) || (out(px + 3, py) && rnd() < 0.6)) row.push('d');
+      else if (out(px, py - 2) || out(px - 2, py)) row.push(rnd() < 0.7 ? 'l' : 'L');
+      else row.push('L');
+    }
+    rows.push(row);
+  }
+  const face = (px, py) => inside(px, py) && rows[py][px] === 'L';
+  // facets: shadow lines running down from the top, like cracks between the rock's faces
+  for (let n = 0; n < cells.length * 2; n++) {
+    let px = 3 + Math.floor(rnd() * (W - 6)), py = 2;
+    while (py < H && !face(px, py)) py++;
+    const slope = rnd() < 0.5 ? -1 : 1;
+    for (let k = 0; k < 5 + rnd() * 6 && face(px, py); k++) {
+      rows[py][px] = 'd';
+      py++;
+      if (rnd() < 0.5) px += slope;
+    }
+  }
+  // light patches
+  for (let n = 0; n < cells.length * 5; n++) {
+    const px = Math.floor(rnd() * W), py = Math.floor(rnd() * H);
+    if (face(px, py) && face(px + 1, py)) { rows[py][px] = 'l'; rows[py][px + 1] = 'l'; }
+  }
+  // the veins: clusters of ore glinting out of the rock, more of them the bigger it is
+  const PATTERNS = [['.yy.', 'yYYy', '.yYy'], ['yy..', 'yYY.', '.YYy', '..y.'], ['.y', 'yY', 'YY', 'y.'], ['yyY', 'YY.'], ['.yy', 'yYY', 'yY.']];
+  for (let n = 0, tries = 0; n < cells.length * 4 && tries < 600; tries++) {
+    const pat = PATTERNS[Math.floor(rnd() * PATTERNS.length)];
+    const px = Math.floor(rnd() * (W - 4)), py = Math.floor(rnd() * (H - 4));
+    if (!pat.every((r, j) => [...r].every((ch, i) => ch === '.' || face(px + i, py + j) || rows[py + j]?.[px + i] === 'l'))) continue;
+    pat.forEach((r, j) => [...r].forEach((ch, i) => { if (ch !== '.') rows[py + j][px + i] = ch; }));
+    n++;
+  }
+  for (let n = 0, tries = 0; n < cells.length * 2 && tries < 300; tries++) {
+    const px = Math.floor(rnd() * W), py = Math.floor(rnd() * H);
+    if (face(px, py)) { rows[py][px] = 'w'; n++; }
+  }
+  return { rows: rows.map(r => r.join('')), x0, y0 };
+}
+
+// The texture and frame for one tile of an ore: [key, frame]. One-tile ores use the plain sprite.
+export function oreFrame(scene, ore, x, y, tier = ore.tier) {
+  const grade = ORES[tier];
+  if (!ore.cells || ore.cells.length < 2) return [`t_ore_${grade.id}`, undefined];
+  const x0 = Math.min(...ore.cells.map(c => c.x)), y0 = Math.min(...ore.cells.map(c => c.y));
+  const shape = ore.cells.map(c => `${c.x - x0}${c.y - y0}`).join('');
+  const key = `t_vein_${x0}_${y0}_${shape}_${grade.id}`;
+  const tx = scene.textures;
+  if (!tx.exists(key)) {
+    const { rows } = veinRows(ore.cells);
+    const tex = tx.addCanvas(key, spriteCanvas(rows, veinColor(grade)));
+    for (const c of ore.cells) tex.add(`${c.x - x0}_${c.y - y0}`, 0, (c.x - x0) * TILE, (c.y - y0) * TILE, TILE, TILE);
+  }
+  return [key, `${x - x0}_${y - y0}`];
 }
 
 // Same canvases for the DOM (HUD icons, hub cards, choice cards).

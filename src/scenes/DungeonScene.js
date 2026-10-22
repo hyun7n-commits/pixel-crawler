@@ -3,7 +3,7 @@
 // Characters stand on the bottom middle of their tile (origin 0.5, 1).
 
 /* global Phaser */
-import { TILE, buildTextures, wallKey, waterKey, shadeKey, floorKey, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
+import { TILE, buildTextures, wallKey, waterKey, shadeKey, floorKey, oreFrame, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
 import { CHARACTERS } from '../data/characters.js';
 import { ITEMS } from '../data/items.js';
 import { T, TERRAIN, GASES, GAS_KEYS } from '../data/terrain.js';
@@ -215,7 +215,8 @@ export class DungeonScene extends Phaser.Scene {
     const run = this.run, map = run.map;
     for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) this.buildTile(x, y);
     this.buildLamps();
-    this.playerSprite = this.makeActor(CHARACTERS[run.charId].sprite, run.p.x, run.p.y).setDepth(D.player);
+    this.heroKey = CHARACTERS[run.charId].sprite;
+    this.playerSprite = this.makeActor(this.heroKey, run.p.x, run.p.y).setDepth(D.player);
     this.cameras.main.startFollow(this.playerSprite, true, 0.25, 0.25, 0, TILE / 2);
     this.cameras.main.centerOn(center(run.p.x), foot(run.p.y) - TILE / 2);
     this.sync(true);
@@ -285,7 +286,12 @@ export class DungeonScene extends Phaser.Scene {
       if (t === DOOR) this.doorImgs[i] = add(map.open[i] ? 't_doorOpen' : 't_door', D.ter);
       if (t === LOCKED) add('t_doorLocked', D.ter);
       if (t === GRAVE) add(map.bigGrave === i ? 't_graveBig' : 't_grave', D.ter);
-      if (t === ORE) this.oreImgs[i] = add(`t_ore_${ORES[map.ores.find(o => idx(o.x, o.y) === i)?.tier || 0].id}`, D.ter);
+      if (t === ORE) {
+        const ore = map.ores.find(o => o.cells.some(c => idx(c.x, c.y) === i));
+        const [key, frame] = ore ? oreFrame(this, ore, x, y) : ['t_ore_copper'];
+        this.oreImgs[i] = add(key, D.ter);
+        if (frame) this.oreImgs[i].setFrame(frame);
+      }
     }
     this.tileImgs[i] = imgs;
   }
@@ -406,6 +412,11 @@ export class DungeonScene extends Phaser.Scene {
     this.tweens.killTweensOf(sprite);
     sprite.hop = 0;
     if (!dur) { sprite.setPosition(tx, ty); return; }
+    // your feet take turns: one walk frame per step, back to standing once you arrive
+    if (sprite === this.playerSprite) {
+      sprite.stepFrame = sprite.stepFrame === 1 ? 2 : 1;
+      sprite.stepUntil = this.time.now + dur + 70;
+    }
     this.tweens.add({ targets: sprite, x: tx, y: ty, duration: dur, ease: 'Quad.out' });
   }
 
@@ -433,6 +444,14 @@ export class DungeonScene extends Phaser.Scene {
         break;
       case 'sneak': this.heavyHit(d.x, d.y, d.from); break;
       case 'snore': this.noiseRing(d.x, d.y, d.r, 0xb58cf0); break;
+      case 'vein': this.onVein(d); break;
+      case 'hangon':
+        // the blow should have finished you: everything stops for a moment, and you're still standing
+        this.hitStop(420);
+        this.cameras.main.flash(260, 255, 255, 255);
+        this.cameras.main.shake(300, 0.015);
+        this.float(d.x, d.y - 0.4, '버텼다!', '#ffd6d6', 120, 16);
+        break;
       case 'dodge': this.float(d.x, d.y, '회피', '#6fe0e0'); break;
       case 'heal': this.float(d.x, d.y, `+${d.n}`, '#8fd36a'); this.fx.heal.explode(6, center(d.x), center(d.y)); break;
       case 'gold': this.float(d.x, d.y, `+${d.n}G`, '#f4cf4f', 300); break;
@@ -669,21 +688,27 @@ export class DungeonScene extends Phaser.Scene {
 
   // A swing at the big ore: everything gets a little bigger with each hit, and the last one pours out.
   onMine(d) {
-    const cx = center(d.x), cy = center(d.y), last = d.last;
+    const cx = center(d.x), cy = center(d.y), last = d.last, size = d.size || 1;
     this.bump(this.playerSprite, d.from, d);
-    this.hitStop(last ? 140 : 35 + d.hits * 12);
+    this.hitStop(last ? 140 + size * 30 : 35 + d.hits * 12);
     this.fx.spark.explode((last ? 30 : 6) + d.hits * 3, cx, cy);
     this.fx.rock.explode((last ? 24 : 4) + d.hits * 3, cx, cy);
-    this.cameras.main.shake(last ? 420 : 80 + d.hits * 35, last ? 0.014 : 0.002 + d.hits * 0.0014);
+    // a big vein comes down in pieces: rubble from every tile it filled
+    if (last && size > 1) for (const c of d.cells) { this.fx.rock.explode(14, center(c.x), center(c.y)); this.fx.spark.explode(12, center(c.x), center(c.y)); }
+    this.cameras.main.shake(last ? 420 + size * 80 : 80 + d.hits * 35, last ? 0.012 + size * 0.002 : 0.002 + d.hits * 0.0014);
     if (last) this.cameras.main.flash(160, 244, 207, 79);
     this.noiseRing(d.x, d.y, d.r);
     const g = ORES[d.tier], tint = Phaser.Display.Color.HexStringToColor(g.vein ? g.vein[0] : '#ffffff').color;
-    // the ore itself shudders
-    const img = this.oreImgs[idx(d.x, d.y)]?.active ? this.oreImgs[idx(d.x, d.y)] : null;
-    if (img && !last) this.tweens.add({ targets: img, x: img.x + 1.5, duration: 30, yoyo: true, repeat: 2 + d.hits });
+    // the ore itself shudders, every tile of it
+    const cells = d.cells || [{ x: d.x, y: d.y }];
+    const imgs = cells.map(c => this.oreImgs[idx(c.x, c.y)]).filter(im => im?.active);
+    if (!last) for (const im of imgs) this.tweens.add({ targets: im, x: im.x + 1.5, duration: 30, yoyo: true, repeat: 2 + d.hits });
     // cracked into a better grade: the veins change colour with a glittering pop
     if (d.rose) {
-      if (img) img.setTexture(`t_ore_${g.id}`);
+      for (const c of cells) {
+        const im = this.oreImgs[idx(c.x, c.y)];
+        if (im?.active) im.setTexture(...oreFrame(this, { cells, tier: d.tier }, c.x, c.y));
+      }
       this.hitStop(110);
       const c = Phaser.Display.Color.IntegerToRGB(tint);
       this.cameras.main.flash(140, c.r, c.g, c.b);
@@ -701,8 +726,24 @@ export class DungeonScene extends Phaser.Scene {
       for (let k = 0; k < 16; k++) this.coinFly(cx, cy, 2.4, 120 + k * 22);
     }
     // gold chips spray out and fly into your pocket
-    const n = last ? 14 : 2 + d.hits;
+    const n = (last ? 14 : 2 + d.hits) * (last ? size : 1);
     for (let k = 0; k < n; k++) this.coinFly(cx, cy, last ? 2.2 : 1.2, k * (last ? 25 : 35));
+  }
+
+  // A big vein comes into view for the first time: it shines, and you can't miss it.
+  onVein(d) {
+    const g = ORES[d.tier], tint = Phaser.Display.Color.HexStringToColor(g.vein ? g.vein[0] : '#ffffff').color;
+    const xs = d.cells.map(c => center(c.x)), ys = d.cells.map(c => center(c.y));
+    const mx = (Math.min(...xs) + Math.max(...xs)) / 2, my = (Math.min(...ys) + Math.max(...ys)) / 2;
+    for (const c of d.cells) this.fx.spark.explode(10, center(c.x), center(c.y));
+    const ring = this.add.circle(mx, my, TILE * 1.2).setStrokeStyle(2, tint, 1).setDepth(D.fx).setScale(0.2);
+    this.tweens.add({ targets: ring, scale: 2, alpha: 0, duration: 600, ease: 'Quad.out', onComplete: () => ring.destroy() });
+    if (d.size >= 4) { const c = Phaser.Display.Color.IntegerToRGB(tint); this.cameras.main.flash(160, c.r, c.g, c.b); }
+    const t = this.add.text(mx, my - TILE, d.size >= 4 ? '대박 광맥!' : '큰 광맥!', {
+      fontFamily: '"Do Hyeon", sans-serif', fontSize: `${d.size >= 4 ? 18 : 14}px`, color: g.vein ? g.vein[0] : '#ffffff', stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5, 1).setDepth(D.text).setResolution(this.textRes()).setScale(0.3);
+    this.tweens.add({ targets: t, scale: 1, duration: 260, ease: 'Back.out' });
+    this.tweens.add({ targets: t, y: t.y - 10, alpha: 0, delay: 1300, duration: 500, onComplete: () => t.destroy() });
   }
 
   coinFly(x, y, spread, delay) {
@@ -801,19 +842,27 @@ export class DungeonScene extends Phaser.Scene {
 
     // the big ores: cracks and pips show how many swings each has taken
     for (const ore of map.ores) {
-      if (!map.explored[idx(ore.x, ore.y)]) continue;
-      const x0 = ore.x * TILE, y0 = ore.y * TILE;
+      if (!ore.cells.some(c => map.explored[idx(c.x, c.y)])) continue;
+      // cracks spread over the whole rock (a full rectangle), or the corner tile of an L
+      const xs = ore.cells.map(c => c.x), ys = ore.cells.map(c => c.y);
+      const bx = Math.min(...xs), by = Math.min(...ys), bw = Math.max(...xs) - bx + 1, bh = Math.max(...ys) - by + 1;
+      const full = bw * bh === ore.cells.length;
+      const corner = full ? null : ore.cells.find(c => ore.cells.filter(o => cheb(o, c) === 1 && (o.x === c.x || o.y === c.y)).length === 2);
+      const cx0 = (full ? bx : corner.x) * TILE, cy0 = (full ? by : corner.y) * TILE, sx = full ? bw : 1, sy = full ? bh : 1;
       g.lineStyle(1, 0x1b1424, 0.9);
       const cracks = [[8, 2, 6, 7], [6, 7, 9, 11], [3, 9, 6, 7], [9, 11, 12, 13], [10, 4, 12, 8]];
-      for (let k = 0; k < ore.hits; k++) g.lineBetween(x0 + cracks[k][0], y0 + cracks[k][1], x0 + cracks[k][2], y0 + cracks[k][3]);
+      for (let k = 0; k < ore.hits; k++) g.lineBetween(cx0 + cracks[k][0] * sx, cy0 + cracks[k][1] * sy, cx0 + cracks[k][2] * sx, cy0 + cracks[k][3] * sy);
+      // the pips: how many swings it has taken, over the middle of the rock
+      const px0 = bx * TILE + (bw * TILE) / 2 - 6.5;
       for (let k = 0; k < ORE_HITS; k++) {
         g.fillStyle(k < ore.hits ? 0xf4cf4f : 0x2c2536, 1);
-        g.fillRect(x0 + 2 + k * 2.6, y0 - 3, 2, 2);
+        g.fillRect(px0 + k * 2.6, by * TILE - 3, 2, 2);
       }
-      // a glint now and then, so it catches your eye from across the room
-      if (map.visible[idx(ore.x, ore.y)] && time > (ore.glint || 0)) {
-        ore.glint = time + 900 + Math.random() * 900;
-        this.fx.spark.explode(2, x0 + 3 + Math.random() * 10, y0 + 3 + Math.random() * 9);
+      // a glint now and then, so it catches your eye from across the room (a big vein glitters more)
+      const c = ore.cells[Math.floor(Math.random() * ore.cells.length)];
+      if (map.visible[idx(c.x, c.y)] && time > (ore.glint || 0)) {
+        ore.glint = time + (900 + Math.random() * 900) / ore.size;
+        this.fx.spark.explode(2, c.x * TILE + 3 + Math.random() * 10, c.y * TILE + 3 + Math.random() * 9);
       }
     }
 
@@ -871,9 +920,15 @@ export class DungeonScene extends Phaser.Scene {
       for (let k = 0; k < 3; k++) g.lineBetween(x0 + 3 + k * 4, y0 + 2, x0 + 7 + k * 4, y0 + 13);
     }
 
-    // you
+    // you: walk frames while moving; standing still a while, you glance back over your shoulder now and then
     const ps = this.playerSprite;
-    this.pose(ps, p, p.face < 0, time);
+    const walking = time < (ps.stepUntil || 0);
+    const key = walking ? `${this.heroKey}_walk${ps.stepFrame}` : this.heroKey;
+    if (ps.texture.key !== key && this.textures.exists(key)) ps.setTexture(key);
+    if (walking || p.sleep || !ps.nextLook) ps.nextLook = time + 2500 + Math.random() * 2000;
+    else if (time > ps.nextLook) { ps.lookAt = time; ps.nextLook = time + 4000 + Math.random() * 4000; }
+    const look = time - (ps.lookAt || -1e9);
+    this.pose(ps, p, (p.face < 0) !== (look > 0 && look < 520), time);
     this.drawStatus(g, ps, p, ps.y - TILE - ps.hop, p.face < 0 ? -1 : 1, time);
 
     // speech bubbles follow their speaker

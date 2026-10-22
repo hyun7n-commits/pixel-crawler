@@ -1,14 +1,14 @@
 // Gives each room of a freshly carved floor one theme, so every feature is there for a reason:
-//   ore    - one of the floor's big ores, with a gas crack beside it (mining makes noise and leaks gas)
+//   ore    - one of the floor's big ores (1 to 4 tiles), with a gas crack beside it (mining makes noise and leaks gas)
 //   garden - a room overgrown with tall grass you cannot see through (one per floor at most)
 //   flood  - groundwater with a little grass around the edges
 //   plain  - nothing much, maybe a patch of grass
 // Corridors stay bare.
 
 import { T, TRAPS } from '../data/terrain.js';
-import { idx, inMap, FLOOR, ORE, DOOR } from './dungeon.js';
+import { idx, inMap, FLOOR, ORE, DOOR, distMap } from './dungeon.js';
 import { rint, pick, shuffle, DIRS8 } from './util.js';
-import { trapsPerFloor, trapHidden, ORES_PER_FLOOR } from '../data/balance.js';
+import { trapsPerFloor, trapHidden, ORES_PER_FLOOR, ORE_SIZE_CHANCE } from '../data/balance.js';
 
 const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const free = (map, x, y) => inMap(x, y) && map.tiles[idx(x, y)] === FLOOR && map.ter[idx(x, y)] === T.NONE;
@@ -58,16 +58,48 @@ function hangLamp(map, r) {
   map.lights.push({ x: spots[Math.min(spots.length - 1, rint(0, 1))], y: r.y - 1 });
 }
 
+// The shapes a vein can take, by size: a block, a domino, an L, a 2x2.
+const VEINS = [
+  [[[0, 0]]],
+  [[[0, 0], [1, 0]], [[0, 0], [0, 1]]],
+  [[[0, 0], [1, 0], [0, 1]], [[0, 0], [1, 0], [1, 1]], [[0, 0], [0, 1], [1, 1]], [[1, 0], [0, 1], [1, 1]]],
+  [[[0, 0], [1, 0], [0, 1], [1, 1]]],
+];
+
+function rollSize() {
+  let roll = Math.random();
+  for (let s = 0; s < ORE_SIZE_CHANCE.length; s++) if ((roll -= ORE_SIZE_CHANCE[s]) < 0) return s + 1;
+  return 1;
+}
+
 // Puts the big ore in the middle of a room, away from the walls so it never blocks a doorway.
-function placeOre(map, r, keep) {
+// A big vein that would cut the floor in two (pillars, cave corners) shrinks until it fits.
+function placeOre(map, r, keep, start) {
   const spots = roomTiles(r, 1).filter(([x, y]) => free(map, x, y) && !keep(x, y));
   if (!spots.length) return false;
-  spots.sort((a, b) => (Math.abs(a[0] - r.cx) + Math.abs(a[1] - r.cy)) - (Math.abs(b[0] - r.cx) + Math.abs(b[1] - r.cy)));
-  const [x, y] = spots[0];
-  map.tiles[idx(x, y)] = ORE;
-  const ore = { x, y, hits: 0, tier: 0, vent: null };
+  const near = ([x, y]) => Math.abs(x - r.cx) + Math.abs(y - r.cy);
+  spots.sort((a, b) => near(a) - near(b));
+  const reach = () => { const dm = distMap(map, start.x, start.y); let n = 0; for (const d of dm) if (d < 9999) n++; return n; };
+  const before = reach();
+  let cells = null;
+  for (let size = rollSize(); size >= 1 && !cells; size--) {
+    for (const [x, y] of spots.slice(0, 6)) {
+      for (const shape of shuffle(VEINS[size - 1].slice())) {
+        const c = shape.map(([dx, dy]) => [x + dx, y + dy]);
+        if (!c.every(([cx, cy]) => inRoom(r, cx, cy) && cx > r.x && cy > r.y && cx < r.x + r.w - 1 && cy < r.y + r.h - 1 && free(map, cx, cy) && !keep(cx, cy))) continue;
+        for (const [cx, cy] of c) map.tiles[idx(cx, cy)] = ORE;
+        if (reach() === before - c.length) { cells = c; break; }
+        for (const [cx, cy] of c) map.tiles[idx(cx, cy)] = FLOOR;
+      }
+      if (cells) break;
+    }
+  }
+  if (!cells) return false;
+  const [x, y] = cells[0];
+  const ore = { x, y, cells: cells.map(([cx, cy]) => ({ x: cx, y: cy })), size: cells.length, hits: 0, tier: 0, vent: null };
   map.ores.push(ore);
-  const crack = DIRS4.map(([dx, dy]) => [x + dx, y + dy]).find(([cx, cy]) => free(map, cx, cy) && !keep(cx, cy));
+  const crack = shuffle(cells.flatMap(([cx, cy]) => DIRS4.map(([dx, dy]) => [cx + dx, cy + dy])))
+    .find(([cx, cy]) => free(map, cx, cy) && !keep(cx, cy));
   if (crack) {
     map.ter[idx(...crack)] = T.VENT;
     ore.vent = { x: crack[0], y: crack[1] };
@@ -91,7 +123,7 @@ export function decorate(map, rooms, { start, stairs }) {
     let theme = 'plain';
     if (i === 0) {
       if (Math.random() < 0.5) grass(map, r, rint(2, 4), keep);
-    } else if (oreRooms.includes(r) && placeOre(map, r, keep)) {
+    } else if (oreRooms.includes(r) && placeOre(map, r, keep, start)) {
       theme = 'ore';
       if (Math.random() < 0.6) grass(map, r, rint(2, 4), keep);
     } else {

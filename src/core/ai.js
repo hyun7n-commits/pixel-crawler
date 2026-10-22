@@ -10,6 +10,7 @@
 import { lineOfSight, distMap, idx } from './dungeon.js';
 import { SLEEP_MIN } from '../data/terrain.js';
 import { NPC_TEXT } from '../data/npcs.js';
+import { MAP_W } from '../data/balance.js';
 import { cheb, shuffle, josa, DIRS8 } from './util.js';
 import { onEnter } from './world.js';
 
@@ -181,11 +182,13 @@ function followTrail(run, e, dm) {
 }
 
 function flee(run, e, dm, sees) {
-  let best = null, bd = dm[idx(e.x, e.y)];
+  // walk downhill on the safety map: out through a door and away, never into a corner
+  const safe = safetyMap(dm);
+  let best = null, bs = safe[idx(e.x, e.y)];
   for (const [dx, dy] of shuffle(DIRS8.slice())) {
     const nx = e.x + dx, ny = e.y + dy;
     if (!canStep(run, e, nx, ny)) continue;
-    if (dm[idx(nx, ny)] > bd && dm[idx(nx, ny)] < 9999) { bd = dm[idx(nx, ny)]; best = [nx, ny]; }
+    if (safe[idx(nx, ny)] < bs) { bs = safe[idx(nx, ny)]; best = [nx, ny]; }
   }
   if (best) { moveEnemy(run, e, ...best); }
   else if (run.touching(e, run.p)) {
@@ -193,6 +196,33 @@ function flee(run, e, dm, sees) {
     run.damagePlayer(e.atk, e, 'melee');
   }
   if (!sees && dm[idx(e.x, e.y)] >= 8) { e.state = 'wander'; e.target = null; }
+}
+
+// Brogue's "safety map": start from your distance times -1.2, then let every tile settle to at most
+// one step worse than its best neighbour. Far-away places become deep valleys, so a dead-end corner
+// near you drains toward the door (even past you) instead of trapping whoever runs there.
+// Built once per turn and kept on the distance map it came from.
+function safetyMap(dm) {
+  if (dm.safe) return dm.safe;
+  const n = dm.length, w = MAP_W, s = new Float32Array(n);
+  for (let i = 0; i < n; i++) s[i] = dm[i] < 9999 ? -1.2 * dm[i] : 9999;
+  const nb = [1, -1, w, -w, w + 1, w - 1, -w + 1, -w - 1];
+  for (let pass = 0, changed = true; changed && pass < 30; pass++) {
+    changed = false;
+    // sweep forward then backward so changes travel both ways in one pass
+    for (const dir of [1, -1]) {
+      for (let k = 0; k < n; k++) {
+        const i = dir > 0 ? k : n - 1 - k;
+        if (s[i] >= 9999) continue;
+        for (const o of nb) {
+          const j = i + o;
+          if (j >= 0 && j < n && s[j] < 9999 && s[j] + 1 < s[i]) { s[i] = s[j] + 1; changed = true; }
+        }
+      }
+    }
+  }
+  dm.safe = s;
+  return s;
 }
 
 function search(run, e) {

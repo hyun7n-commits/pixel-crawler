@@ -74,6 +74,10 @@ export class Hud {
     $('goldNow').textContent = `${run.gold}G`;
     $('hpText').textContent = `${Math.max(0, p.hp)} / ${s.maxHp}`;
     $('hpbar').firstElementChild.style.width = `${(Math.max(0, p.hp) / s.maxHp) * 100}%`;
+    // a hit or two from the end: the view's edges beat red, faster when it's really close
+    const low = lowHealth(run);
+    $('game').classList.toggle('low', low > 0);
+    $('game').style.setProperty('--beat', low > 1 ? '0.7s' : '1.05s');
     $('lvText').textContent = `Lv${p.lvl} · 경험치 ${p.xp}/${xpToLevel(p.lvl)}`;
     $('atkText').textContent = `공격 ${s.atk} · 방어 ${s.def}`;
     $('xpbar').firstElementChild.style.width = `${(p.xp / xpToLevel(p.lvl)) * 100}%`;
@@ -150,4 +154,11 @@ export class Hud {
     }
     add('', 'bag', `가방 ${Object.keys(p.relics).length}/${MAX_SLOTS}`, this.onBag);
   }
+}
+
+// 0: fine · 1: low (30% or less) · 2: one more hit could do it (15% or less, or hanging on at 1)
+export function lowHealth(run) {
+  if (!run || run.over || run.p.hp <= 0) return 0;
+  const f = run.p.hp / run.stat().maxHp;
+  return f <= 0.15 || run.p.hp === 1 ? 2 : f <= 0.3 ? 1 : 0;
 }
