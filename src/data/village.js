@@ -116,6 +116,10 @@ export function gossip(last, meta) {
   if (last.kills >= 15) out.push(`적을 ${last.kills}마리나 쓰러뜨렸다며? 대단해.`);
   if (last.recipes) out.push(`새 합성 조합을 ${last.recipes}개나 찾았다던데? 대장장이가 궁금해하더라.`);
   if (last.gold >= 150) out.push(`${last.gold}G나 벌어 왔다며? 상점 주인이 싱글벙글이야.`);
+  // the fields' odd corners you found
+  if (last.spring && out.length < 3) out.push('돌산 온천에 몸 담갔다며? 부럽다… 다음엔 나도 데려가!');
+  else if (last.ring && out.length < 3) out.push('요정 고리를 타 봤다며? 뿅 하고 나오면 어지럽지 않아?');
+  else if (last.honey && out.length < 3) out.push('벌집 꿀 먹었다며? 벌한테 쏘인 데는 괜찮아? 꿀 냄새 난다.');
   // what you have put up round your house (data/home.js) gets talked about too
   const home = meta.home || [];
   if (home.includes('dog') && out.length < 3) out.push('너네 강아지 오늘 우리 집 앞까지 놀러 왔더라. 귀여워!');
