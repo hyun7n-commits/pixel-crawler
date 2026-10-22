@@ -1,35 +1,58 @@
-// The village you come back to between runs: a street of cottages along the top, a meadow below it,
-// and the signpost out to the fields at the east end. You walk around and bump into people.
+// The village you come back to between runs: a round path that loops around a pond plaza, cottages
+// along it, and the signpost out to the fields on the east side. You walk around and bump into people.
 // Villagers move in one by one as you get further (`when`), and each looks after part of your progress
 // (`panel`, built in ui/hub.js). Until then their house stands empty with the door boarded up.
-//   map: '#' hedge, '.' grass, ':' path, '~' pond, '*' flowers, '>' the signpost out to the fields
+// Some of them like a stroll round the loop (`stroll`: ms between steps; the rival jogs); the others
+// keep to their doors.
+//   map: '#' hedge, '.' grass, ':' path, '~' pond, '*' flowers, 'L' firefly lamp, '>' the signpost out
 
 import { josa } from '../core/util.js';
 
 export const VILLAGE_MAP = [
-  '######################################',
-  '#....................................#',
-  '#....................................#',
-  '#....................................#',
-  '#....................................#',
-  '#...:.....:.....:.....:.....:.....:..#',
-  '#::::::::::::::::::::::::::::::::::::>',
-  '#...*......*.........*.......*.....*.#',
-  '#.*.....~~~~......##.....*.....*....*#',
-  '#....*..~~~~..*...##...*......*......#',
-  '#..*..........*.......*.....*.....*..#',
-  '######################################',
+  '#############################################',
+  '#########...........................#########',
+  '######.................................######',
+  '####...........................*.........####',
+  '###.......................................###',
+  '###.....*............*:..................*###',
+  '##...*.............:::::::..........*......##',
+  '##.............:::::::::::::::.............##',
+  '##.........:::::......:*.....:::::.........##',
+  '#.........:::.........:...*.....:::.*.......#',
+  '#...##...::....*..*...:........*..::...##...#',
+  '#...##..::....*.....*.:..*........*::..##...#',
+  '#......::......**.....:*............::......#',
+  '#....*.:....*....L:::::::::L.........:......#',
+  '#.....::.........::~~~~~~~::........*::.....#',
+  '#....*:..........:~~~~~~~~~:..........:..####',
+  '#.*...::::::::::::~~~~~~~~~:::::::::::::::::>',
+  '#.....:.*........:~~~~~~~~~:.........*:..####',
+  '#.....::.........::~~~~~~~::.........::.....#',
+  '#......:*........L:::::::::L.........:..*...#',
+  '#......::...........................::......#',
+  '#.......::.........................::.......#',
+  '#...**...::.:...................:.::........#',
+  '##....*...:::............*......:::...##...##',
+  '##....##....::::......:......::::.....##...##',
+  '##....##.....**:::::::::::::::*............##',
+  '###.....*..........:::::::......*.........###',
+  '###.....*........*..................*..*.*###',
+  '####............##..........##...........####',
+  '######..........##*.........##.....*...######',
+  '#########*.*......*...........*.*...#########',
+  '#############################################',
 ];
 
 // Footprints in tiles (odd widths, so the door sits in the middle of a tile). The door is the middle
-// of the bottom row; the owner stands just below it.
+// of the bottom row; the owner stands just below it. The top three face the loop from outside it, the
+// bottom three from inside its lower half.
 export const HOUSES = [
-  { id: 'guild', x: 2, y: 1, w: 5, h: 4, roof: '#3f6fb3', sign: 'flag', chimney: true },
-  { id: 'shop', x: 8, y: 1, w: 5, h: 4, roof: '#d9454a', sign: 'coin', awning: true },
-  { id: 'smith', x: 14, y: 1, w: 5, h: 4, roof: '#6b6f7c', sign: 'hammer', chimney: true },
-  { id: 'neighbor', x: 20, y: 1, w: 5, h: 4, roof: '#f29bb2', sign: 'heart' },
-  { id: 'rescue', x: 26, y: 1, w: 5, h: 4, roof: '#f08c3a', sign: 'cross' },
-  { id: 'rival', x: 32, y: 1, w: 5, h: 4, roof: '#7a4bb0', sign: 'star', chimney: true },
+  { id: 'guild', x: 20, y: 1, w: 5, h: 4, roof: '#3f6fb3', sign: 'flag', chimney: true },
+  { id: 'shop', x: 9, y: 4, w: 5, h: 4, roof: '#d9454a', sign: 'coin', awning: true },
+  { id: 'smith', x: 31, y: 4, w: 5, h: 4, roof: '#6b6f7c', sign: 'hammer', chimney: true },
+  { id: 'neighbor', x: 10, y: 18, w: 5, h: 4, roof: '#f29bb2', sign: 'heart' },
+  { id: 'rescue', x: 20, y: 20, w: 5, h: 4, roof: '#f08c3a', sign: 'cross' },
+  { id: 'rival', x: 30, y: 18, w: 5, h: 4, roof: '#7a4bb0', sign: 'star', chimney: true },
 ];
 export const doorOf = h => ({ x: h.x + Math.floor(h.w / 2), y: h.y + h.h });
 
@@ -46,7 +69,7 @@ export const FOLK = {
     lines: ['어서 와! 오늘은 뭐 사 갈래?', '반짝돌 덕에 장사가 잘돼.', '튼튼해져야 멀리 가지!'],
   },
   neighbor: {
-    name: '수다쟁이 이웃', sprite: 'neighbor', panel: 'rumor', when: m => m.stats.runs >= 1,
+    name: '수다쟁이 이웃', sprite: 'neighbor', panel: 'rumor', when: m => m.stats.runs >= 1, stroll: 900,
     tip: '지난 토벌 이야기와 소문을 들려준다',
     arrive: '안녕! 오늘 이사 왔어. 소문은 나한테 물어봐!',
     lines: ['들었어? 들었어?', '어제 그 얘기 해 줄까?', '소문 하나 알려 줄게!'],
@@ -59,14 +82,14 @@ export const FOLK = {
     lines: ['새 조합 찾았나?', '반짝돌 냄새가 나는군.', '뚝딱뚝딱.'],
   },
   rescue: {
-    name: '구조대원', sprite: 'rescuer', panel: 'records', when: m => deaths(m) >= 2,
+    name: '구조대원', sprite: 'rescuer', panel: 'records', when: m => deaths(m) >= 2, stroll: 1100,
     tip: '지금까지의 기록을 적어 둔다',
     arrive: '오늘부터 마을 구조대야. 쓰러지면 내가 업어 올게!',
     hint: '들판에서 자꾸 쓰러지는 일꾼이 있다던데... 구조대가 생긴다는 소문이 있어.',
     lines: [m => `벌써 ${deaths(m)}번째 구조야.`, '오늘은 업혀 오지 마.', '구조 일지 볼래?'],
   },
   rival: {
-    name: '라이벌', sprite: 'rival', panel: 'rival', when: m => m.stats.bosses.length >= 1,
+    name: '라이벌', sprite: 'rival', panel: 'rival', when: m => m.stats.bosses.length >= 1, stroll: 380,
     tip: '나보다 멀리 가 봤다고 큰소리친다',
     arrive: '왕쥐를 잡았다며? 흥, 나도 이 마을로 이사 왔다.',
     hint: '초원 끝의 왕쥐를 잡으면 웬 잘난 척쟁이가 찾아온대.',

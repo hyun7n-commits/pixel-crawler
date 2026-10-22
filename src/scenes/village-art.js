@@ -98,3 +98,37 @@ export function pathKey(scene, mask) {
   if (!scene.textures.exists(key)) scene.textures.addCanvas(key, pathTile(mask));
   return key;
 }
+
+// A wooden post on the plaza with a jar of fireflies hanging off its arm (the same jar as the lamps
+// in the fields), standing on its tile and reaching up into the one above.
+const POST = [
+  '....kkkkkkkk....',
+  '....knnnnnnnk...',
+  '....kkkkkknNk...',
+  '.......k..knk...',
+  '......kkk.knk...',
+  '.....kNnnkknk...',
+  '.....kcvcckNk...',
+  '.....kczvcknk...',
+  '.....kcvcckNk...',
+  '......kkk.knk...',
+  '..........knk...',
+  '..........knk...',
+  '..........kNk...',
+  '..........knk...',
+  '..........knk...',
+  '..........knk...',
+  '..........kNk...',
+  '..........knk...',
+  '.........kknkk..',
+  '........knnnnnk.',
+  '........kkkkkkk.',
+];
+const POST_PAL = { k: '#1b1424', n: '#a0703f', N: '#6e4a2a', c: '#cfe9a8', v: '#f4f7c0', z: '#ffffff' };
+export function lampPostCanvas() {
+  const c = document.createElement('canvas');
+  c.width = TILE; c.height = POST.length;
+  const g = c.getContext('2d');
+  POST.forEach((row, j) => [...row].forEach((ch, i) => { if (ch !== '.') { g.fillStyle = POST_PAL[ch]; g.fillRect(i, j, 1, 1); } }));
+  return c;
+}

@@ -150,6 +150,12 @@ const villageHooks = {
   },
   onStep: alt => sfx.play('step', alt),
   onHover: (text, flash) => showVillageTip(text, flash),
+  onFind: n => {
+    meta.gold += n;
+    saveMeta(meta);
+    sfx.play('nugget');
+    renderVillageHud(meta);
+  },
 };
 
 // The village's tip line: who someone is when the mouse rests on them, or a short note after a tap.

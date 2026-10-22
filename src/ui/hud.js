@@ -16,8 +16,8 @@ import { playerStatus } from './tip.js';
 // What the quest folk asked of you and have not had back yet.
 function questLines(run) {
   const { ghost, smith } = run.quests, out = [];
-  if (ghost.state === 'asked') out.push(`꼬마 유령의 부탁: 목걸이 도둑 쥐를 잡자 (${ghost.floor}구역)`);
-  if (ghost.state === 'found') out.push(`꼬마 유령에게 목걸이를 돌려주자 (${ghost.floor}구역)`);
+  if (ghost.state === 'asked') out.push(`울보 아기새의 부탁: 리본 도둑 들쥐를 잡자 (${ghost.floor}구역)`);
+  if (ghost.state === 'found') out.push(`울보 아기새에게 리본을 돌려주자 (${ghost.floor}구역)`);
   if (smith.state === 'asked') {
     out.push(smith.chunk === null ? `대장장이의 부탁: ${smith.floor}구역 반짝 바위를 끝까지 캐자` : `대장장이에게 반짝돌 덩어리를 가져가자 (${smith.floor}구역)`);
   }

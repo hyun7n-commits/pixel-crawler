@@ -1,10 +1,11 @@
 // The village between runs, drawn with the meadow's tiles. You walk around it like in a run (tap a
-// spot, or the arrow keys) and bump into people to talk to them; the signpost at the east end leads
+// spot, or the arrow keys) and bump into people to talk to them; the signpost on the east side leads
 // out to the fields. What each villager offers is DOM (ui/hub.js), opened through `hooks.onTalk`.
+// Each time you come home a few shiny bits lie hidden in the grass for whoever wanders off the path.
 
 /* global Phaser */
 import { TILE, wallKey, waterKey, shadeKey, floorKey, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
-import { houseCanvas, pathKey } from './village-art.js';
+import { houseCanvas, pathKey, lampPostCanvas } from './village-art.js';
 import { baseZoom } from './zoom.js';
 import { faceKey } from '../data/faces.js';
 import { VILLAGE_MAP, HOUSES, FOLK, doorOf, HERO_LINES } from '../data/village.js';
@@ -22,8 +23,11 @@ const hash = (x, y) => {
 };
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 const STEP_MS = 140;
-const MEADOW = { y0: 7, y1: 10 }; // where the heroes who stay home wander
 const PAD = { x: 6, y: 8 };       // bushes drawn around the map
+const grassy = ch => ch === '.' || ch === '*';
+// where you walk in: beside the signpost coming back from the fields, otherwise in front of the guild
+const EXIT = (() => { const y = VILLAGE_MAP.findIndex(r => r.includes('>')); return { x: VILLAGE_MAP[y].indexOf('>'), y }; })();
+const GUILD = doorOf(HOUSES.find(h => h.id === 'guild'));
 
 export class VillageScene extends Phaser.Scene {
   constructor(hooks) {
@@ -86,7 +90,7 @@ export class VillageScene extends Phaser.Scene {
     this.clear();
     this.fitZoom();
     this.blocked = new Uint8Array(MW * MH);
-    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if ('#~'.includes(this.ch(x, y))) this.blocked[y * MW + x] = 1;
+    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if ('#~L'.includes(this.ch(x, y))) this.blocked[y * MW + x] = 1;
     // the hedge goes on past the edge, so a tall phone screen shows bushes around the village, not a void
     for (let y = -PAD.y; y < MH + PAD.y; y++) for (let x = -PAD.x; x < MW + PAD.x; x++) this.drawTile(x, y);
     // a house someone is just moving into still has its boards up until they arrive
@@ -103,11 +107,11 @@ export class VillageScene extends Phaser.Scene {
       const f = FOLK[h.id];
       if (!h.lived) continue;
       const at = doorOf(h), s = this.actor(f.sprite, at.x, at.y);
-      const one = { id: h.id, f, x: at.x, y: at.y, s, house: h, greeted: false };
+      const one = { id: h.id, f, x: at.x, y: at.y, s, house: h, greeted: false, next: 0, dir: [0, 1] };
       this.folk.push(one);
       if (f.arrive && !meta.village.seen[h.id]) { arrivals.push(one); s.setAlpha(0); }
     }
-    const start = from === 'run' ? { x: MW - 2, y: 6 } : { x: 4, y: 6 };
+    const start = from === 'run' ? { x: EXIT.x - 1, y: EXIT.y } : { x: GUILD.x, y: GUILD.y + 2 };
     this.p = { x: start.x, y: start.y, id: meta.sel };
     this.heroes = [];
     this.placeHeroes();
@@ -117,13 +121,43 @@ export class VillageScene extends Phaser.Scene {
     this.nextStep = 0;
     this.cameras.main.startFollow(this.ps, true, 0.2, 0.2, 0, TILE / 2);
     this.cameras.main.centerOn(center(start.x), foot(start.y) - TILE / 2);
+    this.hideFinds(2 + Math.floor(Math.random() * 2));
     if (arrivals.length) this.welcome(arrivals);
+  }
+
+  // a few bits of sparkle-stone dropped in the grass, away from the paths; you only see them twinkle
+  // now and then, so you have to wander a little to spot one
+  hideFinds(n) {
+    this.finds = [];
+    for (let tries = 0; tries < 200 && this.finds.length < n; tries++) {
+      const x = 1 + Math.floor(Math.random() * (MW - 2)), y = 1 + Math.floor(Math.random() * (MH - 2));
+      if (!grassy(this.ch(x, y)) || !this.walkable(x, y) || this.finds.some(f => Math.abs(f.x - x) + Math.abs(f.y - y) < 8)) continue;
+      if (Math.abs(x - this.p.x) + Math.abs(y - this.p.y) < 6) continue;
+      const img = this.keep(this.add.image(center(x), center(y) + 2, 't_chip_copper').setDepth(D.deco).setAlpha(0.85));
+      this.finds.push({ x, y, img, next: 0 });
+    }
+  }
+
+  // stepping onto one: it pops up into your pocket
+  pickUp(f) {
+    this.finds = this.finds.filter(o => o !== f);
+    const n = 2 + Math.floor(Math.random() * 4);
+    this.spark.explode(16, f.img.x, f.img.y);
+    this.tweens.add({ targets: f.img, y: f.img.y - 14, alpha: 0, duration: 380, ease: 'Quad.out', onComplete: () => f.img.destroy() });
+    const k = this.dpr / (this.cameras.main.zoom || 3);
+    const t = this.keep(this.add.text(f.img.x, f.img.y - 8, `+${n}G`, {
+      fontFamily: '"Do Hyeon", sans-serif', fontSize: `${15 * k}px`, color: '#f4cf4f', stroke: '#1b1424', strokeThickness: 3 * k,
+    }).setOrigin(0.5, 1).setDepth(D.bubble).setResolution(this.cameras.main.zoom || 3));
+    this.tweens.add({ targets: t, y: t.y - 12, alpha: 0, delay: 350, duration: 700, ease: 'Quad.in' });
+    this.ps.expr = 'sparkle';
+    this.ps.exprUntil = this.time.now + 900;
+    this.hooks.onFind?.(n);
   }
 
   // the heroes you have but did not pick today hang about in the meadow
   placeHeroes() {
     for (const id of Object.keys(CHARACTERS).filter(c => this.meta.chars[c] && c !== this.p.id)) {
-      const spot = this.freeMeadowTile();
+      const spot = this.freeGrassTile();
       if (!spot) break;
       this.heroes.push({ id, x: spot.x, y: spot.y, s: this.actor(CHARACTERS[id].sprite, spot.x, spot.y), next: 0 });
     }
@@ -152,6 +186,8 @@ export class VillageScene extends Phaser.Scene {
     this.bubbles.forEach(b => b.destroy());
     this.bubbles = [];
     this.waterImgs = [];
+    this.glows = [];
+    this.finds = [];
     this.pending = null;
   }
 
@@ -181,6 +217,12 @@ export class VillageScene extends Phaser.Scene {
     const shade = around(hedge) & (N | E | W_ | NE | NW);
     if (shade) add(shadeKey(this, shade));
     if (ch === '>') add('t_stairs', D.deco);
+    if (ch === 'L') {
+      if (!this.textures.exists('village_post')) this.textures.addCanvas('village_post', lampPostCanvas());
+      this.keep(this.add.image(center(x), foot(y), 'village_post').setOrigin(0.5, 1).setDepth(D.actors + y / 100));
+      const glow = this.keep(this.add.image(center(x) - 1, foot(y) - 14, 'glow').setDepth(D.fx).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.6));
+      this.glows.push(glow);
+    }
   }
 
   actor(tex, x, y) {
@@ -189,10 +231,11 @@ export class VillageScene extends Phaser.Scene {
     return s;
   }
 
-  freeMeadowTile() {
-    for (let tries = 0; tries < 60; tries++) {
-      const x = 2 + Math.floor(Math.random() * (MW - 4)), y = MEADOW.y0 + Math.floor(Math.random() * (MEADOW.y1 - MEADOW.y0 + 1));
-      if (this.walkable(x, y)) return { x, y };
+  // the heroes who stay home hang about on the grass inside the loop, near the pond
+  freeGrassTile() {
+    for (let tries = 0; tries < 80; tries++) {
+      const x = GUILD.x - 12 + Math.floor(Math.random() * 25), y = GUILD.y + 3 + Math.floor(Math.random() * 15);
+      if (grassy(this.ch(x, y)) && this.walkable(x, y)) return { x, y };
     }
     return null;
   }
@@ -213,6 +256,7 @@ export class VillageScene extends Phaser.Scene {
     const hero = this.heroAt(x, y);
     if (hero) return `${CHARACTERS[hero.id].name}: 부딪히면 오늘은 이 친구가 나간다.`;
     if (this.ch(x, y) === '>') return '들판 가는 길: 여기로 가면 토벌을 나간다.';
+    if (this.ch(x, y) === 'L') return '반딧불 등';
     return '';
   }
 
@@ -293,6 +337,8 @@ export class VillageScene extends Phaser.Scene {
     this.tweens.add({ targets: ps, x: center(x), y: foot(y), duration: STEP_MS - 10 });
     ps.setDepth(D.actors + y / 100);
     this.hooks.onStep?.(ps.stepFrame === 1);
+    const find = this.finds.find(f => f.x === x && f.y === y);
+    if (find) this.time.delayedCall(STEP_MS - 20, () => this.pickUp(find));
     if (this.ch(x, y) === '>') { this.path = []; this.time.delayedCall(STEP_MS, () => this.hooks.onLeave?.()); }
   }
 
@@ -380,7 +426,11 @@ export class VillageScene extends Phaser.Scene {
     if (this.path.length && time >= this.nextStep) {
       const [x, y] = this.path.shift();
       if (this.walkable(x, y) && this.canCut(this.p.x, this.p.y, x - this.p.x, y - this.p.y)) this.moveTo(x, y);
-      else this.path = [];
+      else {
+        // someone strolled into the way: go round them
+        const [gx, gy] = this.path.length ? this.path[this.path.length - 1] : [x, y];
+        this.path = this.pending ? this.near(this.pending) || [] : this.walkable(gx, gy) ? this.route(gx, gy) : [];
+      }
       this.nextStep = time + STEP_MS;
       if (!this.path.length && this.pending) {
         const who = this.pending;
@@ -407,13 +457,32 @@ export class VillageScene extends Phaser.Scene {
         this.say(one.s, typeof line === 'function' ? line(this.meta) : line);
       }
     }
-    // the heroes at home amble about the meadow
+    // a few villagers stroll round the loop, keeping on the way they were going; they stop for a
+    // chat when you come close, and wait for you once you are on your way to them
+    for (const one of this.folk) {
+      if (!one.f.stroll || time < one.next || one === this.pending || one.s.alpha < 1) continue;
+      one.next = time + one.f.stroll * (0.8 + Math.random() * 0.5);
+      if (Math.max(Math.abs(one.x - this.p.x), Math.abs(one.y - this.p.y)) <= 2) continue;
+      const ok = ([dx, dy]) => this.ch(one.x + dx, one.y + dy) === ':' && this.walkable(one.x + dx, one.y + dy) && this.canCut(one.x, one.y, dx, dy);
+      const ways = DIRS.filter(d => ok(d) && !(d[0] === -one.dir[0] && d[1] === -one.dir[1]));
+      const score = d => d[0] * one.dir[0] + d[1] * one.dir[1] + Math.random() * 1.2;
+      const way = ways.sort((a, b) => score(b) - score(a))[0] || (ok([-one.dir[0], -one.dir[1]]) && [-one.dir[0], -one.dir[1]]);
+      if (!way) continue;
+      one.dir = way;
+      one.x += way[0]; one.y += way[1];
+      if (way[0]) one.s.setFlipX(way[0] < 0);
+      const ms = Math.min(one.f.stroll * 0.7, 420);
+      this.tweens.add({ targets: one.s, x: center(one.x), y: foot(one.y), duration: ms });
+      this.tweens.add({ targets: one.s, hop: 2, duration: ms / 2, yoyo: true, ease: 'Quad.out' });
+      one.s.setDepth(D.actors + one.y / 100);
+    }
+    // the heroes at home amble about on the grass
     for (const h of this.heroes) {
       if (time < h.next || h === this.pending) continue;
       h.next = time + 1200 + Math.random() * 2600;
       const [dx, dy] = DIRS[Math.floor(Math.random() * 4)];
       const x = h.x + dx, y = h.y + dy;
-      if (y < MEADOW.y0 || y > MEADOW.y1 || !this.walkable(x, y)) continue;
+      if (!grassy(this.ch(x, y)) || !this.walkable(x, y)) continue;
       h.x = x; h.y = y;
       if (dx) h.s.setFlipX(dx < 0);
       const sp = CHARACTERS[h.id].sprite;
@@ -436,6 +505,14 @@ export class VillageScene extends Phaser.Scene {
       this.nextSmoke = time + 450;
       for (const h of HOUSES) if (h.lived && h.chimney) this.smoke.explode(1, h.x * TILE + h.w * TILE - 10, h.y * TILE + 1);
     }
+    // the hidden bits twinkle now and then; the lamps flicker
+    for (const f of this.finds) {
+      if (time < f.next) continue;
+      f.next = time + 1300 + Math.random() * 1800;
+      this.spark.explode(2, f.img.x, f.img.y - 2);
+      this.tweens.add({ targets: f.img, alpha: 1, scale: 1.25, duration: 160, yoyo: true });
+    }
+    this.glows.forEach((g, i) => g.setAlpha(0.5 + 0.12 * Math.sin(time / 300 + i * 2.1)));
     const wf = Math.floor(time / 600) % 2;
     if (wf !== this.waterFrame) {
       this.waterFrame = wf;

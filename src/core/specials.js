@@ -1,9 +1,10 @@
 // Special rooms, like Shattered Pixel Dungeon's: small set pieces, each with one choice in it.
-//   vault  - a locked room with three relics in crystal. Take one and the others shatter.
+//   vault  - a locked secret garden with three relics under glass cloches. Take one and the others shatter.
 //            Its key lies in another room of the same floor (or bomb your way in).
-//   grave  - old miners' graves to dig up: gold, an item, or an angry wraith.
-//            The big grave always holds a chest, and always wakes a wraith.
-//   statue - a stone miner stands over a chest. Take the chest and the statue starts to walk.
+//   grave  - the squirrels' acorn stash: dirt mounds to dig up (gold, an item, or an angry squirrel),
+//            and the big oak stump, which always holds a chest (plus any gold the acorn squirrels
+//            stole on this floor) and always lets its keeper out.
+//   statue - a scarecrow stands over a chest. Take the chest and the scarecrow starts to walk.
 //   traps  - a little trap puzzle between the door and a chest (see traps below).
 // Floors without a vault sometimes have a locked chest instead, with its key elsewhere.
 // Nothing here touches the run directly: placeSpecials returns what to add.
@@ -138,7 +139,7 @@ function vault(map, r, out, ctx) {
 function grave(map, r, out) {
   const door = doorsOf(map, r)[0];
   const nearDoor = t => doorsOf(map, r).some(d => cheb(t, d.in) <= 1);
-  // rows of graves on every other tile, so there is always a way between them
+  // rows of mounds on every other tile, so there is always a way between them
   const spots = shuffle(floorTiles(map, r).filter(t => (t.x - r.x) % 2 === 1 && (t.y - r.y) % 2 === 1 && !nearDoor(t)));
   const n = Math.min(spots.length, Math.max(3, Math.min(5, Math.round(r.w * r.h / 8))));
   const graves = spots.slice(0, n);
@@ -146,7 +147,7 @@ function grave(map, r, out) {
   for (const t of graves) map.tiles[idx(t.x, t.y)] = GRAVE;
   const big = graves.reduce((b, t) => (cheb(t, door.in) > cheb(b, door.in) ? t : b));
   map.bigGrave = idx(big.x, big.y);
-  // a little grass between the graves
+  // a little grass between the mounds
   for (const t of floorTiles(map, r)) if (Math.random() < 0.3) map.ter[idx(t.x, t.y)] = T.GRASS;
   // never wall anything off
   for (const t of graves) {

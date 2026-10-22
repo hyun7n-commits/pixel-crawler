@@ -66,12 +66,12 @@ export function springTrap(run, x, y) {
     addGas(run, x, y, 'sleep', 60);
     for (const [dx, dy] of DIRS8) addGas(run, x + dx, y + dy, 'sleep', 30);
     run.emit('puff', { x, y, kind: 'sleep' });
-    if (seen) run.log('딸깍! 졸음 가스가 뿜어져 나왔다!', 'warn');
+    if (seen) run.log('퐁! 졸음 꽃에서 꽃가루가 퍼졌다!', 'warn');
   } else if (t === T.TRAP_SPIKE) {
-    if (seen) run.log('푹! 바닥에서 가시가 솟았다!', 'warn');
-    damageAt(run, x, y, B.trapSpike(run.floor), '가시 함정을 밟았다', 'spike');
+    if (seen) run.log('따끔! 풀숲에 밤송이가 숨어 있었다!', 'warn');
+    damageAt(run, x, y, B.trapSpike(run.floor), '밤송이를 밟았다', 'spike');
   } else if (t === T.TRAP_ALARM) {
-    run.log('따르르릉! 요란한 종소리가 구역 전체에 울렸다!', 'warn');
+    run.log('딸랑딸랑! 방울 소리가 구역 전체에 울렸다!', 'warn');
     run.emit('alarm', { x, y });
     run.noise(x, y, 99);
   } else if (t === T.TRAP_SUMMON) {
@@ -93,9 +93,11 @@ export function springTrap(run, x, y) {
   }
 }
 
-// ---------- graves ----------
-// Digs up an old miner's grave (bumped into, or blown open). Noisy. Usually something good,
-// sometimes a wraith; the big grave holds a chest and always wakes one.
+// ---------- the squirrels' acorn stash ----------
+// Digs up a dirt mound where the squirrels buried their acorns (bumped into, or blown open). Noisy.
+// Usually something good, sometimes an angry squirrel; the big oak stump is their store: it holds a
+// chest and whatever gold the acorn squirrels got away with on this floor, and its keeper always
+// comes out. (The tiles are still called graves in the code.)
 export function openGrave(run, x, y) {
   const map = run.map, i = idx(x, y), big = map.bigGrave === i;
   map.tiles[i] = FLOOR;
@@ -109,19 +111,24 @@ export function openGrave(run, x, y) {
     e.state = 'hunt';
     e.last = { x: run.p.x, y: run.p.y };
     run.say(e, '!');
-    run.log('무덤에서 원혼이 솟아올랐다!', 'warn');
+    run.log(big ? '도토리 창고 주인이 튀어나왔다! 화난 청설모다!' : '흙 속에서 화난 청설모가 튀어나왔다!', 'warn');
   }
   if (big) {
     run.pickups.push({ x, y, type: 'chest' }, { x, y, type: 'gold', amount: B.graveGold(run.floor) * 2 });
-    run.log('큰 무덤 안에 보물 상자가 묻혀 있었다!', 'good');
+    run.log('그루터기 구멍 안에 보물 상자가 숨겨져 있었다!', 'good');
+    if (map.stash) {
+      run.pickups.push({ x, y, type: 'gold', amount: map.stash, stolen: true });
+      run.log('다람쥐가 훔쳐 간 골드도 여기 모여 있었다!', 'good');
+      map.stash = 0;
+    }
   } else if (roll >= 0.3 && roll < 0.7) {
     run.pickups.push({ x, y, type: 'gold', amount: B.graveGold(run.floor) });
-    run.log('무덤 속에서 골드가 나왔다.', 'good');
+    run.log('흙 속에서 골드가 나왔다.', 'good');
   } else if (roll >= 0.7 && roll < 0.9) {
     const type = pick(['potion', 'bomb']);
     run.pickups.push({ x, y, type });
-    run.log(`무덤 속에서 ${josa(ITEMS[type].name, '이', '가')} 나왔다.`, 'good');
-  } else if (roll >= 0.9) run.log('텅 비어 있다.');
+    run.log(`흙 속에서 ${josa(ITEMS[type].name, '이', '가')} 나왔다.`, 'good');
+  } else if (roll >= 0.9) run.log('도토리 껍질뿐이다.');
 }
 
 // Hidden traps next to you may be spotted at the end of each turn.
@@ -133,7 +140,7 @@ export function spotTraps(run) {
     map.hidden[i] = 0;
     run.emit('tiles', { list: [i], soft: true });
     run.emit('spot', { x, y });
-    run.log(`숨은 함정을 찾았다! ${TERRAIN[map.ter[i]].name}이다.`, 'good');
+    run.log(`숨은 함정을 찾았다! ${josa(TERRAIN[map.ter[i]].name, '이다', '다')}.`, 'good');
   }
 }
 
@@ -325,7 +332,7 @@ function creatureTick(run, who) {
       if (run.p.wokeAt !== run.turn) {
         if (!run.p.sleep) {
           run.say('player', '하암…');
-          run.log(run.told.snore ? '졸음 가스를 마셔서 잠들었다…' : '졸음 가스를 마셔서 잠들었다… 코 고는 소리에 적이 몰려온다!', 'warn');
+          run.log(run.told.snore ? '졸음 꽃가루를 마셔서 잠들었다…' : '졸음 꽃가루를 마셔서 잠들었다… 코 고는 소리에 적이 몰려온다!', 'warn');
           run.told.snore = true;
         }
         run.p.sleep = 2;

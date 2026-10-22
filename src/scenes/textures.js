@@ -383,10 +383,10 @@ function glowCanvas() {
   return c;
 }
 
-// The see-through crystal a vault relic sits in (drawn over the relic, so it looks shut inside).
+// The glass cloche a secret-garden relic sits under (drawn over the relic, so it looks shut inside).
 const CRYSTAL = [
-  '....oooo....', '...o....o...', '..o.h....o..', '.o.h......o.', 'o.h........o', 'o.h........o', 'o..........o',
-  'o..........o', 'o..........o', 'o.........so', '.o.......so.', '..o....sso..', '...o.ss.o...', '....oooo....',
+  '.....oo.....', '.....oo.....', '...oooooo...', '..o.h....o..', '.o.h......o.', '.o.h......o.', 'o.h........o',
+  'o.h........o', 'o..........o', 'o.........so', 'o........sso', 'o.......ss.o', 'oooooooooooo', '.oooooooooo.',
 ];
 function crystalCanvas() {
   const c = document.createElement('canvas'), w = CRYSTAL[0].length, h = CRYSTAL.length;
@@ -467,29 +467,6 @@ function flatGrass(variant) {
   return c;
 }
 
-// A pressure plate with the trap's sign in the middle, readable at a glance.
-const TRAP_SIGNS = {
-  trapSpike: ['#e6e9f2', ['.w..w..w', 'www.www.', '........', '..w..w..', '.wwwwww.', '........', '.w..w..w', 'www.www.']],
-  trapSleep: ['#c49af2', ['wwwww...', '...w....', '..w.....', '.w......', 'wwwww...', '....www.', '.....w..', '....www.']],
-  trapAlarm: ['#f4cf4f', ['...ww...', '..wwww..', '.wwwwww.', '.wwwwww.', '.wwwwww.', 'wwwwwwww', '........', '...ww...']],
-  trapSummon: ['#ff6b8a', ['..wwww..', '.w....w.', 'w..ww..w', 'w.wwww.w', 'w.wwww.w', 'w..ww..w', '.w....w.', '..wwww..']],
-  trapOff: [null, []],
-};
-function trapPlate(color, sign) {
-  const [c, g] = canvas();
-  g.fillStyle = '#15111c'; g.fillRect(2, 2, 12, 12);
-  g.fillStyle = '#3a3646'; g.fillRect(3, 3, 10, 10);
-  g.fillStyle = '#58536a'; g.fillRect(3, 3, 10, 1); g.fillRect(3, 3, 1, 10);
-  g.fillStyle = '#26222f'; g.fillRect(4, 12, 9, 1); g.fillRect(12, 4, 1, 9);
-  if (!color) { // spent: a dull cracked plate
-    g.fillStyle = '#15111c';
-    [[5, 5], [6, 6], [7, 6], [8, 7], [8, 8], [9, 9], [10, 9]].forEach(([x, y]) => g.fillRect(x, y, 1, 1));
-    return c;
-  }
-  g.fillStyle = color;
-  sign.forEach((row, j) => { for (let i = 0; i < 8; i++) if (row[i] === 'w') g.fillRect(4 + i, 4 + j, 1, 1); });
-  return c;
-}
 
 export function buildTextures(scene) {
   const tx = scene.textures;
@@ -510,7 +487,6 @@ export function buildTextures(scene) {
     tx.addCanvas(`t_brush${v}`, tallGrass(v));
     tx.addCanvas(`t_grass${v}`, flatGrass(v));
   }
-  for (const [name, [color, sign]] of Object.entries(TRAP_SIGNS)) tx.addCanvas(`t_${name}`, trapPlate(color, sign));
   ZONES.forEach((z, zi) => {
     for (let v = 0; v < FLOOR_VARIANTS; v++) tx.addCanvas(`z${zi}_floor${v}`, floorTile(z, zi, v));
   });

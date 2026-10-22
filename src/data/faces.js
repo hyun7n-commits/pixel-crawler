@@ -1,6 +1,6 @@
 // Chiikawa-style faces for the heroes, made from each hero frame by repainting a few face pixels.
 // Every hero shares one face layout: eyes in columns 7 and 12 (rows 6-7), blush on row 8,
-// the ㅅ mouth on rows 9-10. Each expression is a list of [col, row, colour] pixels.
+// the smiling ‿ mouth on rows 9-10 (a ㅅ there reads as a frown, so only the teary face uses it). Each expression is a list of [col, row, colour] pixels.
 //   hit      squeezed >< eyes when something lands on you
 //   grit     squinted eyes, a crease between them and a straight mouth: straining (mining, a big swing)
 //   teary    wet eyes and a wobbly mouth when your health is low
@@ -9,7 +9,7 @@
 // The sweat drop, falling tears and trembling are drawn over the sprite in DungeonScene.
 
 const EYES = [[7, 6], [7, 7], [12, 6], [12, 7]];
-const MOUTH = [[10, 9], [9, 10], [11, 10]];
+const MOUTH = [[8, 9], [9, 10], [10, 10], [11, 9]];
 const clear = list => list.map(([x, y]) => [x, y, 'w']);
 
 export const FACES = {

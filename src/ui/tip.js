@@ -12,10 +12,10 @@ const PICKUP = {
   chest: () => CHEST,
   lockedChest: () => '잠긴 상자: 이 구역의 열쇠로 열면 유물을 넷 중 하나 고른다.',
   key: () => '작은 열쇠: 이 구역의 잠긴 문이나 상자를 연다.',
-  necklace: () => '반짝돌 목걸이: 꼬마 유령의 것이다.',
+  necklace: () => '아기새 리본: 울보 아기새의 것이다.',
   crystal: (q, run) => {
     const lv = (run.p.relics[q.relic] || 0) + 1;
-    return `수정 속 유물: ${RELICS[q.relic].name} Lv${lv}, ${RELICS[q.relic].desc(lv)}. 하나를 가지면 나머지 수정은 깨진다.`;
+    return `유리 종 속 유물: ${RELICS[q.relic].name} Lv${lv}, ${RELICS[q.relic].desc(lv)}. 하나를 가지면 나머지 유리 종은 깨진다.`;
   },
 };
 

@@ -566,7 +566,7 @@ export class Run {
       } else if (q.type === 'crystal') this.takeCrystal(q);
       else if (q.type === 'necklace') {
         this.quests.ghost.state = 'found';
-        this.log('반짝돌 목걸이를 찾았다! 꼬마 유령에게 돌려주자.', 'good');
+        this.log('아기새 리본을 찾았다! 울보 아기새에게 돌려주자.', 'good');
       } else { this.p.items[q.type]++; this.log(`${josa(ITEMS[q.type].name, '을', '를')} 주웠다.`); }
     }
   }
@@ -576,12 +576,12 @@ export class Run {
     const rl = this.p.relics, id = q.relic;
     const fits = rl[id] ? rl[id] < maxLevelOf(id) : Object.keys(rl).length < MAX_SLOTS;
     if (fits) this.gainRelic(id);
-    else { this.addGold(40); this.log('유물을 더 담을 수 없어서 수정이 골드로 부서졌다.'); }
+    else { this.addGold(40); this.log('유물을 더 담을 수 없어서 유리 종 속 유물을 골드로 바꿨다.'); }
     for (const o of this.pickups.filter(o => o.type === 'crystal' && o.vault === q.vault)) {
       this.pickups.splice(this.pickups.indexOf(o), 1);
       this.emit('shatter', { x: o.x, y: o.y });
     }
-    this.log('나머지 수정은 산산조각 났다.');
+    this.log('나머지 유리 종은 와장창 깨졌다.');
   }
 
   // Taking the chest a statue guards wakes every statue in that room.
@@ -655,11 +655,16 @@ export class Run {
     this.emit('split', { enemy: e, child: c, from: { x: e.x, y: e.y } });
   }
 
-  // A thief that got out of sight with your gold is gone, and the gold with it.
+  // A thief that got out of sight with your gold is gone, and the gold with it; on a floor with an
+  // acorn stash, it takes the gold home to the big oak stump, where you can still dig it up.
   escape(e) {
     e.hp = 0;
     this.emit('escape', { enemy: e });
-    this.log(`${josa(e.d.name, '이', '가')} 골드를 들고 사라졌다…`, 'warn');
+    const stash = this.map.bigGrave;
+    if (e.loot && stash != null && this.map.tiles[stash] === GRAVE) {
+      this.map.stash = (this.map.stash || 0) + e.loot;
+      this.log(`${josa(e.d.name, '이', '가')} 골드를 들고 큰 참나무 그루터기 쪽으로 사라졌다…`, 'warn');
+    } else this.log(`${josa(e.d.name, '이', '가')} 골드를 들고 사라졌다…`, 'warn');
   }
 
   onKill(e) {
@@ -687,7 +692,7 @@ export class Run {
       this.log(`${josa(e.d.name, '이', '가')} 등에 지고 있던 보물을 떨궜다!`, 'good');
     } else if (e.d.quest) {
       this.pickups.push({ x: e.x, y: e.y, type: 'necklace' });
-      this.log('도둑 쥐가 반짝돌 목걸이를 떨궜다!', 'good');
+      this.log('도둑 들쥐가 리본을 떨궜다!', 'good');
     } else if (e.loot) {
       this.pickups.push({ x: e.x, y: e.y, type: 'gold', amount: e.loot, stolen: true });
     } else if (L.goldfang || Math.random() < B.GOLD_DROP_CHANCE) {
