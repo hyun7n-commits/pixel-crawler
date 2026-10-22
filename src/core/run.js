@@ -239,7 +239,7 @@ export class Run {
     if (this.floor > 1) { map.tiles[idx(start.cx, start.cy)] = UPSTAIRS; map.up = { x: start.cx, y: start.cy }; }
     const zi = Math.floor((this.floor - 1) / B.FLOORS_PER_ZONE);
     const stairs = { x: far.cx, y: far.cy };
-    const deco = decorate(map, rooms, { start: this.p, stairs });
+    const deco = decorate(map, rooms, { start: this.p, stairs, floor: this.floor });
     this.has = deco.has;
     const sp = placeSpecials(map, rooms, deco, {
       floor: this.floor, start: this.p, stairs, open: id => this.open(id),
@@ -620,8 +620,8 @@ export class Run {
     const heard = this.noise(ore.x, ore.y, r);
     // the deeper you dig, the more the mine answers: monsters crawl out of the dark toward the sound
     const came = [];
-    // the first floor answers more softly: it is where you learn that digging is heard
-    const wave = B.ORE_WAVE[k] + (B.ORE_WAVE[k] ? B.ORE_SIZE_WAVE[ore.size - 1] : 0) - (this.floor === 1 && B.ORE_WAVE[k] ? 1 : 0);
+    // the first field only wakes who is already there: it is where you learn that digging is heard
+    const wave = this.floor === 1 ? 0 : B.ORE_WAVE[k] + (B.ORE_WAVE[k] ? B.ORE_SIZE_WAVE[ore.size - 1] : 0);
     for (let n = 0; n < (this.char.quiet ? wave - 1 : wave); n++) {
       const t = this.waveSpot(ore);
       if (!t) break;

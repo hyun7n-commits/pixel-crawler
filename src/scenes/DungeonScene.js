@@ -199,6 +199,9 @@ export class DungeonScene extends Phaser.Scene {
   detach() {
     this.run = null;
     if (this.fallen) { this.fallen = false; this.cameras.main.postFX?.clear(); }
+    // a trip that ends mid-burrow must not leave the view closed over the village
+    const iris = document.getElementById('iris');
+    if (iris) iris.hidden = true;
     this.diving = false;
     this.aim = false;
     this.clearFloor();

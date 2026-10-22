@@ -56,7 +56,8 @@ export const REGEN_TURNS = 15;
 // The big ore on each floor: how many swings it takes, how far each swing is heard,
 // how much mine gas the crack beside it puffs per swing, and what it pays.
 // One big ore a field (v0.20: fewer things on the map, so each one matters).
-// From the third swing the mine answers: monsters crawl out of the dark and head for the sound.
+// From the third swing the mine answers: monsters crawl out of the dark and head for the sound
+// (not on the first field, where only those already there wake up).
 export const ORES_PER_FLOOR = 1;
 export const ORE_HITS = 5;
 export const ORE_NOISE = [3, 5, 7, 10, 14];

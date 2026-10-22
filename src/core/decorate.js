@@ -66,7 +66,8 @@ const VEINS = [
   [[[0, 0], [1, 0], [0, 1], [1, 1]]],
 ];
 
-function rollSize() {
+function rollSize(floor) {
+  if (floor === 1) return 1; // the first field's boulder is always a single block
   let roll = Math.random();
   for (let s = 0; s < ORE_SIZE_CHANCE.length; s++) if ((roll -= ORE_SIZE_CHANCE[s]) < 0) return s + 1;
   return 1;
@@ -74,7 +75,7 @@ function rollSize() {
 
 // Puts the big ore in the middle of a room, away from the walls so it never blocks a doorway.
 // A big vein that would cut the floor in two (pillars, cave corners) shrinks until it fits.
-function placeOre(map, r, keep, start) {
+function placeOre(map, r, keep, start, floor) {
   const spots = roomTiles(r, 1).filter(([x, y]) => free(map, x, y) && !keep(x, y));
   if (!spots.length) return false;
   const near = ([x, y]) => Math.abs(x - r.cx) + Math.abs(y - r.cy);
@@ -94,7 +95,7 @@ function placeOre(map, r, keep, start) {
   };
   const before = reach();
   let cells = null;
-  for (let size = rollSize(); size >= 1 && !cells; size--) {
+  for (let size = rollSize(floor); size >= 1 && !cells; size--) {
     for (const [x, y] of spots.slice(0, 6)) {
       for (const shape of shuffle(VEINS[size - 1].slice())) {
         const c = shape.map(([dx, dy]) => [x + dx, y + dy]);
@@ -121,7 +122,7 @@ function placeOre(map, r, keep, start) {
 }
 
 // Returns { has, themes }: what this floor contains (for overheard hints) and each room's theme.
-export function decorate(map, rooms, { start, stairs }) {
+export function decorate(map, rooms, { start, stairs, floor = 1 }) {
   const has = new Set(), themes = [];
   const keep = (x, y) => (Math.abs(x - start.x) <= 1 && Math.abs(y - start.y) <= 1) || (x === stairs.x && y === stairs.y);
 
@@ -130,7 +131,7 @@ export function decorate(map, rooms, { start, stairs }) {
   const oreRooms = new Set();
   for (const r of rooms.slice(1).filter(r => !inRoom(r, stairs.x, stairs.y)).sort((a, b) => b.w * b.h - a.w * a.h)) {
     if (oreRooms.size >= ORES_PER_FLOOR) break;
-    if (placeOre(map, r, keep, start)) oreRooms.add(r);
+    if (placeOre(map, r, keep, start, floor)) oreRooms.add(r);
   }
 
   rooms.forEach((r, i) => {

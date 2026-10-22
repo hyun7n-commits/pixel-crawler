@@ -3,7 +3,8 @@
 // Vampire Crawlers and BALL x PIT hand out something new after almost every run.
 // At the end of a trip the first entries (in this order) whose `when` holds are opened, at most
 // PER_TRIP of them, and listed on the trip's end card; the rest wait for the next trip, so even a
-// big leap forward is learned a piece at a time.
+// big leap forward is learned a piece at a time. The first few also open with trips alone, so a
+// rough start still brings something new home each time.
 //   relic: a basic relic joining the cards you can be offered · what/desc: the line on the end card
 //   icon: the picture beside it (a sprite or relic id)
 // Gates are read with isOpen(meta, id) where the thing would appear (core/run.js, core/specials.js).
@@ -16,11 +17,11 @@ const beat = (m, boss) => m.stats.bosses.includes(boss);
 export const UNLOCKS = [
   { id: 'request', icon: 'guildBoss', what: '조합 의뢰', desc: '나갈 때마다 작은 의뢰가 붙는다. 해내면 그 자리에서 일당을 준다', when: m => m.stats.runs >= 1 },
   { id: 'fang', relic: 'fang', when: m => m.stats.runs >= 1 },
-  { id: 'weeds', icon: 'weed', what: '풀뽑기 밭', desc: '들판에 잡초 밭이 생긴다. 한 포기씩 뽑으면 일당. 가끔 뭔가 소리를 지른다', when: m => m.stats.maxFloor >= 2 },
-  { id: 'hammer', relic: 'hammer', when: m => m.stats.maxFloor >= 2 },
-  { id: 'keys', icon: 'key', what: '잠긴 상자와 열쇠', desc: '2구역부터 잠긴 상자가 있다. 열쇠는 같은 구역 어딘가에', when: m => m.stats.runs >= 2 && m.stats.maxFloor >= 2 },
-  { id: 'bomb', icon: 'bomb', what: '폭탄', desc: '상자와 들판에서 폭탄이 나온다. 던지면 덤불도 바위도 날아간다', when: m => m.stats.maxFloor >= 3 },
-  { id: 'ring', relic: 'ring', when: m => m.stats.maxFloor >= 3 },
+  { id: 'weeds', icon: 'weed', what: '풀뽑기 밭', desc: '들판에 잡초 밭이 생긴다. 한 포기씩 뽑으면 일당. 가끔 뭔가 소리를 지른다', when: m => m.stats.maxFloor >= 2 || m.stats.runs >= 2 },
+  { id: 'hammer', relic: 'hammer', when: m => m.stats.maxFloor >= 2 || m.stats.runs >= 2 },
+  { id: 'keys', icon: 'key', what: '잠긴 상자와 열쇠', desc: '2구역부터 잠긴 상자가 있다. 열쇠는 같은 구역 어딘가에', when: m => m.stats.runs >= 3 || (m.stats.runs >= 2 && m.stats.maxFloor >= 2) },
+  { id: 'bomb', icon: 'bomb', what: '폭탄', desc: '상자와 들판에서 폭탄이 나온다. 던지면 덤불도 바위도 날아간다', when: m => m.stats.maxFloor >= 3 || m.stats.runs >= 4 },
+  { id: 'ring', relic: 'ring', when: m => m.stats.maxFloor >= 3 || m.stats.runs >= 4 },
   { id: 'candy', icon: 'candy', what: '별사탕', desc: '반짝 바위와 잡초 밭에서도 별사탕이 나온다. 먹으면 유물이 다다닥 자란다', when: m => beat(m, 'ratking') },
   { id: 'stall', icon: 'peddler', what: '보스 앞 좌판', desc: '보스 바로 앞 구역에 상점 주인이 좌판을 편다', when: m => beat(m, 'ratking') },
   { id: 'shelf', icon: 'shopkeep', what: '상점 유물 진열대', desc: '마을 상점에서 새 유물을 사서 들판에 풀 수 있다', when: m => beat(m, 'ratking') },
