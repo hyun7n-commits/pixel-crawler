@@ -120,6 +120,8 @@ export function gossip(last, meta) {
   if (last.spring && out.length < 3) out.push('돌산 온천에 몸 담갔다며? 부럽다… 다음엔 나도 데려가!');
   else if (last.ring && out.length < 3) out.push('요정 고리를 타 봤다며? 뿅 하고 나오면 어지럽지 않아?');
   else if (last.honey && out.length < 3) out.push('벌집 꿀 먹었다며? 벌한테 쏘인 데는 괜찮아? 꿀 냄새 난다.');
+  else if (last.screams && out.length < 3) out.push('어제 들판에서 꺄아아 소리 들렸는데, 너였어? 비명 뿌리 뽑았구나.');
+  else if (last.weeds && out.length < 3) out.push(`풀뽑기도 했다며? ${last.weeds}포기나! 일꾼 다 됐네.`);
   // what you have put up round your house (data/home.js) gets talked about too
   const home = meta.home || [];
   if (home.includes('dog') && out.length < 3) out.push('너네 강아지 오늘 우리 집 앞까지 놀러 왔더라. 귀여워!');

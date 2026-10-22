@@ -269,7 +269,7 @@ function onRunEvent(type, d) {
     meta.lastRun = {
       won: d.won, floor: run.floor, zone: run.zone.name, cause: run.cause, kills: run.kills, gold: run.gold,
       recipes: run.newRecipes.length, who: CHARACTERS[meta.sel].name,
-      honey: run.p.honey || 0, ring: !!run.told.ring, spring: !!run.told.spring,
+      honey: run.p.honey || 0, ring: !!run.told.ring, spring: !!run.told.spring, weeds: run.weeds || 0, screams: run.screams || 0,
     };
     saveMeta(meta);
     hud.update(run);

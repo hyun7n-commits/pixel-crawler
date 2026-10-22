@@ -493,12 +493,14 @@ export class Run {
     map.tiles[i] = FLOOR;
     map.ter[i] = T.NONE;
     patch.left--;
+    this.weeds = (this.weeds || 0) + 1;
     this.emit('tiles', { list: [i], soft: true });
     const root = patch.roots.includes(i);
     this.emit('pluck', { x, y, root });
     if (root) {
       const e = this.spawnEnemy('root', x, y);
       Object.assign(e, { state: 'flee', left: B.ROOT_TURNS });
+      this.screams = (this.screams || 0) + 1;
       this.emit('scream', { x, y, first: true });
       this.noise(x, y, B.SCREAM_RANGE);
       this.log('잡초를 뽑았더니 비명 뿌리였다! 꺄아아 소리에 적들이 몰려온다!', 'warn');
