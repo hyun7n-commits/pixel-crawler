@@ -167,6 +167,7 @@ export class Run {
 
   enterFloor() {
     this.telegraph = [];
+    this.puffs = [];
     this.trail = [{ x: this.p.x, y: this.p.y }];
     this.bandageUsed = 0;
     this.refreshDoors();
@@ -294,7 +295,7 @@ export class Run {
     const d = ENEMIES[type];
     const e = {
       id: Run.nextId++, type, d, x, y,
-      hp: Math.round(d.hp * scale), maxHp: Math.round(d.hp * scale), atk: Math.round(d.atk * scale),
+      hp: Math.round(d.hp * scale), maxHp: Math.round(d.hp * scale), atk: Math.round(d.atk * (1 + (scale - 1) * B.ATK_SHARE)),
       def: d.def || 0, aim: false, aimAt: null, skip: false, slam: false, timer: 0, face: -1,
       state: d.boss ? 'hunt' : Math.random() < 0.65 ? 'sleep' : 'wander',
       wake: 0, doze: 0, last: null, target: null, searchT: 0,
@@ -505,7 +506,8 @@ export class Run {
     const heard = this.noise(ore.x, ore.y, r);
     // the deeper you dig, the more the mine answers: monsters crawl out of the dark toward the sound
     const came = [];
-    const wave = B.ORE_WAVE[k] + (B.ORE_WAVE[k] ? B.ORE_SIZE_WAVE[ore.size - 1] : 0);
+    // the first floor answers more softly: it is where you learn that digging is heard
+    const wave = B.ORE_WAVE[k] + (B.ORE_WAVE[k] ? B.ORE_SIZE_WAVE[ore.size - 1] : 0) - (this.floor === 1 && B.ORE_WAVE[k] ? 1 : 0);
     for (let n = 0; n < (this.char.quiet ? wave - 1 : wave); n++) {
       const t = this.waveSpot(ore);
       if (!t) break;
@@ -742,19 +744,30 @@ export class Run {
     } else if (L.goldfang || Math.random() < B.GOLD_DROP_CHANCE) {
       this.pickups.push({ x: e.x, y: e.y, type: 'gold', amount: (Math.floor((this.floor - 1) / 3) + 1) * rint(1, 4) });
     }
-    if (e.d.bones) this.boneBurst(e);
+    if (e.d.bones) this.swell(e);
     if (L.shadow && !e.d.npc) { this.p.shade = 3; this.emit('shade', { x: this.p.x, y: this.p.y }); }
     const heal = 2 * (L.fang || 0) + (L.bloodcrown ? 4 + 2 * L.bloodcrown : 0) + (L.goldfang ? 5 + L.goldfang : 0);
     if (heal) this.heal(heal);
     this.gainXp(e.xp ?? e.d.xp);
   }
 
-  // A skeleton falls apart in a burst of bone: everyone next to it takes a hit, monsters too.
-  boneBurst(e) {
-    const dmg = e.atk + rint(1, 3);
-    this.emit('bones', { x: e.x, y: e.y });
-    for (const o of this.enemies.filter(o => o !== e && o.hp > 0 && cheb(o, e) === 1)) this.hurt(o, dmg * 2, 'bones');
-    if (cheb(this.p, e) === 1) this.hurtPlayer(Math.max(1, dmg - this.stat().def), '독버섯 포자에 맞았다', 'bones');
+  // A poison mushroom that falls swells up, and bursts after your next move: everyone next to it then
+  // takes a hit, monsters too. The tiles around it glow, so one step away keeps you out of it.
+  swell(e) {
+    this.puffs.push({ x: e.x, y: e.y, dmg: e.atk + rint(1, 3), t: 1 });
+    this.emit('swell', { x: e.x, y: e.y });
+    if (this.isVisible(e.x, e.y)) this.log('독버섯이 부풀어 오른다. 곧 터진다!', 'warn');
+  }
+
+  burstPuffs() {
+    const due = this.puffs.filter(f => f.t-- <= 0);
+    if (!due.length) return;
+    this.puffs = this.puffs.filter(f => f.t >= 0);
+    for (const f of due) {
+      this.emit('bones', { x: f.x, y: f.y });
+      for (const o of this.enemies.filter(o => o.hp > 0 && cheb(o, f) <= 1)) this.hurt(o, f.dmg * 2, 'bones');
+      if (cheb(this.p, f) <= 1) this.hurtPlayer(Math.max(1, f.dmg - this.stat().def), '독버섯 포자에 맞았다', 'bones');
+    }
   }
 
   damagePlayer(raw, src, kind = 'melee') {
@@ -893,6 +906,8 @@ export class Run {
     // doors shut the moment nobody stands in them, so a chaser right behind you loses sight of you
     // as you step through (the Shattered Pixel Dungeon door ambush)
     this.refreshDoors();
+    this.burstPuffs();
+    if (p.hp <= 0) { this.afterTurn(); return; }
     const dm = distMap(this.map, p.x, p.y);
     if (!quick) for (const e of this.enemies.slice()) {
       if (e.hp > 0 && p.hp > 0) enemyAct(this, e, dm);
@@ -1054,15 +1069,23 @@ export class Run {
         e.slam = false;
         const hit = this.telegraph.some(t => t.x === p.x && t.y === p.y);
         this.emit('slam', { tiles: this.telegraph, hit });
-        this.telegraph = [];
-        if (hit) { this.hurtPlayer(10 + this.floor, '버섯 왕의 버섯 망치에 맞았다', 'slam'); this.log('버섯 왕의 내려치기에 맞았다!', 'warn'); }
+        if (hit) { this.hurtPlayer(12 + 2 * this.floor, '버섯 왕의 버섯 망치에 맞았다', 'slam'); this.log('버섯 왕의 내려치기에 맞았다!', 'warn'); }
         else this.log('내려치기를 피했다!', 'good');
+        // the slam shakes spores loose: a little mushroom pops up where the hammer fell (one at a time)
+        const spot = shuffle(this.telegraph.length ? this.telegraph.slice() : []).find(t => this.canEnemyEnter(t.x, t.y));
+        if (spot && this.enemies.filter(m => m.hp > 0 && m.sprout).length < 1) {
+          const m = this.spawnEnemy('skel', spot.x, spot.y, B.enemyScale(this.floor));
+          Object.assign(m, { hp: Math.ceil(m.hp / 2), maxHp: Math.ceil(m.maxHp / 2), state: 'hunt', last: { x: p.x, y: p.y }, small: true, sprout: true, xp: 1 });
+          this.log('내려친 자리에서 꼬마 독버섯이 솟아났다!', 'warn');
+        }
+        this.telegraph = [];
         return true;
       }
-      if (e.timer % 4 === 0) {
+      if (e.timer % 3 === 0) {
         e.slam = true;
         this.telegraph = [];
-        for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+        // a cross on you: one step on the slant takes you out of it (a 3x3 square could not be left in one step)
+        for (const [i, j] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
           if (passable(this.map, p.x + i, p.y + j)) this.telegraph.push({ x: p.x + i, y: p.y + j });
         }
         this.log('버섯 왕이 커다란 버섯 망치를 들어 올렸다. 붉은 칸에서 벗어나야 한다!', 'warn');
@@ -1080,7 +1103,18 @@ export class Run {
       }
       if (n) this.log('왕쥐가 쥐를 불러냈다.', 'warn');
     }
-    if (e.type === 'lord' && e.timer % 6 === 0 && !e.aim) {
+    // the last boss gets angry at half health: a swarm of bats, and it blinks around twice as often
+    if (e.type === 'lord' && !e.rage && e.hp <= e.maxHp / 2) {
+      e.rage = true;
+      let n = 0;
+      for (const [dx, dy] of shuffle(DIRS8.slice())) {
+        if (n < 3 && this.canEnemyEnter(e.x + dx, e.y + dy)) { this.spawnEnemy('bat', e.x + dx, e.y + dy).state = 'hunt'; n++; }
+      }
+      this.emit('rage', { enemy: e });
+      this.log('박쥐 대왕이 화났다! 박쥐 떼가 몰려온다!', 'warn');
+      return true;
+    }
+    if (e.type === 'lord' && e.timer % (e.rage ? 4 : 6) === 0 && !e.aim) {
       const spots = [];
       for (let y = p.y - 6; y <= p.y + 6; y++) for (let x = p.x - 6; x <= p.x + 6; x++) {
         const dd = Math.max(Math.abs(x - p.x), Math.abs(y - p.y));

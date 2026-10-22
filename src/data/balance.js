@@ -24,10 +24,12 @@ export const LEVEL_UP_HEAL = 0.1;  // share of max HP restored on level up (leve
 // (enemies.js), so walking in and trading blows with two at once loses;
 // doorways, surprise hits, bombs and backing off are what win.
 export const enemiesPerFloor = floor => 5 + floor;
-// stat multiplier for enemies: grows within a zone and a little per zone
-export const enemyScale = floor => 1 + 0.2 * ((floor - 1) % 3) + 0.15 * Math.floor((floor - 1) / 3);
+// stat multiplier for enemies: grows within a zone and a lot per zone, because relics, candies and
+// evolutions make you much stronger as you go (v0.19). Attack grows by ATK_SHARE of it, health in full.
+export const enemyScale = floor => 1 + 0.25 * ((floor - 1) % 3) + 0.55 * Math.floor((floor - 1) / 3);
+export const ATK_SHARE = 1.6;
 export const POTION_CHANCE = 0.45;  // a potion lying somewhere on a floor
-export const bossScale = floor => 1 + 0.1 * (floor / 3 - 1);
+export const bossScale = floor => 1 + 0.5 * (floor / 3 - 1);
 
 export const GOLD_DROP_CHANCE = 0.4;
 export const VICTORY_BONUS = 200;

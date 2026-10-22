@@ -18,7 +18,7 @@ export const ENEMIES = {
   slime:    { name: '슬라임', sprite: 'slime',  hp: 12, atk: 5, xp: 3, slow: true, splits: true, tip: '느리지만, 때리면 둘로 갈라진다.' },
   goblin:   { name: '도토리 다람쥐', sprite: 'goblin', hp: 10, atk: 4, xp: 4, thief: true, tip: '골드를 훔쳐 달아난다. 잡으면 돌려받는다.' },
   bat:      { name: '박쥐',   sprite: 'bat',    hp: 8,  atk: 4, xp: 4, fast: true, hitAndRun: true, tip: '빠르다. 물고 나면 물러났다가 다시 온다.' },
-  skel:     { name: '독버섯', sprite: 'skel',   hp: 15, atk: 5, xp: 6, bones: true, tip: '쓰러질 때 포자가 터져 옆 칸을 다치게 한다.' },
+  skel:     { name: '독버섯', sprite: 'skel',   hp: 15, atk: 5, xp: 6, bones: true, tip: '쓰러지면 부풀었다가 다음 턴에 터진다. 한 걸음 물러나면 안 맞는다.' },
   spider:   { name: '거미',   sprite: 'spider', hp: 9,  atk: 4, xp: 5, ranged: 5, tip: '조준선을 그은 다음 턴에 쏜다. 그 칸에서 벗어나면 피할 수 있다.' },
   knight:   { name: '멧돼지', sprite: 'knight', hp: 23, atk: 6, def: 1, xp: 10, charge: 5, tip: '붉은 길을 그은 다음 돌진한다. 옆으로 비키면 부딪혀 어지러워한다.' },
   wizard:   { name: '여우',   sprite: 'wizard', hp: 12, atk: 6, xp: 9, ranged: 6, blink: true, tip: '조준한 다음 턴에 여우불을 쏜다. 다가가면 둔갑해서 달아난다.' },
@@ -37,8 +37,8 @@ export const ENEMIES = {
   smith:    { name: '두더지 대장장이', sprite: 'mole', hp: 1, atk: 0, xp: 0, npc: true, peaceful: true, tip: '말을 걸려면 부딪혀 보자.' },
 
   ratking:  { name: '왕쥐',          sprite: 'rat',  hp: 45,  atk: 3, xp: 20, boss: true, tip: '가끔 쥐를 불러낸다.' },
-  skelking: { name: '버섯 왕',       sprite: 'skel', hp: 80,  atk: 5, xp: 30, boss: true, tip: '붉게 표시된 칸을 내려친다. 칸 밖으로 피해야 한다.' },
-  lord:     { name: '박쥐 대왕', sprite: 'vampLord', hp: 120, atk: 6, xp: 40, boss: true, ranged: 7, tip: '순간이동한 뒤 조준한다. 때리면 체력을 빨아들인다.' },
+  skelking: { name: '버섯 왕',       sprite: 'skel', hp: 100, atk: 6, xp: 30, boss: true, tip: '붉게 표시된 칸을 내려친다. 칸 밖으로 피해야 한다. 내려친 자리엔 꼬마 독버섯이 솟는다.' },
+  lord:     { name: '박쥐 대왕', sprite: 'vampLord', hp: 140, atk: 8, xp: 40, boss: true, ranged: 7, tip: '순간이동한 뒤 조준한다. 때리면 체력을 빨아들인다. 반쯤 다치면 화가 나서 박쥐 떼를 부른다.' },
 };
 
 // Three floors per zone; the third floor of each zone is the boss.

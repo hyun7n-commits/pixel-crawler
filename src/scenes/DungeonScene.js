@@ -71,6 +71,7 @@ export class DungeonScene extends Phaser.Scene {
     this.gasGfx = this.add.graphics().setDepth(D.gas);
     this.fireGfx = this.add.graphics().setDepth(D.fire);
     this.teleGfx = this.add.graphics().setDepth(D.telegraph);
+    this.puffGfx = this.add.graphics().setDepth(D.enemies);
     this.overlay = this.add.graphics().setDepth(D.overlay);
     this.pathGfx = this.add.graphics().setDepth(D.overlay);
     this.bubbles = [];
@@ -606,6 +607,15 @@ export class DungeonScene extends Phaser.Scene {
         d.tiles.forEach(t => this.fx.dust.explode(3, center(t.x), center(t.y)));
         if (!d.hit) this.shake(120, 0.004);
         break;
+      case 'rage': {
+        // the last boss loses its temper: a red flash, a shake, and its frown deepens for the rest of the fight
+        const s = this.enemySprites[d.enemy.id];
+        this.fx.magic.explode(30, center(d.enemy.x), center(d.enemy.y));
+        this.shake(300, 0.01);
+        if (s) { s.setTintFill(0xff5050); s.flashUntil = this.time.now + 220; this.tweens.add({ targets: s, hop: 7, duration: 120, yoyo: true, repeat: 1 }); }
+        this.face('shock', 900);
+        break;
+      }
       case 'teleport':
         this.fx.magic.explode(18, center(d.from.x), center(d.from.y));
         this.fx.magic.explode(18, center(d.to.x), center(d.to.y));
@@ -630,6 +640,7 @@ export class DungeonScene extends Phaser.Scene {
         if (s) { s.dying = true; this.tweens.add({ targets: s, alpha: 0, duration: 200, onComplete: () => { s.destroy(); delete this.enemySprites[d.enemy.id]; } }); }
         break;
       }
+      case 'swell': this.fx.spore.explode(8, center(d.x), center(d.y)); break;
       case 'bones':
         this.fx.spore.explode(30, center(d.x), center(d.y));
         this.fx.dust.explode(10, center(d.x), center(d.y));
@@ -1033,7 +1044,7 @@ export class DungeonScene extends Phaser.Scene {
   // ---------- per-frame drawing ----------
   update(time) {
     const run = this.run, g = this.overlay;
-    g.clear(); this.teleGfx.clear(); this.pathGfx.clear(); this.gasGfx.clear(); this.fireGfx.clear(); this.shadowGfx.clear();
+    g.clear(); this.teleGfx.clear(); this.puffGfx.clear(); this.pathGfx.clear(); this.gasGfx.clear(); this.fireGfx.clear(); this.shadowGfx.clear();
     // down a burrow, the old field stays on screen while the rules already hold the new one
     if (!run || !this.playerSprite || this.diving) return;
     const map = run.map, p = run.p;
@@ -1097,6 +1108,21 @@ export class DungeonScene extends Phaser.Scene {
         this.teleGfx.fillStyle(0xff4646, pulse * (1 - k * 0.08));
         this.teleGfx.fillRect(t.x * TILE + 2, t.y * TILE + 2, TILE - 4, TILE - 4);
       });
+    }
+
+    // a fallen poison mushroom swelling up: the tiles it will burst over, and the spore ball growing
+    for (const f of run.puffs || []) {
+      if (!run.isVisible(f.x, f.y)) continue;
+      this.teleGfx.fillStyle(0xff4646, pulse);
+      for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+        if (run.passable(f.x + i, f.y + j)) this.teleGfx.fillRect((f.x + i) * TILE, (f.y + j) * TILE, TILE, TILE);
+      }
+      // the spore ball sits above whatever it dropped, wobbling bigger as it is about to go
+      const r = 5.5 + 1.5 * Math.sin(time / 60), cx = center(f.x), cy = center(f.y) - 1;
+      this.puffGfx.fillStyle(0x3a2150, 1).fillCircle(cx, cy, r + 1);
+      this.puffGfx.fillStyle(0xb57cf0, 1).fillCircle(cx, cy, r);
+      this.puffGfx.fillStyle(0xe2c8ff, 1).fillCircle(cx - r * 0.35, cy - r * 0.35, r * 0.35);
+      this.puffGfx.fillStyle(0x3a2150, 1).fillRect(cx - 2.5, cy, 1, 1.5).fillRect(cx + 1.5, cy, 1, 1.5);
     }
 
     // auto-walk path
@@ -1263,7 +1289,7 @@ export class DungeonScene extends Phaser.Scene {
     if (!s.dying) s.setScale(base * sx * k * (s.sqx ?? 1), base * sy * k * (s.sqy ?? 1));
     s.setOrigin(0.5 + jitter / TILE, 1 + hop / TILE);
     if (time < s.flashUntil) return;
-    let tint = who.d?.boss ? 0xffb0b0 : 0xffffff;
+    let tint = who.rage ? 0xff8080 : who.d?.boss ? 0xffb0b0 : 0xffffff;
     if (who.burn > 0) tint = 0xffc890;
     if (who.sleep || who.state === 'sleep') tint = 0xc4c4dc;
     if (who.stoneT > 0) tint = 0x9a9aac;
