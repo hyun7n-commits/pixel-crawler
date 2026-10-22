@@ -47,7 +47,7 @@ function trample(run, who, x, y) {
   // now and then something glints in the grass
   if (who === 'player' && Math.random() < B.GRASS_COIN) {
     const n = rint(1, 3) * (1 + Math.floor((run.floor - 1) / B.FLOORS_PER_ZONE));
-    run.addGold(n, x, y);
+    run.addGold(n);
     run.log(`풀 속에서 동전 ${n}개를 주웠다.`, 'good');
   }
 }

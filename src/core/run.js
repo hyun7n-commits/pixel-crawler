@@ -524,17 +524,20 @@ export class Run {
     const g = ORES[ore.tier];
     const r = Math.round((B.ORE_NOISE[k] + (nugget ? 2 : 0)) * (this.char.quiet ? 0.75 : 1));
     let gold;
-    if (!last) gold = Math.round(B.oreGold(this.floor) * g.mult * B.ORE_SWING[k] * s.oreMult * big * (nugget ? B.ORE_NUGGET_MULT : 1));
+    // the pickaxe and the coin relics add up on sparkle rocks rather than multiply: a gold build pays
+    // well without one lucky run buying out the whole village
+    const oreCut = s.goldMult + (s.oreMult - 1) * B.stepGold(this.danger || 0);
+    if (!last) gold = Math.round(B.oreGold(this.floor) * g.mult * B.ORE_SWING[k] * oreCut * big * (nugget ? B.ORE_NUGGET_MULT : 1));
     this.emit('mine', { x: at.x, y: at.y, cells: ore.cells, size: ore.size, from: { x: p.x, y: p.y }, hits: ore.hits, r, last, tier: ore.tier, rose, nugget });
     if (ore.vent) addGas(this, ore.vent.x, ore.vent.y, 'mine', B.ORE_GAS);
-    if (!last) this.addGold(gold);
+    if (!last) this.addGold(gold, true);
     else {
       for (const c of ore.cells) map.tiles[idx(c.x, c.y)] = FLOOR;
       map.ores = map.ores.filter(o => o !== ore);
       this.meta.ores[g.id] = (this.meta.ores[g.id] || 0) + 1;
       // the haul lies in a heap on every tile the vein filled; a 2x2 jackpot holds a richer chest
-      const haul = Math.round(B.oreJackpot(this.floor) * g.mult * s.oreMult * big / ore.size);
-      for (const c of ore.cells) this.pickups.push({ x: c.x, y: c.y, type: 'gold', amount: haul, ore: ore.tier });
+      const haul = Math.round(B.oreJackpot(this.floor) * g.mult * oreCut * big / ore.size);
+      for (const c of ore.cells) this.pickups.push({ x: c.x, y: c.y, type: 'gold', amount: haul, ore: ore.tier, raw: true });
       this.pickups.push({ x: ore.x, y: ore.y, type: 'chest', rich: ore.size >= 4, vein: ore.size >= 4 });
       if (Math.random() < B.CANDY_ORE[ore.size - 1]) { const c = ore.cells[ore.cells.length - 1]; this.pickups.push({ x: c.x, y: c.y, type: 'candy' }); }
       this.discover('ore_jackpot', true);
@@ -609,7 +612,7 @@ export class Run {
       this.pickups.splice(this.pickups.indexOf(q), 1);
       this.emit('pickup', { x, y, type: q.type });
       if (q.type === 'gold' && q.stolen) { this.gold += q.amount; this.emit('gold', { x, y, n: q.amount }); }
-      else if (q.type === 'gold') this.addGold(q.amount);
+      else if (q.type === 'gold') this.addGold(q.amount, q.raw);
       else if (q.type === 'chest') {
         this.queue.push({ kind: 'chest', rich: !!q.rich, vein: !!q.vein });
         this.log('보물 상자를 열었다!', 'good');
@@ -876,8 +879,9 @@ export class Run {
     if (this.p.hp > before) this.emit('heal', { x: this.p.x, y: this.p.y, n: this.p.hp - before });
   }
 
-  addGold(n) {
-    const g = Math.max(1, Math.round(n * this.stat().goldMult));
+  // `raw`: the amount already has the gold bonuses in it (sparkle-rock gold)
+  addGold(n, raw = false) {
+    const g = Math.max(1, Math.round(raw ? n : n * this.stat().goldMult));
     this.gold += g;
     this.emit('gold', { x: this.p.x, y: this.p.y, n: g });
   }
@@ -970,7 +974,7 @@ export class Run {
     for (const q of this.pickups.filter(q => q.type === 'gold' && cheb(q, p) <= r && this.isVisible(q.x, q.y))) {
       this.pickups.splice(this.pickups.indexOf(q), 1);
       this.emit('pickup', { x: q.x, y: q.y, type: 'gold' });
-      this.addGold(q.amount);
+      this.addGold(q.amount, q.raw);
     }
   }
 
