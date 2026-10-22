@@ -19,7 +19,7 @@
 
 export const ENEMIES = {
   rat:      { name: '들쥐',   sprite: 'rat',    hp: 6,  atk: 2, xp: 1, flees: true, pack: 3, tip: '떼로 다닌다.' },
-  slime:    { name: '슬라임', sprite: 'slime',  hp: 12, atk: 5, xp: 3, slow: true, splits: true, tip: '느리지만, 때리면 둘로 갈라진다.' },
+  slime:    { name: '슬라임', sprite: 'slime',  hp: 12, atk: 4, xp: 3, slow: true, splits: true, tip: '느리지만, 때리면 둘로 갈라진다.' },
   goblin:   { name: '도토리 다람쥐', sprite: 'goblin', hp: 10, atk: 4, xp: 4, thief: true, tip: '골드를 훔쳐 달아난다. 잡으면 돌려받는다.' },
   bat:      { name: '박쥐',   sprite: 'bat',    hp: 8,  atk: 4, xp: 4, fast: true, hitAndRun: true, tip: '빠르다. 물고 나면 물러났다가 다시 온다.' },
   skel:     { name: '독버섯', sprite: 'skel',   hp: 15, atk: 5, xp: 6, bones: true, tip: '쓰러지면 부풀었다가 다음 턴에 터진다. 한 걸음 물러나면 안 맞는다.' },
