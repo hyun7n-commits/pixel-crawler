@@ -403,3 +403,17 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #log .quest, #mlog .quest { color: #ffe08a; }
 #mStatus .chip.req { background: rgba(244, 207, 79, 0.16); color: #ffe08a; }
 .unlock-note.req-done { color: #ffe08a; }
+/* a boss steps into view (ui/bosscard.js): a dark band slides across with the boss, its name and a line */
+.bosscard { position: absolute; inset: 0; z-index: 6; display: flex; align-items: center; background: rgba(8, 6, 14, .45); animation: bc-in .25s ease-out; cursor: pointer; }
+.bosscard.out { animation: bc-out .3s ease-in forwards; }
+.bc-band { width: 100%; display: flex; align-items: center; justify-content: center; gap: 16px; padding: 12px 16px; background: linear-gradient(90deg, #1b1424, #3a1730 50%, #1b1424); border-top: 3px solid var(--gold); border-bottom: 3px solid var(--gold); animation: bc-slide .4s cubic-bezier(.2, .9, .3, 1.15); }
+.bc-pic { position: relative; flex: none; width: 104px; height: 104px; transform: scaleX(-1); animation: bc-hop .45s .35s ease-out; }
+.bc-pic .bc-crown { position: absolute; left: 32px; top: -22px; }
+.bc-text { min-width: 0; }
+.bc-text small { display: block; color: #ff8080; font-family: var(--font-display); font-size: 15px; letter-spacing: .15em; }
+.bc-text b { display: block; font-family: var(--font-display); font-weight: normal; font-size: clamp(30px, 7vw, 46px); line-height: 1.1; color: var(--gold); text-shadow: 3px 3px 0 #000; }
+.bc-text p { margin: 6px 0 0; color: #f4f0e8; font-size: clamp(14px, 3.8vw, 18px); }
+@keyframes bc-in { from { opacity: 0; } }
+@keyframes bc-out { to { opacity: 0; transform: translateX(6%); } }
+@keyframes bc-slide { from { transform: translateX(-105%); } }
+@keyframes bc-hop { 0%, 100% { transform: scaleX(-1); } 40% { transform: scaleX(-1) translateY(-12px); } }

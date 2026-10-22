@@ -15,6 +15,7 @@ import { Hud, lowHealth } from './ui/hud.js';
 import { renderPanel, renderVillageHud } from './ui/hub.js';
 import { showChoice, showSummary, showTalk, closeTalk, closeModal, modalOpen } from './ui/modal.js';
 import { showEvolve } from './ui/evo.js';
+import { bossCard } from './ui/bosscard.js';
 import { FOLK } from './data/village.js';
 import { CHARACTERS } from './data/characters.js';
 import { describeTile } from './ui/tip.js';
@@ -235,6 +236,9 @@ function onRunEvent(type, d) {
 }
 
 function afterTurn() {
+  // a boss comes into view for the first time this floor: it steps out on its card
+  const boss = run.enemies.find(e => e.d.boss && e.hp > 0 && run.isVisible(e.x, e.y));
+  if (boss && run.bossShown !== boss.id) { run.bossShown = boss.id; clearPath(); bossCard(boss); sfx.play('boom'); sfx.play('alert'); }
   // stop walking when a new enemy comes into view or something holds you
   const seen = visibleEnemies();
   if (path.length && (seen > seenCount || run.p.sleep)) clearPath();

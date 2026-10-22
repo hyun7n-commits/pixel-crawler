@@ -1208,6 +1208,7 @@ export class DungeonScene extends Phaser.Scene {
       let flip = face < 0;
       if (e.state === 'search' && e.searchT > 0) flip = Math.floor(time / 450) % 2 === 0; // looking around
       this.pose(s, e, flip, time);
+      s.crown?.setVisible(s.visible);
       if (!s.visible) continue;
       if (s.crown) s.crown.setPosition(s.x, s.y - TILE * 1.25 + 2 - s.lift);
       const top = s.y - TILE * (s.scaleY / texScale(s)) * (e.d.boss ? 1.25 : 1) - s.lift;
