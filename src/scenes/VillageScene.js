@@ -5,10 +5,10 @@
 
 /* global Phaser */
 import { TILE, wallKey, waterKey, shadeKey, floorKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
-import { houseCanvas, pathKey, lampPostCanvas } from './village-art.js';
+import { houseCanvas, pathKey, lampPostCanvas, lotCanvas } from './village-art.js';
 import { baseZoom } from './zoom.js';
 import { faceKey } from '../data/faces.js';
-import { VILLAGE_MAP, HOUSES, FOLK, doorOf, HERO_LINES } from '../data/village.js';
+import { VILLAGE_MAP, HOUSES, FOLK, doorOf, HERO_LINES, HOME, ownsHome } from '../data/village.js';
 import { CHARACTERS } from '../data/characters.js';
 import { ZONES } from '../data/enemies.js';
 
@@ -100,6 +100,11 @@ export class VillageScene extends Phaser.Scene {
       for (let y = h.y; y < h.y + h.h; y++) for (let x = h.x; x < h.x + h.w; x++) this.blocked[y * MW + x] = 1;
       h.lived = lived;
     }
+    // your own house, or the roped-off lot where it will stand
+    const home = ownsHome(meta);
+    if (!this.textures.exists('village_lot')) this.textures.addCanvas('village_lot', lotCanvas(HOME.w, HOME.h));
+    this.keep(this.add.image(HOME.x * TILE, HOME.y * TILE, home ? this.houseKey(HOME, true) : 'village_lot').setOrigin(0).setDepth(D.house));
+    for (let y = HOME.y; y < HOME.y + HOME.h; y++) for (let x = HOME.x; x < HOME.x + HOME.w; x++) this.blocked[y * MW + x] = 1;
     // the villagers stand at their doors; ones who just moved in arrive with a little fanfare
     this.folk = [];
     const arrivals = [];
@@ -244,6 +249,10 @@ export class VillageScene extends Phaser.Scene {
   folkAt(x, y) { return this.folk.find(f => f.x === x && f.y === y); }
   heroAt(x, y) { return this.heroes.find(h => h.x === x && h.y === y); }
   houseAt(x, y) { return HOUSES.find(h => x >= h.x && x < h.x + h.w && y >= h.y && y < h.y + h.h); }
+  homeAt(x, y) { return x >= HOME.x && x < HOME.x + HOME.w && y >= HOME.y && y < HOME.y + HOME.h; }
+  homeLine() {
+    return ownsHome(this.meta) ? '내 집: 토벌 자격증 셋을 따고 조합에서 받은 내 집이다!' : '빈 집터: 언젠가 여기에 내 집을… 조합장이 말한 큰 상이 이건가?';
+  }
   walkable(x, y) {
     if (x < 0 || y < 0 || x >= MW || y >= MH || this.blocked[y * MW + x]) return false;
     return !this.folkAt(x, y) && !this.heroAt(x, y) && !(this.p && this.p.x === x && this.p.y === y);
@@ -253,6 +262,7 @@ export class VillageScene extends Phaser.Scene {
     const who = this.folkAt(x, y) || (this.houseAt(x, y)?.lived && this.folk.find(f => f.id === this.houseAt(x, y).id));
     if (who) return `${who.f.name}: ${who.f.tip}`;
     if (this.houseAt(x, y)) return '빈 집: 아직 아무도 안 산다.';
+    if (this.homeAt(x, y)) return this.homeLine();
     const hero = this.heroAt(x, y);
     if (hero) return `${CHARACTERS[hero.id].name}: 부딪히면 오늘은 이 친구가 나간다.`;
     if (this.ch(x, y) === '>') return '들판 가는 땅굴: 쏙 들어가면 토벌을 나간다.';
@@ -266,6 +276,7 @@ export class VillageScene extends Phaser.Scene {
     const house = this.houseAt(x, y);
     const target = this.folkAt(x, y) || (house?.lived && this.folk.find(f => f.id === house.id)) || this.heroAt(x, y);
     if (house && !house.lived) { this.hooks.onHover?.('빈 집: 아직 아무도 안 산다.', true); return; }
+    if (this.homeAt(x, y)) { this.hooks.onHover?.(this.homeLine(), true); return; }
     if (target) {
       const near = this.near(target);
       if (near === 0) { this.meet(target); return; }
@@ -519,6 +530,7 @@ export class VillageScene extends Phaser.Scene {
     if (time > (this.nextSmoke || 0)) {
       this.nextSmoke = time + 450;
       for (const h of HOUSES) if (h.lived && h.chimney) this.smoke.explode(1, h.x * TILE + h.w * TILE - 10, h.y * TILE + 1);
+      if (ownsHome(this.meta)) this.smoke.explode(1, HOME.x * TILE + HOME.w * TILE - 10, HOME.y * TILE + 1);
     }
     // the hidden bits twinkle now and then; the lamps flicker
     for (const f of this.finds) {

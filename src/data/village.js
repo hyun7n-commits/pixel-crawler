@@ -55,6 +55,10 @@ export const HOUSES = [
   { id: 'rival', x: 30, y: 18, w: 5, h: 4, roof: '#7a4bb0', sign: 'star', chimney: true },
 ];
 export const doorOf = h => ({ x: h.x + Math.floor(h.w / 2), y: h.y + h.h });
+// Your own house (the story's dream, scenes/storyboards.js): an empty lot until the guild's big prize
+// for all three licenses, the first win; then a yellow-roofed house with a heart over the door.
+export const HOME = { id: 'home', x: 31, y: 25, w: 5, h: 4, roof: '#f4cf4f', sign: 'heart', chimney: true };
+export const ownsHome = m => m.stats.wins > 0;
 
 const deaths = m => m.stats.runs - m.stats.wins;
 export const FOLK = {
@@ -106,6 +110,7 @@ export function gossip(last, meta) {
   if (!last) return ['아직 아무 일도 없었어. 얼른 들판에 다녀와!'];
   const out = [];
   if (last.won) out.push(`들었어? ${josa(last.who, '이', '가')} 박쥐 대왕을 쓰러뜨렸대! 온 마을이 들썩들썩해.`);
+  if (last.won && meta.stats.wins === 1) out.push('조합장이 상으로 집을 줬다며? 집들이 때 나도 꼭 불러 줘!');
   else if (last.cause) out.push(`${last.zone} ${last.floor}구역에서 ${last.cause}면서? 다들 걱정했어.`);
   if (!last.won && last.floor >= meta.stats.maxFloor && last.floor > 1) out.push(`그래도 ${last.floor}구역은 지금까지 제일 멀리 간 거래!`);
   if (last.kills >= 15) out.push(`적을 ${last.kills}마리나 쓰러뜨렸다며? 대단해.`);

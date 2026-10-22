@@ -132,3 +132,33 @@ export function lampPostCanvas() {
   POST.forEach((row, j) => [...row].forEach((ch, i) => { if (ch !== '.') { g.fillStyle = POST_PAL[ch]; g.fillRect(i, j, 1, 1); } }));
   return c;
 }
+
+// Your house-to-be before you have it: a patch of turned earth roped off on four stakes, with a
+// little board on a post (a heart drawn on it). The guild's big prize builds the house here.
+export function lotCanvas(w, h) {
+  const W = w * TILE, H = h * TILE;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  const fill = (col, x, y, ww = 1, hh = 1) => { g.fillStyle = col; g.fillRect(x, y, ww, hh); };
+  let s = 7;
+  const r = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+  const top = 18;
+  fill('#b08f60', 6, top + 2, W - 12, H - top - 6);
+  fill('#c9a878', 7, top + 3, W - 14, H - top - 8);
+  for (let k = 0; k < 70; k++) fill(r() < 0.5 ? '#a08458' : '#dcc196', 8 + Math.floor(r() * (W - 16)), top + 4 + Math.floor(r() * (H - top - 11)), r() < 0.3 ? 2 : 1, 1);
+  // furrows
+  for (let y = top + 7; y < H - 8; y += 5) fill('#a08458', 10, y, W - 20, 1);
+  // stakes and the rope between them
+  const stakes = [[5, top], [W - 7, top], [5, H - 6], [W - 7, H - 6]];
+  g.fillStyle = '#f4f0e8';
+  for (let x = 6; x < W - 6; x++) { fill('#f4f0e8', x, top + 1 + (Math.abs(x - W / 2) < W / 4 ? 1 : 0)); fill('#f4f0e8', x, H - 5 + (Math.abs(x - W / 2) < W / 4 ? 1 : 0)); }
+  for (let y = top + 1; y < H - 4; y++) { fill('#f4f0e8', 6, y); fill('#f4f0e8', W - 6, y); }
+  for (const [x, y] of stakes) { fill('#1b1424', x - 1, y - 4, 4, 9); fill('#a0703f', x, y - 3, 2, 7); fill('#c9a878', x, y - 3, 2, 1); }
+  // the board on its post, a heart on it
+  const bx = Math.floor(W / 2) - 7, by = 2;
+  fill('#1b1424', bx + 6, by + 10, 3, top - 4); fill('#6e4a2a', bx + 7, by + 10, 1, top - 5);
+  fill('#1b1424', bx, by, 15, 11); fill('#c9a878', bx + 1, by + 1, 13, 9); fill('#e0c79c', bx + 1, by + 1, 13, 1);
+  for (const [x, y] of [[4, 3], [5, 3], [8, 3], [9, 3], [3, 4], [4, 4], [5, 4], [6, 4], [7, 4], [8, 4], [9, 4], [10, 4], [4, 5], [5, 5], [6, 5], [7, 5], [8, 5], [9, 5], [5, 6], [6, 6], [7, 6], [8, 6], [6, 7], [7, 7]]) fill('#f29bb2', bx + x, by + y);
+  return c;
+}
