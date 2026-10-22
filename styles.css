@@ -209,6 +209,10 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .choice .nm { font-family: var(--font-display); font-size: 19px; }
 .choice .tag { font-size: 11.5px; font-weight: 700; padding: 1px 7px; border-radius: 3px; background: var(--panel-2); color: var(--accent); }
 .choice .tag.new { background: var(--accent); color: var(--accent-ink); }
+.rc-count { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+.choice.ready { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), 0 0 14px rgba(244,207,79,.45); animation: readyglow 1.2s ease-in-out infinite alternate; }
+.choice .tag.ready { background: var(--gold); color: #1b1424; }
+@keyframes readyglow { from { box-shadow: 0 0 0 1px var(--gold), 0 0 6px rgba(244,207,79,.3); } to { box-shadow: 0 0 0 1px var(--gold), 0 0 16px rgba(244,207,79,.6); } }
 .choice .ds { font-size: 12.5px; color: var(--fg); line-height: 1.4; }
 .choice .recipe { justify-content: center; }
 .sheet-box { position: relative; width: min(640px, 100%); max-height: 100%; display: flex; }

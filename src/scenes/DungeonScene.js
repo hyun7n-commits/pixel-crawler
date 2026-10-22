@@ -14,6 +14,7 @@ import { ORE_HITS } from '../data/balance.js';
 import { ORES } from '../data/ores.js';
 import { cheb } from '../core/util.js';
 import { faceKey } from '../data/faces.js';
+import { tierOf } from '../data/relics.js';
 import { baseZoom } from './zoom.js';
 import { wait, fissionMs, evolveMs, FISSION_LEAD, FISSION_STEP, EVOLVE_FLASH } from '../ui/beat.js';
 
@@ -410,7 +411,10 @@ export class DungeonScene extends Phaser.Scene {
       }
       // things that stand still (a "chest", a statue, quest folk) stay drawn once seen, like items
       const still = e.state === 'hide' || e.state === 'stone' || e.state === 'npc';
-      s.setVisible(run.isVisible(e.x, e.y) || (still && !!map.explored[idx(e.x, e.y)]));
+      // the owl's eye feels sleepers through the walls: a faint shape above the dark
+      const sensed = run.sensed(e);
+      s.setVisible(run.isVisible(e.x, e.y) || (still && !!map.explored[idx(e.x, e.y)]) || sensed);
+      s.setAlpha(sensed ? 0.5 : 1).setDepth(sensed ? D.overlay + 0.5 : D.enemies);
       this.moveTo(s, e.x, e.y, dur);
     }
     for (const id of Object.keys(this.enemySprites)) {
@@ -521,6 +525,25 @@ export class DungeonScene extends Phaser.Scene {
         this.float(d.x, d.y - 0.4, '버텼다!', '#ffd6d6', 120, 16);
         break;
       case 'dodge': this.float(d.x, d.y, '회피', '#6fe0e0'); break;
+      // the evolved relics' own moves
+      case 'shade': this.fx.magic.explode(14, center(d.x), center(d.y)); break;
+      case 'quick': this.float(d.x, d.y - 0.3, '한 번 더!', '#c9f2a8', 80); this.fx.spark.explode(10, center(d.x), center(d.y)); break;
+      case 'push': this.fx.dust.explode(10, center(d.from.x), foot(d.from.y) - 2); this.shake(90, 0.003); break;
+      case 'bonk': {
+        this.shake(140, 0.006);
+        this.fx.spark.explode(12, center(d.x) + d.dx * 7, center(d.y) + d.dy * 7);
+        const e = this.run.enemyAt(d.x, d.y), s = e && this.enemySprites[e.id];
+        if (s) this.tweens.add({ targets: s, x: s.x + d.dx * 4, duration: 60, yoyo: true });
+        break;
+      }
+      case 'iron': {
+        const ps = this.playerSprite;
+        if (ps) { ps.setTintFill(0xd8e2ff); ps.flashUntil = this.time.now + 90; }
+        this.fx.spark.explode(8, center(d.x), center(d.y) - 6);
+        this.float(d.x, d.y - 0.2, '강철!', '#d8e2ff');
+        break;
+      }
+      case 'snooze': this.fx.sleep.explode(5, center(d.x), center(d.y) - 10); break;
       case 'heal': this.float(d.x, d.y, `+${d.n}`, '#8fd36a'); this.fx.heal.explode(6, center(d.x), center(d.y)); break;
       case 'gold': this.float(d.x, d.y, `+${d.n}G`, '#f4cf4f', 300); break;
       case 'pickup':
@@ -1178,6 +1201,13 @@ export class DungeonScene extends Phaser.Scene {
     else if (time > ps.nextLook) { ps.lookAt = time; ps.nextLook = time + 4000 + Math.random() * 4000; }
     const look = time - (ps.lookAt || -1e9);
     this.pose(ps, p, (p.face < 0) !== (look > 0 && look < 520), time);
+    ps.setAlpha(p.shade > 0 ? 0.55 : 1); // hidden in the shadows after a kill (그림자 걸음)
+    // holding a legend, you give off a few embers now and then; a myth, a purple shimmer
+    if (time > (this.auraAt || 0)) {
+      this.auraAt = time + 650;
+      const top = Math.max(0, ...Object.keys(p.relics).map(tierOf));
+      if (top >= 2) this.fx[top >= 3 ? 'magic' : 'ember'].explode(top >= 3 ? 3 : 2, ps.x + (Math.random() - 0.5) * 12, ps.y - 4 - Math.random() * 10);
+    }
     this.drawStatus(g, ps, p, ps.y - TILE - ps.hop, p.face < 0 ? -1 : 1, time);
 
     // speech bubbles follow their speaker

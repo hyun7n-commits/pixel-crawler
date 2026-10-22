@@ -48,11 +48,13 @@ export function showChoice({ title, sub, run, opts, onPick, onReroll, who }) {
       b.dataset.key = String(i + 1);
       const info = el('div');
       if (o.kind === 'relic') {
-        const r = RELICS[o.id], cur = run.p.relics[o.id] || 0;
+        const r = RELICS[o.id], cur = run.p.relics[o.id] || 0, evo = run.evolvesWith(o.id);
         b.append(icon(o.id));
+        // a card that completes a recipe you know glows, and says what it turns into
+        if (evo) b.classList.add('ready');
         info.append(
           el('span', 'nm', r.name),
-          el('span', cur ? 'tag' : 'tag new', cur ? `Lv${cur} → Lv${cur + 1}` : '새 유물'),
+          el('span', evo ? 'tag ready' : cur ? 'tag' : 'tag new', evo ? `진화! → ${RELICS[evo.id].name}` : cur ? `Lv${cur} → Lv${cur + 1}` : '새 유물'),
           el('span', 'ds', r.desc(cur + 1)),
         );
         const rc = recipeFor(run, o.id, o.id);

@@ -18,7 +18,7 @@ import { decorate, decorateArena, placeTraps } from './decorate.js';
 import { placeSpecials, SET_PIECES } from './specials.js';
 import { NPC_TEXT } from '../data/npcs.js';
 import { enemyAct, rouse, awaken } from './ai.js';
-import { onEnter, explosion, envTick, waterBody, ignite, addGas, spotTraps, revealTraps, openGrave, setBurn } from './world.js';
+import { onEnter, explosion, envTick, waterBody, ignite, addGas, spotTraps, revealTraps, openGrave, setBurn, springTrap } from './world.js';
 
 export const zoneOf = floor => ZONES[Math.floor((floor - 1) / B.FLOORS_PER_ZONE)];
 export const isBossFloor = floor => floor % B.FLOORS_PER_ZONE === 0;
@@ -171,6 +171,8 @@ export class Run {
     this.bandageUsed = 0;
     this.refreshDoors();
     computeFOV(this.map, this.p.x, this.p.y, this.stat().sight);
+    // 반딧불 모자: every sparkle boulder on the field glows through the dark from the moment you arrive
+    if (this.lv('headlamp')) for (const o of this.map.ores) for (const c of o.cells) this.map.explored[idx(c.x, c.y)] = 1;
     // `dir`: 1 down a burrow to the next field, -1 back, 0 the first field; `from`: the hole you went into
     this.emit('floor', this.arrival || {});
     this.arrival = null;
@@ -389,6 +391,12 @@ export class Run {
 
   wait() {
     if (!this.canAct()) return false;
+    // 꿀잠 베개: a proper rest, as long as nobody is in sight
+    const L = this.levels(), p = this.p;
+    if (L.pillow && p.hp < this.stat().maxHp && !this.enemies.some(e => e.hp > 0 && !e.d.npc && !this.calm(e) && e.state !== 'hide' && e.state !== 'stone' && this.isVisible(e.x, e.y))) {
+      this.heal(1 + L.pillow);
+      this.emit('snooze', { x: p.x, y: p.y });
+    }
     this.endTurn();
     return true;
   }
@@ -601,12 +609,17 @@ export class Run {
   unaware(e) { return ['sleep', 'wander', 'search'].includes(e.state) || this.calm(e); }
 
   playerAttack(e) {
-    const s = this.stat(), L = this.levels();
+    const s = this.stat(), L = this.levels(), p = this.p;
     const base = s.atk + rnd(2);
-    if (this.unaware(e)) {
-      this.emit('sneak', { x: e.x, y: e.y, from: { x: this.p.x, y: this.p.y } });
-      this.log(`${e.state === 'sleep' ? '자고 있는' : '나를 못 본'} ${josa(e.d.name, '을', '를')} 세게 내리쳤다!`, 'good');
+    // 그림자 걸음: right after a kill you are still in the shadows, so the next blow is a surprise too
+    const shade = p.shade > 0 && !this.unaware(e);
+    if (this.unaware(e) || shade) {
+      p.shade = 0;
+      this.emit('sneak', { x: e.x, y: e.y, from: { x: p.x, y: p.y } });
+      this.log(shade ? `그림자 속에서 튀어나와 ${josa(e.d.name, '을', '를')} 내리쳤다!` : `${e.state === 'sleep' ? '자고 있는' : '나를 못 본'} ${josa(e.d.name, '을', '를')} 세게 내리쳤다!`, 'good');
       this.strike(e, Math.round(base * s.sneak), 'sneak');
+      // 암살 단검: a surprise kill is over before anyone can react; they all lose this turn
+      if (e.hp <= 0 && L.dagger) { this.quick = true; this.emit('quick', { x: p.x, y: p.y }); }
     } else this.strike(e, base, 'normal');
     // the swing carries on into everyone else standing next to you
     const share = L.quake || L.whirlwind ? 1 : L.whirl ? 0.6 + 0.1 * L.whirl : 0.3 * (L.sweep || 0);
@@ -634,7 +647,30 @@ export class Run {
       if (t === T.BRUSH) ignite(this, e.x, e.y);
     }
     const stun = Math.max(0.15 * (L.hammer || 0), L.quake ? 0.15 + 0.05 * L.quake : 0, L.thunder ? 0.3 + 0.05 * L.thunder : 0, L.giantfist ? 0.25 + 0.05 * L.giantfist : 0);
-    if (e.hp > 0 && !e.d.boss && Math.random() < stun) { e.stun = 1; this.emit('stun', { x: e.x, y: e.y }); }
+    if (e.hp > 0 && !e.d.boss && Math.random() < stun) {
+      e.stun = 1;
+      this.emit('stun', { x: e.x, y: e.y });
+      if (L.giantfist) this.knock(e, 4 + 2 * L.giantfist);
+    }
+  }
+
+  // 거인의 주먹: a dazed monster flies one tile away from you. Into a wall or another monster it takes a
+  // knock (and so does the other one); onto a trap it sets it off; through fire it catches; into water
+  // it is put out.
+  knock(e, dmg) {
+    const dx = Math.sign(e.x - this.p.x), dy = Math.sign(e.y - this.p.y), x = e.x + dx, y = e.y + dy;
+    const other = this.enemyAt(x, y);
+    if (!this.passable(x, y) || other || (x === this.p.x && y === this.p.y)) {
+      this.emit('bonk', { x: e.x, y: e.y, dx, dy });
+      this.hurt(e, dmg, 'bonk');
+      if (other) this.hurt(other, dmg, 'bonk');
+      return;
+    }
+    const from = { x: e.x, y: e.y };
+    e.x = x; e.y = y;
+    this.emit('push', { enemy: e, from, to: { x, y } });
+    onEnter(this, e, x, y);
+    if (isTrap(this.map.ter[idx(x, y)])) springTrap(this, x, y);
   }
 
   hurt(e, dmg, kind) {
@@ -707,6 +743,7 @@ export class Run {
       this.pickups.push({ x: e.x, y: e.y, type: 'gold', amount: (Math.floor((this.floor - 1) / 3) + 1) * rint(1, 4) });
     }
     if (e.d.bones) this.boneBurst(e);
+    if (L.shadow && !e.d.npc) { this.p.shade = 3; this.emit('shade', { x: this.p.x, y: this.p.y }); }
     const heal = 2 * (L.fang || 0) + (L.bloodcrown ? 4 + 2 * L.bloodcrown : 0) + (L.goldfang ? 5 + L.goldfang : 0);
     if (heal) this.heal(heal);
     this.gainXp(e.xp ?? e.d.xp);
@@ -726,11 +763,15 @@ export class Run {
       this.emit('dodge', { x: p.x, y: p.y });
       // the hedgehog cloak pricks whoever lunged at you, hit or miss
       if (L.spikecloak && src && kind === 'melee') this.hurt(src, 4 + 2 * L.spikecloak, 'thorns');
+      // 네잎 클로버: a near miss is lucky money
+      if (L.luckycharm) this.addGold(2 + L.luckycharm);
       return false;
     }
     if (this.char.block && Math.random() < this.char.block) { this.emit('block', { x: p.x, y: p.y, from: { x: src.x, y: src.y } }); return false; }
     const roll = raw * (B.HIT_ROLL[0] + Math.random() * (B.HIT_ROLL[1] - B.HIT_ROLL[0]));
-    const dmg = Math.max(1, Math.round(roll) + rnd(2) - s.def);
+    let dmg = Math.max(1, Math.round(roll) + rnd(2) - s.def);
+    // 강철 심장: with a third of your health or less, blows glance off at half strength
+    if (L.ironheart && p.hp <= s.maxHp / 3) { dmg = Math.max(1, Math.ceil(dmg / 2)); this.emit('iron', { x: p.x, y: p.y }); }
     this.hurtPlayer(dmg, `${src.d.name}에게 당했다`, kind);
     if (src && (kind === 'melee' || kind === 'charge')) {
       const thorn = (L.fortress ? 4 + 2 * L.fortress : 2 * (L.thorns || 0)) + (L.spikecloak ? 4 + 2 * L.spikecloak : 0);
@@ -833,8 +874,10 @@ export class Run {
 
   // ---------- turn ----------
   endTurn() {
-    const p = this.p, L = this.levels();
+    const p = this.p, L = this.levels(), quick = this.quick;
+    this.quick = false;
     this.turn++;
+    if (p.shade > 0) p.shade--;
     if (!this.char.noRegen && this.turn % B.REGEN_TURNS === 0 && p.hp > 0 && p.hp < this.stat().maxHp) p.hp++;
     if (L.goldbolt && this.turn % (L.goldstorm ? 2 : 3) === 0) this.zap(L.goldbolt + 1 + (L.goldstorm ? 1 : 0), 6 + 2 * L.goldbolt);
     else if (L.bolt && this.turn % 6 === 0) this.zap(1, 4 * L.bolt);
@@ -851,7 +894,7 @@ export class Run {
     // as you step through (the Shattered Pixel Dungeon door ambush)
     this.refreshDoors();
     const dm = distMap(this.map, p.x, p.y);
-    for (const e of this.enemies.slice()) {
+    if (!quick) for (const e of this.enemies.slice()) {
       if (e.hp > 0 && p.hp > 0) enemyAct(this, e, dm);
     }
     if (p.hp > 0) envTick(this);
@@ -872,6 +915,9 @@ export class Run {
       this.addGold(q.amount);
     }
   }
+
+  // 부엉이 눈: a sleeping monster out of sight but not far is felt through the walls
+  sensed(e) { return e.state === 'sleep' && !this.isVisible(e.x, e.y) && cheb(e, this.p) <= 12 && this.lv('owleye') > 0; }
 
   // a peaceful monster nobody has picked a fight with yet
   calm(e) { return !!e.d.peaceful && !e.angry; }
@@ -1104,6 +1150,14 @@ export class Run {
       if (!RECIPES.some(rc => (rc.a === a && rc.b === b) || (rc.a === b && rc.b === a))) pairs.push([a, b]);
     }
     return pairs.length ? pick(pairs) : null;
+  }
+
+  // The recipe a relic card would set off at once, but only one you have found before: an unknown
+  // recipe stays a surprise.
+  evolvesWith(id) {
+    const rl = { ...this.p.relics, [id]: (this.p.relics[id] || 0) + 1 };
+    const ready = r => rl[r] && (tierOf(r) > 0 || rl[r] >= MAX_LEVEL);
+    return RECIPES.find(rc => (rc.a === id || rc.b === id) && !rl[rc.id] && ready(rc.a) && ready(rc.b) && this.meta.recipes[recipeKey(rc)]) || null;
   }
 
   // Called by the UI after the player picks one of `offers()`.

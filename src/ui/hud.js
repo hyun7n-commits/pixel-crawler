@@ -2,7 +2,7 @@
 // On a phone the same panel is a bag sheet, with a slim status bar on top and a toolbar below.
 
 import { $, el, button, icon } from './dom.js';
-import { RELICS, MAX_SLOTS, MAX_LEVEL, tierOf, maxLevelOf, isFused, fusedParts, relicName } from '../data/relics.js';
+import { RELICS, MAX_SLOTS, MAX_LEVEL, tierOf, maxLevelOf, isFused, fusedParts, relicName, recipesWith, recipeKey } from '../data/relics.js';
 import { recipeFor, relicIcon } from './recipe.js';
 
 const TIER_CLASS = ['', ' evo', ' legend', ' myth'];
@@ -137,6 +137,9 @@ export class Hud {
       const id = this.selected, lv = p.relics[id];
       const tag = isFused(id) ? ' (합체)' : maxLevelOf(id) === 1 ? TIER_NAME[tierOf(id)] : `${TIER_NAME[tierOf(id)]} Lv${lv}`;
       info.innerHTML = `<b>${relicName(id)}${tag}</b> · ${relicDesc(id, lv)}`;
+      // how many of the recipes this relic goes into you have found; the rest stay a secret
+      const uses = isFused(id) ? [] : recipesWith(id);
+      if (uses.length) info.append(el('div', 'rc-count', `이 유물이 들어가는 조합 ${uses.filter(rc => run.meta.recipes[recipeKey(rc)]).length}/${uses.length} 찾음`));
       const rc = recipeFor(run, id);
       if (rc) info.append(rc);
     } else {
