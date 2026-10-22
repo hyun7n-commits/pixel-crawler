@@ -229,6 +229,7 @@ export function onRunEvent(type, d) {
     case 'meteor': play('boom'); break;
     case 'rage': play('boom'); play('alert'); break;
     case 'request': play('jackpot'); break;
+    case 'buy': play('gold'); play('chest'); break;
     case 'sunbeam': play('rise', 2); break;
     case 'block': play('hit'); play('dodge'); break;
     default: break;

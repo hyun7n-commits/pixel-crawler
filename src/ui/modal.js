@@ -5,6 +5,7 @@ import { RELICS, recipeKey, tierOf } from '../data/relics.js';
 import { recipeFor } from './recipe.js';
 import { josa } from '../core/util.js';
 import { DISCOVERIES } from '../data/terrain.js';
+import { STALL } from '../data/npcs.js';
 
 export const modalOpen = () => !$('modal').hidden;
 let talkClose = null; // set while a villager's talk sheet is open
@@ -74,6 +75,12 @@ export function showChoice({ title, sub, run, opts, onPick, onReroll, who }) {
         const lv = id => run.p.relics[id] || 0;
         info.append(el('span', 'nm', '둘 다 쑥쑥'), el('span', 'tag', '두 개 +1'),
           el('span', 'ds', `${RELICS[o.a].name} Lv${lv(o.a)} → Lv${lv(o.a) + 1}, ${RELICS[o.b].name} Lv${lv(o.b)} → Lv${lv(o.b) + 1}`));
+      } else if (o.kind === 'buy') {
+        // the stall: what it is and its price; greyed out when your purse is short
+        const it = STALL[o.what];
+        b.append(icon(it.icon));
+        info.append(el('span', 'nm', it.name), el('span', 'tag price', `${o.price}G`), el('span', 'ds', it.desc));
+        if (run.gold < o.price) { b.disabled = true; b.classList.add('poor'); }
       } else if (o.kind === 'heal') {
         b.append(icon('heal'));
         info.append(el('span', 'nm', '응급 치료'), el('span', 'ds', '체력 50% 회복'));

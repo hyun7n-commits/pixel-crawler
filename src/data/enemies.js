@@ -35,6 +35,7 @@ export const ENEMIES = {
               tip: '울보 아기새의 리본을 물고 있다.' },
   ghost:    { name: '울보 아기새', sprite: 'ghostNpc', hp: 1, atk: 0, xp: 0, npc: true, peaceful: true, tip: '말을 걸려면 부딪혀 보자.' },
   smith:    { name: '두더지 대장장이', sprite: 'mole', hp: 1, atk: 0, xp: 0, npc: true, peaceful: true, tip: '말을 걸려면 부딪혀 보자.' },
+  peddler:  { name: '상점 주인', sprite: 'shopkeep', hp: 1, atk: 0, xp: 0, npc: true, peaceful: true, tip: '보스 앞에 좌판을 폈다. 부딪히면 물건을 판다. 여기서 쓴 골드는 마을로 못 가져간다.' },
 
   ratking:  { name: '왕쥐',          sprite: 'rat',  hp: 45,  atk: 3, xp: 20, boss: true, intro: '찍찍! 이 들판은 내 거다!', tip: '가끔 쥐를 불러낸다.' },
   skelking: { name: '버섯 왕',       sprite: 'skel', hp: 100, atk: 6, xp: 30, boss: true, intro: '포자 냄새 좋지? 후후후…', tip: '붉게 표시된 칸을 내려친다. 칸 밖으로 피해야 한다. 내려친 자리엔 꼬마 독버섯이 솟는다.' },

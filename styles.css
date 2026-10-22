@@ -417,3 +417,6 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @keyframes bc-out { to { opacity: 0; transform: translateX(6%); } }
 @keyframes bc-slide { from { transform: translateX(-105%); } }
 @keyframes bc-hop { 0%, 100% { transform: scaleX(-1); } 40% { transform: scaleX(-1) translateY(-12px); } }
+/* the shopkeeper's stall in the fields (Run.buy): prices in gold, greyed out when you can't pay */
+.choice .tag.price { background: #3a2e10; color: var(--gold); }
+.choice.poor { opacity: .45; cursor: not-allowed; }

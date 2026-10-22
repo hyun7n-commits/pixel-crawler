@@ -19,7 +19,7 @@ const HEROES = new Set(Object.values(CHARACTERS).map(c => c.sprite));
 const CHARS = new Set([...HEROES, ...Object.values(ENEMIES).map(e => e.sprite), ...Object.values(FOLK).map(f => f.sprite)]);
 const hiCache = {};
 function charRows(name) {
-  if (!HIRES || !CHARS.has(name.replace(/_walk\d$/, ''))) return SPR[name];
+  if (!HIRES || !CHARS.has(name.replace(/_walk\d$/, ''))) return SPR[name] || TER_SPR[name];
   return (hiCache[name] ||= HI[name] || up2(SPR[name]));
 }
 // how much to scale a sprite so it takes one tile whatever its texture size

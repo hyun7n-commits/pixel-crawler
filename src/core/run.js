@@ -16,7 +16,7 @@ import {
 } from './dungeon.js';
 import { decorate, decorateArena, placeTraps } from './decorate.js';
 import { placeSpecials, SET_PIECES } from './specials.js';
-import { NPC_TEXT } from '../data/npcs.js';
+import { NPC_TEXT, PEDDLER_FLOORS, STALL } from '../data/npcs.js';
 import { REQUESTS, pickRequest } from '../data/requests.js';
 import { enemyAct, rouse, awaken } from './ai.js';
 import { onEnter, explosion, envTick, waterBody, ignite, addGas, spotTraps, revealTraps, openGrave, setBurn, springTrap } from './world.js';
@@ -48,7 +48,9 @@ export class Run {
     this.quests = {
       ghost: { floor: rint(1, 2), state: 'idle' },              // idle -> asked -> found -> done
       smith: { floor: rint(4, 5), state: 'idle', chunk: null },  // chunk: grade of the big ore you broke there
+      peddler: { met: false },
     };
+    this.stall = [];
     this.request = pickRequest(meta);   // the guild's request of the day (data/requests.js)
     this.startStats = JSON.parse(JSON.stringify(meta.stats));
     this.listeners = [];
@@ -280,6 +282,12 @@ export class Run {
     // the quest folk, on their floors
     const q = this.quests;
     if (this.floor === q.ghost.floor) place(s => { this.spawnEnemy('ghost', s.x, s.y).state = 'npc'; });
+    // the shopkeeper's stall, the floor before each boss: what's for sale, priced for the zone
+    this.stall = [];
+    if (PEDDLER_FLOORS.includes(this.floor)) {
+      this.stall = Object.entries(STALL).map(([what, it]) => ({ what, price: it.price * (zi + 1), sold: false }));
+      place(s => { this.spawnEnemy('peddler', s.x, s.y).state = 'npc'; });
+    }
     if (this.floor === q.smith.floor) {
       place(s => {
         this.spawnEnemy('smith', s.x, s.y).state = 'npc';
@@ -331,7 +339,7 @@ export class Run {
     this.arrival = { dir, from: { x: this.p.x, y: this.p.y } };
     this.floors[this.floor] = {
       map: this.map, enemies: this.enemies.filter(e => e.hp > 0), pickups: this.pickups,
-      boss: this.boss, has: this.has, gasActive: this.gasActive, overheard: this.overheard, respawnT: this.respawnT,
+      boss: this.boss, has: this.has, gasActive: this.gasActive, overheard: this.overheard, respawnT: this.respawnT, stall: this.stall,
     };
     this.floor += dir;
     this.p.burn = 0; this.p.sleep = 0;
@@ -460,6 +468,12 @@ export class Run {
         this.emit('vanish', { x: e.x, y: e.y });
         this.log(text.bye, 'good');
       } else this.say(e, text.wait);
+    } else if (e.type === 'peddler') {
+      const canGrow = Object.keys(this.p.relics).some(id => this.p.relics[id] < maxLevelOf(id));
+      const stock = this.stall.filter(s => !s.sold && (s.what !== 'grow' || canGrow));
+      if (!stock.length) this.say(e, text.empty);
+      else sheet(q.met ? text.again : text.greet, [...stock.map(s => ({ kind: 'buy', what: s.what, price: s.price })), ...ok()], { noReroll: true });
+      q.met = true;
     } else if (e.type === 'smith') {
       if (q.state === 'idle' && q.chunk === null) { q.state = 'asked'; sheet(text.ask, ok()); }
       else if (q.state === 'done') this.say(e, text.after);
@@ -1221,8 +1235,22 @@ export class Run {
     else if (o.kind === 'gold') this.addGold(o.amount || 25);
     else if (o.kind === 'relic') this.gainRelic(o.id);
     else if (o.kind === 'fuse') this.fuse(o.a, o.b);
+    else if (o.kind === 'buy') this.buy(o.what);
     else if (o.kind === 'twin') for (const id of [o.a, o.b]) if (this.p.relics[id] && this.p.relics[id] < maxLevelOf(id)) this.gainRelic(id);
     this.emit('relics');
+  }
+
+  // Buying at the stall: the gold goes now (it won't come home with you); a relic buy opens its pick.
+  buy(what) {
+    const s = this.stall.find(s => s.what === what), it = STALL[what], text = NPC_TEXT.peddler;
+    if (!s || s.sold || this.gold < s.price) { this.log('골드가 모자라다.', 'bad'); return; }
+    this.gold -= s.price;
+    s.sold = true;
+    this.log(`${josa(it.name, '을', '를')} 샀다. -${s.price}G`, 'good');
+    this.emit('buy', { what, price: s.price });
+    if (what === 'potion' || what === 'bomb') this.p.items[what] = (this.p.items[what] || 0) + 1;
+    else if (what === 'grow') this.queue.push({ kind: 'talk', who: 'peddler', text: text.grow, smithPick: true, noReroll: true });
+    else if (what === 'box') this.queue.push({ kind: 'talk', who: 'peddler', text: text.box, opts: this.offers(3), noReroll: true });
   }
 
   gainRelic(id) {

@@ -1212,6 +1212,12 @@ export class DungeonScene extends Phaser.Scene {
       if (!s.visible) continue;
       if (s.crown) s.crown.setPosition(s.x, s.y - TILE * 1.25 + 2 - s.lift);
       const top = s.y - TILE * (s.scaleY / texScale(s)) * (e.d.boss ? 1.25 : 1) - s.lift;
+      if (e.type === 'peddler' && run.stall.some(x => !x.sold)) { // a coin over the stall while there's stock
+        const gy = top - 4 + Math.sin(time / 260) * 1.2;
+        g.fillStyle(0x1b1424, 1); g.fillCircle(s.x, gy, 3.5);
+        g.fillStyle(0xf4cf4f, 1); g.fillCircle(s.x, gy, 2.5);
+        g.fillStyle(0xfff3b0, 1); g.fillRect(s.x - 1, gy - 1.5, 1, 1);
+      }
       if (['hide', 'stone', 'npc'].includes(e.state)) continue; // no marks: a chest, a statue, a friend
       this.drawStatus(g, s, e, top, flip ? -1 : 1, time);
       if (run.calm(e) && !e.sleep && e.state !== 'sleep') {

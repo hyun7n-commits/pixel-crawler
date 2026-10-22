@@ -1,6 +1,18 @@
 // What the quest folk say. They live on one floor each (Run.quests); talking is Run.talk.
 //   ghost - a crying baby bird whose ribbon a big field mouse ran off with (floor 1 or 2)
 //   smith - a mole blacksmith who hammers a relic up a level for a chunk of the floor's sparkle boulder (floor 4 or 5)
+//   peddler - the village shopkeeper, out in the fields with a stall on the floor before each boss (PEDDLER_FLOORS).
+//             Gold spent there is gold you don't take home, so it is a real choice (see STALL).
+
+export const PEDDLER_FLOORS = [2, 5, 8];
+
+// What the stall sells; `price` is for the meadow and grows with each zone (Run.genFloor).
+export const STALL = {
+  potion: { name: '체력 물약', icon: 'potion', price: 35, desc: '체력 물약 하나. 위험할 때 마신다.' },
+  bomb:   { name: '폭탄',      icon: 'bomb',   price: 25, desc: '폭탄 하나. 둘레 3x3에 펑!' },
+  grow:   { name: '유물 손질', icon: 'anvil',  price: 80, desc: '가진 유물 하나를 골라 한 단계 올린다.' },
+  box:    { name: '유물 꾸러미', icon: 'bag',  price: 110, desc: '유물 셋 중 하나를 골라 가진다.' },
+};
 
 export const NPC_TEXT = {
   ghost: {
@@ -20,5 +32,14 @@ export const NPC_TEXT = {
     thanksGem: '이건 보석이잖아! 두 개 두드려 주지.',
     none: '두드릴 유물이 없네. 대신 덩어리 값을 쳐 주지.',
     after: '또 보자고, 일꾼.',
+  },
+  peddler: {
+    greet: '어머, 일꾼! 들판에서도 장사하지. 보스 앞이니까 단단히 챙겨 가. 여기서 쓴 골드는 마을로 못 가져가는 거 알지?',
+    again: '또 왔네! 뭐 줄까?',
+    ok: ['그냥 갈게', '좌판을 지나간다.'],
+    grow: '어느 유물을 손질해 줄까?',
+    box: '꾸러미 안에 이런 게 들었어. 하나 골라!',
+    thanks: '고마워! 조심해서 가.',
+    empty: '오늘 물건은 다 팔렸어!',
   },
 };
