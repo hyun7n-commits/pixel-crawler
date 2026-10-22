@@ -139,6 +139,10 @@ const SOUNDS = {
   talk() { tone(660, 0.07, { type: 'triangle', vol: 0.12 }); tone(880, 0.09, { type: 'triangle', vol: 0.12, delay: 0.08 }); },
   welcome() { chime([523, 659, 784, 659, 784, 1047], 0.1, 0.12, 0.2, 0.1); },
   swap() { chime([784, 1175], 0.07, 0.1); },
+  // the puppy: a small "멍!" (a quick falling yap with a puff of breath)
+  bark() { tone(900, 0.07, { type: 'square', vol: 0.05, to: 520 }); hiss(0.05, { vol: 0.04, freq: 1800 }); tone(820, 0.06, { type: 'square', vol: 0.04, to: 500, delay: 0.11 }); },
+  // a letter: paper rustling open
+  letter() { hiss(0.12, { vol: 0.06, freq: 3000, to: 5000, type: 'highpass' }); tone(1047, 0.08, { type: 'triangle', vol: 0.08, delay: 0.1 }); },
   boom() { hiss(0.8, { vol: 0.65, freq: 1800, to: 70, type: 'lowpass' }); tone(70, 0.6, { vol: 0.5, to: 28 }); },
   alert() { tone(880, 0.05, { type: 'square', vol: 0.05 }); tone(1320, 0.07, { type: 'square', vol: 0.05, delay: 0.05 }); },
   snore() { hiss(0.55, { vol: 0.14, freq: 320, to: 160, type: 'lowpass', attack: 0.25 }); },

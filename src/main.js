@@ -199,11 +199,11 @@ function openHome() {
 const villageHooks = {
   onTalk: talkTo,
   onHome: openHome,
-  onPet: () => sfx.play('talk'),
+  onPet: () => sfx.play('bark'),
   // a letter from the mailbox (data/home.js LETTERS)
   onMail: letter => {
     const f = FOLK[letter.from];
-    sfx.play('talk');
+    sfx.play('letter');
     showVillageTip('');
     showTalk({ who: f.sprite, name: `${f.name}의 편지`, line: letter.text, build: () => {} });
   },
