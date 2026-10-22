@@ -865,18 +865,20 @@ export class DungeonScene extends Phaser.Scene {
     this.tweens.add({ targets: t, y: t.y - 10, alpha: 0, duration: 800, delay: delay + 150, ease: 'Quad.in', onComplete: () => t.destroy() });
   }
 
-  // A short line in a speech bubble over the speaker. At most two on screen.
+  // A short line in a speech bubble over the speaker, the same size on every screen (sizes are CSS
+  // pixels; `k` turns them into world pixels at the camera's zoom). At most two on screen.
   say(who, text) {
     const target = this.spriteFor(who);
     if (!target || target.dying) return;
     if (who !== 'player' && !this.run.isVisible(who.x, who.y)) return;
+    // critters only ever say "!" or "?": those are head marks (scenes/emotes.js), not bubbles
+    if (text === '!' || text === '?') { this.emote(target, text, text === '?' ? 1300 : 1100); return; }
     while (this.bubbles.length >= 2) this.bubbles.shift().destroy();
-    // enemies only ever say "!" or "?": draw those as a bare mark, not a speech bubble
-    const mark = text === '!' || text === '?';
-    const style = mark
-      ? { fontFamily: '"Do Hyeon", sans-serif', fontSize: '13px', color: text === '!' ? '#ff5a4a' : '#f4cf4f', stroke: '#1b1424', strokeThickness: 3 }
-      : { fontFamily: '"Do Hyeon", sans-serif', fontSize: '9px', color: '#1b1424', backgroundColor: '#f4f0e8', padding: { x: 3, y: 1 } };
-    const b = this.add.text(target.x, target.y - 18, text, style).setOrigin(0.5, 1).setDepth(D.bubble).setResolution(this.textRes());
+    const k = (this.game.registry.get('dpr') || 1) / (this.cameras.main.zoom || 3);
+    const b = this.add.text(target.x, target.y - 18, text, {
+      fontFamily: '"Do Hyeon", sans-serif', fontSize: `${14 * k}px`, color: '#1b1424', backgroundColor: '#f4f0e8',
+      padding: { x: 7 * k, y: 4 * k }, align: 'center', wordWrap: { width: 190 * k, useAdvancedWrap: true },
+    }).setOrigin(0.5, 1).setDepth(D.bubble).setResolution(this.textRes());
     b.target = target;
     b.until = this.time.now + 1500;
     this.bubbles.push(b);
@@ -1286,10 +1288,12 @@ export class DungeonScene extends Phaser.Scene {
     }
     this.drawEmote(g, ps, ps.x, ps.y - TILE - ps.hop - 3, time);
 
-    // speech bubbles follow their speaker
+    // speech bubbles follow their speaker (kept on screen when the speaker stands near an edge)
+    const view = this.cameras.main.worldView;
     this.bubbles = this.bubbles.filter(b => {
       if (time > b.until || !b.target.active) { b.destroy(); return false; }
-      b.setPosition(Math.round(b.target.x), Math.round(b.target.y - TILE - 4 - b.target.hop));
+      const half = b.displayWidth / 2 + 2, x = Phaser.Math.Clamp(b.target.x, view.x + half, view.right - half);
+      b.setPosition(Math.round(x), Math.round(b.target.y - TILE - 4 - b.target.hop));
       b.setAlpha(b.until - time < 250 ? (b.until - time) / 250 : 1);
       return true;
     });

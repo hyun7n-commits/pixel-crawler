@@ -25,7 +25,7 @@ export function canSee(run, e, range) {
 export function enemyAct(run, e, dmP) {
   const d = e.d, p = run.p;
   if (e.state === 'npc') {
-    if (!e.greeted && run.isVisible(e.x, e.y) && cheb(e, p) <= 6) { e.greeted = true; run.say(e, NPC_TEXT[e.type].greet); }
+    if (!e.greeted && run.isVisible(e.x, e.y) && cheb(e, p) <= 6) { e.greeted = true; run.say(e, NPC_TEXT[e.type].call || NPC_TEXT[e.type].greet); }
     return;
   }
   if (e.state === 'hide' || e.state === 'stone') return;

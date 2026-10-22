@@ -14,6 +14,8 @@ export const STALL = {
   box:    { name: '유물 꾸러미', icon: 'bag',  price: 110, desc: '유물 셋 중 하나를 골라 가진다.' },
 };
 
+// `greet` opens the talk sheet; it is also said over their head the first time you come near,
+// unless a shorter `call` is given for that
 export const NPC_TEXT = {
   ghost: {
     greet: '삐약… 일꾼님…',
@@ -34,6 +36,7 @@ export const NPC_TEXT = {
     after: '또 보자고, 일꾼.',
   },
   peddler: {
+    call: '어머, 일꾼! 좌판 보고 가!',
     greet: '어머, 일꾼! 들판에서도 장사하지. 보스 앞이니까 단단히 챙겨 가. 여기서 쓴 골드는 마을로 못 가져가는 거 알지?',
     again: '또 왔네! 뭐 줄까?',
     ok: ['그냥 갈게', '좌판을 지나간다.'],
