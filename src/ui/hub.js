@@ -85,7 +85,7 @@ function chars(box, { meta, onStart, changed, setMeta, onStory }) {
     const top = el('div', 'char-top');
     const sp = icon(c.sprite, 40);
     sp.classList.add('char-spr');
-    top.append(sp, el('span', 'char-name', c.name));
+    top.append(sp, el('span', 'char-name', `${c.name}${c.kind ? `<small>${c.kind}</small>` : ''}`));
     card.append(top);
     const startRelic = Object.entries(c.start).map(([r, l]) => `${RELICS[r].name} Lv${l}`).join(', ');
     card.append(el('div', 'char-stats', `체력 ${c.hp} · 공격 ${c.atk}${c.def ? ` · 방어 ${c.def}` : ''}<br>시작 유물: ${startRelic}<br>${c.note}`));

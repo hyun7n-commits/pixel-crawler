@@ -33,15 +33,20 @@ export const FACES = {
     [10, 9, 'f'], [9, 10, 'f'], [10, 10, 'k'], [11, 10, 'f'], [10, 11, 'f']],
 };
 
-// Only paints onto skin, eyes and mouth, never onto a hat, hood or helmet.
+// Only paints onto the face (skin, eyes, mouth, blush, the raccoon's mask), never onto a hat, wool or
+// helmet. A 'w' in an expression means "this hero's skin here": the colour beside that pixel, so the
+// sheep's peach face and the raccoon's mask stay theirs when an eye closes.
 const FACE_PIXELS = new Set(['w', 'k', 'f', 'q', 'r']);
+const MARKS = new Set(['k', 'f', 'r', 'q']);
 export function faceRows(rows, expr) {
   const out = rows.map(r => [...r]);
+  const face = new Set([...FACE_PIXELS, rows[7][9], rows[6][6], rows[6][11]]);
+  const skinAt = (x, y) => [rows[y][x - 1], rows[y][x + 1]].find(c => c && !MARKS.has(c) && face.has(c)) || rows[7][9];
   for (const [x, y, ch] of FACES[expr]) {
     const was = out[y]?.[x];
-    if (was === undefined || !FACE_PIXELS.has(was)) continue;
+    if (was === undefined || !face.has(rows[y][x])) continue;
     // the vampire's eyes are red; keep them red when they stay eyes
-    out[y][x] = ch === 'k' && rows[6][7] === 'r' && y >= 5 && y <= 8 ? 'r' : ch;
+    out[y][x] = ch === 'w' ? skinAt(x, y) : ch === 'k' && rows[6][7] === 'r' && y >= 5 && y <= 8 ? 'r' : ch;
   }
   return out.map(r => r.join(''));
 }
