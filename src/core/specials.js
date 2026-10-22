@@ -6,15 +6,18 @@
 //            stole on this floor) and always lets its keeper out.
 //   statue - a scarecrow stands over a chest. Take the chest and the scarecrow starts to walk.
 //   traps  - a little trap puzzle between the door and a chest (see traps below).
+//   hive   - a honey stump in a grassy patch, its bees humming round it. Bump it for the honey pot
+//            (more max HP for the run) and every bee that is awake comes after you, until you get
+//            far enough away. Smoke from a fire next to it, or sleepy pollen, puts them to sleep first.
 // Floors without a vault sometimes have a locked chest instead, with its key elsewhere.
 // Nothing here touches the run directly: placeSpecials returns what to add.
 
 import { T } from '../data/terrain.js';
-import { idx, FLOOR, DOOR, GRAVE, LOCKED, distMap } from './dungeon.js';
+import { idx, FLOOR, DOOR, GRAVE, LOCKED, HIVE, distMap } from './dungeon.js';
 import { pick, shuffle, DIRS8 } from './util.js';
 import * as B from '../data/balance.js';
 
-export const SET_PIECES = new Set(['vault', 'grave', 'statue', 'traps']);
+export const SET_PIECES = new Set(['vault', 'grave', 'statue', 'traps', 'hive']);
 
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 const inRoom = (r, x, y) => x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
@@ -108,11 +111,12 @@ export function placeSpecials(map, rooms, deco, ctx) {
     grave: (r) => r.w >= 4 && r.h >= 4,
     statue: (r) => r.w >= 5 && r.h >= 5 && ctx.floor >= 2,
     traps: (r, i) => leaf(i) && Math.min(r.w, r.h) >= 3 && Math.max(r.w, r.h) >= 5 && r.w * r.h <= 35,
+    hive: (r) => r.w >= 4 && r.h >= 4 && hiveSpots(map, r).length > 0,
   };
-  const make = { grave, statue, traps };
+  const make = { grave, statue, traps, hive };
   let made = 0;
-  for (const kind of shuffle(['grave', 'statue', 'traps'])) {
-    if (made >= (ctx.floor === 1 ? 1 : 2) || Math.random() > B.SPECIAL_CHANCE) continue;
+  for (const kind of shuffle(['grave', 'statue', 'traps', 'hive'])) {
+    if (made >= (ctx.floor === 1 ? 1 : 2) || Math.random() > (kind === 'hive' ? B.HIVE_CHANCE : B.SPECIAL_CHANCE)) continue;
     const fits = ids().filter(i => fit[kind](rooms[i], i));
     if (!fits.length) continue;
     const i = pick(fits);
@@ -167,6 +171,27 @@ function statue(map, r, out) {
   if (!behind) return;
   out.enemies.push({ type: 'statue', x: at.x, y: at.y, state: 'stone' });
   out.pickups.push({ x: behind.x, y: behind.y, type: 'chest', guarded: true });
+}
+
+// where the stump can stand: open ground all round it (so it never cuts a way off), not by a door
+function hiveSpots(map, r) {
+  const doors = doorsOf(map, r);
+  return floorTiles(map, r).filter(t => DIRS8.every(([dx, dy]) => map.tiles[idx(t.x + dx, t.y + dy)] === FLOOR) &&
+    !doors.some(d => cheb(t, d.in) <= 1));
+}
+
+function hive(map, r, out, ctx) {
+  const door = doorsOf(map, r)[0];
+  const spots = hiveSpots(map, r);
+  // as deep in the room as it can be, so you see the bees before you reach them
+  const at = spots.reduce((b, t) => (cheb(t, door.in) > cheb(b, door.in) ? t : b));
+  map.tiles[idx(at.x, at.y)] = HIVE;
+  map.hive = { x: at.x, y: at.y, honey: true };
+  // a meadow round it: grass that burns, which is the smoke that calms the bees
+  for (const t of floorTiles(map, r)) if (cheb(t, at) <= 2 ? Math.random() < 0.6 : Math.random() < 0.25) map.ter[idx(t.x, t.y)] = T.GRASS;
+  const zone = Math.floor((ctx.floor - 1) / B.FLOORS_PER_ZONE);
+  const round = shuffle(DIRS8.map(([dx, dy]) => ({ x: at.x + dx, y: at.y + dy })));
+  for (const t of round.slice(0, 3 + zone)) out.enemies.push({ type: 'bee', x: t.x, y: t.y, state: 'wander' });
 }
 
 // A trap room is a little puzzle you can read from the door: one kind of trap, laid in a pattern.

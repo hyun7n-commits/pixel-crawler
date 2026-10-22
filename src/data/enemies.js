@@ -11,6 +11,8 @@
 //   blink: teleports away when you get next to it, then aims · stoneSkin: after it attacks it turns to
 //   stone for a turn and barely feels hits
 // gimmick: not part of a zone's roster; placed by special rooms and grows with the zone (see gimmickScale)
+// swarm: bees of the honey stump (map.hive); anger one and every one awake comes, and they all go
+//   home once you are far enough from the stump
 // npc: someone to talk to; bumping into them talks instead of attacking, and they cannot be hurt
 
 export const ENEMIES = {
@@ -33,9 +35,11 @@ export const ENEMIES = {
   wraith:   { name: '화난 청설모', sprite: 'wraith', hp: 8, atk: 3, xp: 4, gimmick: true, tip: '도토리 창고를 파헤쳐서 화가 났다.' },
   thief:    { name: '리본 도둑 들쥐', sprite: 'thief', hp: 14, atk: 3, xp: 8, gimmick: true, quest: true,
               tip: '울보 아기새의 리본을 물고 있다.' },
+  bee:      { name: '꿀벌', sprite: 'bee', hp: 4, atk: 1, xp: 1, fast: true, peaceful: true, swarm: true, gimmick: true,
+              tip: '벌집 둘레를 윙윙 맴돈다. 벌집이나 벌을 건드리면 떼로 덤비지만, 멀리 달아나면 집으로 돌아간다.' },
   ghost:    { name: '울보 아기새', sprite: 'ghostNpc', hp: 1, atk: 0, xp: 0, npc: true, peaceful: true, tip: '말을 걸려면 부딪혀 보자.' },
   smith:    { name: '두더지 대장장이', sprite: 'mole', hp: 1, atk: 0, xp: 0, npc: true, peaceful: true, tip: '말을 걸려면 부딪혀 보자.' },
-  peddler:  { name: '상점 주인', sprite: 'shopkeep', hp: 1, atk: 0, xp: 0, npc: true, peaceful: true, tip: '보스 앞에 좌판을 폈다. 부딪히면 물건을 판다. 여기서 쓴 골드는 마을로 못 가져간다.' },
+  peddler:  { name: '상점 주인', sprite: 'peddler', hp: 1, atk: 0, xp: 0, npc: true, peaceful: true, tip: '보스 앞에 좌판을 폈다. 부딪히면 물건을 판다. 여기서 쓴 골드는 마을로 못 가져간다.' },
 
   ratking:  { name: '왕쥐',          sprite: 'rat',  hp: 45,  atk: 3, xp: 20, boss: true, intro: '찍찍! 이 들판은 내 거다!', tip: '가끔 쥐를 불러낸다.' },
   skelking: { name: '버섯 왕',       sprite: 'skel', hp: 100, atk: 6, xp: 30, boss: true, intro: '포자 냄새 좋지? 후후후…', tip: '붉게 표시된 칸을 내려친다. 칸 밖으로 피해야 한다. 내려친 자리엔 꼬마 독버섯이 솟는다.' },

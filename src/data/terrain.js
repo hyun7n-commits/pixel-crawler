@@ -36,6 +36,8 @@ export const TILE_INFO = {
   door:    { name: '나무 문', tip: '열기 전에는 안이 안 보인다.' },
   grave:   { name: '흙 둔덕', tip: '다람쥐가 도토리를 묻어 둔 자리. 부딪히면 파헤친다. 보물이 나오기도 하고, 화난 청설모가 튀어나오기도 한다.' },
   graveBig: { name: '큰 참나무 그루터기', tip: '다람쥐들의 도토리 창고. 부딪히면 파헤친다. 큰 보물과 다람쥐가 훔쳐 간 골드가 모여 있지만, 청설모가 꼭 튀어나온다.' },
+  hive:    { name: '벌집 그루터기', tip: '꿀이 가득한 벌집. 부딪히면 꿀단지를 꺼내 먹는다(최대 체력이 늘어난다). 대신 벌들이 화를 낸다.' },
+  hiveEmpty: { name: '빈 벌집 그루터기', tip: '꿀은 다 꺼냈다.' },
   locked:  { name: '잠긴 문', tip: '이 구역 어딘가에 있는 열쇠로 연다.' },
   bigOre:  { name: '반짝 바위', tip: '부딪혀서 캔다. 칠수록 더 좋은 반짝돌이 나오기도 하지만, 소리가 커져서 적이 찾아온다.' },
   fire:    { name: '불', tip: '닿으면 몸에 불이 붙는다. 웅덩이에 들어가면 꺼진다.' },
@@ -65,6 +67,7 @@ export const DISCOVERIES = [
   { id: 'ore_jackpot', combo: '반짝 바위 + 끝까지', result: '반짝돌이 통째로 쏟아진다', hint: '반짝 바위 끝까지 캐면 대박이래.' },
   { id: 'bomb_trap',   combo: '폭탄 + 함정',        result: '멀리서 함정을 터뜨린다', hint: '함정에 폭탄 던지면 멀리서도 터진대.' },
   { id: 'bolt_water',  combo: '번개 + 웅덩이',      result: '웅덩이에 있는 모두가 감전', hint: '웅덩이에 번개 떨어지면 다 찌릿하대.' },
+  { id: 'smoke_bees',  combo: '연기 + 벌집',        result: '벌들이 꾸벅꾸벅 존다', hint: '벌집 옆에 불을 피우면 벌들이 졸린대.' },
 ];
 
 // Things enemies mutter when you overhear them unseen

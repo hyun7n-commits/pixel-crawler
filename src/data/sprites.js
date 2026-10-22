@@ -808,6 +808,25 @@ export const SPR = {
     '...kLLLLLLLk..rq',
     '..kLLkkkkkLLk...',
   ],
+  // 꿀벌: a round little bee from the honey stump, striped back, wings up
+  bee: [
+    '................',
+    '................',
+    '................',
+    '................',
+    '......kk.kk.....',
+    '.....kwwkwwk....',
+    '.....kwckwck.k..',
+    '.....kkkkkkkk...',
+    '....kykykyyyk...',
+    '...kyykykyykyk..',
+    '..kkyykykyykyk..',
+    '...kYykykyyyqk..',
+    '....kYkYkYYYk...',
+    '.....kkkkkkk....',
+    '................',
+    '................',
+  ],
   key: [
     '................',
     '................',
@@ -968,6 +987,9 @@ export const SPR = {
   bag: ['..nnnn..', '.n....n.', '.nNNNNn.', 'nnnnnnnn', 'nnnyynnn', 'nnnnnnnn', 'NNNNNNNN', '........'],
 };
 
+// the field peddler is the shopkeeper; only the 32px look (sprites32.js) gives them a pack
+SPR.peddler = SPR.shopkeep;
+
 // Floor features drawn on top of the floor tile (16x16, '.' shows the floor).
 export const TER_SPR = {
   // the squirrels' acorn stash: dirt mounds with an acorn poking out, and the big oak stump with its hollow
@@ -1006,6 +1028,44 @@ export const TER_SPR = {
     'kHHhHhhhhhhHhHHk',
     'k.kkHkkkkkkHkk.k',
     '..k.kk....kk.k..',
+  ],
+  // the honey stump: a straw skep on an old stump, honey oozing out of its door
+  hive: [
+    '................',
+    '......kkkk......',
+    '....kkiiiikk....',
+    '...kizziiiiik...',
+    '...kuuuuuuuuk...',
+    '..kiiiiiiiiiik..',
+    '..kuuuukkuuuuk..',
+    '..kiiiikxkiiik..',
+    '.kkkkkyykkokkkk.',
+    '.knnNNynnnNNnnk.',
+    '.kHnnnoNNNnnnHk.',
+    '.kHHnnnnnnnnHHk.',
+    '.kHhhHhhhhHhhHk.',
+    'kkHhhhHhhhHhhHkk',
+    'kHHhHhhhhhhHhHHk',
+    'k.kkHkkkkkkHkk.k',
+  ],
+  // …and once its honey pot is taken
+  hiveEmpty: [
+    '................',
+    '......kkkk......',
+    '....kkuuuukk....',
+    '...kuuuuuuuuk...',
+    '...kUUUUUUUUk...',
+    '..kuuuuuuuuuuk..',
+    '..kUUUUkkUUUUk..',
+    '..kuuuukxkuuuk..',
+    '.kkkkkkkkkkkkkk.',
+    '.knnNNnnnnNNnnk.',
+    '.kHnnnNNNNnnnHk.',
+    '.kHHnnnnnnnnHHk.',
+    '.kHhhHhhhhHhhHk.',
+    'kkHhhhHhhhHhhHkk',
+    'kHHhHhhhhhhHhHHk',
+    'k.kkHkkkkkkHkk.k',
   ],
   dug: [
     '................',

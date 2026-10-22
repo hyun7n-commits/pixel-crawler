@@ -12,13 +12,13 @@ import { T, DISCOVERIES, GOSSIP, SLEEP_TALK, FLOOR_HINTS, isTrap } from '../data
 import { rnd, rint, pick, shuffle, cheb, josa, DIRS8 } from './util.js';
 import {
   createMap, carveRooms, carveArena, idx, inMap, passable, distMap, lineOfSight, computeFOV,
-  FLOOR, STAIRS, ORE, UPSTAIRS, GRAVE, LOCKED, DOOR,
+  FLOOR, STAIRS, ORE, UPSTAIRS, GRAVE, LOCKED, DOOR, HIVE,
 } from './dungeon.js';
 import { decorate, decorateArena, placeTraps } from './decorate.js';
 import { placeSpecials, SET_PIECES } from './specials.js';
 import { NPC_TEXT, PEDDLER_FLOORS, STALL } from '../data/npcs.js';
 import { REQUESTS, pickRequest } from '../data/requests.js';
-import { enemyAct, rouse, awaken } from './ai.js';
+import { enemyAct, rouse, awaken, angerSwarm } from './ai.js';
 import { onEnter, explosion, envTick, waterBody, ignite, addGas, spotTraps, revealTraps, openGrave, setBurn, springTrap } from './world.js';
 
 export const zoneOf = floor => ZONES[Math.floor((floor - 1) / B.FLOORS_PER_ZONE)];
@@ -109,7 +109,7 @@ export class Run {
       def: ch.def + lv('shield') + f('fortress', 2, 1) + lv('undying') + lv('ironheart') + f('embermail', 1, 1) + lv('guardian'),
       maxHp: ch.hp + up.hp * 4 + 8 * lv('heart') + f('bloodcrown', 15, 5) + 10 * lv('lifetree') + (on('eternity') ? 30 : 0) +
         f('ironheart', 10, 5) + f('pillow', 16, 4) + f('giantfist', 12, 4) + 10 * lv('guardian') + (on('bloodking') ? 20 : 0) +
-        (this.p.lvl - 1) * B.HP_PER_LEVEL,
+        (this.p.lvl - 1) * B.HP_PER_LEVEL + (this.p.honey || 0),
       goldMult: (1 + 0.4 * lv('coin') + f('goldbolt', 0.75, 0.25) + 0.25 * lv('goldstorm') + (on('minecrown') ? 0.5 : 0) + 0.1 * up.greed +
         f('luckycharm', 1, 0.25) + f('goldfang', 0.8, 0.2) + 0.25 * lv('fortune') + (on('dawnstar') ? 0.5 : 0)) * B.stepGold(this.danger || 0),
       // never more than 60%: something always gets through
@@ -287,7 +287,7 @@ export class Run {
     if (Math.random() < 0.3) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'map' }));
 
     this.pickups.push(...sp.pickups);
-    for (const o of sp.enemies) this.spawnEnemy(o.type, o.x, o.y, B.gimmickScale(this.floor)).state = o.state;
+    for (const o of sp.enemies) this.spawnEnemy(o.type, o.x, o.y, ENEMIES[o.type].swarm ? B.enemyScale(this.floor) : B.gimmickScale(this.floor)).state = o.state;
     // the quest folk, on their floors
     const q = this.quests;
     if (this.floor === q.ghost.floor) place(s => { this.spawnEnemy('ghost', s.x, s.y).state = 'npc'; });
@@ -414,6 +414,7 @@ export class Run {
     if (map.tiles[i] === ORE) return this.mineOre(this.oreAt(nx, ny), { x: nx, y: ny });
     if (map.tiles[i] === GRAVE) { openGrave(this, nx, ny); this.endTurn(); return true; }
     if (map.tiles[i] === LOCKED) return this.unlock(nx, ny);
+    if (map.tiles[i] === HIVE) return this.takeHoney(nx, ny);
     if (!this.passable(nx, ny)) return false;
     p.x = nx; p.y = ny;
     this.trail.push({ x: nx, y: ny });
@@ -453,6 +454,23 @@ export class Run {
     this.emit('tiles', { list: [i], soft: true });
     this.emit('unlock', { x, y });
     this.log('열쇠로 잠긴 문을 열었다.', 'good');
+    this.endTurn();
+    return true;
+  }
+
+  // 벌집 그루터기: the honey pot is eaten on the spot (max HP for the rest of the run), and every bee
+  // that is awake comes after you. Bees put to sleep by smoke or pollen first don't notice.
+  takeHoney(x, y) {
+    const h = this.map.hive;
+    if (!h || !h.honey) { this.log('꿀을 다 꺼낸 벌집이다.'); return false; }
+    h.honey = false;
+    const n = B.honeyHp(this.floor);
+    this.withMaxHpDelta(() => { this.p.honey = (this.p.honey || 0) + n; });
+    this.emit('tiles', { list: [idx(x, y)], soft: true });
+    this.emit('honey', { x, y, n });
+    this.log(`벌집에서 꿀단지를 꺼내 먹었다! 최대 체력 +${n}`, 'good');
+    if (angerSwarm(this)) this.log('윙윙! 벌들이 화났다! 벌집에서 멀리 달아나면 돌아간다.', 'warn');
+    else if (this.enemies.some(e => e.d.swarm && e.hp > 0)) this.log('벌들이 쿨쿨 자는 사이에 살짝 꺼냈다.', 'good');
     this.endTurn();
     return true;
   }
@@ -728,7 +746,8 @@ export class Run {
     this.emit('hit', { enemy: e, x: e.x, y: e.y, dmg, kind });
     if (e.hp <= 0) this.onKill(e);
     else {
-      rouse(this, e, 'hit');
+      // bees singed by fire are in its smoke too (world.js smokeHive): dozy, not angry
+      if (!(kind === 'fire' && e.d.swarm)) rouse(this, e, 'hit');
       if (e.d.splits && e.hp >= 4) this.split(e);
     }
   }

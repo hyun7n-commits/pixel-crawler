@@ -8,7 +8,7 @@ import { TILE, buildTextures, wallKey, waterKey, shadeKey, floorKey, oreFrame, d
 import { CHARACTERS } from '../data/characters.js';
 import { ITEMS } from '../data/items.js';
 import { T, TERRAIN, GASES, GAS_KEYS } from '../data/terrain.js';
-import { idx, inMap, lineOfSight, WALL, STAIRS, DOOR, ORE, UPSTAIRS, GRAVE, LOCKED } from '../core/dungeon.js';
+import { idx, inMap, lineOfSight, WALL, STAIRS, DOOR, ORE, UPSTAIRS, GRAVE, LOCKED, HIVE } from '../core/dungeon.js';
 import { WAKE_AT } from '../core/ai.js';
 import { BOMB_RANGE } from '../core/run.js';
 import { ORE_HITS } from '../data/balance.js';
@@ -354,6 +354,7 @@ export class DungeonScene extends Phaser.Scene {
       if (t === DOOR) this.doorImgs[i] = add(map.open[i] ? 't_doorOpen' : 't_door', D.ter);
       if (t === LOCKED) add('t_doorLocked', D.ter);
       if (t === GRAVE) add(map.bigGrave === i ? 't_graveBig' : 't_grave', D.ter);
+      if (t === HIVE) add(map.hive?.honey ? 't_hive' : 't_hiveEmpty', D.ter);
       if (t === ORE) {
         const ore = map.ores.find(o => o.cells.some(c => idx(c.x, c.y) === i));
         const [key, frame] = ore ? oreFrame(this, ore, x, y) : ['t_ore_copper'];
@@ -424,7 +425,7 @@ export class DungeonScene extends Phaser.Scene {
       if (seen && s.was) {
         if (e.state === 'hunt' && !['hunt', 'flee'].includes(s.was)) this.emote(s, '!');
         else if (e.state === 'search' && s.was === 'hunt') this.emote(s, '?', 1300);
-        else if (e.state === 'wander' && s.was === 'search') this.emote(s, '…', 1300);
+        else if (e.state === 'wander' && (s.was === 'search' || s.was === 'hunt')) this.emote(s, '…', 1300);
       }
       if (seen && ((e.angry && !s.wasAngry) || (e.rage && !s.wasRage))) this.emote(s, 'anger', 1500);
       s.was = e.state; s.wasAngry = e.angry; s.wasRage = e.rage;
@@ -574,6 +575,14 @@ export class DungeonScene extends Phaser.Scene {
       case 'dig': this.fx.dust.explode(14, center(d.x), center(d.y)); this.fx.rock.explode(6, center(d.x), center(d.y)); this.shake(90, 0.004); break;
       case 'shatter': this.fx.crystal.explode(16, center(d.x), center(d.y)); break;
       case 'unlock': this.fx.spark.explode(14, center(d.x), center(d.y)); break;
+      case 'honey':
+        this.fx.gold.explode(18, center(d.x), center(d.y));
+        this.fx.heal.explode(14, center(this.run.p.x), center(this.run.p.y));
+        this.float(this.run.p.x, this.run.p.y, `♥+${d.n}`, '#ff9fb4', 0, 12);
+        this.face('sparkle', 1100);
+        break;
+      case 'swarm': if (d.x != null) this.noiseRing(d.x, d.y, 2, 0xf4cf4f); break;
+      case 'smoke': this.fx.steam.explode(24, center(d.x), center(d.y)); this.fx.sleep.explode(10, center(d.x), center(d.y)); break;
       case 'locked': this.float(d.x, d.y, '잠김', '#b8bccb'); break;
       case 'vanish': this.fx.magic.explode(26, center(d.x), center(d.y)); this.float(d.x, d.y, '고마워!', '#c8f6ff', 0, 11); break;
       case 'reveal': {
@@ -1338,6 +1347,8 @@ export class DungeonScene extends Phaser.Scene {
     if (who.d && !asleep0 && !windup && !who.stoneT && !s.dying) {
       const t = time * (who.state === 'hunt' ? 1.5 : 1) + id * 377;
       switch (who.d.sprite) {
+        case 'bee': // buzzing about: a quick bob and a little zigzag
+          hop = Math.max(hop, 3 + 1.5 * Math.sin(t / 110)); jitter = Math.sin(t / 260) * 0.8; sx = 1 + 0.05 * Math.sin(t / 40); break;
         case 'bat': case 'vampLord': // always on the wing: bobbing and flapping
           hop = Math.max(hop, 2.5 + 1.5 * Math.sin(t / 170)); sx = 1 + 0.08 * Math.sin(t / 55); break;
         case 'slime': { const w = Math.sin(t / 240); sx = 1 + 0.08 * w; sy = 1 - 0.08 * w; break; } // jelly

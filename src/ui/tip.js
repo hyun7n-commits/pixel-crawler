@@ -4,7 +4,7 @@ import { T, TERRAIN, TILE_INFO, GASES, GAS_KEYS } from '../data/terrain.js';
 import { ORE_HITS, candySteps } from '../data/balance.js';
 import { ITEMS } from '../data/items.js';
 import { ORES } from '../data/ores.js';
-import { idx, inMap, STAIRS, DOOR, ORE, UPSTAIRS, WALL, GRAVE, LOCKED } from '../core/dungeon.js';
+import { idx, inMap, STAIRS, DOOR, ORE, UPSTAIRS, WALL, GRAVE, LOCKED, HIVE } from '../core/dungeon.js';
 import { RELICS } from '../data/relics.js';
 
 const CHEST = '보물 상자: 열면 유물을 하나 고른다.';
@@ -58,6 +58,7 @@ export function describeTile(run, x, y, always = false) {
   if (t === DOOR) lines.push(`${TILE_INFO.door.name}: ${TILE_INFO.door.tip}`);
   if (t === LOCKED) lines.push(`${TILE_INFO.locked.name}: ${TILE_INFO.locked.tip}${map.keyHeld ? ' 열쇠가 있다!' : ''}`);
   if (t === GRAVE) { const g = TILE_INFO[map.bigGrave === i ? 'graveBig' : 'grave']; lines.push(`${g.name}: ${g.tip}`); }
+  if (t === HIVE) { const g = TILE_INFO[map.hive?.honey ? 'hive' : 'hiveEmpty']; lines.push(`${g.name}: ${g.tip}`); }
   const ore = t === ORE && map.ores.find(o => o.cells.some(c => idx(c.x, c.y) === i));
   if (ore) {
     const what = ore.size > 1 ? `${['', '', '두 칸짜리', '세 칸짜리', '네 칸짜리'][ore.size]} ${ORES[ore.tier].name} 반짝 바위` : `${ORES[ore.tier].name} 반짝 바위`;

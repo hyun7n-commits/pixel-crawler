@@ -10,7 +10,7 @@
 import { lineOfSight, distMap, idx, passable } from './dungeon.js';
 import { SLEEP_MIN } from '../data/terrain.js';
 import { NPC_TEXT } from '../data/npcs.js';
-import { MAP_W } from '../data/balance.js';
+import { MAP_W, BEE_HOME } from '../data/balance.js';
 import { cheb, shuffle, josa, rint, DIRS8 } from './util.js';
 import { onEnter } from './world.js';
 
@@ -31,7 +31,10 @@ export function enemyAct(run, e, dmP) {
   if (e.state === 'hide' || e.state === 'stone') return;
   if (e.stun > 0) { e.stun--; return; }
   if (e.stoneT > 0) { e.stoneT--; return; }
-  if (run.calm(e)) { calmAct(run, e); return; }
+  // bees after you turn back once you are far enough from their stump
+  const hive = d.swarm && run.map.hive;
+  if (hive && !run.calm(e) && cheb(p, hive) > BEE_HOME) { e.angry = false; e.state = 'wander'; e.aim = false; }
+  if (run.calm(e)) { if (hive && e.state !== 'sleep') hover(run, e, hive); else calmAct(run, e); return; }
   if (e.state === 'sleep') { sleepTick(run, e); return; }
   if (d.slow) { e.skip = !e.skip; if (e.skip) return; }
   e.timer++;
@@ -87,6 +90,28 @@ function calmAct(run, e) {
   wander(run, e);
 }
 
+// A calm bee buzzes about its stump, never more than a couple of steps away.
+function hover(run, e, hive) {
+  if (cheb(e, hive) > 2) { stepToward(run, e, distMap(run.map, hive.x, hive.y)); return; }
+  if (Math.random() < 0.4) return;
+  const steps = DIRS8.map(([dx, dy]) => ({ x: e.x + dx, y: e.y + dy })).filter(t => canStep(run, e, t.x, t.y) && cheb(t, hive) <= 2);
+  const t = steps[Math.floor(Math.random() * steps.length)];
+  if (t) moveEnemy(run, e, t.x, t.y);
+}
+
+// The stump was robbed (or a bee was hit): every bee that is awake comes after you. Returns how many.
+export function angerSwarm(run) {
+  let n = 0;
+  for (const b of run.enemies) {
+    if (!b.d.swarm || b.hp <= 0 || b.state === 'sleep') continue;
+    b.angry = true; b.state = 'hunt'; b.wake = 0; b.doze = 0;
+    b.last = { x: run.p.x, y: run.p.y };
+    n++;
+  }
+  if (n) run.emit('swarm', { x: run.map.hive?.x, y: run.map.hive?.y });
+  return n;
+}
+
 // A mimic drops its act, or a statue comes to life, and goes straight for you.
 export function awaken(run, e) {
   if (e.state !== 'hide' && e.state !== 'stone') return;
@@ -107,6 +132,7 @@ export function rouse(run, e, by, x, y) {
   }
   if (run.calm(e)) {
     if (by !== 'hit') return false; // noise doesn't bother it
+    if (e.d.swarm) angerSwarm(run);
     e.angry = true;
     e.state = 'hunt'; e.wake = 0; e.doze = 0;
     e.last = { x: run.p.x, y: run.p.y };

@@ -315,7 +315,31 @@ export function waterBody(map, x, y) {
 export function envTick(run) {
   gasTick(run);
   fireTick(run);
+  smokeHive(run);
   for (const who of ['player', ...run.enemies.filter(e => e.hp > 0)]) creatureTick(run, who);
+}
+
+// Smoke from a fire by the honey stump puts its bees to sleep (how beekeepers do it), angry or not;
+// they stay asleep a while after the fire dies down.
+function smokeHive(run) {
+  const map = run.map, h = map.hive;
+  if (!h) return;
+  let smoke = false;
+  for (let dy = -B.HIVE_SMOKE; dy <= B.HIVE_SMOKE && !smoke; dy++) for (let dx = -B.HIVE_SMOKE; dx <= B.HIVE_SMOKE; dx++) {
+    if (inMap(h.x + dx, h.y + dy) && map.fire[idx(h.x + dx, h.y + dy)] > 0) { smoke = true; break; }
+  }
+  if (!smoke) return;
+  let n = 0;
+  for (const e of run.enemies) {
+    if (!e.d.swarm || e.hp <= 0) continue;
+    if (e.state !== 'sleep') n++;
+    Object.assign(e, { state: 'sleep', angry: false, aim: false, wake: 0, doze: 8 });
+  }
+  if (n && run.isVisible(h.x, h.y)) {
+    run.emit('smoke', { x: h.x, y: h.y });
+    run.discover('smoke_bees');
+    run.log('연기를 맡은 벌들이 꾸벅꾸벅 졸기 시작했다.', 'good');
+  }
 }
 
 function creatureTick(run, who) {

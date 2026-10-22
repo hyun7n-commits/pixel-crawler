@@ -143,6 +143,9 @@ const SOUNDS = {
   bark() { tone(900, 0.07, { type: 'square', vol: 0.05, to: 520 }); hiss(0.05, { vol: 0.04, freq: 1800 }); tone(820, 0.06, { type: 'square', vol: 0.04, to: 500, delay: 0.11 }); },
   // a letter: paper rustling open
   letter() { hiss(0.12, { vol: 0.06, freq: 3000, to: 5000, type: 'highpass' }); tone(1047, 0.08, { type: 'triangle', vol: 0.08, delay: 0.1 }); },
+  // the honey stump: a sweet glug, the swarm's angry buzz
+  honey() { chime([784, 1047, 1319], 0.06, 0.12); },
+  buzz() { tone(210, 0.45, { type: 'sawtooth', vol: 0.035, to: 250 }); tone(226, 0.45, { type: 'sawtooth', vol: 0.03, to: 196, delay: 0.04 }); },
   boom() { hiss(0.8, { vol: 0.65, freq: 1800, to: 70, type: 'lowpass' }); tone(70, 0.6, { vol: 0.5, to: 28 }); },
   alert() { tone(880, 0.05, { type: 'square', vol: 0.05 }); tone(1320, 0.07, { type: 'square', vol: 0.05, delay: 0.05 }); },
   snore() { hiss(0.55, { vol: 0.14, freq: 320, to: 160, type: 'lowpass', attack: 0.25 }); },
@@ -236,6 +239,9 @@ export function onRunEvent(type, d) {
     case 'buy': play('gold'); play('chest'); break;
     case 'sunbeam': play('rise', 2); break;
     case 'block': play('hit'); play('dodge'); break;
+    case 'honey': play('honey'); break;
+    case 'swarm': play('buzz'); break;
+    case 'smoke': play('puff'); play('snore'); break;
     default: break;
   }
 }
