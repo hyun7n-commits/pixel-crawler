@@ -82,6 +82,28 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #phaser { position: absolute; inset: 0; }
 #banner { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); font-family: var(--font-display); font-size: clamp(22px, 4vw, 34px); color: var(--gold); text-shadow: 3px 3px 0 #000; pointer-events: none; white-space: nowrap; opacity: 0; transition: opacity .3s; }
 #banner.show { opacity: 1; }
+/* the evolution moment (ui/evo.js): two relics slide together, flash, and the new one pops out */
+.evocard { position: absolute; left: 50%; top: 27%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; z-index: 5; animation: evo-life var(--ms) linear forwards; --c: #f4cf4f; }
+.evocard.t2 { --c: #f08c3a; } .evocard.t3 { --c: #c48cff; } .evocard.tf { --c: #6fe0e0; }
+.evo-row { position: relative; width: 200px; height: 88px; }
+.evo-row > span { position: absolute; left: 50%; top: 50%; display: flex; gap: 2px; transform: translate(-50%, -50%); }
+.evo-row canvas { width: 52px; height: 52px; filter: drop-shadow(2px 2px 0 #000); }
+.evo-a { animation: evo-a var(--ms) ease-in forwards; }
+.evo-b { animation: evo-b var(--ms) ease-in forwards; }
+.evo-r { opacity: 0; animation: evo-r var(--ms) linear forwards; }
+.evo-r canvas { width: 72px; height: 72px; }
+.evocard.tf .evo-r canvas { width: 40px; height: 40px; }
+.evo-flash { width: 30px; height: 30px; border-radius: 50%; background: #fff; box-shadow: 0 0 24px 10px var(--c); opacity: 0; animation: evo-flash var(--ms) linear forwards; }
+.evo-rays { width: 180px; height: 180px; border-radius: 50%; opacity: 0; background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--c) 55%, transparent) 0 12deg, transparent 12deg 30deg); -webkit-mask: radial-gradient(circle, #000 25%, transparent 70%); mask: radial-gradient(circle, #000 25%, transparent 70%); animation: evo-rays var(--ms) linear forwards; }
+.evo-name { font-family: var(--font-display); font-size: clamp(20px, 3.6vw, 30px); color: var(--c); text-shadow: 3px 3px 0 #000; white-space: nowrap; opacity: 0; animation: evo-name var(--ms) ease-out forwards; }
+.evo-new { font-size: 13px; font-weight: 700; color: #1b1424; background: var(--c); padding: 2px 10px; border-radius: 10px; opacity: 0; animation: evo-name var(--ms) ease-out forwards; animation-delay: calc(var(--ms) * 0.08); box-shadow: 2px 2px 0 #000; }
+@keyframes evo-life { 0%, 88% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes evo-a { 0% { transform: translate(-260%, -50%); opacity: 0; } 8% { opacity: 1; } 30% { transform: translate(-150%, -50%) rotate(-8deg); } 34% { transform: translate(-145%, -50%) rotate(8deg); } 38% { transform: translate(-150%, -50%) rotate(-8deg); } 46% { transform: translate(-50%, -50%) scale(.6); opacity: 1; } 47%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(.6); } }
+@keyframes evo-b { 0% { transform: translate(160%, -50%); opacity: 0; } 8% { opacity: 1; } 30% { transform: translate(50%, -50%) rotate(8deg); } 34% { transform: translate(45%, -50%) rotate(-8deg); } 38% { transform: translate(50%, -50%) rotate(8deg); } 46% { transform: translate(-50%, -50%) scale(.6); opacity: 1; } 47%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(.6); } }
+@keyframes evo-flash { 0%, 44% { opacity: 0; transform: translate(-50%, -50%) scale(.2); } 48% { opacity: 1; transform: translate(-50%, -50%) scale(1.6); } 62%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(3); } }
+@keyframes evo-r { 0%, 47% { opacity: 0; transform: translate(-50%, -50%) scale(0); } 55% { opacity: 1; transform: translate(-50%, -50%) scale(1.45); } 62%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+@keyframes evo-rays { 0%, 46% { opacity: 0; transform: translate(-50%, -50%) rotate(0); } 55% { opacity: 1; } 90% { opacity: .8; } 100% { opacity: 0; transform: translate(-50%, -50%) rotate(60deg); } }
+@keyframes evo-name { 0%, 50% { opacity: 0; transform: translateY(8px); } 58%, 100% { opacity: 1; transform: none; } }
 #tip { position: absolute; left: 10px; right: 10px; bottom: 10px; max-width: 560px; background: rgba(12,11,17,.92); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: 13px; line-height: 1.5; white-space: pre-line; pointer-events: none; color: var(--fg); }
 #pstatus { display: flex; flex-wrap: wrap; gap: 4px; min-height: 0; }
 #pstatus:empty { display: none; }
@@ -106,6 +128,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .relic.legend { border-color: #f08c3a; box-shadow: inset 0 0 0 1px #f08c3a, 0 0 6px #f08c3a; }
 .relic.myth { border-color: #c48cff; box-shadow: inset 0 0 0 1px #c48cff, 0 0 8px #9a5fd1; animation: mythglow 1.6s ease-in-out infinite alternate; }
 .relic.fused { border-color: #6fe0e0; box-shadow: inset 0 0 0 1px #6fe0e0; }
+.relic.ding { animation: ding .3s ease-out; }
+@keyframes ding { 0% { transform: scale(1); } 35% { transform: scale(1.25); box-shadow: 0 0 10px var(--gold); border-color: var(--gold); } 100% { transform: scale(1); } }
 @keyframes mythglow { from { box-shadow: inset 0 0 0 1px #c48cff, 0 0 4px #9a5fd1; } to { box-shadow: inset 0 0 0 1px #c48cff, 0 0 12px #c48cff; } }
 /* a fused relic: its two halves overlapping, the second a little lower */
 .fused-icon { position: relative; width: 80%; height: 80%; display: block; }

@@ -480,6 +480,7 @@ export class Run {
       const haul = Math.round(B.oreJackpot(this.floor) * g.mult * s.oreMult * big / ore.size);
       for (const c of ore.cells) this.pickups.push({ x: c.x, y: c.y, type: 'gold', amount: haul, ore: ore.tier });
       this.pickups.push({ x: ore.x, y: ore.y, type: 'chest', rich: ore.size >= 4, vein: ore.size >= 4 });
+      if (Math.random() < B.CANDY_ORE[ore.size - 1]) { const c = ore.cells[ore.cells.length - 1]; this.pickups.push({ x: c.x, y: c.y, type: 'candy' }); }
       this.discover('ore_jackpot', true);
       // the blacksmith on this floor wants a chunk of it
       const smith = this.quests.smith;
@@ -563,7 +564,8 @@ export class Run {
       } else if (q.type === 'key') {
         map.keyHeld = true;
         this.log('작은 열쇠를 주웠다. 이 구역의 잠긴 곳을 연다.', 'good');
-      } else if (q.type === 'crystal') this.takeCrystal(q);
+      } else if (q.type === 'candy') this.fission(q.n || B.candySteps(this.floor), x, y);
+      else if (q.type === 'crystal') this.takeCrystal(q);
       else if (q.type === 'necklace') {
         this.quests.ghost.state = 'found';
         this.log('아기새 리본을 찾았다! 울보 아기새에게 돌려주자.', 'good');
@@ -687,8 +689,10 @@ export class Run {
         this.log('다음 구역 표지판이 나타나고, 돌아가는 길도 열렸다.', 'good');
       }
       this.addGold(30 * (this.floor / 3));
+      this.dropNear(e.x, e.y, { type: 'candy', n: B.candySteps(this.floor) + B.CANDY_BOSS });
     } else if (e.d.treasure) {
       this.pickups.push({ x: e.x, y: e.y, type: 'chest' }, { x: e.x, y: e.y, type: 'gold', amount: B.turtleGold(this.floor) });
+      this.dropNear(e.x, e.y, { type: 'candy' });
       this.log(`${josa(e.d.name, '이', '가')} 등에 지고 있던 보물을 떨궜다!`, 'good');
     } else if (e.d.quest) {
       this.pickups.push({ x: e.x, y: e.y, type: 'necklace' });
@@ -1125,6 +1129,38 @@ export class Run {
     this.emit('evolve', { id, tier: 0, fused: true, x: this.p.x, y: this.p.y });
   }
 
+  // A pickup beside (x, y): the first free floor tile around it, or right there.
+  dropNear(x, y, q) {
+    const t = DIRS8.map(([dx, dy]) => ({ x: x + dx, y: y + dy }))
+      .find(t => this.passable(t.x, t.y) && this.map.tiles[idx(t.x, t.y)] === FLOOR && !isTrap(this.map.ter[idx(t.x, t.y)]) && !this.pickups.some(o => o.x === t.x && o.y === t.y));
+    this.pickups.push({ ...(t || { x, y }), ...q });
+  }
+
+  // 별사탕, BALL x PIT's fission: several of your relics grow one after another (다다다닥), and whatever
+  // that completes evolves at the end. A relic whose recipe partner you also hold is likelier to be
+  // picked, so a candy tends to finish something (nothing on screen says which). With nothing left to
+  // grow, a step pays gold.
+  fission(n, x, y) {
+    const rl = this.p.relics, steps = [];
+    let gold = 0;
+    for (let k = 0; k < n; k++) {
+      const ids = Object.keys(rl).filter(id => rl[id] < maxLevelOf(id));
+      if (!ids.length) { gold += 6 + 4 * Math.floor((this.floor - 1) / B.FLOORS_PER_ZONE); steps.push({ gold: true }); continue; }
+      const w = ids.map(id => (recipesWith(id).some(rc => rl[rc.a === id ? rc.b : rc.a]) ? 3 : 1));
+      let r = Math.random() * w.reduce((a, b) => a + b, 0), id = ids[0];
+      for (let i = 0; i < ids.length; i++) if ((r -= w[i]) < 0) { id = ids[i]; break; }
+      this.withMaxHpDelta(() => { rl[id]++; });
+      steps.push({ id, lvl: rl[id] });
+    }
+    this.meta.stats.candies = (this.meta.stats.candies || 0) + 1;
+    const grown = steps.filter(t => t.id).map(t => `${RELICS[t.id].name} Lv${t.lvl}`);
+    this.log(`별사탕! ${grown.length ? grown.join(', ') : '더 자랄 유물이 없다'}`, 'evo');
+    this.emit('fission', { x, y, steps });
+    if (gold) this.addGold(gold);
+    this.checkRecipes();
+    this.emit('relics');
+  }
+
   // Any recipe you now hold the two halves of goes off by itself, the first time as a discovery.
   checkRecipes() {
     const rl = this.p.relics, ready = id => rl[id] && (tierOf(id) > 0 || rl[id] >= MAX_LEVEL);
@@ -1138,8 +1174,7 @@ export class Run {
         this.meta.stats.evos++;
         if (first) { this.newRecipes.push(key); this.gold += DISCOVERY_GOLD[tier]; }
         this.log(`${['', '진화', '전설', '신화'][tier]}! ${RELICS[rc.a].name} + ${RELICS[rc.b].name} → ${RELICS[rc.id].name}`, 'evo');
-        this.emit('evolve', { id: rc.id, tier, first, x: this.p.x, y: this.p.y });
-        this.emit('banner', { text: RELICS[rc.id].name });
+        this.emit('evolve', { id: rc.id, a: rc.a, b: rc.b, tier, first, known: RECIPES.filter(r => this.meta.recipes[recipeKey(r)]).length, x: this.p.x, y: this.p.y });
         again = true;
       }
     }

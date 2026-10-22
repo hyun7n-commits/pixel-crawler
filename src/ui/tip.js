@@ -1,7 +1,7 @@
 // One-line explanations for whatever is under the mouse, so nothing needs to be memorised.
 
 import { T, TERRAIN, TILE_INFO, GASES, GAS_KEYS } from '../data/terrain.js';
-import { ORE_HITS } from '../data/balance.js';
+import { ORE_HITS, candySteps } from '../data/balance.js';
 import { ITEMS } from '../data/items.js';
 import { ORES } from '../data/ores.js';
 import { idx, inMap, STAIRS, DOOR, ORE, UPSTAIRS, WALL, GRAVE, LOCKED } from '../core/dungeon.js';
@@ -13,6 +13,7 @@ const PICKUP = {
   lockedChest: () => '잠긴 상자: 이 구역의 열쇠로 열면 유물을 넷 중 하나 고른다.',
   key: () => '작은 열쇠: 이 구역의 잠긴 문이나 상자를 연다.',
   necklace: () => '아기새 리본: 울보 아기새의 것이다.',
+  candy: (q, run) => `별사탕: 먹으면 가진 유물들이 한꺼번에 ${q.n || candySteps(run.floor)}번 자란다.`,
   crystal: (q, run) => {
     const lv = (run.p.relics[q.relic] || 0) + 1;
     return `유리 종 속 유물: ${RELICS[q.relic].name} Lv${lv}, ${RELICS[q.relic].desc(lv)}. 하나를 가지면 나머지 유리 종은 깨진다.`;

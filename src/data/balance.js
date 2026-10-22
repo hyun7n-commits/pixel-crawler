@@ -12,6 +12,11 @@ export const xpToLevel = lvl => 3 + lvl;
 export const TWIN_CHANCE = 0.35;
 // chance a card is the unseen other half of a recipe for a relic you are growing (nothing says so)
 export const PARTNER_CHANCE = 0.55;
+// 별사탕, BALL x PIT's fission: one candy grows this many relic levels in a row (다다다닥).
+// Bosses, treasure critters, the oak stump and sparkle boulders (by vein size) drop them.
+export const candySteps = floor => 3 + Math.floor((floor - 1) / FLOORS_PER_ZONE);
+export const CANDY_BOSS = 2;              // extra steps in a boss's candy
+export const CANDY_ORE = [0.3, 0.45, 0.65, 1];
 export const HP_PER_LEVEL = 1;
 export const LEVEL_UP_HEAL = 0.1;  // share of max HP restored on level up (levels come often since v0.15)
 

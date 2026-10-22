@@ -12,6 +12,7 @@ import { isTrap } from './data/terrain.js';
 import { Hud, lowHealth } from './ui/hud.js';
 import { renderPanel, renderVillageHud } from './ui/hub.js';
 import { showChoice, showSummary, showTalk, closeTalk, closeModal, modalOpen } from './ui/modal.js';
+import { showEvolve } from './ui/evo.js';
 import { FOLK } from './data/village.js';
 import { CHARACTERS } from './data/characters.js';
 import { describeTile } from './ui/tip.js';
@@ -176,6 +177,8 @@ function onRunEvent(type, d) {
   if (type === 'log') hud.log(d.text, d.cls);
   if (type === 'banner') hud.banner(d.text);
   if (type === 'discover') hud.banner(`새 발견! ${d.d.combo}`);
+  if (type === 'evolve') showEvolve(d);
+  if (type === 'fission') hud.fission(d);
   if (type === 'floor') { clearPath(); seenCount = 0; }
   if (type === 'phit') clearPath();
   if (type === 'turn') afterTurn();

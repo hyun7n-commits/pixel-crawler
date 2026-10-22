@@ -15,10 +15,11 @@ import { ORES } from '../data/ores.js';
 import { cheb } from '../core/util.js';
 import { faceKey } from '../data/faces.js';
 import { baseZoom } from './zoom.js';
+import { wait, fissionMs, evolveMs, FISSION_LEAD, FISSION_STEP, EVOLVE_FLASH } from '../ui/beat.js';
 
 const D = { tiles: 0, ter: 1, fire: 2, gas: 3, telegraph: 4, pickups: 5, enemies: 6, player: 7, overlay: 8, fx: 9, bubble: 10, text: 11 };
 // what a pickup looks like on the floor (items use their own sprite)
-const PICKUP_TEX = { gold: 'gold', chest: 'chest', lockedChest: 'lockedChest', key: 'key', necklace: 'necklace', crystal: 'pedestal' };
+const PICKUP_TEX = { gold: 'gold', chest: 'chest', lockedChest: 'lockedChest', key: 'key', necklace: 'necklace', candy: 'candy', crystal: 'pedestal' };
 const center = v => v * TILE + TILE / 2;
 const foot = v => v * TILE + TILE;
 const hash = (x, y) => {
@@ -568,18 +569,20 @@ export class DungeonScene extends Phaser.Scene {
         }
         if (!d.hit) { this.shake(120, 0.005); this.fx.spark.explode(8, center(d.to.x), center(d.to.y) - 8); }
         break;
+      case 'fission': {
+        // the candy bursts into stars, then each relic it grows pops up over your head, one after another
+        const ms = fissionMs(d.steps.length);
+        this.later(wait(d, ms), () => {
+          this.face('sparkle', ms + 300);
+          this.fx.spark.explode(26, center(this.run.p.x), center(this.run.p.y));
+          d.steps.forEach((st, k) => this.later(FISSION_LEAD + k * FISSION_STEP, () => this.growPop(st, k)));
+        });
+        break;
+      }
       case 'evolve': {
-        // the higher the tier, the bigger the bang; a recipe found for the first time rings out twice
-        this.face('sparkle', 1200);
-        const col = [[111, 224, 224], [244, 207, 79], [240, 140, 58], [196, 140, 255]][d.tier || 0];
-        this.fx.spark.explode(30 + 20 * (d.tier || 0), center(d.x), center(d.y));
-        this.fx[d.tier >= 3 ? 'magic' : d.fused ? 'crystal' : 'fire'].explode(20 + 10 * (d.tier || 0), center(d.x), center(d.y));
-        this.cameras.main.flash(180 + 80 * (d.tier || 0), ...col);
-        if (d.tier >= 2) this.shake(260, 0.006 * d.tier);
-        for (let k = 0; k < (d.first ? 3 : 1); k++) {
-          const ring = this.add.circle(center(d.x), center(d.y), TILE).setStrokeStyle(2, Phaser.Display.Color.GetColor(...col), 1).setDepth(D.fx).setScale(0.2);
-          this.tweens.add({ targets: ring, scale: 3 + d.tier, alpha: 0, delay: k * 200, duration: 700, ease: 'Quad.out', onComplete: () => ring.destroy() });
-        }
+        // goes off when the two relics meet on the evolve card (ui/evo.js)
+        const ms = evolveMs(d);
+        this.later(wait(d, ms) + EVOLVE_FLASH * ms, () => this.evolveBang(d));
         break;
       }
       case 'sunbeam': {
@@ -698,6 +701,41 @@ export class DungeonScene extends Phaser.Scene {
     this.tweens.killTweensOf(sprite);
     sprite.setPosition(bx, by);
     this.tweens.add({ targets: sprite, x: bx + dx, y: by + dy, duration: 55, yoyo: true, ease: 'Quad.out' });
+  }
+
+  // Like time.delayedCall, but on the page's clock, so it stays in step with the DOM cards (ui/beat.js)
+  // even when frames drop. Skipped if the run has ended by then.
+  later(ms, fn) {
+    const run = this.run;
+    setTimeout(() => { if (this.run === run && run && !run.over) fn(); }, ms);
+  }
+
+  // One relic growing in a star candy's burst: its icon pops up over your head with its new level.
+  growPop(st, k) {
+    const p = this.run.p, x = center(p.x), y = p.y * TILE - 3;
+    const img = this.add.image(x, y, st.id || 'gold').setDepth(D.text).setScale(0);
+    this.tweens.add({ targets: img, scale: 1.6, duration: 110, ease: 'Back.out' });
+    this.tweens.add({ targets: img, y: y - 16, alpha: 0, delay: 260, duration: 420, ease: 'Quad.in', onComplete: () => img.destroy() });
+    if (st.id) this.float(p.x, p.y - 0.9, `Lv${st.lvl}`, st.lvl >= 3 ? '#f4cf4f' : '#ffffff', 60, 9);
+    this.fx.spark.explode(5 + k, x, y);
+  }
+
+  // The bang on the field when two relics become one: the higher the tier, the bigger; a recipe found
+  // for the first time rings out three times.
+  evolveBang(d) {
+    const x = center(this.run.p.x), y = center(this.run.p.y);
+    this.face('sparkle', 1200);
+    const col = [[111, 224, 224], [244, 207, 79], [240, 140, 58], [196, 140, 255]][d.tier || 0];
+    this.fx.spark.explode(30 + 20 * (d.tier || 0), x, y);
+    this.fx[d.tier >= 3 ? 'magic' : d.fused ? 'crystal' : 'fire'].explode(20 + 10 * (d.tier || 0), x, y);
+    // a soft burst of light around you instead of a full-screen flash
+    const glow = this.add.circle(x, y, TILE * (2 + d.tier), Phaser.Display.Color.GetColor(...col), 0.45).setDepth(D.fx).setScale(0.3).setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({ targets: glow, scale: 1.4, alpha: 0, duration: 420 + 120 * (d.tier || 0), ease: 'Quad.out', onComplete: () => glow.destroy() });
+    if (d.tier >= 2) this.shake(260, 0.004 * d.tier);
+    for (let k = 0; k < (d.first ? 3 : 1); k++) {
+      const ring = this.add.circle(x, y, TILE).setStrokeStyle(2, Phaser.Display.Color.GetColor(...col), 1).setDepth(D.fx).setScale(0.2);
+      this.tweens.add({ targets: ring, scale: 3 + d.tier, alpha: 0, delay: k * 200, duration: 700, ease: 'Quad.out', onComplete: () => ring.destroy() });
+    }
   }
 
   float(x, y, text, color, delay = 0, size = 10) {

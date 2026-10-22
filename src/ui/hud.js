@@ -12,6 +12,7 @@ import { ITEMS } from '../data/items.js';
 import { LAST_FLOOR, xpToLevel } from '../data/balance.js';
 import { zoneOf, isBossFloor } from '../core/run.js';
 import { playerStatus } from './tip.js';
+import { wait, fissionMs, FISSION_LEAD, FISSION_STEP } from './beat.js';
 
 // What the quest folk asked of you and have not had back yet.
 function questLines(run) {
@@ -64,6 +65,18 @@ export class Hud {
     }
   }
 
+  // A star candy's burst: each relic it grows gives its slot a little bounce, in step with the field.
+  fission(d) {
+    const delay = wait(d, fissionMs(d.steps.length));
+    d.steps.forEach((st, k) => st.id && setTimeout(() => {
+      const b = $('relics').querySelector(`[data-id="${st.id}"]`);
+      if (!b) return;
+      b.classList.remove('ding');
+      void b.offsetWidth;
+      b.classList.add('ding');
+    }, delay + FISSION_LEAD + k * FISSION_STEP));
+  }
+
   banner(text) {
     const b = $('banner');
     b.textContent = text;
@@ -114,6 +127,7 @@ export class Hud {
       });
       b.append(relicIcon(id), el('span', 'lv', maxLevelOf(id) === 1 ? '★' : String(p.relics[id])));
       b.setAttribute('aria-label', relicName(id));
+      b.dataset.id = id;
       b.setAttribute('aria-pressed', String(this.selected === id));
       box.append(b);
     }

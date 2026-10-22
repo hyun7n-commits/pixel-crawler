@@ -2,6 +2,7 @@
 // Each sound is a few short tones and noise bursts. Swap these for recorded sounds later
 // by changing SOUNDS only; the rest of the game just calls onRunEvent.
 import { T } from '../data/terrain.js';
+import { wait, fissionMs, evolveMs, FISSION_LEAD, FISSION_STEP, EVOLVE_FLASH } from '../ui/beat.js';
 
 const VOLUME = 0.4;
 const MUTE_KEY = 'pixel-crawler-muted';
@@ -144,7 +145,25 @@ const SOUNDS = {
   dodge() { hiss(0.12, { vol: 0.12, freq: 2000, to: 4500, q: 2 }); },
   puff() { hiss(0.35, { vol: 0.15, freq: 900, to: 300, q: 0.6, attack: 0.02 }); },
   levelup() { chime([659, 784, 988, 1319], 0.07, 0.13); },
-  evolve() { chime([523, 659, 784, 1047, 1319, 1568], 0.08, 0.14, 0.3); },
+  // a star candy: a pop, then one bright pip per relic it grows, climbing the scale (다다다닥)
+  candy(n, delay) {
+    hiss(0.2, { vol: 0.14, freq: 5200, type: 'highpass', delay });
+    tone(1800, 0.06, { type: 'triangle', vol: 0.12, to: 900, delay });
+    const scale = [784, 880, 988, 1175, 1319, 1568, 1760, 1976, 2349, 2637];
+    for (let k = 0; k < n; k++) {
+      const f = scale[Math.min(k, scale.length - 1)], t = delay + (FISSION_LEAD + k * FISSION_STEP) / 1000;
+      tone(f, 0.08, { type: 'square', vol: 0.04, delay: t });
+      tone(f * 2, 0.14, { type: 'triangle', vol: 0.11, delay: t });
+    }
+  },
+  // two relics wind up as they slide together, then the flash: a thump and a chime, brighter for legends
+  evolve(tier, start, flash) {
+    const b = [1, 1, 1.12, 1.26][tier || 0];
+    hiss(flash, { vol: 0.12, freq: 300, to: 2600, q: 1.2, attack: flash * 0.8, delay: start });
+    tone(130 * b, 0.6, { vol: 0.3, to: 60, delay: start + flash });
+    chime([523, 659, 784, 1047, 1319, 1568].map(f => f * b), 0.06, 0.14, 0.3, start + flash);
+    if (tier >= 2) chime([1568, 1976, 2349, 3136].map(f => f * b), 0.05, 0.09, 0.35, start + flash + 0.42);
+  },
 };
 
 export function play(name, ...args) {
@@ -180,7 +199,7 @@ export function onRunEvent(type, d) {
     case 'sneak': play('sneak'); break;
     case 'phit': play('hurt'); break;
     case 'kill': play('kill'); break;
-    case 'pickup': play(d.type === 'chest' ? 'chest' : 'gold'); break;
+    case 'pickup': if (d.type !== 'candy') play(d.type === 'chest' ? 'chest' : 'gold'); break;
     case 'boom': case 'gasboom': play('boom'); break;
     case 'alert': play('alert'); break;
     case 'snore': play('snore'); break;
@@ -189,7 +208,8 @@ export function onRunEvent(type, d) {
     case 'dodge': play('dodge'); break;
     case 'puff': play('puff'); break;
     case 'levelup': play('levelup'); break;
-    case 'evolve': play('evolve'); break;
+    case 'evolve': { const ms = evolveMs(d); play('evolve', d.fused ? 0 : d.tier, wait(d, ms) / 1000, EVOLVE_FLASH * ms / 1000); break; }
+    case 'fission': play('candy', d.steps.length, wait(d, fissionMs(d.steps.length)) / 1000); break;
     case 'steal': play('gold'); play('dodge'); break;
     case 'escape': play('puff'); break;
     case 'bones': play('kill'); play('hit'); break;
