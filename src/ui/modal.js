@@ -17,12 +17,18 @@ export function closeModal() {
   talkClose = null;
 }
 
-function openSheet(build) {
+// `onX`: the sheet gets a ✕ in its top right corner that stays put while the sheet scrolls
+function openSheet(build, onX) {
   const m = $('modal');
   m.innerHTML = '';
   const sh = el('div', 'sheet');
   build(sh);
-  m.append(sh);
+  if (onX) {
+    const box = el('div', 'sheet-box'), x = button('x-close', '✕', onX);
+    x.setAttribute('aria-label', '닫기');
+    box.append(sh, x);
+    m.append(box);
+  } else m.append(sh);
   m.hidden = false;
   setTimeout(() => sh.querySelector('button')?.focus({ preventScroll: true }), 0);
 }
@@ -100,10 +106,7 @@ export function showTalk({ who, name, line, build, onClose }) {
     const redraw = () => { const y = sh.scrollTop; body.innerHTML = ''; build(body, redraw); sh.scrollTop = y; };
     redraw();
     sh.append(body);
-    const foot = el('div', 'sheet-foot');
-    foot.append(button('btn', '닫기', () => closeTalk()));
-    sh.append(foot);
-  });
+  }, () => closeTalk());
   talkClose = onClose || (() => {});
   $('modal').onclick = ev => { if (ev.target === $('modal')) closeTalk(); };
 }

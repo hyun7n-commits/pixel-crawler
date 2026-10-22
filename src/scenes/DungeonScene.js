@@ -178,12 +178,14 @@ export class DungeonScene extends Phaser.Scene {
   // ---------- wiring ----------
   attach(run) {
     this.run = run;
+    this.diving = false;
     run.on((type, data) => this.onEvent(type, data));
     if (run.map) this.buildFloor();
   }
 
   detach() {
     this.run = null;
+    this.diving = false;
     this.aim = false;
     this.clearFloor();
   }
@@ -221,6 +223,68 @@ export class DungeonScene extends Phaser.Scene {
     this.cameras.main.centerOn(center(run.p.x), foot(run.p.y) - TILE / 2);
     this.sync(true);
   }
+
+  // Through a burrow: you hop into the hole, the view closes in a circle around you, and the next field
+  // opens around you as you pop out of its hole. The rules have already moved you; this is only the show,
+  // and your next move waits for it (busy). `d.dir`: 1 on, -1 back, 0 the first field of a run.
+  arrive(d) {
+    const ps = this.playerSprite;
+    if (!d.dir || !ps) { this.buildFloor(); this.popOut(); this.iris(true, 420); return; }
+    this.busyUntil = performance.now() + 1100;
+    this.diving = true;
+    const hx = center(d.from.x), hy = foot(d.from.y), k = texScale(ps);
+    this.tweens.killTweensOf(ps);
+    ps.dying = true; // the pose loop leaves it alone from here
+    this.tweens.add({
+      targets: ps, x: hx, y: hy - 5, duration: 140, ease: 'Quad.out',
+      onComplete: () => {
+        this.fx.dust.explode(12, hx, hy - 3);
+        this.tweens.add({ targets: ps, y: hy + 7, scaleX: k * 0.6, scaleY: k * 0.15, duration: 170, ease: 'Quad.in' });
+      },
+    });
+    this.later(120, () => this.iris(false, 340, () => this.later(90, () => {
+      this.diving = false;
+      this.buildFloor();
+      this.popOut();
+      this.iris(true, 420);
+    })));
+  }
+
+  // You pop up out of the hole: squashed flat, then a little hop, then you land.
+  popOut() {
+    const ps = this.playerSprite;
+    if (!ps) return;
+    this.busyUntil = Math.max(this.busyUntil || 0, performance.now() + 450);
+    ps.sqx = 0.6; ps.sqy = 0.2; ps.hop = -4;
+    this.tweens.add({ targets: ps, sqx: 1, sqy: 1, duration: 260, ease: 'Back.out' });
+    this.tweens.add({ targets: ps, hop: 9, duration: 170, ease: 'Quad.out', onComplete: () => this.tweens.add({ targets: ps, hop: 0, duration: 150, ease: 'Quad.in' }) });
+    this.later(60, () => this.fx.dust.explode(14, ps.x, ps.y - 2));
+  }
+
+  // The circle the view closes to (open = false) or opens from, centred on you; done() when it is over.
+  iris(open, ms, done) {
+    const el = document.getElementById('iris');
+    if (!el) { done?.(); return; }
+    const cam = this.cameras.main, box = el.parentElement.getBoundingClientRect(), R = Math.hypot(box.width, box.height);
+    const t0 = performance.now();
+    el.hidden = false;
+    const tick = () => {
+      const f = Math.min(1, (performance.now() - t0) / ms), ps = this.playerSprite;
+      const r = R * (open ? f * f : (1 - f) * (1 - f));
+      let x = box.width / 2, y = box.height / 2;
+      if (ps) {
+        const cv = this.game.canvas.getBoundingClientRect(), v = cam.worldView, s = (cv.width / this.scale.width) * cam.zoom;
+        x = cv.left - box.left + (ps.x - v.x) * s;
+        y = cv.top - box.top + (ps.y - TILE / 2 - v.y) * s;
+      }
+      el.style.background = `radial-gradient(circle at ${x}px ${y}px, transparent ${r}px, #0c0b11 ${r + 1}px)`;
+      if (f < 1) requestAnimationFrame(tick);
+      else { if (open) el.hidden = true; done?.(); }
+    };
+    tick();
+  }
+
+  busy() { return performance.now() < (this.busyUntil || 0); }
 
   makeActor(tex, x, y) {
     const s = this.add.image(center(x), foot(y), tex).setOrigin(0.5, 1);
@@ -321,7 +385,7 @@ export class DungeonScene extends Phaser.Scene {
   // ---------- state -> sprites ----------
   sync(instant = false) {
     const run = this.run;
-    if (!run) return;
+    if (!run || this.diving) return;
     const map = run.map, p = run.p;
     const dur = instant ? 0 : 90;
 
@@ -430,7 +494,7 @@ export class DungeonScene extends Phaser.Scene {
   onEvent(type, d) {
     if (!this.run) return;
     switch (type) {
-      case 'floor': this.buildFloor(); break;
+      case 'floor': this.arrive(d); break;
       case 'turn': this.sync(); this.follow(); break;
       case 'relics': this.sync(); break;
       case 'tiles': this.rebuildAround(d.list, d.soft); break;
@@ -947,7 +1011,8 @@ export class DungeonScene extends Phaser.Scene {
   update(time) {
     const run = this.run, g = this.overlay;
     g.clear(); this.teleGfx.clear(); this.pathGfx.clear(); this.gasGfx.clear(); this.fireGfx.clear(); this.shadowGfx.clear();
-    if (!run || !this.playerSprite) return;
+    // down a burrow, the old field stays on screen while the rules already hold the new one
+    if (!run || !this.playerSprite || this.diving) return;
     const map = run.map, p = run.p;
 
     // lamps flicker
@@ -1165,7 +1230,7 @@ export class DungeonScene extends Phaser.Scene {
     if (who.stoneT > 0) { sx = 1; sy = 1; hop = 0; }
     const base = (who.d?.boss ? 1.25 : 1) * (who.small ? 0.8 : 1);
     const k = texScale(s);
-    if (!s.dying) s.setScale(base * sx * k, base * sy * k);
+    if (!s.dying) s.setScale(base * sx * k * (s.sqx ?? 1), base * sy * k * (s.sqy ?? 1));
     s.setOrigin(0.5 + jitter / TILE, 1 + hop / TILE);
     if (time < s.flashUntil) return;
     let tint = who.d?.boss ? 0xffb0b0 : 0xffffff;

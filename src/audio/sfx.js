@@ -141,8 +141,16 @@ const SOUNDS = {
   alert() { tone(880, 0.05, { type: 'square', vol: 0.05 }); tone(1320, 0.07, { type: 'square', vol: 0.05, delay: 0.05 }); },
   snore() { hiss(0.55, { vol: 0.14, freq: 320, to: 160, type: 'lowpass', attack: 0.25 }); },
   zap() { tone(1400, 0.12, { type: 'sawtooth', vol: 0.06, to: 300 }); hiss(0.1, { vol: 0.15, freq: 5000, type: 'highpass' }); },
-  stairs() { hiss(0.45, { vol: 0.16, freq: 300, to: 1500, q: 2, attack: 0.08 }); },
-  dodge() { hiss(0.12, { vol: 0.12, freq: 2000, to: 4500, q: 2 }); },
+  // into a burrow: a scuffle of dirt and a sliding whistle down (쏙)
+  dive() {
+    hiss(0.18, { vol: 0.16, freq: 900, to: 300, q: 0.7, delay: 0.12 });
+    tone(900, 0.3, { type: 'triangle', vol: 0.12, to: 180, delay: 0.16 });
+  },
+  // and out the other end with a pop (뿅)
+  pop(delay = 0) {
+    hiss(0.12, { vol: 0.14, freq: 700, to: 1600, q: 0.8, delay });
+    tone(320, 0.14, { type: 'triangle', vol: 0.16, to: 900, delay: delay + 0.04 });
+  },  dodge() { hiss(0.12, { vol: 0.12, freq: 2000, to: 4500, q: 2 }); },
   puff() { hiss(0.35, { vol: 0.15, freq: 900, to: 300, q: 0.6, attack: 0.02 }); },
   levelup() { chime([659, 784, 988, 1319], 0.07, 0.13); },
   // a star candy: a pop, then one bright pip per relic it grows, climbing the scale (다다다닥)
@@ -204,7 +212,7 @@ export function onRunEvent(type, d) {
     case 'alert': play('alert'); break;
     case 'snore': play('snore'); break;
     case 'zap': play('zap'); break;
-    case 'floor': play('stairs'); break;
+    case 'floor': if (d.dir) play('dive'); play('pop', d.dir ? 0.62 : 0.05); break;
     case 'dodge': play('dodge'); break;
     case 'puff': play('puff'); break;
     case 'levelup': play('levelup'); break;

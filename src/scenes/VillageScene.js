@@ -255,7 +255,7 @@ export class VillageScene extends Phaser.Scene {
     if (this.houseAt(x, y)) return '빈 집: 아직 아무도 안 산다.';
     const hero = this.heroAt(x, y);
     if (hero) return `${CHARACTERS[hero.id].name}: 부딪히면 오늘은 이 친구가 나간다.`;
-    if (this.ch(x, y) === '>') return '들판 가는 길: 여기로 가면 토벌을 나간다.';
+    if (this.ch(x, y) === '>') return '들판 가는 땅굴: 쏙 들어가면 토벌을 나간다.';
     if (this.ch(x, y) === 'L') return '반딧불 등';
     return '';
   }
@@ -339,7 +339,21 @@ export class VillageScene extends Phaser.Scene {
     this.hooks.onStep?.(ps.stepFrame === 1);
     const find = this.finds.find(f => f.x === x && f.y === y);
     if (find) this.time.delayedCall(STEP_MS - 20, () => this.pickUp(find));
-    if (this.ch(x, y) === '>') { this.path = []; this.time.delayedCall(STEP_MS, () => this.hooks.onLeave?.()); }
+    if (this.ch(x, y) === '>') { this.path = []; this.time.delayedCall(STEP_MS, () => this.dive()); }
+  }
+
+  // Into the burrow out to the fields: a little hop, then down the hole, then the run begins.
+  dive() {
+    const ps = this.ps, k = texScale(ps), y = ps.y;
+    ps.diving = true;
+    this.hooks.onDive?.();
+    this.tweens.add({
+      targets: ps, y: y - 5, duration: 140, ease: 'Quad.out',
+      onComplete: () => this.tweens.add({
+        targets: ps, y: y + 7, scaleX: k * 0.6, scaleY: k * 0.15, duration: 170, ease: 'Quad.in',
+        onComplete: () => this.time.delayedCall(160, () => { ps.diving = false; ps.setScale(k).setY(y); this.hooks.onLeave?.(); }),
+      }),
+    });
   }
 
   // bumping into someone: a villager talks, a hero takes your place for today
@@ -497,7 +511,7 @@ export class VillageScene extends Phaser.Scene {
     all.forEach((s, i) => {
       const breathe = s === ps && walking ? 1 : 1 + 0.035 * Math.sin(time / 420 + i * 1.7);
       const k = texScale(s);
-      s.setScale(k, k * breathe).setOrigin(0.5, 1 + (s.hop || 0) / TILE);
+      if (!s.diving) s.setScale(k, k * breathe).setOrigin(0.5, 1 + (s.hop || 0) / TILE);
       g.fillStyle(0x000000, 0.28);
       g.fillEllipse(s.x, s.y - 1.5, 11, 4);
     });

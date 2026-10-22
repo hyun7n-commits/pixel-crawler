@@ -40,7 +40,7 @@ const hud = new Hud({
   onBag: () => setBag(!$('game').classList.contains('bag-open')),
 });
 
-const canAct = () => run && !run.over && !modalOpen() && run.canAct();
+const canAct = () => run && !run.over && !modalOpen() && run.canAct() && !scene?.busy();
 const clearPath = () => { path = []; chase = null; if (scene) scene.path = path; };
 const tipAt = () => pinned || scene?.hover;
 
@@ -143,6 +143,7 @@ const villageHooks = {
     sfx.play('swap');
     renderVillageHud(meta);
   },
+  onDive: () => { sfx.unlockAudio(); sfx.play('dive'); },
   onLeave: () => startRun(),
   onArrive: id => {
     meta.village.seen[id] = true;
@@ -175,7 +176,8 @@ function onRunEvent(type, d) {
   sfx.onRunEvent(type, d);
   sfx.setHeartbeat(lowHealth(run));
   if (type === 'log') hud.log(d.text, d.cls);
-  if (type === 'banner') hud.banner(d.text);
+  // a new field's name shows once you have popped out of the burrow
+  if (type === 'banner') setTimeout(() => hud.banner(d.text), scene?.busy() ? 650 : 0);
   if (type === 'discover') hud.banner(`새 발견! ${d.d.combo}`);
   if (type === 'evolve') showEvolve(d);
   if (type === 'fission') hud.fission(d);

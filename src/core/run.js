@@ -143,8 +143,9 @@ export class Run {
 
   // ---------- floors ----------
   start() {
+    this.arrival = { dir: 0 };
     this.genFloor();
-    this.log(`${josa(this.char.name, '으로', '로')} 들판에 나왔다. 표지판을 찾아 앞으로 가자.`, 'good');
+    this.log(`${josa(this.char.name, '으로', '로')} 들판에 나왔다. 깃발 꽂힌 땅굴을 찾아 앞으로 가자.`, 'good');
     this.emit('banner', { text: `1구역 · ${this.zone.name}` });
     this.afterTurn();
   }
@@ -170,7 +171,9 @@ export class Run {
     this.bandageUsed = 0;
     this.refreshDoors();
     computeFOV(this.map, this.p.x, this.p.y, this.stat().sight);
-    this.emit('floor');
+    // `dir`: 1 down a burrow to the next field, -1 back, 0 the first field; `from`: the hole you went into
+    this.emit('floor', this.arrival || {});
+    this.arrival = null;
     this.spotVeins();
   }
 
@@ -302,6 +305,7 @@ export class Run {
 
   // dir = 1 down, -1 up. Floors you have been on come back exactly as you left them.
   changeFloor(dir) {
+    this.arrival = { dir, from: { x: this.p.x, y: this.p.y } };
     this.floors[this.floor] = {
       map: this.map, enemies: this.enemies.filter(e => e.hp > 0), pickups: this.pickups,
       boss: this.boss, has: this.has, gasActive: this.gasActive, overheard: this.overheard, respawnT: this.respawnT,
@@ -522,7 +526,7 @@ export class Run {
         if (near) m.explored[idx(x, y)] = 1;
       }
       const traps = revealTraps(this);
-      this.log(`지도를 펼쳤다. 표지판 위치가 보인다.${traps ? ` 숨은 함정 ${traps}개도 표시돼 있다.` : ''}`, 'good');
+      this.log(`지도를 펼쳤다. 땅굴 위치가 보인다.${traps ? ` 숨은 함정 ${traps}개도 표시돼 있다.` : ''}`, 'good');
     }
     this.endTurn();
     return true;
@@ -686,7 +690,7 @@ export class Run {
         this.map.tiles[idx(up.x, up.y)] = UPSTAIRS;
         this.map.ter[idx(up.x, up.y)] = T.NONE;
         this.emit('stairs', { x: up.x, y: up.y });
-        this.log('다음 구역 표지판이 나타나고, 돌아가는 길도 열렸다.', 'good');
+        this.log('다음 구역으로 가는 땅굴이 뚫리고, 돌아가는 굴도 열렸다.', 'good');
       }
       this.addGold(30 * (this.floor / 3));
       this.dropNear(e.x, e.y, { type: 'candy', n: B.candySteps(this.floor) + B.CANDY_BOSS });

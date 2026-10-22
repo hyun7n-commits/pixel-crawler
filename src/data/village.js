@@ -4,7 +4,7 @@
 // (`panel`, built in ui/hub.js). Until then their house stands empty with the door boarded up.
 // Some of them like a stroll round the loop (`stroll`: ms between steps; the rival jogs); the others
 // keep to their doors.
-//   map: '#' hedge, '.' grass, ':' path, '~' pond, '*' flowers, 'L' firefly lamp, '>' the signpost out
+//   map: '#' hedge, '.' grass, ':' path, '~' pond, '*' flowers, 'L' firefly lamp, '>' the burrow out to the fields
 
 import { josa } from '../core/util.js';
 

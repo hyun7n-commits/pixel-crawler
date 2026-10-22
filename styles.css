@@ -82,6 +82,9 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #phaser { position: absolute; inset: 0; }
 #banner { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); font-family: var(--font-display); font-size: clamp(22px, 4vw, 34px); color: var(--gold); text-shadow: 3px 3px 0 #000; pointer-events: none; white-space: nowrap; opacity: 0; transition: opacity .3s; }
 #banner.show { opacity: 1; }
+/* the circle the view closes to when you dive into a burrow (DungeonScene.iris) */
+#iris { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+#iris[hidden] { display: none; }
 /* the evolution moment (ui/evo.js): two relics slide together, flash, and the new one pops out */
 .evocard { position: absolute; left: 50%; top: 27%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; z-index: 5; animation: evo-life var(--ms) linear forwards; --c: #f4cf4f; }
 .evocard.t2 { --c: #f08c3a; } .evocard.t3 { --c: #c48cff; } .evocard.tf { --c: #6fe0e0; }
@@ -208,6 +211,11 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .choice .tag.new { background: var(--accent); color: var(--accent-ink); }
 .choice .ds { font-size: 12.5px; color: var(--fg); line-height: 1.4; }
 .choice .recipe { justify-content: center; }
+.sheet-box { position: relative; width: min(640px, 100%); max-height: 100%; display: flex; }
+.sheet-box .sheet { width: 100%; }
+.x-close { position: absolute; top: 8px; right: 8px; width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--line); background: var(--panel-2); color: var(--fg); font-size: 18px; line-height: 1; display: grid; place-items: center; padding: 0; z-index: 2; cursor: pointer; }
+.x-close:hover { border-color: var(--gold); color: var(--gold); }
+.sheet.talk .talk-head { padding-right: 40px; }
 .sheet-foot { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
 .summary .stat b { font-size: 24px; }
