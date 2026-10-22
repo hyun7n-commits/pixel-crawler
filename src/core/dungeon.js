@@ -10,9 +10,9 @@ import { MAP_W as W, MAP_H as H, SIGHT } from '../data/balance.js';
 import { T } from '../data/terrain.js';
 import { rint, pick, DIRS8 } from './util.js';
 
-export const WALL = 0, FLOOR = 1, STAIRS = 2, DOOR = 3, ORE = 4, UPSTAIRS = 5, GRAVE = 6, LOCKED = 7, HIVE = 8;
+export const WALL = 0, FLOOR = 1, STAIRS = 2, DOOR = 3, ORE = 4, UPSTAIRS = 5, GRAVE = 6, LOCKED = 7, HIVE = 8, WEED = 9;
 // tiles you bump into to use: mine, dig, unlock, take the honey
-export const isBump = t => t === ORE || t === GRAVE || t === LOCKED || t === HIVE;
+export const isBump = t => t === ORE || t === GRAVE || t === LOCKED || t === HIVE || t === WEED;
 export const isStairs = t => t === STAIRS || t === UPSTAIRS;
 
 export function createMap() {

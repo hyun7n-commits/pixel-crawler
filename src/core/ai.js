@@ -10,8 +10,8 @@
 import { lineOfSight, distMap, idx, passable } from './dungeon.js';
 import { SLEEP_MIN } from '../data/terrain.js';
 import { NPC_TEXT } from '../data/npcs.js';
-import { MAP_W, BEE_HOME } from '../data/balance.js';
-import { cheb, shuffle, josa, rint, DIRS8 } from './util.js';
+import { MAP_W, BEE_HOME, SCREAM_RANGE } from '../data/balance.js';
+import { cheb, shuffle, josa, rint, pick, DIRS8 } from './util.js';
 import { onEnter } from './world.js';
 
 export const WAKE_AT = 10;
@@ -36,6 +36,7 @@ export function enemyAct(run, e, dmP) {
   if (hive && !run.calm(e) && cheb(p, hive) > BEE_HOME) { e.angry = false; e.state = 'wander'; e.aim = false; }
   if (run.calm(e)) { if (hive && e.state !== 'sleep') hover(run, e, hive); else calmAct(run, e); return; }
   if (e.state === 'sleep') { sleepTick(run, e); return; }
+  if (d.screams) { scream(run, e, dmP); return; }
   if (d.slow) { e.skip = !e.skip; if (e.skip) return; }
   e.timer++;
   if (e.burn > 0 && !d.boss && Math.random() < 0.5) { randomStep(run, e); return; }
@@ -314,6 +315,27 @@ function flee(run, e, dm, sees) {
     run.damagePlayer(e.atk, e, 'melee');
   }
   if (!sees && dm[idx(e.x, e.y)] >= 8) { e.state = 'wander'; e.target = null; }
+}
+
+// A screaming root runs from you yelling every turn, so everyone near comes to see. Caught, it goes
+// quiet; asleep (pollen), it hushes; left alone, it digs back into the ground after a while.
+function scream(run, e, dm) {
+  if (--e.left <= 0) {
+    e.hp = 0;
+    run.emit('burrow', { enemy: e });
+    if (run.isVisible(e.x, e.y)) run.log('비명 뿌리가 땅속으로 쏙 숨었다. 조용해졌다.');
+    return;
+  }
+  const safe = safetyMap(dm);
+  let best = null, bs = safe[idx(e.x, e.y)];
+  for (const [dx, dy] of shuffle(DIRS8.slice())) {
+    const nx = e.x + dx, ny = e.y + dy;
+    if (canStep(run, e, nx, ny) && safe[idx(nx, ny)] < bs) { bs = safe[idx(nx, ny)]; best = [nx, ny]; }
+  }
+  if (best) moveEnemy(run, e, ...best);
+  if (e.left % 2 === 0) run.say(e, pick(['꺄아아!', '꺄악!', '으아앙!', '살려줘!']));
+  run.emit('scream', { x: e.x, y: e.y });
+  run.noise(e.x, e.y, SCREAM_RANGE);
 }
 
 // Brogue's "safety map": start from your distance times -1.2, then let every tile settle to at most

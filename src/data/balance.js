@@ -122,4 +122,11 @@ export const RING_CHANCE = [0.2, 0.7, 0.3];
 export const SPRING_CHANCE = [0, 0.25, 0.7];
 export const SPRING_HEAL = 1;
 export const HIVE_SMOKE = 2;
+// 풀뽑기 밭: the chance a field has a weed patch, by zone (most out on the meadow); each weed pulled
+// pays a little, one or two are screaming roots that run off yelling (heard SCREAM_RANGE away) for
+// ROOT_TURNS turns before they dig back in, and the last weed of the patch hides a star candy
+export const WEED_CHANCE = [0.65, 0.35, 0.15];
+export const weedGold = floor => (1 + Math.floor((floor - 1) / FLOORS_PER_ZONE)) * (2 + Math.floor(Math.random() * 2));
+export const SCREAM_RANGE = 7;
+export const ROOT_TURNS = 8;
 export const graveGold = floor => (2 + Math.floor((floor - 1) / FLOORS_PER_ZONE)) * (3 + Math.floor(Math.random() * 4));

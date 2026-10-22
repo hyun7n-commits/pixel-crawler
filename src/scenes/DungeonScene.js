@@ -8,7 +8,7 @@ import { TILE, buildTextures, wallKey, waterKey, shadeKey, floorKey, oreFrame, d
 import { CHARACTERS } from '../data/characters.js';
 import { ITEMS } from '../data/items.js';
 import { T, TERRAIN, GASES, GAS_KEYS } from '../data/terrain.js';
-import { idx, inMap, lineOfSight, WALL, STAIRS, DOOR, ORE, UPSTAIRS, GRAVE, LOCKED, HIVE } from '../core/dungeon.js';
+import { idx, inMap, lineOfSight, WALL, STAIRS, DOOR, ORE, UPSTAIRS, GRAVE, LOCKED, HIVE, WEED } from '../core/dungeon.js';
 import { WAKE_AT } from '../core/ai.js';
 import { BOMB_RANGE } from '../core/run.js';
 import { ORE_HITS } from '../data/balance.js';
@@ -208,6 +208,7 @@ export class DungeonScene extends Phaser.Scene {
     this.light = null;
     this.tileImgs = [];
     this.waterImgs = new Set();
+    this.shyWeeds = new Set();
     this.enemySprites = {};
     this.pickupSprites = {};
     this.doorImgs = {};
@@ -322,7 +323,7 @@ export class DungeonScene extends Phaser.Scene {
   buildTile(x, y) {
     if (!inMap(x, y)) return;
     const map = this.run.map, i = idx(x, y), t = map.tiles[i], ter = map.ter[i], zi = this.zi;
-    (this.tileImgs[i] || []).forEach(img => { this.waterImgs.delete(img); img.destroy(); });
+    (this.tileImgs[i] || []).forEach(img => { this.waterImgs.delete(img); this.shyWeeds.delete(img); img.destroy(); });
     const imgs = [];
     const add = (key, depth = D.tiles) => {
       const img = this.add.image(x * TILE, y * TILE, key).setOrigin(0).setDepth(depth).setVisible(false);
@@ -361,6 +362,11 @@ export class DungeonScene extends Phaser.Scene {
       if (t === LOCKED) add('t_doorLocked', D.ter);
       if (t === GRAVE) add(map.bigGrave === i ? 't_graveBig' : 't_grave', D.ter);
       if (t === HIVE) add(map.hive?.honey ? 't_hive' : 't_hiveEmpty', D.ter);
+      if (t === WEED) {
+        const w = add('t_weed', D.ter);
+        // a screaming root trembles now and then (see update)
+        if (map.weeds?.roots.includes(i)) { w.home = x * TILE; this.shyWeeds.add(w); }
+      }
       if (t === ORE) {
         const ore = map.ores.find(o => o.cells.some(c => idx(c.x, c.y) === i));
         const [key, frame] = ore ? oreFrame(this, ore, x, y) : ['t_ore_copper'];
@@ -588,6 +594,32 @@ export class DungeonScene extends Phaser.Scene {
         this.fx.gold.explode(18, center(d.x), center(d.y));
         this.fx.heal.explode(14, center(this.run.p.x), center(this.run.p.y));
         this.float(this.run.p.x, this.run.p.y, `♥+${d.n}`, '#ff9fb4', 0, 12);
+        this.face('sparkle', 1100);
+        break;
+      case 'pluck':
+        // out comes the weed with a puff of leaves and soil
+        this.fx.leaf.explode(d.root ? 16 : 10, center(d.x), center(d.y));
+        this.fx.dust.explode(6, center(d.x), center(d.y) + 4);
+        break;
+      case 'scream': {
+        // a pink ring of noise round the root, and the field hears it
+        this.noiseRing(d.x, d.y, 2, 0xff8fb0);
+        const e = this.run.enemyAt(d.x, d.y), s = this.enemySprites[e?.id];
+        if (s) this.emote(s, '!', 500);
+        // just pulled: its sprite turns up a moment later, then it yells
+        if (d.first && e) this.time.delayedCall(80, () => this.say(e, '꺄아아악!'));
+        break;
+      }
+      case 'burrow': {
+        // it digs back into the ground
+        const s = this.enemySprites[d.enemy.id];
+        this.fx.dust.explode(14, center(d.enemy.x), center(d.enemy.y) + 4);
+        if (s) { s.dying = true; this.tweens.add({ targets: s, scaleY: 0, alpha: 0, duration: 260, onComplete: () => { s.destroy(); delete this.enemySprites[d.enemy.id]; } }); }
+        break;
+      }
+      case 'weedsDone':
+        this.fx.spark.explode(24, center(d.x), center(d.y));
+        this.float(d.x, d.y, '다 뽑았다!', '#b5e08a', 120, 11);
         this.face('sparkle', 1100);
         break;
       case 'warp': {
@@ -1126,6 +1158,11 @@ export class DungeonScene extends Phaser.Scene {
       this.waterFrame = wf;
       for (const img of this.waterImgs) img.setTexture(waterKey(this, this.zi, wf, img.shore, img.warm));
     }
+    // a screaming root in the weed patch gives itself away with a shiver now and then
+    for (const w of this.shyWeeds) {
+      const ph = (time + w.home * 37) % 2300;
+      w.x = w.home + (w.visible && ph < 260 ? Math.round(Math.sin(ph / 22)) * 0.7 : 0);
+    }
     // a hot spring steams
     if (map.spring && time > (this.steamAt || 0)) {
       this.steamAt = time + 140;
@@ -1387,6 +1424,7 @@ export class DungeonScene extends Phaser.Scene {
         case 'garg': sx = 1 + 0.05 * Math.sin(t / 150); break; // crawling
         case 'knight': if (t % 3000 < 220) { sx = 1.07; sy = 0.93; } break; // a snort
         case 'turtle': rot = 0.03 * Math.sin(t / 900); break;
+        case 'root': hop = Math.max(hop, Math.abs(Math.sin(t / 60)) * 2); rot = 0.12 * Math.sin(t / 45); break; // running about in a panic
       }
     }
     // you, at ease: the worker stretches, the rogue crouches and peeks both ways, the mage floats,

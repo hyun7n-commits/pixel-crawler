@@ -147,6 +147,12 @@ const SOUNDS = {
   warp() { chime([1047, 1319, 1568, 2093], 0.035, 0.09); hiss(0.18, { vol: 0.05, freq: 4000, to: 8000, type: 'highpass' }); },
   // the honey stump: a sweet glug, the swarm's angry buzz
   honey() { chime([784, 1047, 1319], 0.06, 0.12); },
+  // 풀뽑기: a soft pop of roots coming loose; the screaming root's squeal, wobbling up and down
+  pluck() { hiss(0.12, { vol: 0.12, freq: 1200, to: 500, q: 0.8 }); tone(520, 0.08, { type: 'triangle', vol: 0.1, to: 900, delay: 0.03 }); },
+  scream() {
+    tone(1250, 0.32, { type: 'square', vol: 0.035, to: 1700 });
+    tone(1700, 0.3, { type: 'square', vol: 0.03, to: 1150, delay: 0.3 });
+  },
   buzz() { tone(210, 0.45, { type: 'sawtooth', vol: 0.035, to: 250 }); tone(226, 0.45, { type: 'sawtooth', vol: 0.03, to: 196, delay: 0.04 }); },
   boom() { hiss(0.8, { vol: 0.65, freq: 1800, to: 70, type: 'lowpass' }); tone(70, 0.6, { vol: 0.5, to: 28 }); },
   alert() { tone(880, 0.05, { type: 'square', vol: 0.05 }); tone(1320, 0.07, { type: 'square', vol: 0.05, delay: 0.05 }); },
@@ -242,6 +248,10 @@ export function onRunEvent(type, d) {
     case 'sunbeam': play('rise', 2); break;
     case 'block': play('hit'); play('dodge'); break;
     case 'honey': play('honey'); break;
+    case 'pluck': play('pluck'); break;
+    case 'scream': play('scream'); break;
+    case 'burrow': play('puff'); break;
+    case 'weedsDone': play('levelup'); break;
     case 'warp': play('warp'); break;
     case 'swarm': play('buzz'); break;
     case 'smoke': play('puff'); play('snore'); break;

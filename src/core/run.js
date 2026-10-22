@@ -12,7 +12,7 @@ import { T, DISCOVERIES, GOSSIP, SLEEP_TALK, FLOOR_HINTS, isTrap } from '../data
 import { rnd, rint, pick, shuffle, cheb, josa, DIRS8 } from './util.js';
 import {
   createMap, carveRooms, carveArena, idx, inMap, passable, distMap, lineOfSight, computeFOV,
-  FLOOR, STAIRS, ORE, UPSTAIRS, GRAVE, LOCKED, DOOR, HIVE,
+  FLOOR, STAIRS, ORE, UPSTAIRS, GRAVE, LOCKED, DOOR, HIVE, WEED,
 } from './dungeon.js';
 import { decorate, decorateArena, placeTraps } from './decorate.js';
 import { placeSpecials, SET_PIECES } from './specials.js';
@@ -425,6 +425,7 @@ export class Run {
     if (map.tiles[i] === GRAVE) { openGrave(this, nx, ny); this.endTurn(); return true; }
     if (map.tiles[i] === LOCKED) return this.unlock(nx, ny);
     if (map.tiles[i] === HIVE) return this.takeHoney(nx, ny);
+    if (map.tiles[i] === WEED) return this.pullWeed(nx, ny);
     if (!this.passable(nx, ny)) return false;
     p.x = nx; p.y = ny;
     this.trail.push({ x: nx, y: ny });
@@ -481,6 +482,35 @@ export class Run {
     this.log(`벌집에서 꿀단지를 꺼내 먹었다! 최대 체력 +${n}`, 'good');
     if (angerSwarm(this)) this.log('윙윙! 벌들이 화났다! 벌집에서 멀리 달아나면 돌아간다.', 'warn');
     else if (this.enemies.some(e => e.d.swarm && e.hp > 0)) this.log('벌들이 쿨쿨 자는 사이에 살짝 꺼냈다.', 'good');
+    this.endTurn();
+    return true;
+  }
+
+  // 풀뽑기: pull a weed for a little pay (the spot is left bare). A screaming root jumps out yelling and runs (ai.js scream);
+  // the last weed of the patch has a star candy under it.
+  pullWeed(x, y) {
+    const map = this.map, i = idx(x, y), patch = map.weeds || { left: 1, roots: [] };
+    map.tiles[i] = FLOOR;
+    map.ter[i] = T.NONE;
+    patch.left--;
+    this.emit('tiles', { list: [i], soft: true });
+    const root = patch.roots.includes(i);
+    this.emit('pluck', { x, y, root });
+    if (root) {
+      const e = this.spawnEnemy('root', x, y);
+      Object.assign(e, { state: 'flee', left: B.ROOT_TURNS });
+      this.emit('scream', { x, y, first: true });
+      this.noise(x, y, B.SCREAM_RANGE);
+      this.log('잡초를 뽑았더니 비명 뿌리였다! 꺄아아 소리에 적들이 몰려온다!', 'warn');
+    } else {
+      this.addGold(B.weedGold(this.floor));
+      if (!this.told.weed) { this.told.weed = true; this.log('잡초를 쏙 뽑았다. 풀뽑기 일당이 조금 나온다.', 'good'); }
+    }
+    if (patch.left === 0) {
+      this.pickups.push({ x, y, type: 'candy' });
+      this.log('밭을 다 뽑았다! 마지막 풀 밑에서 별사탕이 나왔다!', 'good');
+      this.emit('weedsDone', { x, y });
+    }
     this.endTurn();
     return true;
   }
@@ -935,7 +965,7 @@ export class Run {
     let woke = 0;
     const heard = [];
     for (const e of this.enemies) {
-      if (e.hp <= 0 || cheb(e, { x, y }) > r) continue;
+      if (e.hp <= 0 || e.d.screams || cheb(e, { x, y }) > r) continue;
       const before = e.state;
       if (rouse(this, e, 'noise', x, y)) woke++;
       if (e.state === 'search' && before !== 'search') heard.push(e);

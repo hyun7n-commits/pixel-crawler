@@ -6,6 +6,8 @@
 //            stole on this floor) and always lets its keeper out.
 //   statue - a scarecrow stands over a chest. Take the chest and the scarecrow starts to walk.
 //   traps  - a little trap puzzle between the door and a chest (see traps below).
+//   weeds  - 풀뽑기 밭: weeds in rows to pull, a little pay each. One (two in a big patch) is a screaming
+//            root that trembles now and then; pull it and it runs off yelling. The last weed hides a star candy.
 //   hive   - a honey stump in a grassy patch, its bees humming round it. Bump it for the honey pot
 //            (more max HP for the run) and every bee that is awake comes after you, until you get
 //            far enough away. Smoke from a fire next to it, or sleepy pollen, puts them to sleep first.
@@ -15,11 +17,11 @@
 // Nothing here touches the run directly: placeSpecials returns what to add.
 
 import { T } from '../data/terrain.js';
-import { idx, FLOOR, DOOR, GRAVE, LOCKED, HIVE, distMap } from './dungeon.js';
+import { idx, FLOOR, DOOR, GRAVE, LOCKED, HIVE, WEED, distMap } from './dungeon.js';
 import { pick, shuffle, DIRS8 } from './util.js';
 import * as B from '../data/balance.js';
 
-export const SET_PIECES = new Set(['vault', 'grave', 'statue', 'traps', 'hive']);
+export const SET_PIECES = new Set(['vault', 'grave', 'statue', 'traps', 'hive', 'weeds']);
 
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 const inRoom = (r, x, y) => x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
@@ -114,11 +116,15 @@ export function placeSpecials(map, rooms, deco, ctx) {
     statue: (r) => r.w >= 5 && r.h >= 5 && ctx.floor >= 2,
     traps: (r, i) => leaf(i) && Math.min(r.w, r.h) >= 3 && Math.max(r.w, r.h) >= 5 && r.w * r.h <= 35,
     hive: (r) => r.w >= 4 && r.h >= 4 && hiveSpots(map, r).length > 0,
+    weeds: (r) => r.w >= 4 && r.h >= 3,
   };
-  const make = { grave, statue, traps, hive };
+  const make = { grave, statue, traps, hive, weeds };
+  const zone = Math.min(2, Math.floor((ctx.floor - 1) / B.FLOORS_PER_ZONE));
+  const chance = { hive: B.HIVE_CHANCE, weeds: B.WEED_CHANCE[zone] };
   let made = 0;
-  for (const kind of shuffle(['grave', 'statue', 'traps', 'hive'])) {
-    if (made >= (ctx.floor === 1 ? 1 : 2) || Math.random() > (kind === 'hive' ? B.HIVE_CHANCE : B.SPECIAL_CHANCE)) continue;
+  // the weed patch, the meadow's everyday job, gets the first pick of the rooms
+  for (const kind of ['weeds', ...shuffle(['grave', 'statue', 'traps', 'hive'])]) {
+    if (made >= (ctx.floor === 1 ? 1 : 2) || Math.random() > (chance[kind] ?? B.SPECIAL_CHANCE)) continue;
     const fits = ids().filter(i => fit[kind](rooms[i], i));
     if (!fits.length) continue;
     const i = pick(fits);
@@ -126,7 +132,7 @@ export function placeSpecials(map, rooms, deco, ctx) {
     make[kind](map, rooms[i], out, ctx);
     made++;
   }
-  if (Math.random() < B.RING_CHANCE[Math.min(2, Math.floor((ctx.floor - 1) / B.FLOORS_PER_ZONE))]) rings(map, rooms, ids());
+  if (Math.random() < B.RING_CHANCE[zone]) rings(map, rooms, ids());
   return out;
 }
 
@@ -188,6 +194,26 @@ function statue(map, r, out) {
   if (!behind) return;
   out.enemies.push({ type: 'statue', x: at.x, y: at.y, state: 'stone' });
   out.pickups.push({ x: behind.x, y: behind.y, type: 'chest', guarded: true });
+}
+
+// 풀뽑기 밭: rows of weeds on every other line, broken every third tile (so there is always a way
+// between them), a little grass round them. Which ones are screaming roots is kept in map.weeds.roots; the scene makes them tremble.
+function weeds(map, r) {
+  const nearDoor = t => doorsOf(map, r).some(d => cheb(t, d.in) <= 1);
+  const spots = shuffle(floorTiles(map, r).filter(t => (t.y - r.y) % 2 === 1 && (t.x - r.x) % 3 !== 0 && !nearDoor(t)));
+  const list = spots.slice(0, Math.min(spots.length, Math.max(4, Math.min(9, Math.round(r.w * r.h / 5)))));
+  if (list.length < 3) return;
+  for (const t of list) map.tiles[idx(t.x, t.y)] = WEED;
+  // never wall anything off
+  const door = doorsOf(map, r)[0];
+  for (const t of list) {
+    const dm = distMap(map, door.in.x, door.in.y);
+    if (floorTiles(map, r).every(f => dm[idx(f.x, f.y)] < 9999)) break;
+    map.tiles[idx(t.x, t.y)] = FLOOR;
+  }
+  const ids = list.map(t => idx(t.x, t.y)).filter(i => map.tiles[i] === WEED);
+  map.weeds = { left: ids.length, roots: shuffle(ids.slice()).slice(0, ids.length >= 7 ? 2 : 1) };
+  for (const t of floorTiles(map, r)) if (Math.random() < 0.3) map.ter[idx(t.x, t.y)] = T.GRASS;
 }
 
 // where the stump can stand: open ground all round it (so it never cuts a way off), not by a door

@@ -42,7 +42,8 @@ export function loadMeta() {
         found: { ...m.found },
         recipes: { ...m.recipes, ...oldLegends(m.legends) },
         ores: { ...m.ores },
-        critters: { ...m.critters },
+        // saves from before the critter book already knew the bosses they beat
+        critters: m.critters ? { ...m.critters } : Object.fromEntries((m.stats?.bosses || []).map(b => [b, 1])),
         village: { seen: { ...m.village?.seen } },
         story: { ...m.story },
         home: Array.isArray(m.home) ? m.home : [],

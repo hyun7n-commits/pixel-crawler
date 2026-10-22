@@ -13,6 +13,8 @@
 // gimmick: not part of a zone's roster; placed by special rooms and grows with the zone (see gimmickScale)
 // swarm: bees of the honey stump (map.hive); anger one and every one awake comes, and they all go
 //   home once you are far enough from the stump
+// screams: a screaming root pulled from a weed patch; it never fights, only runs off yelling (every
+//   critter nearby hears it) until it is caught or digs back in (ai.js scream)
 // npc: someone to talk to; bumping into them talks instead of attacking, and they cannot be hurt
 
 export const ENEMIES = {
@@ -35,6 +37,8 @@ export const ENEMIES = {
   wraith:   { name: '화난 청설모', sprite: 'wraith', hp: 8, atk: 3, xp: 4, gimmick: true, tip: '도토리 창고를 파헤쳐서 화가 났다.' },
   thief:    { name: '리본 도둑 들쥐', sprite: 'thief', hp: 14, atk: 3, xp: 8, gimmick: true, quest: true,
               tip: '울보 아기새의 리본을 물고 있다.' },
+  root:     { name: '비명 뿌리', sprite: 'root', hp: 3, atk: 0, xp: 2, screams: true, gimmick: true,
+              tip: '풀밭에 숨어 있다가 뽑히면 꺄아아 소리치며 달아난다. 그 소리에 적이 몰려온다. 잡으면 조용해지고, 놔두면 잠시 뒤 땅속으로 숨는다.' },
   bee:      { name: '꿀벌', sprite: 'bee', hp: 4, atk: 1, xp: 1, fast: true, peaceful: true, swarm: true, gimmick: true,
               tip: '벌집 둘레를 윙윙 맴돈다. 벌집이나 벌을 건드리면 떼로 덤비지만, 멀리 달아나면 집으로 돌아간다.' },
   ghost:    { name: '울보 아기새', sprite: 'ghostNpc', hp: 1, atk: 0, xp: 0, npc: true, peaceful: true, tip: '말을 걸려면 부딪혀 보자.' },
