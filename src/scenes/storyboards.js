@@ -4,8 +4,9 @@
 // The view is 8 x 5 tiles (StoryScene VIEW); ground and hedges run on past it for wide screens.
 //
 // The story in short: a new worker moves to the little village at the edge of the fields with nothing
-// but a straw hat and a debt. The fields toss and turn every night, so every morning the paths are
-// new. The guild pays for 탐험 jobs and the sparkle boulders are money; whoever faints out there is
+// but a straw hat and a debt. The fields toss and turn every night, so the paths are new each time,
+// and the sparkle boulders only shine in the dark: the work is done at night, by lantern light.
+// The guild pays for 탐험 jobs and the sparkle boulders are money; whoever faints out there is
 // carried home by the guild. Beat the boss at the end of a zone and you get that zone's license;
 // all three, and there is a big prize. (The prize is a house of your own.)
 
@@ -59,7 +60,7 @@ const intro = [
     },
     lines: [
       { text: '들판 끝에 작은 마을이 있다.' },
-      { text: '이 들판은 밤마다 뒤척인다. 아침이면 길이 몽땅 바뀌어 있다.', at: (k, c) => k.toss(c.hedges) },
+      { text: '이 들판은 밤마다 뒤척인다. 하룻밤 새 길이 몽땅 바뀐다.', at: (k, c) => k.toss(c.hedges) },
     ],
   },
   { // the new worker moves in
@@ -83,7 +84,7 @@ const intro = [
     lines: [
       { who: '조합장', text: '일하러 왔다고? 마침 잘됐네.', at: (k, c) => k.hop(c.boss) },
       {
-        who: '조합장', text: '들판엔 말썽쟁이들이 산다네. 탐험하고 오면 일당을 주지.',
+        who: '조합장', text: '들판엔 말썽쟁이들이 산다네. 밤에 탐험하고 오면 일당을 주지.',
         at: (k, c) => {
           const rat = k.actor('rat', 0.5, 2.4), slime = k.actor('slime', 7, 2.4, { flip: true });
           for (const m of [rat, slime]) { m.setAlpha(0); m.y -= 10; k.tweens.add({ targets: m, alpha: 1, y: m.y + 10, duration: 260, ease: 'Back.out' }); }
@@ -92,11 +93,11 @@ const intro = [
       },
     ],
   },
-  { // the sparkle boulders: money, but loud
+  { // the sparkle boulders: money, but loud (and they only shine at night)
     build(k) {
-      k.sky('day');
-      k.ground(HOME_ZI, 2);
-      k.hedge(HOME_ZI, L, R, 1);
+      k.sky('night');
+      k.ground(HOME_ZI, 2, NIGHT);
+      k.hedge(HOME_ZI, L, R, 1, NIGHT);
       const rock = k.keep(k.add.image(4.6 * 16 + 8, 3 * 16 + 16, 't_ore_gold').setOrigin(0.5, 1).setDepth(4.03).setScale(1.5));
       const hero = k.actor('adv', 3, 3, { face: 'grit' });
       k.breathe(hero);
@@ -104,7 +105,7 @@ const intro = [
     },
     lines: [
       {
-        text: '들판 곳곳의 반짝 바위. 깨면 반짝돌이 쏟아진다.',
+        text: '반짝 바위는 밤에만 반짝인다. 깨면 반짝돌이 쏟아진다.',
         at: (k, c) => {
           for (let i = 0; i < 3; i++) k.time.delayedCall(i * 380, () => { k.tweens.add({ targets: c.hero, x: c.hero.x + 4, duration: 70, yoyo: true }); k.sparkle(4.6, 3, 6); });
           k.time.delayedCall(1200, () => { k.tweens.add({ targets: c.rock, alpha: 0, scale: 2, duration: 220 }); k.coins(4.6, 2.6, 7); k.sparkle(4.6, 3, 30); k.face(c.hero, 'sparkle'); k.hop(c.hero, 2); });
@@ -124,9 +125,9 @@ const intro = [
   },
   { // fainting is not the end
     build(k) {
-      k.sky('dusk');
-      k.ground(HOME_ZI, 2, DUSK);
-      k.hedge(HOME_ZI, L, R, 1, DUSK);
+      k.sky('night');
+      k.ground(HOME_ZI, 2, NIGHT);
+      k.hedge(HOME_ZI, L, R, 1, NIGHT);
       const hero = k.actor('adv', 3.5, 3, { face: 'hit' });
       hero.setAngle(-90).setOrigin(0.5, 0.75);
       const rescuer = k.actor('rescuer', 12, 3, { flip: true });
@@ -145,7 +146,7 @@ const intro = [
           });
         },
       },
-      { text: '번 돈은 그대로 내 것. 내일 또 나가면 된다.', at: k => { k.coins(3.5, 2, 5); k.sparkle(3.5, 2, 10); } },
+      { text: '번 돈은 그대로 내 것. 오늘 밤 또 나가면 된다.', at: k => { k.coins(3.5, 2, 5); k.sparkle(3.5, 2, 10); } },
     ],
   },
   { // the licenses, and the big prize
@@ -153,7 +154,7 @@ const intro = [
     lines: [
       { who: '조합장', text: '구역 끝의 대장을 잡으면 탐험 자격증을 주지.', at: k => { k.badge(4.8, 2.7, LICENSE.ratking); k.badge(5.9, 2.7, LICENSE.skelking, 250); k.badge(7, 2.7, LICENSE.lord, 500); } },
       { who: '조합장', text: '초원, 깊은숲, 돌산. 셋 다 따 오면… 큰 상이 있다네.', at: (k, c) => k.hop(c.boss) },
-      { text: '좋아, 첫 탐험 나가 보자!', at: (k, c) => { k.face(c.hero, 'sparkle'); k.hop(c.hero, 3, 6); k.sparkle(3, 3, 20); } },
+      { text: '등불 챙겨서, 첫 탐험 나가 보자!', at: (k, c) => { k.face(c.hero, 'sparkle'); k.hop(c.hero, 3, 6); k.sparkle(3, 3, 20); } },
     ],
   },
 ];
@@ -179,9 +180,9 @@ const skelking = [{
 const ending = [
   { // the bat lord falls asleep at last
     build(k) {
-      k.sky('dusk');
-      k.ground(2, 2, DUSK);
-      k.hedge(2, L, R, 1, DUSK);
+      k.sky('night');
+      k.ground(2, 2);
+      k.hedge(2, L, R, 1);
       const lord = k.actor('vampLord', 5, 2.8);
       const hero = k.actor('adv', 2, 2.8, { face: 'grit' });
       return { lord, hero };
@@ -239,7 +240,7 @@ const ending = [
       return { hedges: [...back, ...front], gm, hero };
     },
     lines: [
-      { text: '…그리고 다음 날 아침.' },
+      { text: '…그리고 다음 날 밤.' },
       { text: '들판은 또 뒤척였다.', at: (k, c) => { k.toss(c.hedges); k.face(c.hero, 'shock'); } },
       { who: '조합장', text: '돌산 너머에 뭐가 또 있는 모양이군. 자, 오늘도 탐험 부탁하네!', at: (k, c) => { k.hop(c.gm, 2); k.face(c.hero); } },
     ],
