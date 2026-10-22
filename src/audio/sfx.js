@@ -105,8 +105,8 @@ const SOUNDS = {
     tone(62, 0.12, { vol: 0.32, to: 44, attack: 0.01 });
     tone(58, 0.1, { vol: 0.22, to: 42, attack: 0.01, delay: 0.17 });
   },
-  // you'd have gone down, but you hang on at 1: a thump, and the world holds its breath
-  hangon() {
+  // you go down: a thump, and the world holds its breath
+  fall() {
     tone(80, 0.5, { vol: 0.5, to: 30 });
     hiss(0.6, { vol: 0.2, freq: 300, to: 80, type: 'lowpass' });
     chime([523, 392], 0.18, 0.1, 0.4, 0.25);

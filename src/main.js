@@ -274,8 +274,26 @@ function onRunEvent(type, d) {
     };
     saveMeta(meta);
     hud.update(run);
-    showSummary({ won: d.won, run, newlyUnlockable: d.newlyUnlockable, stepOpened: d.stepOpened, opened: d.opened, onClose: () => { scene.detach(); run = null; afterRunStory(); } });
+    const summary = () => showSummary({ won: d.won, run, newlyUnlockable: d.newlyUnlockable, stepOpened: d.stepOpened, opened: d.opened, onClose: () => { scene.detach(); run = null; afterRunStory(); } });
+    if (d.won) summary();
+    else fallen(summary);
   }
+}
+
+// Down: the field turns grey and quiet, then one line says where and to what ("2구역 · 들쥐에게 당했다"),
+// like Shattered Pixel Dungeon's "Killed by a marsupial rat on depth 2". A tap (or a few seconds) moves on.
+function fallen(then) {
+  sfx.setHeartbeat(0);
+  sfx.play('fall');
+  const line = $('fallen');
+  let gone = false;
+  const go = () => { if (gone) return; gone = true; line.hidden = true; line.onclick = null; then(); };
+  scene.fall(() => {
+    line.textContent = `${run.floor}구역 · ${run.cause || '쓰러졌다'}`;
+    line.hidden = false;
+    line.onclick = go;
+    setTimeout(go, 2600);
+  });
 }
 
 function afterTurn() {

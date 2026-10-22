@@ -197,6 +197,7 @@ export class DungeonScene extends Phaser.Scene {
 
   detach() {
     this.run = null;
+    if (this.fallen) { this.fallen = false; this.cameras.main.postFX?.clear(); }
     this.diving = false;
     this.aim = false;
     this.clearFloor();
@@ -860,6 +861,32 @@ export class DungeonScene extends Phaser.Scene {
     });
   }
 
+  // Falling down (v0.20): no fanfare. Your eyes squeeze shut and you tip over where you stood, the
+  // colour drains out of the field, and it goes quiet. `done` runs once it has sunk in.
+  fall(done) {
+    const ps = this.playerSprite, cam = this.cameras.main, p = this.run.p;
+    this.fallen = true;
+    this.bubbles.forEach(b => b.destroy());
+    this.bubbles = [];
+    if (ps) {
+      this.tweens.killTweensOf(ps);
+      const key = faceKey(this.heroKey, 'hit');
+      if (this.textures.exists(key)) ps.setTexture(key);
+      ps.clearTint().setAlpha(1);
+      // a beat standing, then over onto your side (a quarter turn keeps every pixel square)
+      this.time.delayedCall(260, () => {
+        ps.setOrigin(0.5, 0.5).setPosition(center(p.x), foot(p.y) - 5).setRotation(p.face < 0 ? -Math.PI / 2 : Math.PI / 2);
+      });
+    }
+    const fx = cam.postFX?.addColorMatrix();
+    const k = { t: 0 };
+    this.tweens.add({
+      targets: k, t: 1, delay: 200, duration: 1400, ease: 'Quad.out',
+      onUpdate: () => { if (fx) { fx.grayscale(k.t); fx.brightness(1 - 0.3 * k.t, true); } },
+    });
+    this.time.delayedCall(1500, () => done?.());
+  }
+
   // ---------- effect helpers ----------
   flash(sprite) {
     if (!sprite) return;
@@ -1295,6 +1322,7 @@ export class DungeonScene extends Phaser.Scene {
 
     // you: walk frames while moving; standing still a while, you glance back over your shoulder now and then
     const ps = this.playerSprite;
+    if (this.fallen) return; // lying where you fell (fall): nothing more moves
     const walking = time < (ps.stepUntil || 0);
     let expr = time < (ps.exprUntil || 0) ? ps.expr : this.lowHp ? 'teary' : '';
     // a blink every few seconds when the face is at rest
