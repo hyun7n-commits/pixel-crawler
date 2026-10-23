@@ -211,6 +211,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .recipe-cell b { width: 32px; text-align: center; color: var(--muted); }
 .recipe-cell .rc-name { font-family: var(--font-body); font-size: 12px; color: var(--muted); }
 .recipe-cell:not(.unknown) .rc-name { color: var(--text, #eee); }
+.recipe-cell .rc-sig { font-family: var(--font-body); font-size: 12px; line-height: 1.35; color: #f2b45a; }
+.recipe-cell.t3 .rc-sig { color: #d8b0ff; }
 .book-tier { font-family: var(--font-body); font-size: 12px; color: var(--muted); margin: 6px 0 4px; }
 .book-tier.t2 { color: #f08c3a; }
 .book-tier.t3 { color: #c48cff; }

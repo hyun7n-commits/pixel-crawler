@@ -5,7 +5,7 @@
 
 import { $, el, button, icon } from './dom.js';
 import { CHARACTERS } from '../data/characters.js';
-import { UPGRADES, PACK_COST, FORGE_COST, FORGE_LEGEND_LOOP, forgeable } from '../data/upgrades.js';
+import { UPGRADES, PACK_COST, FORGE_COST, FORGE_LEGEND_LOOP, forgeable, forgeStock } from '../data/upgrades.js';
 import { PETS } from '../data/pets.js';
 import { isOpen, RELIC_GATES } from '../data/unlocks.js';
 import { RELICS, RECIPES, recipeKey, tierOf, DISCOVERY_GOLD } from '../data/relics.js';
@@ -253,6 +253,8 @@ function books(box, { meta, changed }) {
       if (got) line.append(pic(rc.a), el('span', 'rc-op', '+'), pic(rc.b), el('span', 'rc-op', '→'), pic(rc.id));
       else line.append(el('b', null, '?'), el('span', 'rc-op', '+'), el('b', null, '?'), el('span', 'rc-op', '→'), pic(rc.id, true));
       cell.append(line, el('span', 'rc-name', got ? RELICS[rc.id].name : `처음 만들면 +${DISCOVERY_GOLD[tier]}G`));
+      // a legend or myth found: its own move, in a line (the same one its evolve card shows)
+      if (got && RELICS[rc.id].sig) cell.append(el('span', 'rc-sig', RELICS[rc.id].sig));
       cell.title = got ? `${RELICS[rc.a].name} + ${RELICS[rc.b].name} → ${RELICS[rc.id].name}: ${RELICS[rc.id].desc(1)}` : '아직 아무도 모르는 조합';
       grid.append(cell);
     }
@@ -278,10 +280,10 @@ function books(box, { meta, changed }) {
 // 주문 제작: an evolved relic you have made before (from the second 회차 a legend too), forged for the
 // next run. Paid now; tap it again to call it off and get the gold back, or tap another to swap.
 function forge(box, meta, changed) {
-  const list = el('div', 'shop'), ids = forgeable(meta), cost = id => FORGE_COST[tierOf(id)];
+  const list = el('div', 'shop'), ids = forgeStock(meta), known = forgeable(meta).length, cost = id => FORGE_COST[tierOf(id)];
   list.append(el('h3', null, '주문 제작'));
   list.append(el('p', 'row-sub', ids.length
-    ? `찾아낸 조합의 진화 유물을 만들어 준다. 다음 판에 Lv1로 들고 나간다. 한 판에 하나.${loopsOpen(meta) >= FORGE_LEGEND_LOOP ? ' 전설도 만들 수 있다.' : ` ${FORGE_LEGEND_LOOP}회차가 열리면 전설도 만들어 준다.`}`
+    ? `만들 줄 아는 ${known}개 가운데 오늘 만들 수 있는 것. 들판에 다녀올 때마다 바뀐다. 다음 판에 Lv1로 들고 나간다. 한 판에 하나.${loopsOpen(meta) >= FORGE_LEGEND_LOOP ? ' 전설도 만들 수 있다.' : ` ${FORGE_LEGEND_LOOP}회차가 열리면 전설도 만들어 준다.`}`
     : '아직 만들 줄 아는 게 없다. 들판에서 유물을 진화시켜 조합을 찾아 오자.'));
   const grid = el('div', 'pack-grid forge-grid');
   for (const id of ids) {
@@ -298,7 +300,8 @@ function forge(box, meta, changed) {
     grid.append(b);
   }
   if (ids.length) list.append(grid);
-  if (meta.forge) list.append(el('p', 'row-sub', `${josa(RELICS[meta.forge].name, '을', '를')} 주문했다. 다시 누르면 취소하고 골드를 돌려받는다.`));
+  // what the order does (a phone has no hover), and how to call it off
+  if (meta.forge) list.append(el('p', 'row-sub', `${josa(RELICS[meta.forge].name, '을', '를')} 주문했다. ${RELICS[meta.forge].desc(1)}. 다시 누르면 취소하고 골드를 돌려받는다.`));
   box.append(list);
 }
 

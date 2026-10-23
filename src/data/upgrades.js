@@ -15,10 +15,24 @@ export const PACK_COST = 300;
 // (or the myth) you are after. Price by tier (1 evolved, 2 legend); legends once FORGE_LEGEND_LOOP 회차 is open.
 export const FORGE_COST = { 1: 2000, 2: 9000 };
 export const FORGE_LEGEND_LOOP = 2;
-// what the smith can make: every evolved relic (and later legend) you have made at least once
+// what the smith knows how to make: every evolved relic (and later legend) you have made at least once
+const inOrder = (a, b) => tierOf(a) - tierOf(b) || Object.keys(RELICS).indexOf(a) - Object.keys(RELICS).indexOf(b);
 export const forgeable = meta => [...new Set(RECIPES.filter(rc => meta.recipes[recipeKey(rc)]).map(rc => rc.id))]
   .filter(id => tierOf(id) === 1 || (tierOf(id) === 2 && loopsOpen(meta) >= FORGE_LEGEND_LOOP))
-  .sort((a, b) => tierOf(a) - tierOf(b) || Object.keys(RELICS).indexOf(a) - Object.keys(RELICS).indexOf(b));
+  .sort(inOrder);
+// ...and what he has the stuff for today: a few of those (up to two legends), a new lot after every trip.
+// Dealt from the number of trips so far, so it holds still while you look and changes when you come home;
+// what you have ordered stays on show so it can be called off.
+export const FORGE_STOCK = 4;
+export function forgeStock(meta) {
+  let s = (meta.stats.runs * 7919 + 17) % 233280;
+  const deal = ids => ids.map(id => [(s = (s * 9301 + 49297) % 233280), id]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
+  const all = forgeable(meta);
+  const legends = deal(all.filter(id => tierOf(id) === 2)).slice(0, 2);
+  const stock = [...deal(all.filter(id => tierOf(id) === 1)).slice(0, FORGE_STOCK - legends.length), ...legends];
+  if (meta.forge && !stock.includes(meta.forge)) stock.push(meta.forge);
+  return stock.sort(inOrder);
+}
 
 export const UPGRADES = {
   hp:     { name: '튼튼한 몸',   eff: '시작 최대 체력 +3',                 costs: [150, 400, 900, 1800, 3200] },
