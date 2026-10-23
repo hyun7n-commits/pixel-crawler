@@ -251,6 +251,10 @@ export class Run {
     if (this.request) this.log(`오늘의 조합 의뢰: ${this.request.text} (일당 ${this.request.pay}G)`, 'quest');
     if (this.packed) this.log(`챙겨 온 ${RELICS[this.packed].name} Lv${this.p.relics[this.packed]}`, 'good');
     if (this.forged) this.log(`대장장이가 만들어 준 ${josa(RELICS[this.forged].name, '을', '를')} 들고 나왔다.`, 'good');
+    // 도구 주머니 (village upgrade): a meadow tool or two to start with
+    const pouch = [];
+    for (let k = 0; k < (this.meta.up.tool || 0); k++) { const t = this.pickTool(); if (t) { this.p.items[t]++; pouch.push(ITEMS[t].name); } }
+    if (pouch.length) this.log(`도구 주머니에 ${josa(pouch.join(', '), '을', '를')} 챙겨 왔다.`, 'good');
     if (this.kit) {
       for (let k = 1; k <= this.kit; k++) this.queue.push({ kind: 'kit', k, n: this.kit });
       this.log(`조합이 출발 보급을 챙겨 줬다. 유물 ${this.kit}개를 고른다.`, 'good');

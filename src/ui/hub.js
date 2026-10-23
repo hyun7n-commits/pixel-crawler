@@ -106,7 +106,8 @@ function shop(box, { meta, changed }) {
   const list = el('div', 'shop');
   list.append(el('h3', null, '영구 강화'));
   for (const [id, u] of Object.entries(UPGRADES)) {
-    const lv = meta.up[id], max = u.costs.length;
+    if (u.open && !isOpen(meta, u.open)) continue;
+    const lv = meta.up[id] || 0, max = u.costs.length;
     const row = el('div', 'row'), main = el('div', 'row-main');
     const nm = el('span', 'row-name', u.name), pips = el('span', 'pips');
     for (let i = 0; i < max; i++) pips.append(el('i', i < lv ? 'on' : ''));
