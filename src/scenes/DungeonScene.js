@@ -2381,7 +2381,8 @@ export class DungeonScene extends Phaser.Scene {
     s.setOrigin(0.5 + jitter / TILE, 1 + hop / TILE);
     s.lift = hop;
     if (time < s.flashUntil) return;
-    let tint = who.rage ? 0xff8080 : who.d?.boss ? 0xffb0b0 : 0xffffff;
+    // every boss has a picture of its own now (and the crown), so only rage colours one
+    let tint = who.rage ? 0xff8080 : 0xffffff;
     if (who.burn > 0) tint = 0xffc890;
     if (who.sleep || who.state === 'sleep') tint = 0xc4c4dc;
     if (who.stoneT > 0) tint = 0x9a9aac;
