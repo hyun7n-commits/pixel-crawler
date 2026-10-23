@@ -244,12 +244,14 @@ export class DungeonScene extends Phaser.Scene {
   attach(run) {
     this.run = run;
     this.diving = false;
+    this.held = null;
     run.on((type, data) => this.onEvent(type, data));
     if (run.map) this.buildFloor();
   }
 
   detach() {
     this.run = null;
+    this.held = null;
     if (this.fallen) { this.fallen = false; this.cameras.main.postFX?.clear(); }
     // a trip that ends mid-burrow must not leave the view closed over the village
     const iris = document.getElementById('iris');
@@ -1038,6 +1040,12 @@ export class DungeonScene extends Phaser.Scene {
   // ---------- events ----------
   onEvent(type, d) {
     if (!this.run) return;
+    // something thrown is still in the air: where it lands, and the rest of that turn, waits until it
+    // gets there (the rules have already happened; only the show waits)
+    if (this.held) {
+      if (performance.now() < this.held.until + 400) { this.held.list.push([type, d]); return; }
+      this.letGo();
+    }
     switch (type) {
       case 'floor': this.arrive(d); break;
       case 'turn': this.sync(); this.follow(); this.darkEyes(); break;
@@ -1106,7 +1114,14 @@ export class DungeonScene extends Phaser.Scene {
       case 'shot': this.projectile(d.from, d.to, d.hit, d.kind); break;
       case 'wand': this.projectile(d.from, d.to, true, 'magic'); break;
       case 'recharge': if (this.playerSprite) this.fx.magic.explode(5, this.playerSprite.x, this.playerSprite.y - TILE); break;
-      case 'throw': this.throwArc(d.from, d.to, d.sprite); break;
+      case 'throw': {
+        // the critters' marks (stars, bars) keep showing how things stood until it lands
+        const ms = this.throwArc(d.from, d.to, d.sprite), held = { until: performance.now() + ms / pace(), list: [], snap: this.run.enemies.map(e => ({ ...e })) };
+        this.held = held;
+        this.busyUntil = Math.max(this.busyUntil || 0, held.until + 30);
+        this.time.delayedCall(ms, () => { if (this.held === held) this.letGo(); });
+        break;
+      }
       // the meadow tools (core/run.js throwTool) where they land
       case 'pine':
         // 도토리 다람쥐 catches it in both paws, with a happy little hop
@@ -1880,12 +1895,21 @@ export class DungeonScene extends Phaser.Scene {
     });
   }
 
+  // the flight takes `ms` (returned) at 1x
   throwArc(from, to, tex = 'bomb') {
     const b = this.add.image(center(from.x), center(from.y), tex).setScale(0.6).setDepth(D.fx);
-    const dist = Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y));
-    this.tweens.add({ targets: b, x: center(to.x), duration: 110 + dist * 25, ease: 'Linear', onComplete: () => b.destroy() });
-    this.tweens.add({ targets: b, y: center(to.y), duration: 110 + dist * 25, ease: 'Quad.in' });
-    this.tweens.add({ targets: b, angle: 360, duration: 110 + dist * 25 });
+    const dist = Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y)), ms = 110 + dist * 25;
+    this.tweens.add({ targets: b, x: center(to.x), duration: ms, ease: 'Linear', onComplete: () => b.destroy() });
+    this.tweens.add({ targets: b, y: center(to.y), duration: ms, ease: 'Quad.in' });
+    this.tweens.add({ targets: b, angle: 360, duration: ms });
+    return ms;
+  }
+
+  // the turn that waited for a thrown thing plays now, in order (a throw among it holds the rest again)
+  letGo() {
+    const list = this.held ? this.held.list : [];
+    this.held = null;
+    for (const [type, d] of list) this.onEvent(type, d);
   }
 
   // 민들레 홀씨: up you go on the wind, a trail of tufts behind, and down with a little squash far away
@@ -2218,7 +2242,7 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     let claw = false;
-    for (const e of run.enemies) {
+    for (const e of this.held?.snap || run.enemies) {
       const s = this.enemySprites[e.id];
       if (!s || e.hp <= 0 || s.dying) continue;
       const face = e.state === 'hunt' || e.state === 'flee' ? (p.x < e.x ? -1 : 1) * (e.state === 'flee' ? -1 : 1) : e.face || -1;
