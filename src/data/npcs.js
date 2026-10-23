@@ -10,6 +10,7 @@ export const PEDDLER_FLOORS = [2, 5, 8];
 export const STALL = {
   potion: { name: '체력 물약', icon: 'potion', price: 35, desc: '체력 물약 하나. 위험할 때 마신다.' },
   bomb:   { name: '폭탄',      icon: 'bomb',   price: 25, desc: '폭탄 하나. 둘레 3x3에 펑!' },
+  tools:  { name: '도구 꾸러미', icon: 'toolpouch', price: 40, desc: '들판 도구 두 개. 뭐가 들었는지는 풀어 봐야 안다.' },
   grow:   { name: '유물 손질', icon: 'anvil',  price: 80, desc: '가진 유물 하나를 골라 한 단계 올린다.' },
   box:    { name: '유물 꾸러미', icon: 'bag',  price: 110, desc: '유물 셋 중 하나를 골라 가진다.' },
 };

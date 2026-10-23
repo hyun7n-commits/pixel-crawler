@@ -7,7 +7,7 @@ import { RELICS, RECIPES, MAX_LEVEL, MAX_SLOTS, DISCOVERY_GOLD, tierOf, maxLevel
 import { CHARACTERS } from '../data/characters.js';
 import { PETS, peckGold, PECKS_PER_FIELD } from '../data/pets.js';
 import { ENEMIES, ZONES } from '../data/enemies.js';
-import { ITEMS, TOOLS } from '../data/items.js';
+import { ITEMS, TOOLS, ZONE_TOOL } from '../data/items.js';
 import { ORES } from '../data/ores.js';
 import { T, DISCOVERIES, GOSSIP, SLEEP_TALK, FLOOR_HINTS, SLEEP_MIN, isTrap, isPool, isGap } from '../data/terrain.js';
 import { rnd, rint, pick, shuffle, cheb, josa, DIRS8 } from './util.js';
@@ -418,9 +418,8 @@ export class Run {
     if (this.open('bomb') && Math.random() < 0.5) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'bomb' }));
     if (this.open('map') && Math.random() < 0.3) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'map' }));
     // 들판 도구: one of the meadow tools opened so far, lying in the grass
-    const tools = TOOLS.filter(id => this.open(id));
-    if (tools.length && Math.random() < B.TOOL_CHANCE) place(s => this.pickups.push({ x: s.x, y: s.y, type: pick(tools) }));
-    if (tools.length && Math.random() < B.TOOL_MORE) place(s => this.pickups.push({ x: s.x, y: s.y, type: pick(tools) }));
+    if (this.pickTool() && Math.random() < B.TOOL_CHANCE) place(s => this.pickups.push({ x: s.x, y: s.y, type: this.pickTool() }));
+    if (this.pickTool() && Math.random() < B.TOOL_MORE) place(s => this.pickups.push({ x: s.x, y: s.y, type: this.pickTool() }));
     // now and then an old worker's name tag in the grass; in the ruins, a few on every floor
     for (let i = 0, n = B.tagsPerFloor(this.stage); i < n; i++) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'tag' }));
 
@@ -438,7 +437,8 @@ export class Run {
     // the shopkeeper's stall, the floor before each boss: what's for sale, priced for the zone
     this.stall = [];
     if (this.floor === this.bossFloor - 1 && this.open('stall')) {
-      this.stall = Object.entries(STALL).map(([what, it]) => ({ what, price: Math.round(it.price * (B.gs(zi) + 1)), sold: false }));
+      this.stall = Object.entries(STALL).filter(([what]) => what !== 'tools' || this.pickTool())
+        .map(([what, it]) => ({ what, price: Math.round(it.price * (B.gs(zi) + 1)), sold: false }));
       place(s => { this.spawnEnemy('peddler', s.x, s.y).state = 'npc'; });
     }
     if (this.floor === q.smith.floor && this.open('smith')) {
@@ -452,6 +452,13 @@ export class Run {
     // 갈림길: what the sign by the burrow you came down promised is here; and from here on, two ways
     if (route) this.routeBonus(route, place);
     if (this.open('fork') && B.localOf(this.floor) < B.FLOORS_PER_ZONE - 1) this.fork(open);
+  }
+
+  // One of the meadow tools opened so far (null before any), the stage's own (ZONE_TOOL) half the time
+  pickTool() {
+    const open = TOOLS.filter(id => this.open(id)), own = ZONE_TOOL[this.zone.style];
+    if (!open.length) return null;
+    return open.includes(own) && Math.random() < 0.5 ? own : pick(open);
   }
 
   // The second burrow on a field: in a room far from where you came in and from the first one, never
@@ -488,10 +495,7 @@ export class Run {
     const m = this.map;
     if (kind === 'chest') place(s => this.addChest(s.x, s.y));
     if (kind === 'candy') place(s => this.pickups.push({ x: s.x, y: s.y, type: 'candy', n: B.candySteps(this.floor) }));
-    if (kind === 'tools') {
-      const t = TOOLS.filter(id => this.open(id));
-      for (let k = 0; k < 2; k++) place(s => this.pickups.push({ x: s.x, y: s.y, type: t.length ? pick(t) : 'bomb' }));
-    }
+    if (kind === 'tools') for (let k = 0; k < 2; k++) place(s => this.pickups.push({ x: s.x, y: s.y, type: this.pickTool() || 'bomb' }));
     if (kind === 'rest') {
       place(s => this.pickups.push({ x: s.x, y: s.y, type: 'potion' }));
       place(s => { if (this.bareSpot(s.x, s.y)) m.ter[idx(s.x, s.y)] = T.BERRY; });
@@ -2579,6 +2583,12 @@ export class Run {
     this.log(`${josa(it.name, '을', '를')} 샀다. -${s.price}G`, 'good');
     this.emit('buy', { what, price: s.price });
     if (what === 'potion' || what === 'bomb') this.p.items[what] = (this.p.items[what] || 0) + 1;
+    else if (what === 'tools') {
+      const got = [this.pickTool(), this.pickTool()];
+      for (const id of got) this.p.items[id] = (this.p.items[id] || 0) + 1;
+      const names = got[0] === got[1] ? `${ITEMS[got[0]].name} 두 개` : `${ITEMS[got[0]].name}, ${ITEMS[got[1]].name}`;
+      this.log(`꾸러미를 풀어 보니 ${josa(names, '이', '가')} 들어 있다.`, 'good');
+    }
     else if (what === 'grow') this.queue.push({ kind: 'talk', who: 'peddler', text: text.grow, smithPick: true, noReroll: true });
     else if (what === 'box') this.queue.push({ kind: 'talk', who: 'peddler', text: text.box, opts: this.offers(3), noReroll: true });
   }

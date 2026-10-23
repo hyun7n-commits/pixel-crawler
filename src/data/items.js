@@ -21,3 +21,13 @@ export const ITEMS = {
 
 // the meadow tools, in the order they open (data/unlocks.js)
 export const TOOLS = Object.keys(ITEMS).filter(id => ITEMS[id].tool);
+
+// What each stage's ground is rich in (Run.pickTool): half the tools lying about are this one once it
+// is open. Dandelions on the meadow, pinecones under the forest and the seaside pines (good for
+// knocking a crab off the cliff), sleep flowers in the misty marsh and the dim cave, goat bells on the
+// rock and in the old union's ruins, honey in the giant garden, chilies on the snow (to keep warm)
+// and in the volcano.
+export const ZONE_TOOL = {
+  meadow: 'dandelion', forest: 'pinecone', marsh: 'sleepy', sea: 'pinecone', rock: 'bell',
+  garden: 'honeyjar', snow: 'chili', cave: 'sleepy', volcano: 'chili', ruins: 'bell',
+};
