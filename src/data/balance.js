@@ -66,6 +66,14 @@ export const FALL_HURT = 0.2;
 export const lavaHurt = floor => 6 + Math.floor(gfl(floor) / 3);
 // how long a snail's slime and the queen bee's honey stay on the ground
 export const GOO_TURNS = 14;
+// v0.26 들판 도구 (data/items.js): a meadow tool lies somewhere on a field this often (one of the ones
+// opened so far), and a second one now and then
+export const TOOL_CHANCE = 0.6, TOOL_MORE = 0.2;
+export const pineDamage = floor => 3 + Math.floor(gfl(floor) / 3);
+export const BELL_TURNS = 4, BELL_RANGE = 7, PINE_NOISE = 3;
+export const CHILI_TURNS = 5, CHILI_BOSS = 2;
+// 민들레 홀씨 carries you at least this many steps' walk from where you were
+export const BLOW_MIN = 10;
 
 // v0.21 zones. The marsh is darker (MARSH_DARK tiles of sight) but its fireflies light FLY_LIGHT tiles
 // around them, and each one caught in a jar gives a tile of sight back for the trip (FLY_MAX at most).

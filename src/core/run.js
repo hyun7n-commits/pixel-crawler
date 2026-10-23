@@ -7,9 +7,9 @@ import { RELICS, RECIPES, MAX_LEVEL, MAX_SLOTS, DISCOVERY_GOLD, tierOf, maxLevel
 import { CHARACTERS } from '../data/characters.js';
 import { PETS, peckGold, PECKS_PER_FIELD } from '../data/pets.js';
 import { ENEMIES, ZONES } from '../data/enemies.js';
-import { ITEMS } from '../data/items.js';
+import { ITEMS, TOOLS } from '../data/items.js';
 import { ORES } from '../data/ores.js';
-import { T, DISCOVERIES, GOSSIP, SLEEP_TALK, FLOOR_HINTS, isTrap, isPool, isGap } from '../data/terrain.js';
+import { T, DISCOVERIES, GOSSIP, SLEEP_TALK, FLOOR_HINTS, SLEEP_MIN, isTrap, isPool, isGap } from '../data/terrain.js';
 import { rnd, rint, pick, shuffle, cheb, josa, DIRS8 } from './util.js';
 import {
   createMap, carveRooms, carveArena, idx, inMap, passable, squeeze, distMap, lineOfSight, computeFOV,
@@ -24,7 +24,7 @@ import { REQUESTS, pickRequest } from '../data/requests.js';
 import { isOpen, openNew, RELIC_GATES } from '../data/unlocks.js';
 import { caged, cleared, stageOpen, loopsOpen, loopFoe, loopGold, FRIENDS } from '../data/stages.js';
 import { daresOn, daresOpen, dareGold } from '../data/dares.js';
-import { enemyAct, rouse, awaken, angerSwarm, twist, inReach } from './ai.js';
+import { enemyAct, rouse, awaken, angerSwarm, twist, inReach, canSee } from './ai.js';
 import { onEnter, explosion, envTick, waterBody, ignite, addGas, spotTraps, revealTraps, openGrave, setBurn, springTrap } from './world.js';
 
 export const zoneOf = floor => ZONES[Math.floor((floor - 1) / B.FLOORS_PER_ZONE)];
@@ -81,7 +81,10 @@ export class Run {
       burn: 0, sleep: 0, stun: 0, wokeAt: -1,
       relics: { ...this.char.start },
       // 햄스터's cheek pouch packs more potions; 펭귄 sets off with a bag of bombs
-      items: { potion: this.dare('nopotion') ? 0 : meta.up.pot + (this.char.pouch || 0), bomb: this.char.bombs || (isOpen(meta, 'bomb') ? 1 : 0), map: 0 },
+      items: {
+        potion: this.dare('nopotion') ? 0 : meta.up.pot + (this.char.pouch || 0), bomb: this.char.bombs || (isOpen(meta, 'bomb') ? 1 : 0), map: 0,
+        ...Object.fromEntries(TOOLS.map(id => [id, 0])),
+      },
       // 마법사's wand: sparks left, and turns since the last one came back
       charges: this.char.wand ? B.WAND_CHARGES : 0, wandT: 0,
     };
@@ -411,6 +414,10 @@ export class Run {
     if (!this.dare('nopotion') && Math.random() < B.POTION_CHANCE) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'potion' }));
     if (this.open('bomb') && Math.random() < 0.5) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'bomb' }));
     if (this.open('map') && Math.random() < 0.3) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'map' }));
+    // 들판 도구: one of the meadow tools opened so far, lying in the grass
+    const tools = TOOLS.filter(id => this.open(id));
+    if (tools.length && Math.random() < B.TOOL_CHANCE) place(s => this.pickups.push({ x: s.x, y: s.y, type: pick(tools) }));
+    if (tools.length && Math.random() < B.TOOL_MORE) place(s => this.pickups.push({ x: s.x, y: s.y, type: pick(tools) }));
     // now and then an old worker's name tag in the grass; in the ruins, a few on every floor
     for (let i = 0, n = B.tagsPerFloor(this.stage); i < n; i++) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'tag' }));
 
@@ -1002,10 +1009,11 @@ export class Run {
   }
 
   useItem(id) {
-    if (!this.canAct() || !this.p.items[id] || id === 'bomb') return false;
+    if (!this.canAct() || !this.p.items[id] || ITEMS[id].throw) return false;
     const p = this.p;
     p.items[id]--;
     p.blend = false;
+    if (id === 'dandelion') this.blowAway();
     if (id === 'potion') {
       this.heal(Math.round(this.stat().maxHp * B.POTION_HEAL));
       this.log('체력 물약을 마셨다.', 'good');
@@ -1024,8 +1032,156 @@ export class Run {
     return true;
   }
 
-  canThrowAt(x, y) {
-    return inMap(x, y) && this.isVisible(x, y) && cheb({ x, y }, this.p) <= BOMB_RANGE && !(x === this.p.x && y === this.p.y);
+  // `id`: what is thrown; a chili has to land on a critter you can see (not a chest that might be one)
+  canThrowAt(x, y, id = 'bomb') {
+    if (!inMap(x, y) || !this.isVisible(x, y) || cheb({ x, y }, this.p) > BOMB_RANGE || (x === this.p.x && y === this.p.y)) return false;
+    if (!ITEMS[id]?.foe) return true;
+    const e = this.enemyAt(x, y);
+    return !!e && !e.d.npc && !['hide', 'stone', 'lurk'].includes(e.state) && !e.diving;
+  }
+
+  // Anything thrown: picked on the map, flown there in an arc, and it costs the turn. Each meadow tool
+  // does one thing where it lands (data/items.js).
+  throwTool(id, x, y) {
+    if (id === 'bomb') return this.throwBomb(x, y);
+    const p = this.p;
+    if (!this.canAct() || !ITEMS[id]?.throw || !p.items[id] || !this.canThrowAt(x, y, id)) return false;
+    p.items[id]--;
+    p.blend = false;
+    if (x !== p.x) p.face = Math.sign(x - p.x);
+    this.emit('throw', { from: { x: p.x, y: p.y }, to: { x, y }, sprite: ITEMS[id].sprite });
+    if (id === 'pinecone') this.pinecone(x, y);
+    else if (id === 'honeyjar') this.splashHoney(x, y);
+    else if (id === 'sleepy') this.sleepPuff(x, y);
+    else if (id === 'chili') this.chili(this.enemyAt(x, y));
+    else if (id === 'bell') this.dropBell(x, y);
+    this.endTurn();
+    return true;
+  }
+
+  // 솔방울: a critter it hits is knocked a tile away (over a drop, onto a trap, into another one...) and
+  // left seeing stars for a turn, so the blow after that is a surprise. On bare ground it goes 톡, and
+  // whoever is close turns to look (a stone thrown to draw a guard off), and a trap it lands on goes off.
+  pinecone(x, y) {
+    const e = this.enemyAt(x, y);
+    if (e && !e.d.npc) {
+      this.emit('pine', { x, y, hit: true });
+      if (this.isVisible(x, y)) this.log(`솔방울이 ${josa(e.d.name, '을', '를')} 딱 맞혔다!`, 'good');
+      this.hurt(e, B.pineDamage(this.floor), 'pine');
+      if (e.hp > 0 && !e.d.boss && !['hide', 'stone', 'lurk'].includes(e.state)) this.knock(e, 2 + Math.floor(this.floor / 4));
+      if (e.hp > 0 && !['hide', 'stone', 'lurk'].includes(e.state)) {
+        e.stun = Math.max(e.stun || 0, 1);
+        this.emit('stun', { x: e.x, y: e.y });
+      }
+      return;
+    }
+    this.emit('pine', { x, y, hit: false });
+    const ter = this.map.ter[idx(x, y)];
+    if (isTrap(ter)) { springTrap(this, x, y); return; }
+    const heard = this.noise(x, y, B.PINE_NOISE);
+    this.log(heard.length ? '톡! 솔방울 소리에 근처 녀석이 고개를 돌렸다.' : '톡! 솔방울이 데구루루 굴러갔다.');
+    if (heard.length) this.emit('heard', { x, y, list: heard });
+  }
+
+  // 꿀 병: it breaks and honey pours over the tile and the ones round it; whoever stands there is stuck
+  // fast (a boss pulls free sooner), and anyone who walks in later loses a turn on every step, as with
+  // the queen bee's honey
+  splashHoney(x, y) {
+    for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) this.goo(x + k, y + j, T.HONEY);
+    const stuck = this.enemies.filter(e => e.hp > 0 && !e.d.npc && !e.d.flies && e.type !== 'queen' && cheb(e, { x, y }) <= 1
+      && !['hide', 'stone', 'lurk'].includes(e.state));
+    for (const e of stuck) e.stun = Math.max(e.stun || 0, e.d.boss ? 1 : 2);
+    if (cheb(this.p, { x, y }) <= 1) this.p.sticky = 1;
+    this.emit('splash', { x, y, list: stuck });
+    this.log(stuck.length ? `꿀 병이 깨지며 꿀이 쏟아졌다! ${stuck.length > 1 ? `${stuck.length}마리가` : josa(stuck[0].d.name, '이', '가')} 꿀에 붙어 버둥거린다.` : '꿀 병이 깨지며 꿀이 쏟아졌다! 끈적끈적.', 'good');
+  }
+
+  // 졸음 꽃: pops into a cloud of sleep pollen, the same as the trap. Whoever is in it nods off at once
+  // (and stays asleep while the cloud hangs there); it drifts, so too close and you go too.
+  sleepPuff(x, y) {
+    addGas(this, x, y, 'sleep', 60);
+    for (const [dx, dy] of DIRS8) addGas(this, x + dx, y + dy, 'sleep', 30);
+    this.emit('puff', { x, y, kind: 'sleep' });
+    const g = this.map.gas.sleep, slept = [];
+    for (const e of this.enemies) {
+      if (e.hp <= 0 || e.d.npc || e.state === 'sleep' || ['hide', 'stone', 'lurk'].includes(e.state) || g[idx(e.x, e.y)] < SLEEP_MIN) continue;
+      Object.assign(e, { state: 'sleep', wake: 0, doze: 2, aim: false });
+      slept.push(e);
+    }
+    this.emit('doze', { list: slept });
+    this.log(slept.length ? `졸음 꽃이 퐁! ${slept.length > 1 ? `${slept.length}마리가` : josa(slept[0].d.name, '이', '가')} 꾸벅꾸벅 잠들었다.` : '졸음 꽃이 퐁 터지며 꽃가루가 퍼졌다.', 'good');
+  }
+
+  // 매운 고추: too hot to think of anything but running (ai.js e.fear); it tires as anything running
+  // does, and fights back only when cornered
+  chili(e) {
+    if (!e) return;
+    e.fear = e.d.boss ? B.CHILI_BOSS : B.CHILI_TURNS;
+    Object.assign(e, { state: 'flee', ran: 0, pants: 0, aim: false, wake: 0, doze: 0 });
+    this.emit('chili', { enemy: e });
+    this.say(e, pick(['매워!', '맵다맵다!', '혀가 불타!', '물! 물!']));
+    if (this.isVisible(e.x, e.y)) this.log(e.d.boss ? `${josa(e.d.name, '이', '가')} 매워서 펄쩍 뛰었다! 금방 정신을 차릴 것 같다.` : `${josa(e.d.name, '이', '가')} 매워서 펄쩍 뛰었다! 허둥지둥 달아난다.`, 'good');
+  }
+
+  // 방울: it rings where it lands for a few turns (ringBells, every turn before the critters move), and
+  // then lies there to be picked up again
+  dropBell(x, y) {
+    (this.map.bells ||= []).push({ x, y, t: B.BELL_TURNS });
+    this.log('딸랑딸랑! 방울이 울린다.', 'good');
+  }
+
+  // Every critter in earshot that is not after you turns to the bell (a sleeper wakes and comes to
+  // look); one chasing you that cannot see you right now goes to the bell too. A boss is not fooled.
+  ringBells() {
+    const bells = this.map.bells;
+    if (!bells?.length) return;
+    for (const b of bells.slice()) {
+      this.emit('ring', { x: b.x, y: b.y });
+      const heard = this.noise(b.x, b.y, B.BELL_RANGE);
+      for (const e of this.enemies) {
+        if (e.hp <= 0 || e.d.npc || e.d.boss || this.calm(e) || cheb(e, b) > B.BELL_RANGE || e.fear > 0) continue;
+        if (!['search', 'wander', 'hunt'].includes(e.state) || (e.state === 'hunt' && canSee(this, e, 9))) continue;
+        if (e.state !== 'search' && !heard.includes(e)) heard.push(e);
+        Object.assign(e, { state: 'search', searchT: 0, last: { x: b.x, y: b.y }, aim: false });
+      }
+      if (heard.length) this.emit('heard', { x: b.x, y: b.y, list: heard });
+      if (--b.t <= 0) {
+        bells.splice(bells.indexOf(b), 1);
+        this.pickups.push({ x: b.x, y: b.y, type: 'bell' });
+        this.emit('bellDone', { x: b.x, y: b.y });
+      }
+    }
+  }
+
+  // 민들레 홀씨: blown off on the wind to open ground far away on this field (somewhere you could walk
+  // to, never into a locked room, not beside a critter), and whoever was chasing you has lost you
+  blowAway() {
+    const p = this.p, m = this.map, from = { x: p.x, y: p.y }, dm = distMap(m, p.x, p.y);
+    const bad = [T.LAVA, T.CHASM, T.HONEY, T.SLIME, T.ICE, T.RING];
+    const spots = [];
+    let far = null;
+    for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) {
+      const i = idx(x, y), d = dm[i];
+      if (m.tiles[i] !== FLOOR || d >= 9999 || !this.canEnemyEnter(x, y) || bad.includes(m.ter[i]) || isPool(m.ter[i]) || m.fire[i] > 0) continue;
+      if (this.enemies.some(e => e.hp > 0 && !e.d.npc && !this.calm(e) && cheb(e, { x, y }) <= 3)) continue;
+      if (!far || d > dm[idx(far.x, far.y)]) far = { x, y };
+      if (d >= B.BLOW_MIN) spots.push({ x, y });
+    }
+    const to = spots.length ? pick(spots) : far;
+    if (!to) { this.log('바람이 없어서 홀씨가 제자리에 내려앉았다.'); return; }
+    p.x = to.x; p.y = to.y;
+    this.trail = [{ x: to.x, y: to.y }];
+    p.sticky = 0; p.held = null;
+    let lost = 0;
+    for (const e of this.enemies) {
+      if (e.hp <= 0 || e.state !== 'hunt') continue;
+      Object.assign(e, { state: 'search', searchT: 0, last: from, aim: false });
+      lost++;
+    }
+    this.emit('blow', { from, to });
+    this.log(lost ? '민들레 홀씨를 후 불었다. 바람을 타고 훨훨! 쫓아오던 녀석들이 나를 놓쳤다.' : '민들레 홀씨를 후 불었다. 바람을 타고 훨훨 날아갔다!', 'good');
+    onEnter(this, 'player', to.x, to.y);
+    this.pickupAt(to.x, to.y);
   }
 
   throwBomb(x, y) {
@@ -1115,7 +1271,7 @@ export class Run {
       else if (q.type === 'necklace') {
         this.quests.ghost.state = 'found';
         this.log('아기새 리본을 찾았다! 울보 아기새에게 돌려주자.', 'good');
-      } else { this.p.items[q.type]++; this.log(`${josa(ITEMS[q.type].name, '을', '를')} 주웠다.`); }
+      } else { this.p.items[q.type] = (this.p.items[q.type] || 0) + 1; this.log(`${josa(ITEMS[q.type].name, '을', '를')} 주웠다.`); }
     }
   }
 
@@ -1698,6 +1854,7 @@ export class Run {
     // doors shut the moment nobody stands in them, so a chaser right behind you loses sight of you
     // as you step through (the Shattered Pixel Dungeon door ambush)
     this.refreshDoors();
+    this.ringBells();
     this.burstPuffs();
     this.dropRocks();
     if (p.hp <= 0) { this.afterTurn(); return; }

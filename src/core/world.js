@@ -3,7 +3,7 @@
 
 import { T, TERRAIN, GAS_KEYS, SLEEP_MIN, MINE_MIN, isTrap } from '../data/terrain.js';
 import { idx, inMap, passable, isBorder, WALL, FLOOR, DOOR, GRAVE, LOCKED } from './dungeon.js';
-import { ITEMS } from '../data/items.js';
+import { ITEMS, TOOLS } from '../data/items.js';
 import { DIRS8, pick, rint, shuffle, josa } from './util.js';
 import * as B from '../data/balance.js';
 
@@ -155,7 +155,9 @@ export function openGrave(run, x, y) {
     run.pickups.push({ x, y, type: 'gold', amount: B.graveGold(run.floor) });
     run.log('흙 속에서 골드가 나왔다.', 'good');
   } else if (roll >= 0.7 && roll < 0.9) {
-    const type = run.dare?.('nopotion') ? 'bomb' : pick(['potion', 'bomb']);
+    // a potion or a bomb; once the meadow tools are about, now and then one of those
+    const tools = TOOLS.filter(id => run.open?.(id));
+    const type = tools.length && Math.random() < 0.4 ? pick(tools) : run.dare?.('nopotion') ? 'bomb' : pick(['potion', 'bomb']);
     run.pickups.push({ x, y, type });
     run.log(`흙 속에서 ${josa(ITEMS[type].name, '이', '가')} 나왔다.`, 'good');
   } else if (roll >= 0.9) run.log('도토리 껍질뿐이다.');

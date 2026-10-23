@@ -65,6 +65,14 @@ export function enemyAct(run, e, dmP) {
   // coming (run.unaware: a surprise attack)
   if (e.stun > 0) { e.dazed = --e.stun === 0; return; }
   if (e.stoneT > 0) { e.stoneT--; return; }
+  // 매운 고추 (run.chili): it only wants to get away from you, panting like any runner; when the heat
+  // wears off it comes back to look for you where it last saw you
+  if (e.fear > 0) {
+    e.state = 'flee';
+    flee(run, e, dmP, canSee(run, e, 9));
+    if (--e.fear === 0 && e.hp > 0) Object.assign(e, { state: 'search', searchT: 0, last: { x: p.x, y: p.y } });
+    return;
+  }
   // bees after you turn back once you are far enough from their stump
   const hive = d.swarm && run.map.hive;
   if (hive && !run.calm(e) && cheb(p, hive) > BEE_HOME) { e.angry = false; e.state = 'wander'; e.aim = false; }

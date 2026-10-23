@@ -11,7 +11,8 @@ import { suspend, resume, clearSuspended, savedRun } from './core/suspend.js';
 import { pathTo, idx, isBump, isStairs } from './core/dungeon.js';
 import { ENEMIES, ZONES } from './data/enemies.js';
 import { cleared } from './data/stages.js';
-import { cheb } from './core/util.js';
+import { cheb, josa } from './core/util.js';
+import { ITEMS } from './data/items.js';
 import { T, isTrap } from './data/terrain.js';
 import { Hud, lowHealth } from './ui/hud.js';
 import { renderPanel, renderVillageHud } from './ui/hub.js';
@@ -34,7 +35,7 @@ let run = null;
 let scene = null;
 let path = [];
 let seenCount = 0;
-let aiming = false;
+let aiming = null;  // what is being thrown (data/items.js) while a spot on the map is picked
 let chase = null;   // an enemy tapped from afar: walk up to it and hit it once
 let pinned = null;  // tile whose tip stays up after a long press on a phone, or a tap while looking
 let looking = false; // 살펴보기: a tap on the map shows what is there instead of walking (L key)
@@ -43,8 +44,8 @@ let inVillage = false;
 const hud = new Hud({
   onUseItem: id => {
     setBag(false);
-    if (id === 'bomb') { setAim(!aiming); return; }
-    if (canAct()) { clearPath(); setAim(false); run.useItem(id); }
+    if (ITEMS[id].throw) { setAim(aiming === id ? null : id); return; }
+    if (canAct()) { clearPath(); setAim(null); run.useItem(id); }
   },
   onWait: () => restOnce(),
   onBag: () => setBag(!$('game').classList.contains('bag-open')),
@@ -86,9 +87,9 @@ function setBag(open) {
   $('game').classList.toggle('bag-open', !!open);
 }
 
-// Throwing a bomb: press the bomb (or 2), then pick a tile on the map.
-function setAim(on) {
-  aiming = !!(on && canAct() && run.p.items.bomb > 0);
+// Throwing something (a bomb, a pinecone...): press it (or its number key), then pick a tile on the map.
+function setAim(id) {
+  aiming = id && canAct() && run.p.items[id] > 0 ? id : null;
   if (aiming && looking) { looking = false; hud.looking = false; $('lookBtn')?.classList.remove('on'); }
   if (scene) scene.aim = aiming;
   hud.aiming = aiming;
@@ -100,9 +101,13 @@ function showTip(h) {
   const tip = $('tip');
   let text = '';
   if (run && aiming) {
-    text = '폭탄을 던질 곳을 고른다 · 취소: Esc 또는 폭탄 버튼';
-    if (!matchMedia('(pointer: coarse)').matches) text += ' · 방향키로 옮기고 Enter로 던진다';
-    if (h && run.canThrowAt(h.x, h.y) && cheb(h, run.p) <= 1) text += '\n바로 옆이라 나도 맞는다!';
+    const it = ITEMS[aiming];
+    const touch = matchMedia('(pointer: coarse)').matches;
+    text = `${josa(it.name, '을', '를')} ${it.foe ? '던질 적을' : '던질 곳을'} 고른다 · 취소: ${touch ? '던질 곳 버튼을 한 번 더' : `Esc 또는 ${it.name} 버튼`}`;
+    if (!touch) text += ' · 방향키로 옮기고 Enter로 던진다';
+    // too close for comfort: what lands next to you gets you too
+    const near = { bomb: '바로 옆이라 나도 맞는다!', sleepy: '바로 옆이라 나도 잠들지 모른다!', honeyjar: '바로 옆이라 내 발에도 꿀이 묻는다!' }[aiming];
+    if (near && h && run.canThrowAt(h.x, h.y, aiming) && cheb(h, run.p) <= 1) text += `\n${near}`;
   } else if (run && h) {
     text = describeTile(run, h.x, h.y, h === pinned);
     if (run.canZapAt(h.x, h.y)) text += `\n누르면 지팡이로 마법 화살을 쏜다 (남은 ${run.p.charges}발)`;
@@ -447,7 +452,7 @@ document.addEventListener('keydown', ev => {
   if (!run || $('game').hidden) return;
   if (k === 'Escape') { setAim(false); setLook(false); clearPath(); return; }
   if (k === 'l') { setLook(!looking); return; }
-  // aiming a bomb from the keyboard: arrows move the mark, Enter or Space throws
+  // aiming from the keyboard: arrows move the mark, Enter or Space throws
   if (aiming && (KEYS[k] || k === 'Enter' || k === ' ')) {
     ev.preventDefault();
     const h = scene.hover && cheb(scene.hover, run.p) <= BOMB_RANGE ? scene.hover : { x: run.p.x, y: run.p.y };
@@ -455,7 +460,7 @@ document.addEventListener('keydown', ev => {
       const t = { x: h.x + KEYS[k][0], y: h.y + KEYS[k][1] };
       if (cheb(t, run.p) <= BOMB_RANGE) scene.hover = t;
       showTip(scene.hover);
-    } else if (run.canThrowAt(h.x, h.y) && canAct()) { clearPath(); run.throwBomb(h.x, h.y); setAim(false); }
+    } else if (run.canThrowAt(h.x, h.y, aiming) && canAct()) { clearPath(); run.throwTool(aiming, h.x, h.y); setAim(null); }
     return;
   }
   // a held key repeats faster than the hero walks: keep to the walk's beat so each step can glide
@@ -469,11 +474,13 @@ document.addEventListener('keydown', ev => {
   }
   if (KEYS[k]) { ev.preventDefault(); clearPath(); setAim(false); if (canAct()) run.step(...KEYS[k]); return; }
   if (k === ' ' || k === '.') { ev.preventDefault(); clearPath(); setAim(false); if (canAct()) run.wait(); return; }
-  if (k === '2') {
-    setAim(!aiming);
+  // the number keys: 1 potion, 2 bomb, 3 map, 4-9 the meadow tools (data/items.js)
+  const item = Object.keys(ITEMS).find(id => ITEMS[id].key === k);
+  if (item && ITEMS[item].throw) {
+    setAim(aiming === item ? null : item);
     // the mark starts on the nearest critter you could hit
     if (aiming) {
-      const t = run.enemies.filter(e => e.hp > 0 && !e.d.npc && run.isVisible(e.x, e.y) && run.canThrowAt(e.x, e.y)).sort((a, b) => cheb(a, run.p) - cheb(b, run.p))[0];
+      const t = run.enemies.filter(e => e.hp > 0 && !e.d.npc && run.isVisible(e.x, e.y) && run.canThrowAt(e.x, e.y, aiming)).sort((a, b) => cheb(a, run.p) - cheb(b, run.p))[0];
       scene.hover = t ? { x: t.x, y: t.y } : { x: run.p.x, y: run.p.y };
       showTip(scene.hover);
     }
@@ -483,8 +490,7 @@ document.addEventListener('keydown', ev => {
   // 마법사: X sends a spark at the nearest monster in reach (Z is a step down and to the left)
   if (k === 'x' && run?.char.wand) { zapNearest(); return; }
   if (k === 'f') { nextSpeed(); showSpeed(); return; }
-  const item = { 1: 'potion', 3: 'map' }[k];
-  if (item && canAct()) { clearPath(); setAim(false); run.useItem(item); }
+  if (item && canAct()) { clearPath(); setAim(null); run.useItem(item); }
 });
 
 // Click-walking steps around things you would rather not step on by accident: traps you know of, and fire.
@@ -492,6 +498,8 @@ document.addEventListener('keydown', ev => {
 const SKIRT = [T.RING, T.ICE, T.SLIME, T.HONEY];
 
 function onTileClick(x, y) {
+  // the 도구 tray is open: a tap on the map just puts it away
+  if (hud.trayOpen) { hud.trayOpen = false; if (run) hud.update(run); return; }
   // looking: the tap shows what is there and nothing else happens
   if (looking) { pinned = { x, y }; showTip(pinned); return; }
   // a tap first puts away a tip left up by a long press, like closing an info window in SPD
@@ -499,7 +507,7 @@ function onTileClick(x, y) {
   if (!canAct()) return;
   const p = run.p;
   if (aiming) {
-    if (run.canThrowAt(x, y)) { clearPath(); run.throwBomb(x, y); setAim(false); }
+    if (run.canThrowAt(x, y, aiming)) { clearPath(); run.throwTool(aiming, x, y); setAim(null); }
     else if (x === p.x && y === p.y) setAim(false);
     return;
   }

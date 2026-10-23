@@ -80,7 +80,10 @@ export function describeTile(run, x, y, always = false) {
       // stars round its head: a blow now is a surprise attack (run.unaware)
       const dizzy = run.dizzy(e) && !['sleep', 'wander', 'search'].includes(e.state) ? '어질어질해서 지금 치면 기습' : '';
       const fire = e.burn > 0 ? '불붙음' : '';
-      const how = [dizzy || STATE[e.state] || '', fire].filter(Boolean).join(', ');
+      // the meadow tools at work: a chili still burning its tongue, honey holding its feet
+      const hot = e.fear > 0 ? `매워서 달아나는 중 (${e.fear}턴)` : '';
+      const stuck = e.stun > 0 && map.ter[i] === T.HONEY ? '꿀에 붙어 꼼짝 못 함' : '';
+      const how = [hot || stuck || dizzy || STATE[e.state] || '', fire].filter(Boolean).join(', ');
       lines.push(`${e.chief ? '우두머리 ' : ''}${e.d.name} · 체력 ${e.hp}/${e.maxHp} · 공격 ${e.atk} · ${how}${e.d.tip ? ` · ${e.d.tip}` : ''}`);
     }
   }
@@ -88,6 +91,8 @@ export function describeTile(run, x, y, always = false) {
   if (t === WALL && lm && x >= lm.x && x < lm.x + lm.w && y >= lm.y && y < lm.y + lm.h) lines.push(`${lm.name}: ${lm.tip}`);
   else if (t === WALL && map.props?.[i]) lines.push(`${PROP_NAME[run.zone.style] || TILE_INFO.prop.name}: ${TILE_INFO.prop.tip}`);
   if (map.drips?.some(o => o.x === x && o.y === y)) lines.push(`${TILE_INFO.drip.name}: ${TILE_INFO.drip.tip}`);
+  const bell = map.bells?.find(o => o.x === x && o.y === y);
+  if (bell) lines.push(`방울: 딸랑딸랑 울리는 중 (${bell.t}턴 더). 나를 못 보는 적은 이리로 온다. 다 울리면 주울 수 있다.`);
   if (map.flies?.some(o => o.x === x && o.y === y)) lines.push(`${TILE_INFO.fly.name}: ${TILE_INFO.fly.tip}`);
   if (t === STAIRS) lines.push(`${TILE_INFO.stairs.name}: ${TILE_INFO.stairs.tip}`);
   if (t === UPSTAIRS) lines.push(`${TILE_INFO.upStairs.name}: ${TILE_INFO.upStairs.tip}`);
