@@ -74,6 +74,17 @@ export function enemyAct(run, e, dmP) {
     if (--e.fear === 0 && e.hp > 0) Object.assign(e, { state: 'search', searchT: 0, last: { x: p.x, y: p.y } });
     return;
   }
+  // 도토리 다람쥐 with a pinecone (run.pinecone): off it goes to bury it, then pats the earth down,
+  // minding you not at all
+  if (e.bury > 0) {
+    // something else came up (a nap, a noise to look into, spores, a scrap): the pinecone can wait
+    if (e.state !== 'wander' || e.grump > 0 || e.foe != null) e.bury = 0;
+    else {
+      if (--e.bury >= 2) wander(run, e);
+      else run.emit('dig', { enemy: e, done: e.bury === 0 });
+      return;
+    }
+  }
   // bees after you turn back once you are far enough from their stump
   const hive = d.swarm && run.map.hive;
   if (hive && !run.calm(e) && cheb(p, hive) > BEE_HOME) { e.angry = false; e.state = 'wander'; e.aim = false; }

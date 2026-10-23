@@ -1105,9 +1105,23 @@ export class DungeonScene extends Phaser.Scene {
       case 'throw': this.throwArc(d.from, d.to, d.sprite); break;
       // the meadow tools (core/run.js throwTool) where they land
       case 'pine':
+        // 도토리 다람쥐 catches it in both paws, with a happy little hop
+        if (d.caught != null) {
+          const s = this.enemySprites[d.caught];
+          if (s) this.tweens.add({ targets: s, hop: 6, duration: 110, yoyo: true, ease: 'Quad.out' });
+          this.float(d.x, d.y, '덥석!', '#f29bb2', 0, 10);
+          break;
+        }
         this.fx.dust.explode(d.hit ? 10 : 6, center(d.x), center(d.y));
         this.float(d.x, d.y, d.hit ? '딱!' : '톡', d.hit ? '#f4cf4f' : '#d8d2c0', 0, d.hit ? 12 : 9);
         if (!d.hit) this.noiseRing(d.x, d.y, 3, 0xd8d2c0);
+        break;
+      case 'dig':
+        // the squirrel scratches a hole for its pinecone, then pats the earth down over it
+        if (this.run.isVisible(d.enemy.x, d.enemy.y)) {
+          this.fx.dust.explode(4, center(d.enemy.x), center(d.enemy.y) + 4);
+          if (d.done) this.float(d.enemy.x, d.enemy.y, '토닥토닥', '#d8d2c0', 0, 8);
+        }
         break;
       case 'honeyPour': {
         const ring = this.add.circle(center(d.x), center(d.y), TILE * 0.6).setStrokeStyle(2, 0xf4cf4f, 0.9).setDepth(D.fx).setScale(0.4);
@@ -2477,6 +2491,12 @@ export class DungeonScene extends Phaser.Scene {
         if (t > 0.08 && t < 0.26) { g.fillStyle(0xf29bb2, 1); g.fillRect(x - 2, y, 5, 1); g.fillRect(x, y - 2, 1, 5); }
         g.fillStyle(0xfff3b0, 1); g.fillRect(x, y, 1, 1);
       }
+    }
+    // 도토리 다람쥐 hugging the pinecone it caught, on its way to bury it
+    if (who.bury > 0) {
+      const x = Math.round(s.x + dir * 4) - 1, y = Math.round(top + 9 - (s.hop || 0));
+      g.fillStyle(0x4f331d, 1); g.fillRect(x + 1, y, 1, 1); g.fillRect(x, y + 1, 3, 3); g.fillRect(x + 1, y + 4, 1, 1);
+      g.fillStyle(0x9a6a3a, 1); g.fillRect(x + 1, y + 1, 1, 1); g.fillRect(x, y + 2, 1, 1); g.fillRect(x + 2, y + 2, 1, 1); g.fillRect(x + 1, y + 3, 1, 1);
     }
     if (who !== this.run.p) return;
     // a bead of sweat when something is about to hit you or has just noticed you

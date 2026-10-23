@@ -91,7 +91,9 @@ export function describeTile(run, x, y, always = false) {
       const scrap = foe ? `${josa(foe.d.name, '과', '와')} 싸우는 중. 나는 안중에도 없다 (지금 치면 기습)` : '';
       // 심술 버섯: cross with everyone
       const cross = e.grump > 0 ? `심술 나서 옆에 있는 녀석을 무는 중 (${e.grump}턴)` : '';
-      const how = [hot || stuck || cross || scrap || dizzy || heap || STATE[e.state] || '', fire].filter(Boolean).join(', ');
+      // 도토리 다람쥐 with a pinecone in its paws
+      const busy = e.bury > 0 ? '솔방울을 묻으러 가는 중. 나는 안중에도 없다 (지금 치면 기습)' : '';
+      const how = [hot || stuck || cross || scrap || busy || dizzy || heap || STATE[e.state] || '', fire].filter(Boolean).join(', ');
       lines.push(`${e.chief ? '우두머리 ' : e.big ? '기세등등한 ' : ''}${e.d.name} · 체력 ${e.hp}/${e.maxHp} · 공격 ${e.atk} · ${how}${e.d.tip ? ` · ${e.d.tip}` : ''}`);
     }
   }

@@ -74,6 +74,8 @@ export const GOO_TURNS = 14;
 export const TOOL_CHANCE = 0.6, TOOL_MORE = 0.2;
 export const pineDamage = floor => 3 + Math.floor(gfl(floor) / 3);
 export const BELL_TURNS = 4, BELL_RANGE = 7, PINE_NOISE = 3;
+// 도토리 다람쥐 + 솔방울: turns it spends running off with the pinecone and burying it (the last two digging)
+export const BURY_TURNS = 7;
 export const CHILI_TURNS = 5, CHILI_BOSS = 2;
 // 민들레 홀씨 carries you at least this many steps' walk from where you were
 export const BLOW_MIN = 10;

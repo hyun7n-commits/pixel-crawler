@@ -1151,6 +1151,24 @@ export class Run {
   // whoever is close turns to look (a stone thrown to draw a guard off), and a trap it lands on goes off.
   pinecone(x, y) {
     const e = this.enemyAt(x, y);
+    // 도토리 다람쥐 loves anything with a seed in it: it catches the pinecone in both paws, lets go of
+    // whatever it stole, and scampers off to bury its treasure, with no eyes for you until the hole
+    // is patted down (ai.js e.bury); a blow on the way is a surprise one
+    if (e && e.type === 'goblin' && e.hp > 0 && !e.stun && !['hide', 'stone', 'lurk', 'sleep'].includes(e.state)) {
+      this.emit('pine', { x, y, hit: false, caught: e.id });
+      if (e.loot) {
+        this.pickups.push({ x: e.x, y: e.y, type: 'gold', amount: e.loot, stolen: true });
+        this.emit('dropLoot', { enemy: e, x: e.x, y: e.y, n: e.loot });
+        e.loot = 0;
+      }
+      Object.assign(e, { state: 'wander', bury: B.BURY_TURNS, target: null, foe: null, foeT: 0, aim: false, fear: 0 });
+      this.say(e, '♥');
+      if (this.isVisible(x, y)) {
+        this.log(`${josa(e.d.name, '이', '가')} 솔방울을 덥석 받아 들고 신나서 묻으러 간다!`, 'good');
+        this.discover('pine_squirrel');
+      }
+      return;
+    }
     if (e && !e.d.npc) {
       this.emit('pine', { x, y, hit: true });
       if (this.isVisible(x, y)) this.log(`솔방울이 ${josa(e.d.name, '을', '를')} 딱 맞혔다!`, 'good');
@@ -1589,6 +1607,7 @@ export class Run {
     if (e.state === 'dead') dmg = e.hp;         // a ladybug playing dead: one more blow and it is over
     e.hp -= dmg;
     e.hitAt = this.turn;
+    e.bury = 0;   // a blow brings a squirrel busy with its pinecone back to its senses
     this.emit('hit', { enemy: e, x: e.x, y: e.y, dmg, kind });
     // 무당벌레: the first time it should fall, it flips over and plays dead
     if (e.hp <= 0 && e.d.playDead && !e.faked) {
