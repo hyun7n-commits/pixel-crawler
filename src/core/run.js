@@ -507,6 +507,7 @@ export class Run {
       });
     }
     this.routeSaid = kind;
+    m.routeKind = kind;
   }
 
   // What each new zone adds to a field: the marsh's diving beetles slip under the water and fireflies

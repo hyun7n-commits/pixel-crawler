@@ -714,6 +714,44 @@ export const SPR = {
   ],
 };
 
+// v0.26 bosses of their own (they used to be a big copy of their critters): 왕쥐 sits up front in a
+// little red cape with an ermine collar, and 버섯 왕 wears a gold band round its cap and a moustache
+SPR.ratking = [
+  '.kkk........kkk.',
+  'kqqqk......kqqqk',
+  'kqqlk......klqqk',
+  '.klllkkkkkklllk.',
+  '.kllllllllllllk.',
+  'kllllllllllllllk',
+  'kllkllllllllkllk',
+  'kllkllwwwwllkllk',
+  'klllwwwqqwwwlllk',
+  'kllllwwffwwllllk',
+  '.kqllwfwwfwllqk.',
+  'krkwkwkwwkwkwkrk',
+  'krrrWWWWWWWWrrkq',
+  'kRrrWWWWWWWWrkqq',
+  '.kRRkkWWWWkkRRk.',
+  '..kk..kkkk..kk..',
+];
+SPR.skelking = [
+  '.....kkkkkk.....',
+  '...kkppppppkk...',
+  '..kppppppppppk..',
+  '.kpppwwppwwpppk.',
+  '.kppwwwppwwwppk.',
+  'kppppwppppwppppk',
+  'kpwppppppppppwpk',
+  'kPPPppppppppPPPk',
+  'kyYyyYyyyyYyyYyk',
+  '.kkkwwwwwwwwkkk.',
+  '...kwkwwwwkwk...',
+  '...kwwwwwwwwk...',
+  '...kwWWWWWWwk...',
+  '...kWWwwwwWWk...',
+  '....kWWWWWWk....',
+  '.....kkkkkk.....',
+];
 // 갈림길 (v0.26): the little notice board planted behind a burrow; the picture of what the field past
 // it has (data/routes.js) is drawn on its paper (scenes/DungeonScene.js buildTile)
 SPR.routeBoard = [

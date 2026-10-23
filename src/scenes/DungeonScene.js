@@ -1619,7 +1619,7 @@ export class DungeonScene extends Phaser.Scene {
 
   onKill(e) {
     const s = this.enemySprites[e.id];
-    const fx = e.d.sprite === 'skel' ? 'spore' : e.d.sprite === 'slime' ? 'slime' : 'blood';
+    const fx = e.d.sprite === 'skel' || e.d.sprite === 'skelking' ? 'spore' : e.d.sprite === 'slime' ? 'slime' : 'blood';
     if (this.run.isVisible(e.x, e.y)) this.fx[fx].explode(e.d.boss ? 40 : 14, center(e.x), center(e.y));
     if (e.d.boss) { this.fx.spark.explode(30, center(e.x), center(e.y)); }
     if (!s) return;
