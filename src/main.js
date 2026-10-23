@@ -697,4 +697,4 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) putAw
 window.addEventListener('pagehide', putAway);
 
 // test hook for automated play-testing; harmless in normal play
-window.__game = { get run() { return run; }, get meta() { return meta; }, get scene() { return scene; }, get village() { return village(); }, startRun, setAim, showVillage, showStory };
+window.__game = { get run() { return run; }, get meta() { return meta; }, get scene() { return scene; }, get village() { return village(); }, startRun, setAim, showVillage, showStory, talkTo };

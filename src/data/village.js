@@ -157,6 +157,7 @@ const TOOL_TALK = {
 const ROUTE_TALK = {
   chief: '왕관 쓴 녀석 있는 굴로 일부러 들어갔다며? 간도 크다!',
   rest: '표지판 보고 쉬어 가는 굴로 갔구나. 잘했어, 쉬는 것도 일이야.',
+  den: '다 같이 낮잠 자는 방이 있다는 굴로 들어갔다며? 걔들 깨면 어쩌려고!',
 };
 
 export function gossip(last, meta) {
