@@ -40,6 +40,11 @@ export function onEnter(run, who, x, y) {
   if (ter === T.BERRY && who === 'player') eatBerries(run, x, y);
   if (who === 'player' && isTrap(ter)) springTrap(run, x, y);
   if (who === 'player' && ter === T.RING) warp(run, x, y);
+  // 꿀: whoever walks into the queen bee's honey is stuck there a turn (her bees fly over it)
+  if (ter === T.HONEY && who === 'player') {
+    run.p.sticky = 1;
+    if (!run.told.honey) { run.told.honey = true; run.log('꿀을 밟았다! 끈적끈적, 다음 걸음은 발을 떼느라 한 턴이 간다.', 'warn'); }
+  } else if (ter === T.HONEY && !who.d.flies && who.type !== 'queen') who.stun = Math.max(who.stun || 0, 1);
 }
 
 // 요정 고리: step into one and you pop out of its partner. The fairies only carry you, so whoever
@@ -71,7 +76,7 @@ function trample(run, who, x, y) {
   if (run.isVisible(x, y)) run.emit('rustle', { x, y });
   // now and then something glints in the grass
   if (who === 'player' && Math.random() < B.GRASS_COIN) {
-    const n = rint(1, 3) * (1 + Math.floor((run.floor - 1) / B.FLOORS_PER_ZONE));
+    const n = rint(1, 3) * (1 + Math.floor(B.gs(B.stageOf(run.floor))));
     run.addGold(n);
     run.log(`풀 속에서 동전 ${n}개를 주웠다.`, 'good');
   }
@@ -109,7 +114,7 @@ export function springTrap(run, x, y) {
     }
     const n = Math.min(spots.length, B.trapSummon(run.floor));
     for (const s of spots.slice(0, n)) {
-      const e = run.spawnEnemy(pick(run.zone.enemies), s.x, s.y, B.enemyScale(run.floor));
+      const e = run.spawnEnemy(pick(run.zone.enemies), s.x, s.y, run.foeScale);
       e.state = 'hunt';
       e.last = { x: run.p.x, y: run.p.y };
       run.emit('summon', { x: s.x, y: s.y });
@@ -132,7 +137,7 @@ export function openGrave(run, x, y) {
   run.noise(x, y, 5);
   const roll = Math.random();
   if (big || roll < 0.3) {
-    const e = run.spawnEnemy('wraith', x, y, B.gimmickScale(run.floor));
+    const e = run.spawnEnemy('wraith', x, y, run.oddScale);
     e.state = 'hunt';
     e.last = { x: run.p.x, y: run.p.y };
     run.say(e, '!');
@@ -181,6 +186,14 @@ export function revealTraps(run) {
 export function setBurn(run, who, n) {
   const b = body(run, who);
   if (who !== 'player' && who.d.npc) return;
+  // 숯덩이 catches: it flares up quick and fierce, and burns itself out in a few turns
+  if (who !== 'player' && who.d.coal && !who.lit && who.hp > 0) {
+    Object.assign(who, { lit: 9, look: 'coalLit', state: 'hunt', last: { x: run.p.x, y: run.p.y }, wake: 0, doze: 0 });
+    run.emit('kindle', { enemy: who });
+    run.say(who, '화르륵!');
+    if (run.isVisible(who.x, who.y)) run.log(`${josa(who.d.name, '에', '에')} 불이 붙었다! 활활 타오른다!`, 'warn');
+  }
+  if (who !== 'player' && who.d.fireproof) return;
   if (b.hp <= 0 || run.map.ter[idx(b.x, b.y)] === T.WATER) return;
   const was = b.burn > 0;
   b.burn = Math.max(b.burn || 0, n);
@@ -219,6 +232,15 @@ function fireTick(run) {
       else if (TERRAIN[map.ter[j]]?.burn && Math.random() < 0.45) spread.add(j);
     }
     if (--map.fire[i] === 0 && (map.ter[i] === T.BRUSH || map.ter[i] === T.GRASS)) { map.ter[i] = T.ASH; changed.push(i); }
+    // a wooden bridge burnt through falls into the drop, with whoever is on it
+    else if (map.fire[i] === 0 && map.ter[i] === T.BRIDGE) {
+      map.ter[i] = T.CHASM;
+      changed.push(i);
+      run.emit('collapse', { x, y });
+      if (run.isVisible(x, y)) run.log('불탄 다리가 와르르 무너졌다!', 'warn');
+      if (w === 'player') { run.pendingFall = true; run.fallAt = { x, y }; }
+      else if (w && !w.d.flies && !w.d.boss) run.plunge(w, { x, y });
+    }
   }
   for (const j of spread) {
     const x = j % map.w, y = (j / map.w) | 0;

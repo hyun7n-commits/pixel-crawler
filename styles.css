@@ -145,7 +145,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #side { background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; padding: 12px; overflow-y: auto; min-height: 0; }
 .hud-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .floor { font-family: var(--font-body); font-size: 24px; }
-.floor small { color: var(--muted); font-family: var(--font-display); font-size: 15px; margin-left: 4px; }
+.floor small { white-space: nowrap; color: var(--muted); font-family: var(--font-display); font-size: 15px; margin-left: 4px; }
 .gold-now { color: var(--gold); font-family: var(--font-body); font-size: 24px; font-variant-numeric: tabular-nums; }
 .meter { display: flex; flex-direction: column; gap: 4px; }
 .meter-label { display: flex; justify-content: space-between; font-family: var(--font-body); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -219,6 +219,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .item.aiming { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); color: var(--gold); }
 .item kbd { font-family: var(--font-tiny); font-size: 10px; color: var(--muted); }
 .actions { display: flex; gap: 6px; }
+#lookBtn.on { border-color: var(--gold); color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
 .actions .btn { flex: 1; font-family: var(--font-body); font-size: 12px; white-space: nowrap; padding-left: 2px; padding-right: 2px; min-width: 0; }
 #log { font-family: var(--font-body); font-size: 12px; line-height: 1.5; display: flex; flex-direction: column; gap: 2px; color: var(--muted); flex: 1; min-height: 80px; }
 #log div:last-child { color: var(--fg); }
@@ -277,6 +278,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .critter-book .ore-cell.boss { border-color: #8a6d2a; }
 .critter-book .ore-cell.picked { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
 .sheet p.book-note { position: sticky; bottom: -18px; font-family: var(--font-body); font-size: 12px; color: var(--fg); background: var(--panel); border-top: 1px solid var(--line); margin: 10px -2px -2px; padding: 10px 4px 14px; min-height: 2.8em; line-height: 1.45; }
+.sheet p.book-note .lore { display: block; margin-top: 6px; color: #9a8fb0; font-style: italic; }
 .unlock-note { background: #2a2410; border: 1px solid #6a5a1c; color: var(--gold); padding: 10px 12px; border-radius: 0; line-height: 1.5; }
 .opened { border: 2px solid var(--gold); background: #1d1a10; padding: 8px 12px 10px; }
 .opened h3 { margin: 0 0 6px; color: var(--gold); font-family: var(--font-display); font-size: 15px; letter-spacing: 1px; }
@@ -362,7 +364,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   #mXp { flex-basis: 100%; }
   #stage { grid-column: 1; grid-row: 2; }
   #mbar {
-    grid-column: 2; grid-row: 1 / span 2; width: 78px; grid-auto-flow: row; grid-template-columns: 1fr; grid-template-rows: repeat(5, minmax(0, 1fr)); gap: 5px;
+    grid-column: 2; grid-row: 1 / span 2; width: 78px; grid-auto-flow: row; grid-template-columns: 1fr; grid-auto-rows: minmax(0, 1fr); gap: 5px;
     border-top: 0; border-left: 1px solid var(--line);
     padding: max(6px, env(safe-area-inset-top, 0px)) max(6px, env(safe-area-inset-right, 0px)) max(6px, env(safe-area-inset-bottom, 0px)) 6px;
   }

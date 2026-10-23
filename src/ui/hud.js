@@ -10,7 +10,7 @@ const TIER_NAME = ['', ' (진화)', ' (전설)', ' (신화)'];
 const relicDesc = (id, l) => (isFused(id) ? fusedParts(id).map(p => RELICS[p].desc(maxLevelOf(p))).join(' / ') : RELICS[id].desc(l));
 import { ITEMS } from '../data/items.js';
 import { isOpen } from '../data/unlocks.js';
-import { xpToLevel } from '../data/balance.js';
+import { xpToLevel, WAND_CHARGES, WAND_RECHARGE } from '../data/balance.js';
 import { playerStatus } from './tip.js';
 import { wait, fissionMs, FISSION_LEAD, FISSION_STEP, GROW_MS } from './beat.js';
 
@@ -33,10 +33,13 @@ function questLines(run) {
 }
 
 export class Hud {
-  constructor({ onUseItem, onWait, onBag }) {
+  constructor({ onUseItem, onWait, onBag, onLook, onWand }) {
     this.onUseItem = onUseItem;
+    this.onWand = onWand;
     this.onWait = onWait;
     this.onBag = onBag;
+    this.onLook = onLook;
+    this.looking = false;
     this.selected = null;
     this.lines = [];
     this.bannerTimer = 0;
@@ -101,7 +104,7 @@ export class Hud {
     const s = run.stat(), p = run.p;
     // the zone, how far into the trip (the last field is its boss), the 회차 and the dares taken
     const boss = run.floor === run.bossFloor, local = run.floor - run.startFloor + 1;
-    const where = boss ? '대장' : `${local}/${run.bossFloor - run.startFloor}`;
+    const where = run.depth ? `깊은 곳 ${run.depth}` : boss ? '대장' : `${local}/${run.bossFloor - run.startFloor}`;
     const extra = `${run.loop}회차${run.dares.length ? ` · 내기 ${run.dares.length}` : ''}`;
     $('floorLabel').innerHTML = `${run.zone.name} ${where}<small>${extra}</small>`;
     $('goldNow').textContent = `${run.gold}G`;
@@ -170,6 +173,14 @@ export class Hud {
 
     const items = $('items');
     items.innerHTML = '';
+    // 마법사's wand: its sparks, full and spent
+    if (run.char.wand) {
+      const b = button('item wand', null, this.onWand);
+      b.append(relicIcon('bolt'), el('span', null, `마법 지팡이 ${'●'.repeat(p.charges)}${'○'.repeat(WAND_CHARGES - p.charges)}`), el('kbd', null, '키 X'));
+      b.title = `멀리(2~4칸) 있는 적을 누르면 마법 화살을 쏜다. ${WAND_RECHARGE}턴마다 한 발씩 다시 찬다.`;
+      b.disabled = !p.charges;
+      items.append(b);
+    }
     for (const [id, d] of shownItems(run)) {
       const aim = id === 'bomb' && this.aiming;
       const b = button('item' + (aim ? ' aiming' : ''), null, () => this.onUseItem(id));
@@ -180,7 +191,7 @@ export class Hud {
     }
   }
 
-  // phone toolbar: rest, the three consumables and the bag, big enough for a thumb
+  // phone toolbar: rest, a look at something, the consumables and the bag, big enough for a thumb
   renderBar(run) {
     const bar = $('mbar'), p = run.p;
     bar.innerHTML = '';
@@ -191,6 +202,13 @@ export class Hud {
       bar.append(b);
     };
     add('', 'rest', '쉬기', this.onWait);
+    if (run.char.wand) {
+      const b = button('mb', null, this.onWand);
+      b.append(relicIcon('bolt'), el('span', null, `지팡이 ${p.charges}`));
+      b.disabled = !p.charges;
+      bar.append(b);
+    }
+    add(this.looking ? 'aiming' : '', 'look', this.looking ? '누르기' : '살펴보기', this.onLook);
     for (const [id, d] of shownItems(run)) {
       const aim = id === 'bomb' && this.aiming;
       add(aim ? 'aiming' : '', d.sprite, aim ? '던질 곳' : `${d.name.replace('체력 ', '')} ${p.items[id]}`, () => this.onUseItem(id), !p.items[id]);

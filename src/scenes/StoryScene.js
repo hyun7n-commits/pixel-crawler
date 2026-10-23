@@ -105,7 +105,7 @@ export class StoryScene extends Phaser.Scene {
   house(spec, x, y, lived = true, tint) {
     const key = `story_house_${spec.id}_${lived ? 1 : 0}`;
     if (!this.textures.exists(key)) this.textures.addCanvas(key, houseCanvas(spec, lived));
-    const im = this.keep(this.add.image(x * TILE, y * TILE, key).setOrigin(0).setDepth(D.house));
+    const im = this.keep(this.add.image(x * TILE, (y + spec.h) * TILE, key).setOrigin(0, 1).setDepth(D.house));
     if (tint) im.setTint(tint);
     return im;
   }

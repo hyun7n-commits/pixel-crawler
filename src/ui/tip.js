@@ -12,10 +12,11 @@ const CHEST = '보물 상자: 열면 유물을 하나 고른다.';
 const PICKUP = {
   chest: () => CHEST,
   lockedChest: () => '잠긴 상자: 이 구역의 열쇠로 열면 유물을 넷 중 하나 고른다.',
-  bossChest: () => '대장의 보물 상자: 열면 탐험 성공, 골드가 한가득 나온다.',
+  bossChest: () => '대장의 보물 상자: 열면 탐험 성공. 골드가 한가득 나오고 가방 속 유물이 모두 자란다.',
   key: () => '작은 열쇠: 이 구역의 잠긴 문이나 상자를 연다.',
   cageKey: () => '우리 열쇠: 우두머리가 물고 있던 열쇠. 갇힌 친구의 우리를 연다.',
   necklace: () => '아기새 리본: 울보 아기새의 것이다.',
+  tag: () => '낡은 일꾼 명찰: 조합 명찰이다. 이름 자리가 긁혀 있다.',
   candy: (q, run) => `별사탕: 먹으면 가진 유물들이 한꺼번에 ${q.n || candySteps(run.floor)}번 자란다.`,
   crystal: (q, run) => {
     const lv = (run.p.relics[q.relic] || 0) + 1;
@@ -40,7 +41,20 @@ export function playerStatus(p) {
 }
 
 // what a lone wall standing in a room is, by zone
-const PROP_NAME = { meadow: '둥근 덤불', forest: '그루터기', marsh: '갈대 무더기', rock: '바위', cave: '석순' };
+const PROP_NAME = { meadow: '둥근 덤불', forest: '그루터기', marsh: '갈대 무더기', rock: '바위', cave: '석순',
+  sea: '따개비 바위', garden: '거인 꽃봉오리', snow: '얼음덩이', volcano: '식은 용암 덩이', ruins: '부러진 기둥' };
+
+// by the sea, rock with no ground beside it is the sea far below the cliffs (see DungeonScene.buildTile)
+function farSea(run, x, y) {
+  const map = run.map;
+  if (run.zone.style !== 'sea') return false;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    if (!inMap(x + dx, y + dy)) continue;
+    const j = idx(x + dx, y + dy);
+    if (map.tiles[j] !== WALL && ![T.CHASM, T.BRIDGE].includes(map.ter[j])) return false;
+  }
+  return true;
+}
 
 export function describeTile(run, x, y, always = false) {
   if (!inMap(x, y)) return '';
@@ -62,8 +76,9 @@ export function describeTile(run, x, y, always = false) {
     else if (e.d.npc) lines.push(`${e.d.name}: ${e.d.tip}`);
     else lines.push(`${e.chief ? '우두머리 ' : ''}${e.d.name} · 체력 ${e.hp}/${e.maxHp} · 공격 ${e.atk} · ${STATE[e.state] || ''}${e.d.tip ? ` · ${e.d.tip}` : ''}`);
   }
-  const t = map.tiles[i];
-  if (t === WALL && map.props?.[i]) lines.push(`${PROP_NAME[run.zone.style] || TILE_INFO.prop.name}: ${TILE_INFO.prop.tip}`);
+  const t = map.tiles[i], lm = map.landmark;
+  if (t === WALL && lm && x >= lm.x && x < lm.x + lm.w && y >= lm.y && y < lm.y + lm.h) lines.push(`${lm.name}: ${lm.tip}`);
+  else if (t === WALL && map.props?.[i]) lines.push(`${PROP_NAME[run.zone.style] || TILE_INFO.prop.name}: ${TILE_INFO.prop.tip}`);
   if (map.drips?.some(o => o.x === x && o.y === y)) lines.push(`${TILE_INFO.drip.name}: ${TILE_INFO.drip.tip}`);
   if (map.flies?.some(o => o.x === x && o.y === y)) lines.push(`${TILE_INFO.fly.name}: ${TILE_INFO.fly.tip}`);
   if (t === STAIRS) lines.push(`${TILE_INFO.stairs.name}: ${TILE_INFO.stairs.tip}`);
@@ -94,6 +109,9 @@ export function describeTile(run, x, y, always = false) {
     lines.push(q.type === 'gold' ? `골드 ${q.amount}` : PICKUP[q.type] ? PICKUP[q.type](q, run) : `${ITEMS[q.type].name}: ${ITEMS[q.type].desc}`);
   }
   // a long press on a phone should always answer with something
-  if (!lines.length && always) lines.push(t === WALL ? `${run.zone.wallName}: ${TILE_INFO.wall.tip}` : `${TILE_INFO.floor.name}: ${TILE_INFO.floor.tip}`);
+  if (!lines.length && always) {
+    lines.push(t === WALL && farSea(run, x, y) ? '바다: 절벽 저 아래에서 파도가 철썩인다. 여기로는 못 내려간다.'
+      : t === WALL ? `${run.zone.wallName}: ${TILE_INFO.wall.tip}` : `${TILE_INFO.floor.name}: ${TILE_INFO.floor.tip}`);
+  }
   return lines.join('\n');
 }

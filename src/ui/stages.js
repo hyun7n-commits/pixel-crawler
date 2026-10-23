@@ -48,7 +48,7 @@ export function showStages({ meta, onGo, onClose }) {
       }
       sh.append(tabs);
       if (loop > 1) sh.append(el('p', 'loop-note', `${loop}회차: 들판 친구들 체력과 공격 +${Math.round((loopFoe(loop) - 1) * 100)}%, 골드 +${Math.round((loopGold(loop) - 1) * 100)}%`));
-    } else if (LOOPS > 1) sh.append(el('p', 'loop-note', '다섯 스테이지를 다 깨면 더 어려운 2회차가 열린다.'));
+    } else if (LOOPS > 1) sh.append(el('p', 'loop-note', '열 스테이지를 다 깨면 더 어려운 2회차가 열린다.'));
     const dares = daresOn(meta);
     if (dares.length) sh.append(el('p', 'loop-note dare-note', `라이벌 내기 ${dares.length}개: ${dares.map(id => DARE_BY_ID[id].name).join(', ')} · 골드 ×${dareGold(dares.length).toFixed(1)}`));
 
@@ -67,7 +67,7 @@ export function showStages({ meta, onGo, onClose }) {
       if (open && kit.picks) info.append(el('span', 'stage-sub kit', `출발 보급: 유물 ${kit.picks}개, 공격 +${kit.atk}, 체력 +${kit.hp}`));
       card.append(info);
       // the friend locked up here at this 회차: a dark shape until rescued
-      const fid = isOpen(meta, 'cage') && FRIENDS[s][loop - 1], got = fid && meta.chars[fid];
+      const fid = isOpen(meta, 'cage') && FRIENDS[s]?.[loop - 1], got = fid && meta.chars[fid];
       if (fid && CHARACTERS[fid]) {
         const pal = el('span', 'stage-friend' + (got ? ' got' : ''));
         pal.append(icon(CHARACTERS[fid].sprite, 32));

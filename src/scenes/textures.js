@@ -218,28 +218,74 @@ const DETAILS = {
     px => { px('#3d8fb3', [[6, 9], [7, 9], [7, 8], [10, 10], [11, 10]]); px('#8fd8f0', [[6, 8], [7, 7], [10, 9]]); px('#c49aff', [[11, 9]]); },
   ],
 };
+// v0.23's five new grounds
+Object.assign(DETAILS, {
+  sea: [null, null, null,
+    px => { px('#f2d2c8', [[6, 8], [7, 7], [8, 8], [7, 8]]); px('#c99a8c', [[6, 9], [7, 9], [8, 9]]); }, // a shell
+    px => { px('#e0884a', [[7, 6], [6, 8], [7, 8], [8, 8], [5, 9], [9, 9], [7, 7], [7, 9], [6, 10], [8, 10]]); px('#f4b070', [[7, 8]]); }, // a starfish
+    px => { px('#4f7a4a', [[4, 11], [5, 10], [5, 9], [6, 8], [10, 12], [10, 11], [11, 10]]); px('#6f9a5a', [[6, 7], [11, 9]]); }, // seaweed
+    (px, z) => { px(z.floorDark, [[4, 5], [6, 5], [5, 6], [9, 9], [11, 9], [10, 10], [5, 12], [7, 12], [6, 13]]); }, // little crab tracks
+    (px, z) => { px('#9a958c', [[9, 10], [10, 10], [11, 10]]); px('#c9c2b6', [[9, 9], [10, 9]]); px(z.floorDark, [[9, 11], [10, 11], [11, 11]]); },
+  ],
+  garden: [null, null, null,
+    px => { px('#e6a0b8', [[5, 6], [6, 6], [6, 7]]); px('#f4cf4f', [[10, 10], [11, 10], [11, 11]]); px('#e6a0b8', [[12, 4]]); }, // fallen petals
+    px => { px('#f4f0e8', [[6, 6], [8, 6], [7, 5], [7, 7]]); px('#f4cf4f', [[7, 6]]); px('#4f9a3e', [[7, 8], [7, 9], [8, 10]]); }, // a little daisy
+    px => { px('#5f9a48', [[6, 10], [7, 9], [8, 10], [7, 10]]); px('#8fcf72', [[6, 9], [8, 9]]); }, // a sprout
+    px => { px('#f4d98a', [[4, 4], [9, 7], [12, 11], [6, 12], [11, 5]]); }, // pollen dust
+    px => { px('#a0703f', [[5, 9], [6, 9], [7, 9], [8, 9], [9, 9], [10, 9]]); px('#6f9a5a', [[6, 8], [9, 8], [8, 7]]); }, // a dropped twig with a leaf
+  ],
+  snow: [null, null, null,
+    (px, z) => { px(z.floorDark, [[5, 5], [6, 5], [5, 6], [9, 9], [10, 9], [9, 10], [6, 12], [7, 12]]); }, // footprints
+    px => { px('#6b4a2e', [[4, 10], [5, 9], [6, 9], [7, 8], [8, 8], [6, 10]]); }, // a twig poking out of the snow
+    (px, z) => { px('#ffffff', [[6, 7], [7, 7], [8, 7]]); px(z.floorLight, [[5, 8], [6, 8], [7, 8], [8, 8], [9, 8]]); px(z.floorDark, [[5, 9], [6, 9], [7, 9], [8, 9], [9, 9]]); }, // a lump
+    px => { px('#ffffff', [[4, 4], [11, 7], [7, 12]]); px('#dff4ff', [[5, 4], [11, 8]]); }, // sparkles
+    (px, z) => { px(z.floorDark, [[4, 7], [5, 7], [6, 8], [7, 8], [8, 9], [9, 9], [10, 10]]); }, // a crack in the crust
+  ],
+  volcano: [null, null, null,
+    px => { px('#ff9a3a', [[7, 8]]); px('#c4501f', [[6, 8], [8, 8], [7, 9]]); }, // an ember
+    (px, z) => { px(z.floorDark, [[3, 5], [4, 6], [5, 6], [6, 7], [7, 8], [8, 8], [9, 9]]); px('#c4501f', [[5, 6], [7, 8]]); }, // a glowing crack
+    px => { px('#1b1424', [[6, 9], [7, 8], [8, 9], [7, 9]]); px('#5a4a6a', [[7, 8]]); }, // an obsidian shard
+    (px, z) => { px(z.floorLight, [[4, 10], [5, 10], [10, 5], [11, 5], [12, 12]]); px(z.floorDark, [[4, 11], [5, 11], [10, 6], [11, 6]]); },
+    px => { px('#8a7e70', [[6, 7], [7, 7], [8, 8], [6, 8], [7, 8]]); px('#a89c8c', [[6, 7]]); }, // pumice
+  ],
+  ruins: [null, null, null,
+    px => { px('#c9c2b6', [[6, 8], [7, 8], [8, 8], [9, 8], [6, 9], [9, 9], [6, 10], [7, 10], [8, 10], [9, 10]]); px('#7a4e57', [[7, 9], [8, 9]]); px('#a0703f', [[7, 6], [8, 7]]); }, // a worker's name tag on its string
+    (px, z) => { px(z.floorDark, [[4, 4], [5, 5], [6, 5], [7, 6], [7, 7], [8, 8]]); }, // a cracked flagstone
+    px => { px('#5f8a4a', [[5, 10], [6, 9], [6, 10], [7, 10], [10, 6], [11, 5]]); }, // weeds between the stones
+    px => { px('#f4cf4f', [[7, 8]]); px('#c99a2b', [[8, 8], [7, 9]]); }, // a lost button
+    (px, z) => { px('#7a6a60', [[5, 7], [6, 7], [7, 7], [5, 8], [6, 8]]); px(z.floorDark, [[5, 9], [6, 9], [7, 8]]); }, // a bit of brick
+  ],
+});
+
 function floorTile(z, zi, variant) {
   const [c, g] = canvas(), r = noise(variant * 17 + 3 + zi * 101);
   const px = (col, list) => { g.fillStyle = col; list.forEach(([x, y]) => g.fillRect(x, y, 1, 1)); };
   g.fillStyle = z.floor; g.fillRect(0, 0, TILE, TILE);
-  const stony = z.style === 'rock' || z.style === 'cave';
-  for (let k = 0; k < (stony ? 7 : 6) + (variant % 3); k++) {
+  const stony = ['rock', 'cave', 'volcano', 'ruins'].includes(z.style), soft = z.style === 'sea' || z.style === 'snow';
+  // flagstones in the ruins: a few seams
+  if (z.style === 'ruins') {
+    g.fillStyle = z.floorDark;
+    g.fillRect(0, 7 + (variant % 2), TILE, 1); g.fillRect(4 + variant, 0, 1, 7 + (variant % 2)); g.fillRect((10 + variant * 3) % 15, 8, 1, 8);
+  }
+  for (let k = 0; k < (stony ? 7 : soft ? 5 : 6) + (variant % 3); k++) {
     const x = 1 + Math.floor(r() * 14), y = 1 + Math.floor(r() * 14);
-    if (stony) px(r() < 0.6 ? z.floorDark : z.floorLight, r() < 0.4 ? [[x, y], [x + 1, y]] : [[x, y]]);
+    if (stony || soft) px(r() < 0.6 ? z.floorDark : z.floorLight, r() < 0.4 && !soft ? [[x, y], [x + 1, y]] : [[x, y]]);
     else { px(z.floorDark, [[x, y], [x, y - 1]]); px(z.floorDark, [[x + 2, y], [x + 2, y - 1], [x + 1, y + 1]]); } // a blade or two
   }
   // a few lighter blades in front, so the ground has some depth to it
-  if (!stony) for (let k = 0; k < 4; k++) {
+  if (!stony && !soft) for (let k = 0; k < 4; k++) {
     const x = 1 + Math.floor(r() * 14), y = 2 + Math.floor(r() * 13);
     px(z.floorLight, [[x, y], [x + (k % 2 ? 1 : -1), y - 1]]);
   }
   for (let k = 0; k < 6; k++) px(z.floorLight, [[Math.floor(r() * TILE), Math.floor(r() * TILE)]]);
-  DETAILS[z.style][variant]?.(px, z);
+  DETAILS[z.style]?.[variant]?.(px, z);
   return c;
 }
 
+// `a` and `b` are '#rrggbb', or 'rgb(r,g,b)' from an earlier mix
+const rgbInt = c => (c[0] === '#' ? parseInt(c.slice(1), 16) : c.match(/\d+/g).reduce((n, v) => (n << 8) | +v, 0));
 const mix = (a, b, t) => {
-  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const pa = rgbInt(a), pb = rgbInt(b);
   const ch = s => Math.round(((pa >> s) & 255) * (1 - t) + ((pb >> s) & 255) * t);
   return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
 };
@@ -262,6 +308,29 @@ function clumps(fill, r, v, y0, y1, shape, col) {
   }
 }
 
+// The giant garden's top: one huge leaf over the tile, a pale vein down it, and now and then the
+// edge of a giant petal.
+function leafTop(fill, r, v, y1, z, hi) {
+  clumps(fill, r, v, 0, y1, LEAVES, { h: hi, l: z.wallLight, d: z.wallDark });
+  const vx = 3 + ((v * 5) % 9);
+  for (let y = 0; y < y1; y++) fill(mix(z.wallLight, '#ffffff', 0.35), vx + (y >> 2), y);
+  if (r() < 0.22) {
+    const col = ['#e48aa8', '#f4cf4f', '#f4f0e8', '#c49aff'][Math.floor(r() * 4)], x = Math.floor(r() * 10), y = Math.floor(r() * Math.max(1, y1 - 5));
+    fill(col, x, y, 5, 3); fill(col, x + 1, y + 3, 3, 1); fill(mix(col, '#000000', 0.2), x, y + 2, 5, 1);
+  }
+}
+
+// The ruins' top: broken brick courses seen from above, moss and ivy creeping over them.
+function brickTop(fill, r, v, y1, z) {
+  const mortar = mix(z.wallTop, '#000000', 0.3);
+  for (let y = 0; y < y1; y += 4) {
+    fill(mortar, 0, y + 3, TILE, 1);
+    for (let x = ((y >> 2) % 2) * 4 + v; x < TILE; x += 8) fill(mortar, x, y, 1, 3);
+    fill(z.wallLight, 0, y, TILE, 1);
+  }
+  for (let k = 0; k < 3; k++) if (r() < 0.5) { const x = Math.floor(r() * 13), y = Math.floor(r() * Math.max(1, y1 - 2)); fill('#4f7a42', x, y, 3, 2); fill('#6f9a5a', x, y); }
+}
+
 // The top of a reed bed: thin upright blades in rows, pale tips, and now and then a cattail.
 function reedTops(fill, r, v, y1, z, hi) {
   for (let x = 0; x < TILE; x++) {
@@ -281,15 +350,53 @@ function reedTops(fill, r, v, y1, z, hi) {
 //   rock:   a cliff, cracked on top, with a face of rough blocks
 //   cave:   dark rock flecked with crystals, stalactites hanging off its face
 // `v` (0-2) shifts the leaves, trunks and seams so a long wall does not look stamped.
+// Out on the meadow the hedges are only a row thick: what lies beyond them is open pasture, tall grass
+// swaying in the wind with seed heads and a flower here and there, so the meadow looks like rolling
+// fields between hedgerows and not a wood.
+function pastureTile(z, v) {
+  const [c, g] = canvas(), r = noise(v * 53 + 11);
+  const fill = (col, x, y, w = 1, h = 1) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+  // uncut grass beyond the hedgerows: a touch of straw gold and tufts of tall blades,
+  // so it never reads as the mown grass you walk on
+  const base = mix(mix(z.floorLight, z.wallLight, 0.3), '#a8975a', 0.3), soft = mix(base, '#0a1408', 0.22);
+  const light = mix(base, '#eef4b8', 0.2), seed = mix(base, '#efe2a0', 0.42);
+  fill(base, 0, 0, TILE, TILE);
+  for (let k = 0; k < 3; k++) {
+    const x = 1 + Math.floor(r() * 11), y = 5 + Math.floor(r() * 9);
+    // a tuft: thin blades of different heights, the tall ones bending over at the tip
+    for (const [dx, h, lean] of [[0, 2, -1], [2, 4, 1], [4, 3, 0]]) {
+      fill(soft, x + dx, y + 1);
+      fill(light, x + dx, y - h + 2, 1, h - 1);
+      fill(light, x + dx + lean, y - h + 1);
+    }
+    if (r() < 0.5) fill(seed, x + 3, y - 3);
+  }
+  return c;
+}
+
 function wallTile(z, zi, mask, v) {
+  if (!mask && z.style === 'meadow' && !z.day) return pastureTile(z, v);
   const [c, g] = canvas(), r = noise(mask * 7 + v * 131 + zi * 977 + 1);
   const fill = (col, x, y, w = 1, h = 1) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
-  const face = mask & S, topH = face ? ({ forest: 7, marsh: 6 })[z.style] || 5 : TILE;
+  const face = mask & S, topH = face ? ({ forest: 7, marsh: 6, garden: 6, ruins: 4 })[z.style] || 5 : TILE;
   // the top: rows of round leaf clumps (or boulders on the mountain), lit from the top left
   fill(z.wallTop, 0, 0, TILE, topH);
   const hi = mix(z.wallLight, '#ffffff', 0.3);
   if (z.style === 'marsh') reedTops(fill, r, v, topH, z, hi);
-  else clumps(fill, r, v, 0, topH, z.style === 'rock' || z.style === 'cave' ? BOULDER : LEAVES, { h: hi, l: z.wallLight, d: z.wallDark });
+  else if (z.style === 'garden') leafTop(fill, r, v, topH, z, hi);
+  else if (z.style === 'ruins') brickTop(fill, r, v, topH, z);
+  else if (z.style === 'snow') clumps(fill, r, v, 0, topH, BOULDER, { h: '#ffffff', l: z.wallLight, d: mix(z.wallTop, '#5a6a8a', 0.45) });
+  else clumps(fill, r, v, 0, topH, ['rock', 'cave', 'volcano', 'sea'].includes(z.style) ? BOULDER : LEAVES, { h: hi, l: z.wallLight, d: z.wallDark });
+  // tufts of sea grass cling to the clifftop rocks
+  if (z.style === 'sea') for (let k = 0; k < 2; k++) if (r() < 0.55) {
+    const x = 1 + Math.floor(r() * 12), y = 1 + Math.floor(r() * Math.max(1, topH - 3));
+    fill('#4f7a46', x, y + 1, 3, 1); fill('#6f9a58', x, y); fill('#6f9a58', x + 2, y); fill('#8fb86a', x + 1, y - 1 < 0 ? 0 : y - 1);
+  }
+  // the volcano's rock glows through its cracks
+  if (z.style === 'volcano' && r() < 0.5) {
+    const x = 2 + Math.floor(r() * 11), y = 1 + Math.floor(r() * Math.max(1, topH - 3));
+    fill('#c4501f', x, y, 2, 1); fill('#ff9a3a', x + 1, y); fill('#c4501f', x + 2, y + 1);
+  }
   // the cave's rock is flecked with crystals that catch the light
   if (z.style === 'cave') for (let k = 0; k < 2; k++) if (r() < 0.45) {
     const x = 1 + Math.floor(r() * 13), y = 1 + Math.floor(r() * Math.max(1, topH - 3));
@@ -341,9 +448,50 @@ function wallTile(z, zi, mask, v) {
       for (const [x, len] of [[sx + 3, 3], [sx2 - 2, 2]]) if (x >= 0 && x < TILE) { fill(z.wallLight, x, topH + 1, 1, len); fill(z.wallLight, x - 1, topH + 1, 3, 1); }
       fill(z.wallDark, 0, TILE - 3, TILE, 1);
       fill(z.wallLine, 0, TILE - 2, TILE, 2);
+    } else if (z.style === 'sea') {
+      // a sea cliff: bands of rock laid down in layers, a fringe of the clifftop grass hanging over
+      fill(z.wallFace, 0, topH, TILE, TILE - topH);
+      const band = mix(z.wallFace, '#ffffff', 0.14), deep = mix(z.wallFace, '#000000', 0.25);
+      for (const [y, col] of [[topH + 2, band], [topH + 3, deep], [topH + 6, band], [topH + 7, deep]]) if (y < TILE - 3) fill(col, 0, y, TILE, 1);
+      fill(deep, (v * 5 + 3) % 14, topH + 3, 1, 4);
+      for (let x = 0; x < TILE; x++) if ((x + v) % 3 < 2) fill(z.wallTop, x, topH, 1, 1 + ((x + v) % 5 === 0 ? 1 : 0));
+      fill(z.wallDark, 0, TILE - 3, TILE, 1);
+      fill(z.wallLine, 0, TILE - 2, TILE, 2);
+    } else if (z.style === 'garden') {
+      // under the giant leaves: thick green flower stalks standing in the shade
+      fill(z.wallLine, 0, topH, TILE, TILE - topH);
+      for (const sx of [1 + v, 8 + ((v * 2) % 3)]) {
+        fill(z.wallFace, sx, topH, 4, TILE - topH);
+        fill(mix(z.wallFace, '#ffffff', 0.22), sx, topH, 1, TILE - topH);
+        fill(mix(z.wallFace, '#000000', 0.3), sx + 3, topH, 1, TILE - topH);
+      }
+      for (let x = 0; x < TILE; x++) if ((x + v) % 4 < 3) fill(z.wallTop, x, topH, 1, 1 + ((x + v) % 4 === 1 ? 1 : 0));
+      fill(z.wallLine, 0, TILE - 1, TILE, 1);
+    } else if (z.style === 'volcano') {
+      // basalt in columns, a red glow seeping out at the foot
+      fill(z.wallFace, 0, topH, TILE, TILE - topH);
+      for (let x = (v * 2) % 5; x < TILE; x += 5) { fill(z.wallDark, x, topH, 1, TILE - topH - 2); fill(z.wallLight, x + 1, topH, 1, TILE - topH - 3); }
+      fill(z.wallLight, 0, topH, TILE, 1);
+      fill('#7a2a14', 0, TILE - 3, TILE, 1);
+      fill(z.wallLine, 0, TILE - 2, TILE, 2);
+      if (v === 1) fill('#c4501f', 6, TILE - 3, 3, 1);
+    } else if (z.style === 'ruins') {
+      // an old brick wall, ivy hanging down it here and there
+      fill(z.wallFace, 0, topH, TILE, TILE - topH);
+      const mortar = mix(z.wallFace, '#000000', 0.3), lit = mix(z.wallFace, '#ffffff', 0.12);
+      for (let y = topH + 2, row = 0; y < TILE - 2; y += 3, row++) {
+        fill(mortar, 0, y, TILE, 1);
+        for (let x = (row % 2) * 3 + v; x < TILE; x += 6) fill(mortar, x, y - 2, 1, 2);
+        fill(lit, 0, y + 1, TILE, 1);
+      }
+      if (v !== 1) { const ix = v * 6 + 2; fill('#3f5f3a', ix, topH, 2, 6); fill('#5f8a4a', ix, topH, 1, 4); fill('#3f5f3a', ix + 2, topH, 1, 3); }
+      fill(z.wallDark, 0, TILE - 3, TILE, 1);
+      fill(z.wallLine, 0, TILE - 2, TILE, 2);
     } else {
       fill(z.wallFace, 0, topH, TILE, TILE - topH);
       fill(z.wallLight, 0, topH, TILE, 1);
+      // the snow on the plateau's rocks slumps over the edge
+      if (z.style === 'snow') for (let x = 0; x < TILE; x++) fill(z.wallTop, x, topH, 1, 1 + ((x * 3 + v) % 4 === 0 ? 2 : (x + v) % 3 === 0 ? 1 : 0));
       // rough blocks: two rows, the seams shifted per tile
       const s1 = 4 + v * 3, s2 = (s1 + 6) % 13 + 1;
       fill(z.wallDark, 0, topH + 5, TILE, 1);
@@ -382,17 +530,38 @@ function shadeTile(mask) {
 // Water with its shore: the bank's dark lip along the top (it stands above the water), a thin dark
 // edge on the sides, a pale rim at the bottom, and foam that drifts along every edge.
 // Bits in `mask` are the neighbours that are NOT water.
-function waterTile(z, frame, mask) {
+function waterTile(z, frame, mask, kind) {
   const [c, g] = canvas();
   g.fillStyle = z.water; g.fillRect(0, 0, TILE, TILE);
+  // molten rock: dark crust floating on it, bright where it cracks open
+  if (kind === 'lava') {
+    // soft plates of crust drifting on it, glowing at their seams and white hot between them; made of
+    // waves that repeat every tile, so a pool has no seams of its own
+    const crust = mix(z.water, '#2a0f08', 0.62), crustTop = mix(z.water, '#4a1c0c', 0.5), seam = mix(z.water, '#ff3a10', 0.3);
+    const tau = Math.PI * 2, ph = frame * 0.5;
+    for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+      const v = Math.sin(tau * (x + y) / 16 + ph) + 0.6 * Math.cos(tau * (2 * x - y) / 16 + 1.3 - ph) + 0.4 * Math.sin(tau * 2 * y / 16 + 0.7);
+      g.fillStyle = v > 0.55 ? (v > 1.2 ? crustTop : crust) : v > 0.3 ? seam : v < -0.9 ? '#ffd56a' : z.water;
+      g.fillRect(x, y, 1, 1);
+    }
+  }
   g.fillStyle = z.waterLight;
   const o = frame ? 3 : 0;
-  [[2 + o, 4, 4], [9 - o, 7, 5], [4 + o, 11, 4], [12 - o, 13, 3]].forEach(([x, y, w]) => g.fillRect(x, y, w, 1));
-  g.fillStyle = '#ffffff';
-  g.fillRect(3 + o, 4, 1, 1); g.fillRect(10 - o, 7, 1, 1);
+  if (kind === 'ice') {
+    // a sheet of ice: long glints on the slant and a crack or two, no ripples
+    for (const [x, y, n] of [[2, 9, 5], [8, 4, 4], [10, 13, 4]]) for (let k = 0; k < n; k++) g.fillRect(x + k, y - k, 1, 1);
+    g.fillStyle = mix(z.water, '#1a2a3a', 0.35);
+    for (const [x, y] of [[5, 2], [6, 3], [6, 4], [7, 5], [12, 8], [11, 9], [11, 10]]) g.fillRect(x, y, 1, 1);
+    g.fillStyle = '#ffffff';
+    g.fillRect(4, 7, 1, 1); g.fillRect(9, 3, 1, 1);
+  } else if (kind !== 'lava') {
+    [[2 + o, 4, 4], [9 - o, 7, 5], [4 + o, 11, 4], [12 - o, 13, 3]].forEach(([x, y, w]) => g.fillRect(x, y, w, 1));
+    g.fillStyle = '#ffffff';
+    g.fillRect(3 + o, 4, 1, 1); g.fillRect(10 - o, 7, 1, 1);
+  }
   const deep = mix(z.water, '#000000', 0.35), bank = mix(z.floorDark, '#000000', 0.25), lip = z.floorLight;
   // foam: a few soft specks along the waterline that drift between the two frames
-  const foam = 'rgba(210,235,248,0.45)', specks = [1, 2, 6, 10, 11, 14];
+  const foam = kind === 'lava' ? 'rgba(255,224,138,0.7)' : kind === 'ice' ? 'rgba(255,255,255,0.6)' : 'rgba(210,235,248,0.45)', specks = [1, 2, 6, 10, 11, 14];
   const dots = at => specks.forEach(i => at((i + frame * 3) % TILE));
   if (mask & N) {
     g.fillStyle = bank; g.fillRect(0, 0, TILE, 2);
@@ -481,10 +650,116 @@ export function wallKey(scene, zi, mask, v = 0) {
   return key;
 }
 // `warm`: a hot spring's pool, milky jade instead of the zone's blue
-export function waterKey(scene, zi, frame, mask, warm = false) {
-  const key = `z${zi}_water${frame}_${mask}${warm ? '_warm' : ''}`;
+export function waterKey(scene, zi, frame, mask, warm = false, kind = null) {
+  const key = `z${zi}_water${frame}_${mask}${warm ? '_warm' : ''}${kind ? '_' + kind : ''}`;
   const z = warm ? { ...GROUNDS[zi], water: '#4f9a93', waterLight: '#a9d8ce' } : GROUNDS[zi];
-  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, waterTile(z, frame, mask));
+  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, waterTile(z, frame, mask, kind));
+  return key;
+}
+
+// 낭떠러지 (v0.23): a drop seen from above. Where ground meets it on the near (top) side the cliff
+// face shows, rock strata falling away into the dark; the far side and the flanks have a thin lip.
+// By the sea, foam on the waves far below; in the ruins, only dark. `mask`: neighbours that are ground.
+function chasmTile(z, mask, v) {
+  if (z.style === 'sea') return seaTile(z, mask, v, 0);
+  const [c, g] = canvas(), deep = mix(z.void, '#000000', 0.2);
+  g.fillStyle = deep; g.fillRect(0, 0, TILE, TILE);
+  g.fillStyle = 'rgba(255,255,255,0.05)';
+  g.fillRect((3 + v * 5) % TILE, 11, 1, 1); g.fillRect((11 + v * 3) % TILE, 14, 1, 1);
+  if (mask & N) {
+    // the near cliff: the ground's edge, then the rock face dropping into shadow
+    const face = z.wallFace, dark = z.wallDark;
+    for (let y = 0; y < 9; y++) {
+      g.fillStyle = mix(y % 3 === 2 ? dark : face, deep, Math.min(1, y / 9));
+      g.fillRect(0, y, TILE, 1);
+    }
+    g.fillStyle = z.floorLight; g.fillRect(0, 0, TILE, 1);
+    g.fillStyle = mix(dark, deep, 0.3);
+    for (const x of [3, 9, 13]) g.fillRect((x + v) % TILE, 2, 1, 4);
+  }
+  g.fillStyle = mix(z.floorDark, '#000000', 0.3);
+  if (mask & S) { g.fillRect(0, TILE - 2, TILE, 2); g.fillStyle = z.floorLight; g.fillRect(0, TILE - 1, TILE, 1); }
+  g.fillStyle = mix(z.floorDark, '#000000', 0.3);
+  if (mask & W_) g.fillRect(0, 0, 2, TILE);
+  if (mask & E) g.fillRect(TILE - 2, 0, 2, TILE);
+  return c;
+}
+
+// 바닷가 절벽: the sea far down below the cliffs, seen past the edge of a drop or beyond the rocks
+// around the paths. `mask`: the sides where land is (rock or ground). Where land lies to the north
+// its cliff face drops into the water and the surf breaks white at its foot; along the other sides
+// the foam just laps. `v` 0-3 shifts the swell, and 4 puts a little sea stack in it. Two frames.
+function seaTile(z, mask, v, frame) {
+  const [c, g] = canvas();
+  const fill = (col, x, y, w = 1, h = 1) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+  const sea = mix(z.water, '#0b1c2c', 0.3), swell = mix(z.water, z.waterLight, 0.35), glint = mix(z.waterLight, '#ffffff', 0.4);
+  const foam = '#e8f4f8', foamDim = mix(foam, sea, 0.45);
+  fill(sea, 0, 0, TILE, TILE);
+  // long low swells, drifting a pixel each frame
+  for (const [x, y, w] of [[1, 4, 5], [9, 7, 4], [3, 11, 6], [11, 14, 4], [12, 2, 3]]) {
+    const sx = (x + v * 5 + frame) % TILE;
+    fill(swell, sx, y, w, 1);
+    if (sx + w > TILE) fill(swell, 0, y, sx + w - TILE, 1);
+  }
+  fill(glint, (6 + v * 3 + frame * 2) % TILE, (9 + v) % 14 + 1);
+  if (v === 4 && !mask) {
+    // a sea stack: a lump of the cliff rock left standing in the water, foam around its foot
+    fill(z.wallDark, 5, 6, 6, 5); fill(z.wallFace, 6, 5, 4, 5); fill(z.wallLight, 6, 5, 2, 1); fill(z.wallTop, 7, 4, 2, 1);
+    for (let x = 4; x < 12; x++) if ((x + frame) % 2 === 0) fill(foam, x, 11); else fill(foamDim, x, 11);
+    fill(foamDim, 4, 10); fill(foamDim, 11, 10);
+  }
+  if (mask & N) {
+    // the cliff face: rock in layers, darker as it goes down, then the surf at its foot
+    const face = z.wallFace, dark = z.wallDark, band = mix(face, '#ffffff', 0.14);
+    for (let y = 0; y < 8; y++) fill(mix(y % 3 === 1 ? band : y % 3 === 2 ? dark : face, sea, y / 14), 0, y, TILE, 1);
+    for (const x of [2, 8, 13]) fill(mix(dark, sea, 0.2), (x + v * 3) % TILE, 1 + (x % 3), 1, 4);
+    fill(z.wallLine, 0, 0, TILE, 1);
+    for (let x = 0; x < TILE; x++) {
+      const up = (x + v + frame) % 4 === 0;
+      fill(foam, x, up ? 7 : 8);
+      if ((x + frame * 2 + v) % 3 === 0) fill(foamDim, x, 9);
+    }
+  }
+  // foam lapping along the other shores
+  for (let k = 0; k < TILE; k++) {
+    const on = (k + frame + v) % 3 !== 0;
+    if (mask & S) fill(on ? foam : foamDim, k, TILE - 1);
+    if (mask & W_) fill(on ? foam : foamDim, 0, k);
+    if (mask & E) fill(on ? foam : foamDim, TILE - 1, k);
+  }
+  return c;
+}
+export function seaKey(scene, zi, mask, v, frame) {
+  const key = `z${zi}_sea${mask}_${v}_${frame}`;
+  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, seaTile(GROUNDS[zi], mask, v, frame));
+  return key;
+}
+export function chasmKey(scene, zi, mask, v) {
+  const key = `z${zi}_chasm${mask}_${v}`;
+  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, chasmTile(GROUNDS[zi], mask, v));
+  return key;
+}
+
+// The one narrow bridge: planks tied with rope. `ns`: you cross it going north and south.
+function bridgeTile(ns, v) {
+  const [c, g] = canvas();
+  const plank = ['#a0703f', '#8a5f34', '#b07c48'], gap = '#3a2516', rope = '#d8bd7a', ropeDark = '#8e7440';
+  for (let k = 0; k < 4; k++) {
+    g.fillStyle = plank[(k + v) % 3];
+    if (ns) g.fillRect(2, k * 4, 12, 3); else g.fillRect(k * 4, 2, 3, 12);
+    g.fillStyle = gap;
+    if (ns) g.fillRect(2, k * 4 + 3, 12, 1); else g.fillRect(k * 4 + 3, 2, 1, 12);
+  }
+  // rope rails along both sides
+  g.fillStyle = ropeDark;
+  if (ns) { g.fillRect(1, 0, 1, TILE); g.fillRect(14, 0, 1, TILE); } else { g.fillRect(0, 1, TILE, 1); g.fillRect(0, 14, TILE, 1); }
+  g.fillStyle = rope;
+  for (let k = 0; k < TILE; k += 2) { if (ns) { g.fillRect(1, k, 1, 1); g.fillRect(14, k + 1, 1, 1); } else { g.fillRect(k, 1, 1, 1); g.fillRect(k + 1, 14, 1, 1); } }
+  return c;
+}
+export function bridgeKey(scene, ns, v) {
+  const key = `bridge_${ns ? 'ns' : 'ew'}${v}`;
+  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, bridgeTile(ns, v));
   return key;
 }
 export function shadeKey(scene, mask) {
@@ -500,9 +775,16 @@ export function floorKey(zi, h) {
 
 // Tall grass, like Shattered Pixel Dungeon's: blades from edge to edge that hide what is behind.
 // Back blades are darker, front ones lighter with pale tips.
-function tallGrass(variant) {
+// Grass of the new grounds (v0.23): dune grass on the clifftops, frosted grass on the plateau,
+// dry scorched grass on the volcano. Everywhere else it is green.
+export const GRASS_PAL = {
+  sea: { dark: '#3d4a26', mid: '#5e6a33', light: '#87904a', tip: '#cfc488', flat: ['#55602f', '#6f7a3c', '#a8a160'] },
+  snow: { dark: '#3f5a62', mid: '#6a8a92', light: '#a3bec4', tip: '#f2fbff', flat: ['#5f7c84', '#86a2a8', '#d8eaee'] },
+  volcano: { dark: '#3a2618', mid: '#644026', light: '#94622f', tip: '#e0a050', flat: ['#4f3420', '#6e4a28', '#b07a3a'] },
+};
+function tallGrass(variant, pal) {
   const [c, g] = canvas(), r = noise(variant * 31 + 7);
-  const dark = '#1c3a24', mid = '#2a5233', light = '#3d6c44', tip = '#7fa267';
+  const { dark, mid, light, tip } = pal || { dark: '#1c3a24', mid: '#2a5233', light: '#3d6c44', tip: '#7fa267' };
   g.fillStyle = dark; g.fillRect(0, 11, TILE, 5);
   for (let layer = 0; layer < 3; layer++) {
     for (let k = 0; k < 9; k++) {
@@ -523,13 +805,14 @@ function tallGrass(variant) {
 }
 
 // Grass someone walked through: blades lying flat.
-function flatGrass(variant) {
+function flatGrass(variant, pal) {
   const [c, g] = canvas(), r = noise(variant * 13 + 5);
+  const [a, b, tip] = pal?.flat || ['#2d5234', '#3b6340', '#5f8a50'];
   for (let k = 0; k < 11; k++) {
     let x = Math.floor(r() * 14) + 1, y = 2 + Math.floor(r() * 13);
     const dir = r() < 0.5 ? -1 : 1, len = 3 + Math.floor(r() * 4);
     for (let j = 0; j < len; j++) {
-      g.fillStyle = j === len - 1 ? '#5f8a50' : j % 2 ? '#3b6340' : '#2d5234';
+      g.fillStyle = j === len - 1 ? tip : j % 2 ? b : a;
       g.fillRect(x, y, 1, 1);
       x += dir;
       if (j % 2) y -= 1;
@@ -559,6 +842,10 @@ export function buildTextures(scene) {
   for (let v = 0; v < 3; v++) {
     add(`t_brush${v}`, () => tallGrass(v));
     add(`t_grass${v}`, () => flatGrass(v));
+    for (const [style, pal] of Object.entries(GRASS_PAL)) {
+      add(`t_brush${v}_${style}`, () => tallGrass(v, pal));
+      add(`t_grass${v}_${style}`, () => flatGrass(v, pal));
+    }
   }
   GROUNDS.forEach((z, zi) => {
     for (let v = 0; v < FLOOR_VARIANTS; v++) add(`z${zi}_floor${v}`, () => floorTile(z, zi, v));

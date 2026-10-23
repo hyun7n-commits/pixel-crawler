@@ -1,5 +1,5 @@
 // Background music, made on the fly like the sound effects: a short looping tune for each place
-// (the village, the meadow, the deep forest, the marsh, the rocky mountain, the cave, a boss), a melody over a bass line
+// (the village, each of the ten grounds, a boss), a melody over a bass line
 // and a soft beat, played quietly under everything. `setMusic(name)` fades over to another tune;
 // the sound button mutes it with the rest (it plays through the effects' output).
 //
@@ -50,6 +50,41 @@ const TUNES = {
     melody: 'D5 - F5 - A5 - G5 F5 | E5 - C5 - D5 - - - | D5 - F5 - A5 - C6 - | B5 - G5 - A5 - - - | A5 - C6 - D6 - C6 A5 | G5 - B5 - A5 - F5 - | G5 - E5 - F5 - E5 C5 | D5 - - - - - . .',
     bass:   'D3 . D3 . A2 . D3 . | C3 . C3 . G2 . C3 . | D3 . D3 . A2 . D3 . | G2 . G2 . A2 . A2 . | F2 . F2 . C3 . F2 . | G2 . G2 . D3 . G2 . | C3 . C3 . A2 . C3 . | D3 . A2 . D3 . . .',
     drums:  'k . h . s . h . | k . h . s . h h | k . h . s . h . | k . h . s . s s | k . h . s . h . | k . h . s . h h | k . h . s . h . | k k s . s s s .',
+  },
+  // the seaside cliffs: F major, rolling like waves
+  sea: {
+    bpm: 100, lead: 'triangle', vol: 1,
+    melody: 'C5 - F5 - A5 - G5 F5 | G5 - - - C5 - - - | D5 - F5 - A5 - C6 - | A#5 - A5 - G5 - - - | A5 - C6 - F6 - E6 D6 | C6 - A5 - G5 - F5 - | G5 - A5 - A#5 - G5 E5 | F5 - - - - - . .',
+    bass:   'F2 - C3 - F2 - C3 - | C3 - G2 - C3 - G2 - | D3 - A2 - D3 - A2 - | A#2 - F2 - C3 - - - | F2 - C3 - F2 - C3 - | A#2 - F2 - C3 - G2 - | A#2 - F2 - C3 - C3 - | F2 - C3 - F2 - . .',
+    drums:  'k . . h . . h . | k . . h . . h . | k . . h . . h . | k . . h . . s . | k . . h . . h . | k . . h . . h . | k . . h . . h . | k . . h . . . .',
+  },
+  // the giant flower garden: C lydian, bright and bouncy, a little too sweet
+  garden: {
+    bpm: 120, lead: 'triangle', vol: 0.9,
+    melody: 'G5 E5 C5 E5 G5 - C6 - | B5 A5 F#5 A5 G5 - - - | A5 F#5 D5 F#5 A5 - D6 - | C6 B5 A5 B5 G5 - - - | E6 - D6 - C6 - B5 - | A5 - B5 - C6 - E6 - | D6 - C6 - B5 - A5 - | C6 - G5 - C6 - . .',
+    bass:   'C3 . G3 . C3 . G3 . | D3 . A3 . D3 . A3 . | D3 . A3 . D3 . A3 . | G2 . D3 . G2 . D3 . | A2 . E3 . A2 . E3 . | F2 . C3 . F2 . C3 . | D3 . A2 . G2 . D3 . | C3 . G2 . C3 . . .',
+    drums:  'k . h h s . h . | k . h h s . h . | k . h h s . h . | k . h h s . s . | k . h h s . h . | k . h h s . h . | k . h h s . h . | k . s . s . . .',
+  },
+  // the snowy plateau: A minor, high and sparse like bells in the cold
+  snow: {
+    bpm: 76, lead: 'sine', vol: 1.1,
+    melody: 'E6 - - - B5 - - - | C6 - - - A5 - - - | D6 - - - G5 - - - | B5 - - - E5 - - - | A5 - C6 - E6 - - - | D6 - C6 - B5 - - - | C6 - B5 - A5 - G#5 - | A5 - - - - - . .',
+    bass:   'A2 - - - - - - - | F2 - - - - - - - | G2 - - - - - - - | E2 - - - - - - - | A2 - - - - - - - | F2 - - - - - - - | E2 - - - - - - - | A2 - - - - - . .',
+    drums:  'k . . . . . . . | . . . . h . . . | k . . . . . . . | . . . . h . . . | k . . . . . . . | . . . . h . . . | k . . . . . . . | . . . . h . . .',
+  },
+  // the fire volcano: C phrygian, low and driving
+  volcano: {
+    bpm: 116, lead: 'square', vol: 0.5,
+    melody: 'C5 - C#5 - C5 - G4 - | C5 - D#5 - F5 - D#5 C#5 | C5 - C#5 - C5 - G4 - | A#4 - C5 - - - . . | G5 - G#5 - G5 - D#5 - | F5 - D#5 - C#5 - C5 - | A#4 - C#5 - C5 - A#4 - | C5 - - - - - . .',
+    bass:   'C2 . C3 . C2 . C3 . | C#2 . C#3 . C#2 . C#3 . | C2 . C3 . C2 . C3 . | A#1 . A#2 . A#1 . G1 . | C2 . C3 . C2 . C3 . | C#2 . C#3 . C#2 . C#3 . | A#1 . A#2 . G1 . G2 . | C2 . C3 . C2 . . .',
+    drums:  'k . s . k k s . | k . s . k k s . | k . s . k k s . | k . s . k k s s | k . s . k k s . | k . s . k k s . | k . s . k k s . | k k s s k s s .',
+  },
+  // the old guild grounds: D minor, a slow music box with one note that is a little wrong
+  ruins: {
+    bpm: 80, lead: 'triangle', vol: 1,
+    melody: 'D5 - F5 - A5 - G#5 - | A5 - - - . . . . | D5 - F5 - A5 - C6 - | A#5 - A5 - G#5 - - - | F5 - E5 - D5 - C#5 - | D5 - - - . . A4 - | A#4 - A4 - G#4 - A4 - | D5 - - - - - . .',
+    bass:   'D2 - - - A2 - - - | D2 - - - G#2 - - - | D2 - - - A2 - - - | A#1 - - - E2 - - - | A#1 - - - F2 - - - | D2 - - - A1 - - - | A#1 - - - A1 - - - | D2 - - - - - . .',
+    drums:  'k . . . h . . . | k . . . h . . . | k . . . h . . . | k . . . h . . . | k . . . h . . . | k . . . h . . . | k . . . h . . . | k . . . . . . .',
   },
   // a boss: E minor, fast and driving
   boss: {

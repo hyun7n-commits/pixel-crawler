@@ -7,7 +7,7 @@
 // Floor features (brush, water...) live in map.ter, see data/terrain.js.
 
 import { MAP_W as W, MAP_H as H, SIGHT } from '../data/balance.js';
-import { T } from '../data/terrain.js';
+import { T, isGap } from '../data/terrain.js';
 import { rint, pick, DIRS8 } from './util.js';
 
 export const WALL = 0, FLOOR = 1, STAIRS = 2, DOOR = 3, ORE = 4, UPSTAIRS = 5, GRAVE = 6, LOCKED = 7, HIVE = 8, WEED = 9;
@@ -41,9 +41,15 @@ export const idx = (x, y) => y * W + x;
 export const inMap = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
 export const passable = (map, x, y) => {
   if (!inMap(x, y)) return false;
-  const t = map.tiles[idx(x, y)];
-  return t !== WALL && !isBump(t);
+  const i = idx(x, y), t = map.tiles[i];
+  return t !== WALL && !isBump(t) && !isGap(map.ter[i]);
 };
+// what a flier can cross: anything but walls, so drops and lava too
+export const flyable = (map, x, y) => inMap(x, y) && map.tiles[idx(x, y)] !== WALL && !isBump(map.tiles[idx(x, y)]);
+// Two walls that touch only at their corners leave a crack: nobody slips through it on the diagonal, so
+// two passages that meet corner to corner stay apart.
+export const squeeze = (map, x, y, dx, dy) =>
+  Math.abs(dx) === 1 && Math.abs(dy) === 1 && !passable(map, x + dx, y) && !passable(map, x, y + dy);
 export const opaque = (map, x, y) => {
   if (!inMap(x, y)) return true;
   const i = idx(x, y), t = map.tiles[i];
@@ -332,7 +338,7 @@ export function distMap(map, sx, sy, opts = {}) {
     const [x, y] = q[h], d = dm[idx(x, y)];
     for (const [dx, dy] of DIRS8) {
       const nx = x + dx, ny = y + dy;
-      if (!passable(map, nx, ny)) continue;
+      if (!(opts.fly ? flyable : passable)(map, nx, ny) || squeeze(map, x, y, dx, dy)) continue;
       if (opts.exploredOnly && !map.explored[idx(nx, ny)]) continue;
       if (dm[idx(nx, ny)] <= d + 1) continue;
       if (opts.block && opts.block(nx, ny)) continue;
@@ -359,7 +365,7 @@ export function pathTo(map, fx, fy, tx, ty, avoid, block) {
       let best = null, bd = dm[idx(x, y)], be = Infinity;
       for (const [dx, dy] of DIRS8) {
         const nx = x + dx, ny = y + dy;
-        if (!inMap(nx, ny)) continue;
+        if (!inMap(nx, ny) || squeeze(map, x, y, dx, dy)) continue;
         const d = dm[idx(nx, ny)], e = (nx - tx) ** 2 + (ny - ty) ** 2;
         if (d < bd || (best && d === bd && e < be)) { bd = d; be = e; best = [nx, ny]; }
       }

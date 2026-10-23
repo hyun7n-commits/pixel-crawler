@@ -13,7 +13,7 @@
 import { HOME_ZI } from './textures.js';
 
 const HOME = { id: 'home', w: 5, h: 4, roof: '#f4cf4f', sign: 'heart', chimney: true };
-const GUILD = { id: 'guild', w: 5, h: 4, roof: '#3f6fb3', sign: 'flag', chimney: true };
+const GUILD = { id: 'guild', w: 5, h: 4, roof: '#3f6fb3', sign: 'flag' };
 const SHOP = { id: 'shop', w: 5, h: 4, roof: '#d9454a', sign: 'coin', awning: true };
 const NEIGHBOR = { id: 'neighbor', w: 5, h: 4, roof: '#f29bb2', sign: 'heart' };
 // license colours: meadow, forest, rock

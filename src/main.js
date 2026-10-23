@@ -5,7 +5,7 @@ import { DungeonScene } from './scenes/DungeonScene.js';
 import { VillageScene } from './scenes/VillageScene.js';
 import { StoryScene } from './scenes/StoryScene.js';
 import { playStory } from './ui/story.js';
-import { Run, isBossFloor, BOMB_RANGE } from './core/run.js';
+import { Run, BOMB_RANGE } from './core/run.js';
 import { loadMeta, saveMeta } from './core/save.js';
 import { suspend, resume, clearSuspended, savedRun } from './core/suspend.js';
 import { pathTo, idx, isBump, isStairs } from './core/dungeon.js';
@@ -36,7 +36,8 @@ let path = [];
 let seenCount = 0;
 let aiming = false;
 let chase = null;   // an enemy tapped from afar: walk up to it and hit it once
-let pinned = null;  // tile whose tip stays up after a long press on a phone
+let pinned = null;  // tile whose tip stays up after a long press on a phone, or a tap while looking
+let looking = false; // 살펴보기: a tap on the map shows what is there instead of walking (L key)
 let inVillage = false;
 
 const hud = new Hud({
@@ -47,14 +48,37 @@ const hud = new Hud({
   },
   onWait: () => restOnce(),
   onBag: () => setBag(!$('game').classList.contains('bag-open')),
+  onLook: () => setLook(!looking),
+  onWand: () => { setBag(false); zapNearest(); },
 });
+
+// 마법사: a spark at the nearest monster the wand can reach (X, or the wand button)
+function zapNearest() {
+  if (!canAct() || !run.char.wand) return;
+  const e = run.enemies.filter(e => run.canZapAt(e.x, e.y)).sort((a, b) => cheb(a, run.p) - cheb(b, run.p))[0];
+  if (e) { clearPath(); setAim(false); run.castWand(e.x, e.y); }
+  else run.log(run.p.charges ? '지팡이가 닿는 곳(2~4칸)에 적이 없다.' : '지팡이가 다시 찰 때까지 기다려야 한다.');
+}
 
 const canAct = () => run && !run.over && !modalOpen() && run.canAct() && !scene?.busy();
 const clearPath = () => { path = []; chase = null; if (scene) scene.path = path; };
 const tipAt = () => pinned || scene?.hover;
 
 function restOnce() {
+  setLook(false);
   if (canAct()) { clearPath(); setAim(false); run.wait(); }
+}
+
+// 살펴보기: press it, then tap a critter, a tile or a thing on the map to read about it, as many as you
+// like; press it again (or Esc, or move) to go back to walking
+function setLook(on) {
+  looking = !!(on && run && !run.over);
+  if (looking) setAim(false);
+  pinned = null;
+  hud.looking = looking;
+  if (run) hud.update(run);
+  $('lookBtn')?.classList.toggle('on', looking);
+  showTip(tipAt());
 }
 
 // On a phone the side panel is a bag that slides up from the bottom.
@@ -65,6 +89,7 @@ function setBag(open) {
 // Throwing a bomb: press the bomb (or 2), then pick a tile on the map.
 function setAim(on) {
   aiming = !!(on && canAct() && run.p.items.bomb > 0);
+  if (aiming && looking) { looking = false; hud.looking = false; $('lookBtn')?.classList.remove('on'); }
   if (scene) scene.aim = aiming;
   hud.aiming = aiming;
   if (run) hud.update(run);
@@ -78,7 +103,11 @@ function showTip(h) {
     text = '폭탄을 던질 곳을 고른다 · 취소: Esc 또는 폭탄 버튼';
     if (!matchMedia('(pointer: coarse)').matches) text += ' · 방향키로 옮기고 Enter로 던진다';
     if (h && run.canThrowAt(h.x, h.y) && cheb(h, run.p) <= 1) text += '\n바로 옆이라 나도 맞는다!';
-  } else if (run && h) text = describeTile(run, h.x, h.y, h === pinned);
+  } else if (run && h) {
+    text = describeTile(run, h.x, h.y, h === pinned);
+    if (run.canZapAt(h.x, h.y)) text += `\n누르면 지팡이로 마법 화살을 쏜다 (남은 ${run.p.charges}발)`;
+  }
+  else if (run && looking) text = '살펴볼 곳을 누른다 · 다시 누르면 끝';
   tip.textContent = text;
   tip.hidden = !text;
 }
@@ -93,6 +122,7 @@ function showVillage(from) {
   setMusic('village');
   inVillage = true;
   pinned = null;
+  looking = false; hud.looking = false; $('lookBtn')?.classList.remove('on');
   showTip(null);
   const g = $('game');
   g.hidden = false;
@@ -167,7 +197,7 @@ function startRun(left) {
   run.on(onRunEvent);
   scene.attach(run);
   if (restored) {
-    setMusic(isBossFloor(run.floor) ? 'boss' : run.zone.style);
+    setMusic(run.floor === run.bossFloor ? 'boss' : run.zone.style);
     run.log('하던 탐험을 이어서 한다.', 'good');
     run.emit('turn');
     return;
@@ -270,12 +300,14 @@ function onRunEvent(type, d) {
   if (type === 'evolve') showEvolve(d);
   if (type === 'fission') hud.fission(d);
   if (type === 'grow') hud.grow(d);
-  if (type === 'floor') { clearPath(); seenCount = 0; setMusic(isBossFloor(run.floor) ? 'boss' : run.zone.style); }
+  if (type === 'floor') { clearPath(); seenCount = 0; setMusic(run.floor === run.bossFloor ? 'boss' : run.zone.style); }
   if (type === 'kill' && d.enemy.d.boss && !run.victory) setMusic(run.zone.style);
   if (type === 'phit') clearPath();
   if (type === 'turn') afterTurn();
   // written down now and then, so closing the page mid-run loses nothing (core/suspend.js)
   if ((type === 'floor' || (type === 'turn' && run.turn % 10 === 0)) && !run.over) setTimeout(putAway, 0);
+  // the stage won on the way down to 깊은 곳: written to the save right away
+  if (type === 'banked') saveMeta(meta);
   if (type === 'end') {
     clearSuspended();
     setMusic(null);
@@ -290,7 +322,7 @@ function onRunEvent(type, d) {
     saveMeta(meta);
     hud.update(run);
     const summary = () => showSummary({ won: d.won, run, rescued: d.rescued, news: d.news, opened: d.opened, onClose: () => { scene.detach(); run = null; afterRunStory(); } });
-    if (d.won) summary();
+    if (d.won && !d.fell) summary();
     else fallen(summary);
   }
 }
@@ -331,7 +363,18 @@ function nextChoice() {
   setAim(false);
   setBag(false);
   const q = run.queue[0];
-  const onPick = o => { run.choose(o); hud.update(run); nextChoice(); };
+  const onPick = o => { run.choose(o); if (run) hud.update(run); nextChoice(); };
+  // the boss's chest is open: home with the win, or on down into 깊은 곳
+  if (q.kind === 'deeper') {
+    showChoice({
+      title: '대장을 쓰러뜨렸다!', sub: `${run.zone.name} 돌파. 대장 방 바닥에 구멍이 하나 나 있다. 아래에서 찬 바람이 올라온다.`, run, onPick,
+      opts: [
+        { kind: 'ok', act: 'home', icon: 'gold', name: '마을로 돌아간다', desc: '탐험 성공. 모은 골드와 돌파 보너스를 들고 간다.' },
+        { kind: 'ok', act: 'deeper', icon: 'stairs', name: '더 깊이 들어간다', desc: '지금 유물 그대로 더 센 들판으로. 층마다 좋은 상자가 있다. 쓰러지면 깊은 곳에서 주운 골드는 두고 온다. 언제든 메뉴에서 돌아갈 수 있다.' },
+      ],
+    });
+    return;
+  }
   if (q.kind === 'talk') {
     const npc = ENEMIES[q.who];
     showChoice({ title: npc.name, sub: q.text, run, who: npc.sprite, opts: q.smithPick ? run.smithOffers() : q.opts, onPick });
@@ -402,7 +445,8 @@ document.addEventListener('keydown', ev => {
     return;
   }
   if (!run || $('game').hidden) return;
-  if (k === 'Escape') { setAim(false); clearPath(); return; }
+  if (k === 'Escape') { setAim(false); setLook(false); clearPath(); return; }
+  if (k === 'l') { setLook(!looking); return; }
   // aiming a bomb from the keyboard: arrows move the mark, Enter or Space throws
   if (aiming && (KEYS[k] || k === 'Enter' || k === ' ')) {
     ev.preventDefault();
@@ -416,7 +460,7 @@ document.addEventListener('keydown', ev => {
   }
   // a held key repeats faster than the hero walks: keep to the walk's beat so each step can glide
   if (ev.repeat && (ARROWS.has(k) || KEYS[k]) && performance.now() - lastKeyStep < 120 / pace()) { ev.preventDefault(); return; }
-  if (ARROWS.has(k) || KEYS[k]) lastKeyStep = performance.now();
+  if (ARROWS.has(k) || KEYS[k]) { lastKeyStep = performance.now(); if (looking) setLook(false); }
   if (ARROWS.has(k)) {
     ev.preventDefault(); clearPath(); setAim(false);
     held.add(k); tapped.add(k);
@@ -436,14 +480,20 @@ document.addEventListener('keydown', ev => {
     return;
   }
   if (k === 'm') { toggleSound(); return; }
+  // 마법사: X sends a spark at the nearest monster in reach (Z is a step down and to the left)
+  if (k === 'x' && run?.char.wand) { zapNearest(); return; }
   if (k === 'f') { nextSpeed(); showSpeed(); return; }
   const item = { 1: 'potion', 3: 'map' }[k];
   if (item && canAct()) { clearPath(); setAim(false); run.useItem(item); }
 });
 
 // Click-walking steps around things you would rather not step on by accident: traps you know of, and fire.
+// Ice, goo and honey too, when there is another way; tapping right onto them still walks you there.
+const SKIRT = [T.RING, T.ICE, T.SLIME, T.HONEY];
 
 function onTileClick(x, y) {
+  // looking: the tap shows what is there and nothing else happens
+  if (looking) { pinned = { x, y }; showTip(pinned); return; }
   // a tap first puts away a tip left up by a long press, like closing an info window in SPD
   if (pinned) { pinned = null; showTip(scene.hover); return; }
   if (!canAct()) return;
@@ -457,6 +507,8 @@ function onTileClick(x, y) {
   if (e && run.isVisible(x, y)) {
     clearPath();
     if (run.touching(e, p)) { run.step(x - p.x, y - p.y); return; }
+    // 마법사: a monster a few tiles off gets a spark from the wand instead of being walked up to
+    if (run.canZapAt(x, y)) { run.castWand(x, y); return; }
     path = walkTo(x, y);
     if (path.length) { chase = e; scene.path = path; seenCount = visibleEnemies(); }
     return;
@@ -486,7 +538,7 @@ function walkTo(x, y) {
   const m = run.map, p = run.p;
   if (!run.passable(x, y) || !m.explored[idx(x, y)]) return [];
   return pathTo(m, p.x, p.y, x, y,
-    (tx, ty) => (isTrap(m.ter[idx(tx, ty)]) && !m.hidden[idx(tx, ty)]) || m.fire[idx(tx, ty)] > 0 || m.ter[idx(tx, ty)] === T.RING,
+    (tx, ty) => (isTrap(m.ter[idx(tx, ty)]) && !m.hidden[idx(tx, ty)]) || m.fire[idx(tx, ty)] > 0 || SKIRT.includes(m.ter[idx(tx, ty)]),
     // never change floors by walking over stairs on the way somewhere else
     (tx, ty) => isStairs(m.tiles[idx(tx, ty)]));
 }
@@ -504,7 +556,13 @@ function walkTick() {
   }
   if (!path.length) return;
   const [nx, ny] = path.shift();
-  if (run.enemyAt(nx, ny) || !run.step(nx - run.p.x, ny - run.p.y)) clearPath();
+  if (run.enemyAt(nx, ny) || !run.step(nx - run.p.x, ny - run.p.y)) { clearPath(); return; }
+  // slid on ice or goo, or fell: find the way again from wherever you ended up
+  if (path.length && cheb({ x: path[0][0], y: path[0][1] }, run.p) !== 1) {
+    const [tx, ty] = path[path.length - 1];
+    path = run.map ? walkTo(tx, ty) : [];
+    scene.path = path;
+  }
 }
 walkTick();
 
@@ -544,6 +602,7 @@ for (const ev of ['pointerdown', 'touchend', 'click', 'keydown']) document.addEv
 document.addEventListener('gesturestart', ev => ev.preventDefault());
 
 $('waitBtn').addEventListener('click', restOnce);
+$('lookBtn').addEventListener('click', () => setLook(!looking));
 $('bagClose').addEventListener('click', () => setBag(false));
 $('shade').addEventListener('click', () => setBag(false));
 // 나가기: save the trip and go home (pick it up later from the village), or give it up for good
@@ -555,12 +614,13 @@ $('quitBtn').addEventListener('click', () => {
     title: '탐험을 멈출까?', sub: '탐험은 저절로 저장된다. 언제 꺼도 이 순간부터 이어서 할 수 있다.', run,
     opts: [
       { kind: 'ok', id: 'save', name: '저장하고 마을로', desc: '지금 이대로 두고 마을에 간다. 마을의 이어서 탐험 버튼으로 돌아온다.' },
-      { kind: 'ok', id: 'quit', name: '탐험 포기', desc: '여기서 끝내고 돌아간다. 지금까지 주운 골드는 가져간다.' },
+      run.banked ? { kind: 'ok', id: 'quit', name: '마을로 돌아가기', desc: '돌파는 이미 했다. 깊은 곳에서 모은 것까지 다 들고 간다.' }
+        : { kind: 'ok', id: 'quit', name: '탐험 포기', desc: '여기서 끝내고 돌아간다. 지금까지 주운 골드는 가져간다.' },
       { kind: 'ok', id: 'stay', name: '계속하기', desc: '들판으로 돌아간다.' },
     ],
     onPick: o => {
       if (o.id === 'save') saveAndLeave();
-      if (o.id === 'quit') { run.cause = '스스로 돌아왔다'; run.finish(false); }
+      if (o.id === 'quit') { run.cause = '스스로 돌아왔다'; run.finish(!!run.banked); }
     },
   });
 });

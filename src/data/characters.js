@@ -27,8 +27,8 @@ export const CHARACTERS = {
     start: { boots: 1 }, note: '날렵해서 잘 피하고, 자는 적이 늦게 깨며, 기습이 훨씬 아프다',
   },
   mage: {
-    name: '마법사', kind: '양', sprite: 'mage', hp: 25, atk: 3, def: 0, choices: 4,
-    start: { bolt: 2 }, note: '유물을 고를 때 하나 더 보고 고른다',
+    name: '마법사', kind: '양', sprite: 'mage', hp: 25, atk: 3, def: 0, choices: 4, wand: true,
+    start: {}, note: '멀리 있는 적을 누르면 지팡이로 마법 화살을 쏜다 (세 발, 쉬면서 다시 찬다). 유물을 고를 때 하나 더 본다',
   },
   knight: {
     name: '기사', kind: '강아지', sprite: 'knightP', hp: 32, atk: 3, def: 1, block: 0.17,

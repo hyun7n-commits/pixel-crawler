@@ -34,8 +34,8 @@ export const VILLAGE_MAP = [
   '#.T....::...........................::......#',
   '#.......::.........................::.......#',
   '#...**...::.:...................:.::......T.#',
-  '##....*...:::.....T......*......:::...##...##',
-  '##....##....::::......:......::::.....##...##',
+  '##....*...:::.....T......*......:::.........#',
+  '##....##....::::......:......::::............#',
   '##...T##.....**:::::::::::::::*............##',
   '###.....*..........:::::::......*.........###',
   '###.....*........*..................*..*.*###',
@@ -49,12 +49,12 @@ export const VILLAGE_MAP = [
 // of the bottom row; the owner stands just below it. The top three face the loop from outside it, the
 // bottom three from inside its lower half.
 export const HOUSES = [
-  { id: 'guild', x: 20, y: 1, w: 5, h: 4, roof: '#3f6fb3', sign: 'flag', chimney: true },
+  { id: 'guild', x: 20, y: 1, w: 5, h: 4, roof: '#3f6fb3', sign: 'flag' },
   { id: 'shop', x: 9, y: 4, w: 5, h: 4, roof: '#d9454a', sign: 'coin', awning: true },
   { id: 'smith', x: 31, y: 4, w: 5, h: 4, roof: '#6b6f7c', sign: 'hammer', chimney: true },
   { id: 'neighbor', x: 10, y: 18, w: 5, h: 4, roof: '#f29bb2', sign: 'heart' },
-  { id: 'rescue', x: 20, y: 20, w: 5, h: 4, roof: '#f08c3a', sign: 'cross' },
-  { id: 'rival', x: 30, y: 18, w: 5, h: 4, roof: '#7a4bb0', sign: 'star', chimney: true },
+  { id: 'rescue', x: 31, y: 25, w: 5, h: 4, roof: '#f08c3a', sign: 'cross' },
+  { id: 'rival', x: 30, y: 18, w: 5, h: 4, roof: '#7a4bb0', sign: 'star' },
 ];
 export const doorOf = h => ({ x: h.x + Math.floor(h.w / 2), y: h.y + h.h });
 
@@ -70,21 +70,25 @@ export const PROPS = [
   { x: 19, y: 2, kind: 'board' }, { x: 25, y: 2, kind: 'barrel' },
   { x: 8, y: 6, kind: 'barrel' }, { x: 14, y: 4, kind: 'crate' },
   { x: 36, y: 5, kind: 'logs' }, { x: 30, y: 5, kind: 'barrel' },
-  { x: 15, y: 18, kind: 'mushroom' }, { x: 18, y: 21, kind: 'hay' }, { x: 26, y: 22, kind: 'crate' },
+  { x: 15, y: 18, kind: 'mushroom' }, { x: 37, y: 29, kind: 'hay' }, { x: 30, y: 28, kind: 'crate' },
   { x: 36, y: 19, kind: 'dummy' }, { x: 29, y: 19, kind: 'barrel' },
   { x: 3, y: 14, kind: 'well' }, { x: 2, y: 19, kind: 'hay' }, { x: 5, y: 21, kind: 'cart' },
   { x: 2, y: 11, kind: 'pumpkin' }, { x: 2, y: 12, kind: 'pumpkin' },
-  { x: 42, y: 11, kind: 'hive' }, { x: 43, y: 12, kind: 'hive' }, { x: 41, y: 20, kind: 'logs' },
-  { x: 42, y: 19, kind: 'hay' }, { x: 40, y: 22, kind: 'rock' },
+  { x: 42, y: 11, kind: 'hive' }, { x: 43, y: 12, kind: 'hive' }, { x: 41, y: 17, kind: 'logs' },
+  { x: 42, y: 18, kind: 'hay' }, { x: 42, y: 29, kind: 'rock' },
   { x: 13, y: 10, kind: 'mushroom' }, { x: 30, y: 13, kind: 'rock' },
   { x: 9, y: 26, kind: 'veg' }, { x: 10, y: 26, kind: 'veg' }, { x: 9, y: 27, kind: 'veg' }, { x: 10, y: 27, kind: 'veg' },
   { x: 11, y: 26, kind: 'scarecrow' },
   { x: 22, y: 28, kind: 'barrel' }, { x: 23, y: 28, kind: 'crate' }, { x: 26, y: 29, kind: 'logs' },
   { x: 10, y: 2, kind: 'rock' }, { x: 30, y: 2, kind: 'mushroom' }, { x: 34, y: 3, kind: 'hay' },
 ];
+// The big old tree out east, taller than three houses: its trunk takes up `block`, the crown spreads
+// over the path and the grass, and you can walk underneath (the crown fades while you are under it).
+export const BIG_TREE = { x: 40, y: 27, block: [[39, 27], [40, 27], [41, 27]], crown: { x0: 36, x1: 44, y0: 19, y1: 26 } };
+
 // Your own house (the story's dream, scenes/storyboards.js): an empty lot until the guild's big prize
 // for all three licenses, the first win; then a yellow-roofed house with a heart over the door.
-export const HOME = { id: 'home', x: 31, y: 25, w: 5, h: 4, roof: '#f4cf4f', sign: 'heart', chimney: true };
+export const HOME = { id: 'home', x: 20, y: 20, w: 5, h: 4, roof: '#f4cf4f', sign: 'heart', chimney: true };
 export const ownsHome = m => m.stats.wins > 0;
 
 const deaths = m => m.stats.runs - m.stats.wins;
@@ -133,6 +137,15 @@ export const HERO_LINES = ['오늘은 내가 갈게!', '맡겨 줘!', '나도 �
 
 // The neighbour's take on how the last run went (`last`: meta.lastRun), a few lines at most.
 // `cause` reads like "들쥐에게 당했다", so "~면서?" turns it into hearsay.
+// the later ones only once more tags have come back
+const EERIE = [
+  '명찰 주워 왔다며? 조합장이 고맙대. 근데 그 명찰들은 어디에 두는 걸까?',
+  '깊은 곳에 가면 누가 이름을 부른대. 대답하면 안 된대!',
+  '끝집 일꾼 요즘 안 보이더라. 이사 갔나 봐! …그치?',
+  '조합장 방 벽에 가면이 잔뜩 걸려 있대. 폐허에서 하나씩 주워 온 거래.',
+  '들판 친구들 말이야, 가끔 우리랑 똑같이 웃지 않아?',
+];
+
 export function gossip(last, meta) {
   if (!last) return ['아직 아무 일도 없었어. 얼른 들판에 다녀와!'];
   const out = [];
@@ -149,6 +162,9 @@ export function gossip(last, meta) {
   else if (last.honey && out.length < 3) out.push('벌집 꿀 먹었다며? 벌한테 쏘인 데는 괜찮아? 꿀 냄새 난다.');
   else if (last.screams && out.length < 3) out.push('어제 들판에서 꺄아아 소리 들렸는데, 너였어? 비명 뿌리 뽑았구나.');
   else if (last.weeds && out.length < 3) out.push(`풀뽑기도 했다며? ${last.weeds}포기나! 일꾼 다 됐네.`);
+  // and once in a while, after the name tags start turning up, something nobody quite finishes saying
+  const tags = meta.stats?.tags || 0;
+  if (tags >= 3 && out.length < 3 && Math.random() < 0.35) out.push(EERIE[Math.floor(Math.random() * Math.min(EERIE.length, 1 + (tags >> 1)))]);
   // what you have put up round your house (data/home.js) gets talked about too
   const home = meta.home || [];
   if (home.includes('dog') && out.length < 3) out.push('너네 강아지 오늘 우리 집 앞까지 놀러 왔더라. 귀여워!');

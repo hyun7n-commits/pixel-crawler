@@ -8,7 +8,7 @@ import { Run } from './run.js';
 import { ENEMIES } from '../data/enemies.js';
 import { CHARACTERS } from '../data/characters.js';
 
-const KEY = 'pixel-crawler-run-v2';   // v2 goes with the v2 save (core/save.js)
+const KEY = 'pixel-crawler-run-v3';   // v3: ten stages (v0.23), so a trip saved before that is not picked up
 const FORMAT = 1;   // bump when a saved run from an older build could no longer be read
 const TYPED = { Uint8Array, Int16Array, Int32Array, Float32Array };
 const LEAVE_OUT = new Set(['meta', 'listeners', 'char']);
