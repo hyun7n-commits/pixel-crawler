@@ -164,7 +164,7 @@ function pets(list, meta, buy, changed) {
       ? button('btn' + (on ? ' primary' : ''), on ? '데려감' : '데려가기', () => { meta.pet = on ? null : id; changed(); })
       : button('btn gold', `${pt.cost}G`, () => buy(pt.cost, () => { meta.pets = { ...meta.pets, [id]: true }; meta.pet = id; }));
     if (!have) b.disabled = meta.gold < pt.cost;
-    row.append(icon(pt.sprite, 32), main, b);
+    row.append(icon(pt.sprite, 40), main, b);
     list.append(row);
   }
 }
