@@ -303,7 +303,8 @@ export function onRunEvent(type, d) {
     case 'fly': play('rise', 0); break;
     case 'berry': play('honey'); break;
     // the meadow tools (v0.26)
-    case 'pine': play(d.hit ? 'hit' : 'pop'); break;
+    case 'pine': play(d.hit ? 'hit' : 'pop'); if (d.caught != null) play('swap'); break;
+    case 'melt': play('splash'); break;
     case 'honeyPour': play('splash'); play('honey'); break;
     case 'doze': play('puff'); play('snore'); break;
     case 'chili': play('puff'); play('scream', 0.5); break;
