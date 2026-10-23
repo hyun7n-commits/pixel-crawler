@@ -21,6 +21,9 @@ export function showEvolve(d) {
     else ir.append(icon(d.id));
     row.append(el('span', 'evo-rays'), ia, ib, flash, ir);
     box.append(row, el('div', 'evo-name', `${TIER[d.fused ? 0 : d.tier]} ${d.fused ? relicName(d.id) : RELICS[d.id].name}`));
+    // a legend or a myth says in a line what it does that its two halves did not
+    const sig = !d.fused && RELICS[d.id].sig;
+    if (sig) box.append(el('div', 'evo-sig', sig));
     if (d.first) {
       box.append(el('div', 'evo-new', `새 조합 · 도감 ${d.known}/${RECIPES.length}`));
     }

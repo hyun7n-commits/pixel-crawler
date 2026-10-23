@@ -1021,6 +1021,25 @@ export const TER_SPR = {
     '..kkkkkkkkkkk...',
     '................',
   ],
+  // 반짝돌 왕관: a critter set hard into a little lump of sparkle rock (two swings to crack)
+  pebble: [
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '......kkkkk.....',
+    '.....kLllLdk....',
+    '....kLlLLLLdk...',
+    '...kLlLLwLLLdk..',
+    '...kLLLLLLLddk..',
+    '...kLLLLLLdddk..',
+    '...kdLLLLddddk..',
+    '....kdddddddk...',
+    '.....kkkkkkk....',
+    '................',
+  ],
   // the way back: the burrow you popped out of, dirt still scattered around it
   upStairs: [
     '................',

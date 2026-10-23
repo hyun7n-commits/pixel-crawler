@@ -134,6 +134,8 @@ export const ORE_SWING = [1, 1.25, 1.5, 1.8];
 export const ORE_NUGGET = [0.03, 0.04, 0.05, 0.06];
 export const ORE_NUGGET_MULT = 5;
 export const bombDamage = floor => 12 + 2 * gfl(floor);
+// 반짝돌 왕관: a critter set into a pebble of sparkle rock pays this share of a one-tile vein's haul (and no chest)
+export const PEBBLE_HAUL = 0.4;
 
 // Enemies: most start asleep. Once you thin a floor out, a wanderer comes in every so often.
 export const START_ASLEEP = 0.6;

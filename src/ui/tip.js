@@ -37,6 +37,8 @@ export function playerStatus(p) {
   if (p.sleep) s.push('잠듦');
   if (p.stun) s.push('기절');
   if (p.burn) s.push('불붙음');
+  if (p.vanish > 0) s.push('모습 사라짐');
+  if (p.invuln > 0) s.push('무적');
   return s;
 }
 
@@ -74,7 +76,13 @@ export function describeTile(run, x, y, always = false) {
     else if (e.diving) lines.push(`${e.d.name}: 물속에 들어가 있다. 곧 튀어나온다!`);
     else if (e.state === 'stone') lines.push(`${e.d.name}: ${e.d.stoneTip}`);
     else if (e.d.npc) lines.push(`${e.d.name}: ${e.d.tip}`);
-    else lines.push(`${e.chief ? '우두머리 ' : ''}${e.d.name} · 체력 ${e.hp}/${e.maxHp} · 공격 ${e.atk} · ${STATE[e.state] || ''}${e.d.tip ? ` · ${e.d.tip}` : ''}`);
+    else {
+      // stars round its head: a blow now is a surprise attack (run.unaware)
+      const dizzy = run.dizzy(e) && !['sleep', 'wander', 'search'].includes(e.state) ? '어질어질해서 지금 치면 기습' : '';
+      const fire = e.burn > 0 ? '불붙음' : '';
+      const how = [dizzy || STATE[e.state] || '', fire].filter(Boolean).join(', ');
+      lines.push(`${e.chief ? '우두머리 ' : ''}${e.d.name} · 체력 ${e.hp}/${e.maxHp} · 공격 ${e.atk} · ${how}${e.d.tip ? ` · ${e.d.tip}` : ''}`);
+    }
   }
   const t = map.tiles[i], lm = map.landmark;
   if (t === WALL && lm && x >= lm.x && x < lm.x + lm.w && y >= lm.y && y < lm.y + lm.h) lines.push(`${lm.name}: ${lm.tip}`);
@@ -91,7 +99,8 @@ export function describeTile(run, x, y, always = false) {
   const ore = t === ORE && map.ores.find(o => o.cells.some(c => idx(c.x, c.y) === i));
   if (ore) {
     const what = ore.size > 1 ? `${['', '', '두 칸짜리', '세 칸짜리', '네 칸짜리'][ore.size]} ${ORES[ore.tier].name} 반짝 바위` : `${ORES[ore.tier].name} 반짝 바위`;
-    lines.push(`${what} (${ore.hits}/${ORE_HITS}): ${TILE_INFO.bigOre.tip}${ore.size > 1 ? ' 바위가 클수록 많이 나온다.' : ''}`);
+    if (ore.pebble) lines.push(`작은 ${ORES[ore.tier].name} 반짝 바위 (${ore.hits}/2): 굳어 버린 녀석이다. 두 번이면 깨진다.`);
+    else lines.push(`${what} (${ore.hits}/${ORE_HITS}): ${TILE_INFO.bigOre.tip}${ore.size > 1 ? ' 바위가 클수록 많이 나온다.' : ''}`);
   }
   const ter = map.ter[i];
   if (map.spring?.includes(i)) lines.push('온천: 따끈한 물. 들어가 있으면 체력이 조금씩 찬다. 적도 마찬가지다. 불도 꺼진다.');

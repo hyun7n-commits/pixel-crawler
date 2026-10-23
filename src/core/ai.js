@@ -27,7 +27,10 @@ const behind = (e, p) => e.dir && (p.x - e.x) * e.dir.x + (p.y - e.y) * e.dir.y 
 
 export function canSee(run, e, range) {
   const p = run.p, d = cheb(e, p);
-  if (d > range) return false;
+  // 달그림자: melted into the shadows after a kill, you are not there for anyone
+  if (p.vanish > 0 || d > range) return false;
+  // 일식: under the darkened sun a critter cannot make out anything farther than two tiles
+  if (d > 2 && !e.d.boss && run.lv('eclipse')) return false;
   // 카멜레온 standing still: only someone right beside it can tell it from the background
   if (p.blend && d > 1) return false;
   return lineOfSight(run.map, e.x, e.y, p.x, p.y);
@@ -35,6 +38,8 @@ export function canSee(run, e, range) {
 
 export function enemyAct(run, e, dmP) {
   const d = e.d, p = run.p;
+  // the stars clear the moment it gets to act again (see the stun below)
+  e.dazed = false;
   if (e.state === 'npc') {
     if (!e.greeted && run.isVisible(e.x, e.y) && cheb(e, p) <= 6) { e.greeted = true; run.say(e, NPC_TEXT[e.type].call || NPC_TEXT[e.type].greet); }
     return;
@@ -56,7 +61,9 @@ export function enemyAct(run, e, dmP) {
     run.emit('regen', { enemy: e, n: d.regen });
   }
   if (e.state === 'lurk') { lurk(run, e); return; }
-  if (e.stun > 0) { e.stun--; return; }
+  // stunned it loses its turn; on the last one it is left dazed, too dizzy to see your next blow
+  // coming (run.unaware: a surprise attack)
+  if (e.stun > 0) { e.dazed = --e.stun === 0; return; }
   if (e.stoneT > 0) { e.stoneT--; return; }
   // bees after you turn back once you are far enough from their stump
   const hive = d.swarm && run.map.hive;
@@ -108,7 +115,8 @@ export function enemyAct(run, e, dmP) {
 function sleepTick(run, e) {
   if (run.map.gas.sleep[idx(e.x, e.y)] >= SLEEP_MIN) { e.wake = 0; return; }
   if (e.doze > 0) { e.doze--; return; }
-  if (canSee(run, e, 7)) e.wake += (8 - cheb(e, run.p)) * (1 - 0.2 * run.lv('dreamlamp')) * (run.char.hush || 1);
+  // 밤의 눈: you move so softly that a sleeper does not stir however close you come
+  if (canSee(run, e, 7) && !run.lv('nightowl')) e.wake += (8 - cheb(e, run.p)) * (1 - 0.2 * run.lv('dreamlamp')) * (run.char.hush || 1);
   else e.wake = Math.max(0, e.wake - 1);
   if (e.wake >= WAKE_AT) {
     e.state = 'hunt';

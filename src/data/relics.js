@@ -10,6 +10,11 @@
 // Any two relics at MAX_LEVEL that are not a recipe can still be fused (see fusedId): one slot, both
 // effects, but nothing grows out of it any more.
 // `locked: true` relics only appear in the dungeon after they are bought in the shop.
+// Legends and myths each have a move of their own on top of what they hold (`sig`, said on the evolve card).
+// The families meet: a dazed critter (hammer, quake, thunder, meteor) is open to a surprise blow
+// (boots, shadow, dagger, owl eye), fire (ring, sunlamp, volcano) sets it burning and the grass with
+// it, lightning runs through water, and what is knocked flying (giant fist, whirlwind) can go over a
+// drop, into lava or onto a trap.
 
 export const MAX_LEVEL = 3;
 export const MAX_SLOTS = 6;
@@ -18,7 +23,7 @@ export const RELICS = {
   blade:  { name: '칼날',        desc: l => `공격력 +${2 * l}` },
   shield: { name: '방패',        desc: l => `받는 피해 -${l}` },
   fang:   { name: '흡혈 송곳니', desc: l => `적을 쓰러뜨리면 체력 +${2 * l}` },
-  ring:   { name: '불꽃 반지',   desc: l => `공격할 때 30% 확률로 불꽃 피해 +${3 * l}` },
+  ring:   { name: '불꽃 반지',   desc: l => `공격할 때 30% 확률로 불꽃 피해 +${3 * l}, 맞은 적에게 불이 붙는다` },
   coin:   { name: '행운의 동전', desc: l => `얻는 골드 +${40 * l}%` },
   heart:  { name: '거인의 심장', desc: l => `최대 체력 +${8 * l}` },
   thorns: { name: '가시 갑옷',   desc: l => `맞으면 때린 적에게 ${2 * l} 피해`, locked: true, cost: 1100 },
@@ -62,26 +67,26 @@ export const RELICS = {
   giantfist:  { name: '거인의 주먹', tier: 1, desc: l => `최대 체력 +${12 + 4 * l}, 공격력 +${l}, 공격할 때 ${25 + 5 * l}% 확률로 기절시켜 한 칸 날려 보낸다, 벽이나 적에 부딪히면 ${4 + 2 * l} 피해` },
 
   // legends: both ingredients stay inside at full strength
-  volcano:   { name: '화산 망치',   tier: 2, has: ['flamesword', 'quake'], desc: l => `불꽃의 검과 지진 망치의 힘, 공격력 +${2 * l}` },
-  undying:   { name: '불사의 심장', tier: 2, has: ['fortress', 'bloodcrown'], desc: l => `가시 요새와 피의 왕관의 힘, 받는 피해 -${l}, 쓰러지면 한 번 되살아난다` },
-  goldstorm: { name: '황금 폭풍',   tier: 2, has: ['goldbolt', 'goldrush'], desc: l => `황금 번개와 골드 러시의 힘, 번개가 2턴마다 치고, 얻는 골드 +${25 * l}%` },
-  phantom:   { name: '달그림자',    tier: 2, has: ['shadow', 'dreamlamp'], desc: l => `그림자 걸음과 꿈꾸는 등불의 힘, 기습 피해 ×+${0.5 * l}, 피하기 +${5 * l}%` },
-  meteor:    { name: '운석 폭탄',   tier: 2, has: ['firebomb', 'quake'], desc: l => `불꽃 폭탄과 지진 망치의 힘, ${10 - 2 * l}턴마다 보이는 적에게 운석 ${10 + 5 * l}` },
-  lifetree:  { name: '생명의 나무', tier: 2, has: ['herbal', 'bloodcrown'], desc: l => `약초 주머니와 피의 왕관의 힘, ${l < 2 ? 2 : 1}턴마다 체력 +1, 최대 체력 +${10 * l}` },
-  bloodmoon: { name: '붉은 달',     tier: 2, has: ['bloodblade', 'bloodcrown'], desc: l => `피의 검과 피의 왕관의 힘, 공격력 +${2 * l}` },
-  stormlord: { name: '폭풍 망치',   tier: 2, has: ['thunder', 'quake'], desc: l => `천둥 망치와 지진 망치의 힘, 번개가 2턴마다 치고, 공격력 +${l}` },
-  guardian:  { name: '수호 거북',   tier: 2, has: ['ironheart', 'fortress'], desc: l => `강철 심장과 가시 요새의 힘, 받는 피해 -${l}, 최대 체력 +${10 * l}` },
-  fortune:   { name: '행운의 여신', tier: 2, has: ['luckycharm', 'goldfang'], desc: l => `네잎 클로버와 황금 이빨의 힘, 얻는 골드 +${25 * l}%, 피하기 +${5 * l}%` },
-  nightowl:  { name: '밤의 눈',     tier: 2, has: ['owleye', 'dreamlamp'], desc: l => `부엉이 눈과 꿈꾸는 등불의 힘, 시야 +${l}칸, 기습 피해 ×+${0.5 * l}` },
-  whirlwind: { name: '칼바람',      tier: 2, has: ['whirl', 'flamesword'], desc: l => `회오리 검과 불꽃의 검의 힘, 옆의 적에게도 같은 피해, 공격력 +${l}` },
+  volcano:   { name: '화산 망치',   tier: 2, has: ['flamesword', 'quake'], sig: '때리면 불기둥이 솟는다', desc: l => `불꽃의 검과 지진 망치의 힘, 공격력 +${2 * l}, 때리면 불기둥이 솟아 둘레의 적도 불꽃 ${3 + 2 * l} 피해를 입고 불탄다` },
+  undying:   { name: '불사의 심장', tier: 2, has: ['fortress', 'bloodcrown'], sig: '쓰러져도 무적이 되어 일어난다', desc: l => `가시 요새와 피의 왕관의 힘, 받는 피해 -${l}, 쓰러지면 한 번 되살아나 ${1 + l}턴 동안 무적, 둘레의 적을 밀쳐 낸다` },
+  goldstorm: { name: '황금 폭풍',   tier: 2, has: ['goldbolt', 'goldrush'], sig: '번개 맞은 적이 골드를 쏟는다', desc: l => `황금 번개와 골드 러시의 힘, 번개가 2턴마다 치고, 얻는 골드 +${25 * l}%, 번개로 쓰러뜨린 적은 골드를 와르르 쏟는다` },
+  phantom:   { name: '달그림자',    tier: 2, has: ['shadow', 'dreamlamp'], sig: '쓰러뜨리면 모습이 사라진다', desc: l => `그림자 걸음과 꿈꾸는 등불의 힘, 기습 피해 ×+${0.5 * l}, 피하기 +${5 * l}%, 적을 쓰러뜨리면 ${1 + l}턴 동안 모습이 사라져 적들이 나를 놓친다` },
+  meteor:    { name: '운석 폭탄',   tier: 2, has: ['firebomb', 'quake'], sig: '운석이 불태우고 기절시킨다', desc: l => `불꽃 폭탄과 지진 망치의 힘, ${10 - 2 * l}턴마다 보이는 적에게 운석 ${10 + 5 * l}, 맞은 적은 불타고 한가운데 적은 기절한다` },
+  lifetree:  { name: '생명의 나무', tier: 2, has: ['herbal', 'bloodcrown'], sig: '쓰러뜨린 자리에 산딸기가 돋는다', desc: l => `약초 주머니와 피의 왕관의 힘, ${l < 2 ? 2 : 1}턴마다 체력 +1, 최대 체력 +${10 * l}, 적을 쓰러뜨리면 ${15 + 15 * l}% 확률로 그 자리에 산딸기 덤불이 돋는다` },
+  bloodmoon: { name: '붉은 달',     tier: 2, has: ['bloodblade', 'bloodcrown'], sig: '아플수록 세게 친다', desc: l => `피의 검과 피의 왕관의 힘, 공격력 +${2 * l}, 체력이 적을수록 더 세게 친다 (최대 ×${1.5 + 0.25 * l})` },
+  stormlord: { name: '폭풍 망치',   tier: 2, has: ['thunder', 'quake'], sig: '번개가 옆의 적에게 튄다', desc: l => `천둥 망치와 지진 망치의 힘, 번개가 2턴마다 치고, 공격력 +${l}, 번개가 옆의 적에게 ${l}번 더 튄다 (절반 피해)` },
+  guardian:  { name: '수호 거북',   tier: 2, has: ['ironheart', 'fortress'], sig: '쉬면 등껍질에 숨는다', desc: l => `강철 심장과 가시 요새의 힘, 받는 피해 -${l}, 최대 체력 +${10 * l}, 쉬면 등껍질에 쏙 숨어 그 턴엔 1만 아프다 (대장에게는 절반)` },
+  fortune:   { name: '행운의 여신', tier: 2, has: ['luckycharm', 'goldfang'], sig: '유물 카드가 하나 더 나온다', desc: l => `네잎 클로버와 황금 이빨의 힘, 얻는 골드 +${25 * l}%, 피하기 +${5 * l}%, 유물을 고를 때 카드가 하나 더 나온다` },
+  nightowl:  { name: '밤의 눈',     tier: 2, has: ['owleye', 'dreamlamp'], sig: '벽 너머 적이 모두 보인다', desc: l => `부엉이 눈과 꿈꾸는 등불의 힘, 시야 +${l}칸, 기습 피해 ×+${0.5 * l}, 구역의 적이 벽 너머로 모두 보이고, 자는 적은 내가 옆에 가도 깨지 않는다` },
+  whirlwind: { name: '칼바람',      tier: 2, has: ['whirl', 'flamesword'], sig: '옆의 적이 바람에 날아간다', desc: l => `회오리 검과 불꽃의 검의 힘, 옆의 적에게도 같은 피해, 공격력 +${l}, 옆의 적은 바람에 한 칸 날아간다` },
 
   // myths
-  minecrown: { name: '반짝돌 왕관', tier: 3, has: ['goldstorm', 'volcano'], desc: () => '황금 폭풍과 화산 망치의 힘, 공격력 +5, 얻는 골드 +50%, 더 좋은 반짝돌 확률 +15%' },
-  eternity:  { name: '영원의 심장',   tier: 3, has: ['undying', 'lifetree'], desc: () => '불사의 심장과 생명의 나무의 힘, 최대 체력 +30, 두 번 되살아난다' },
-  eclipse:   { name: '일식',          tier: 3, has: ['phantom', 'meteor'], desc: () => '달그림자와 운석 폭탄의 힘, 운석이 3턴마다 떨어지고, 기습 피해 ×+2' },
-  godhammer: { name: '신의 망치',     tier: 3, has: ['stormlord', 'whirlwind'], desc: () => '폭풍 망치와 칼바람의 힘, 공격력 +5, 번개가 매 턴 친다' },
-  bloodking: { name: '피의 군주',     tier: 3, has: ['bloodmoon', 'guardian'], desc: () => '붉은 달과 수호 거북의 힘, 최대 체력 +20, 쓰러지면 한 번 되살아난다' },
-  dawnstar:  { name: '새벽별',        tier: 3, has: ['nightowl', 'fortune'], desc: () => '밤의 눈과 행운의 여신의 힘, 얻는 골드 +50%, 피하기 +10%, 기습 피해 ×+1' },
+  minecrown: { name: '반짝돌 왕관', tier: 3, has: ['goldstorm', 'volcano'], sig: '쓰러뜨린 적이 반짝 바위로 굳는다', desc: () => '황금 폭풍과 화산 망치의 힘, 공격력 +5, 얻는 골드 +50%, 더 좋은 반짝돌 확률 +15%, 쓰러뜨린 적이 작은 반짝 바위로 굳는다' },
+  eternity:  { name: '영원의 심장',   tier: 3, has: ['undying', 'lifetree'], sig: '두 번, 가득 차서 되살아난다', desc: () => '불사의 심장과 생명의 나무의 힘, 최대 체력 +30, 두 번 되살아나고 그때마다 체력이 가득 찬다' },
+  eclipse:   { name: '일식',          tier: 3, has: ['phantom', 'meteor'], sig: '적이 두 칸 밖을 못 본다', desc: () => '달그림자와 운석 폭탄의 힘, 운석이 3턴마다 떨어지고, 기습 피해 ×+2, 적의 눈이 어두워져 두 칸 밖은 못 본다' },
+  godhammer: { name: '신의 망치',     tier: 3, has: ['stormlord', 'whirlwind'], sig: '때릴 때마다 번개가 꽂힌다', desc: () => '폭풍 망치와 칼바람의 힘, 공격력 +5, 번개가 매 턴 치고, 때린 적에게 번개가 내리꽂힌다' },
+  bloodking: { name: '피의 군주',     tier: 3, has: ['bloodmoon', 'guardian'], sig: '준 피해만큼 체력이 찬다', desc: () => '붉은 달과 수호 거북의 힘, 최대 체력 +20, 쓰러지면 한 번 되살아나고, 준 피해의 30%만큼 체력이 찬다' },
+  dawnstar:  { name: '새벽별',        tier: 3, has: ['nightowl', 'fortune'], sig: '구역이 환히 밝아진다', desc: () => '밤의 눈과 행운의 여신의 힘, 얻는 골드 +50%, 피하기 +10%, 기습 피해 ×+1, 구역에 오면 날이 밝아 땅과 숨은 함정이 다 보인다' },
 };
 
 export const tierOf = id => (isFused(id) ? 0 : RELICS[id].tier || 0);

@@ -61,6 +61,14 @@ function oreCanvas(grade) {
   stampPieces(rows, grade, grade.metal ? 4 : 3, seeded(7 + ORES.indexOf(grade)));
   return spriteCanvas(rows.map(r => r.join('')), pieceColor(grade));
 }
+// 반짝돌 왕관's pebble: the small lump with two of the grade's smallest pieces in it
+function pebbleCanvas(grade) {
+  const rows = TER_SPR.pebble.map(r => [...r]);
+  const [pat, spots] = grade.metal ? [NUGGETS[2], [[5, 9], [9, 11]]] : [CRYSTALS[2], [[5, 9], [9, 10]]];
+  for (const [px, py] of spots) pat.forEach((r, j) => [...r].forEach((ch, i) => { if (ch !== '.') rows[py + j][px + i] = ch; }));
+  return spriteCanvas(rows.map(r => r.join('')), pieceColor(grade));
+}
+export const pebbleKey = tier => `t_pebble_${ORES[tier].id}`;
 // What a grade looks like lying on the floor (a little heap of its pieces), and one chip of it in the air.
 function dropCanvas(grade, chip) {
   const S = chip ? 6 : 14, rows = Array.from({ length: S }, () => Array(S).fill('o'));
@@ -839,6 +847,7 @@ export function buildTextures(scene) {
   for (const [name, rows] of Object.entries(TER_SPR)) if (!tx.exists(`t_${name}`)) tx.addCanvas(`t_${name}`, spriteCanvas(rows));
   for (const grade of ORES) {
     if (!tx.exists(`t_ore_${grade.id}`)) tx.addCanvas(`t_ore_${grade.id}`, oreCanvas(grade));
+    if (!tx.exists(`t_pebble_${grade.id}`)) tx.addCanvas(`t_pebble_${grade.id}`, pebbleCanvas(grade));
     if (!tx.exists(`t_drop_${grade.id}`)) tx.addCanvas(`t_drop_${grade.id}`, dropCanvas(grade, false));
     if (!tx.exists(`t_chip_${grade.id}`)) tx.addCanvas(`t_chip_${grade.id}`, dropCanvas(grade, true));
   }
