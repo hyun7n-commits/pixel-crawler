@@ -1169,6 +1169,12 @@ export class Run {
       }
       return;
     }
+    // 공벌레 curls up tight at the knock and goes rolling off like a bowling ball (rollBug)
+    if (e && e.type === 'garg' && e.hp > 0 && !e.chief) {
+      this.emit('pine', { x, y, hit: true });
+      this.rollBug(e);
+      return;
+    }
     if (e && !e.d.npc) {
       this.emit('pine', { x, y, hit: true });
       if (this.isVisible(x, y)) this.log(`솔방울이 ${josa(e.d.name, '을', '를')} 딱 맞혔다!`, 'good');
@@ -1196,6 +1202,44 @@ export class Run {
     const heard = this.noise(x, y, B.PINE_NOISE);
     this.log(heard.length ? '톡! 솔방울 소리에 근처 녀석이 고개를 돌렸다.' : '톡! 솔방울이 데구루루 굴러갔다.');
     if (heard.length) this.emit('heard', { x, y, list: heard });
+  }
+
+  // 공벌레 + 솔방울: rolled up into a ball, it goes the way the pinecone flew, up to ROLL_TILES, unhurt in
+  // its shell. It stops at a wall, in honey, on a trap (which goes off), over a cliff edge, or at the
+  // first critter in its way: that one is bowled over, hurt and dizzy, and cross with it (다툼). The
+  // ball stays curled up a turn where it stops.
+  rollBug(e) {
+    const dx = Math.sign(e.x - this.p.x), dy = Math.sign(e.y - this.p.y), from = { x: e.x, y: e.y }, map = this.map;
+    const seen = this.isVisible(e.x, e.y);
+    let pin = null, edge = null;
+    for (let k = 0; k < B.ROLL_TILES; k++) {
+      const x = e.x + dx, y = e.y + dy;
+      if (!inMap(x, y) || squeeze(map, e.x, e.y, dx, dy)) break;
+      const ter = map.ter[idx(x, y)];
+      if (ter === T.CHASM) { edge = { x, y }; break; }
+      const other = this.enemyAt(x, y);
+      if (other) { pin = other; break; }
+      if (!this.passable(x, y) || ter === T.LAVA || (x === this.p.x && y === this.p.y)) break;
+      e.x = x; e.y = y;
+      if (ter === T.HONEY || isTrap(ter)) break;
+    }
+    Object.assign(e, { stoneT: 1, aim: false, foe: null, foeT: 0, bury: 0 });
+    if (e.state === 'sleep') e.state = 'search';
+    this.emit('roll', { enemy: e, from, to: { x: e.x, y: e.y }, dx, dy });
+    const rolled = e.x !== from.x || e.y !== from.y || pin || edge;
+    if (seen || this.isVisible(e.x, e.y)) {
+      this.log(rolled ? `${josa(e.d.name, '이', '가')} 동그랗게 말려서 데굴데굴 굴러간다!` : `${josa(e.d.name, '이', '가')} 동그랗게 말렸다.`, 'good');
+      if (rolled) this.discover('pine_roll');
+    }
+    if (edge) { this.plunge(e, edge); return; }
+    if (e.x !== from.x || e.y !== from.y) onEnter(this, e, e.x, e.y);
+    if (isTrap(map.ter[idx(e.x, e.y)])) springTrap(this, e.x, e.y);
+    if (pin) {
+      this.emit('bonk', { x: e.x, y: e.y, dx, dy });
+      if (this.isVisible(pin.x, pin.y)) this.log(`데구르르 쾅! ${josa(pin.d.name, '이', '가')} 볼링 핀처럼 넘어졌다.`, 'good');
+      this.hurt(pin, 2 * B.pineDamage(this.floor), 'bonk', e);
+      if (pin.hp > 0 && !pin.d.boss) { pin.stun = Math.max(pin.stun || 0, 1); this.emit('stun', { x: pin.x, y: pin.y }); }
+    }
   }
 
   // 꿀 병: it breaks and honey pours over the tile and the ones round it; whoever stands there is stuck
@@ -1271,7 +1315,7 @@ export class Run {
     e.fear = e.d.boss ? B.CHILI_BOSS : B.CHILI_TURNS;
     Object.assign(e, { state: 'flee', ran: 0, pants: 0, aim: false, wake: 0, doze: 0 });
     this.emit('chili', { enemy: e });
-    this.say(e, pick(['매워!', '맵다맵다!', '혀가 불타!', '물! 물!']));
+    this.say(e, pick(['헥헥!', '후아후아!', '하아하아!', '!!']));
     if (this.isVisible(e.x, e.y)) this.log(e.d.boss ? `${josa(e.d.name, '이', '가')} 매워서 펄쩍 뛰었다! 금방 정신을 차릴 것 같다.` : `${josa(e.d.name, '이', '가')} 매워서 펄쩍 뛰었다! 허둥지둥 달아난다.`, 'good');
   }
 

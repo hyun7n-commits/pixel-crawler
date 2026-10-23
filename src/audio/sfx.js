@@ -182,6 +182,7 @@ const SOUNDS = {
     hiss(0.12, { vol: 0.14, freq: 700, to: 1600, q: 0.8, delay });
     tone(320, 0.14, { type: 'triangle', vol: 0.16, to: 900, delay: delay + 0.04 });
   },  dodge() { hiss(0.12, { vol: 0.12, freq: 2000, to: 4500, q: 2 }); },
+  roll() { hiss(0.3, { vol: 0.12, freq: 420, to: 200, type: 'lowpass', attack: 0.02 }); tone(150, 0.28, { type: 'triangle', vol: 0.07, to: 95 }); },
   puff() { hiss(0.35, { vol: 0.15, freq: 900, to: 300, q: 0.6, attack: 0.02 }); },
   levelup() { chime([659, 784, 988, 1319], 0.07, 0.13); },
   // a relic you picked lands: one pip, a little run up when it is full
@@ -304,6 +305,7 @@ export function onRunEvent(type, d) {
     case 'berry': play('honey'); break;
     // the meadow tools (v0.26)
     case 'pine': play(d.hit ? 'hit' : 'pop'); if (d.caught != null) play('swap'); break;
+    case 'roll': play('roll'); break;
     case 'melt': play('splash'); break;
     case 'yum': play('honey'); break;
     case 'honeyPour': play('splash'); play('honey'); break;

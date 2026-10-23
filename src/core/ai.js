@@ -866,7 +866,8 @@ export function brawl(run, a, b) {
   run.brawls = (run.brawls || 0) + 1;
   run.emit('brawl', { enemy: a, foe: b });
   if (run.isVisible(a.x, a.y)) {
-    run.say(a, pick(['야!', '너지?!', '아야! 너!', '이 녀석이!', '뭐야!']));
+    // critters only ever speak in marks (design: no words from enemies)
+    run.say(a, pick(['!', '!!', '!?']));
     run.log(`화가 난 ${josa(a.d.name, '이', '가')} ${b.d.name}에게 덤벼든다!`, 'good');
   }
   return true;
@@ -879,7 +880,7 @@ export function vex(run, e, turns, why = 'spores') {
   if (!(e.grump > 0)) {
     Object.assign(e, { state: 'hunt', wake: 0, doze: 0, aim: false, aimAt: null, charge: null, lick: null, swoop: null, lane: null });
     run.emit('grump', { enemy: e });
-    if (run.isVisible(e.x, e.y)) run.say(e, pick(['으르릉…', '흥!', '건드리지 마!', '다 미워!']));
+    if (run.isVisible(e.x, e.y)) run.say(e, pick(['으르릉…', '흥!', '!']));
   }
   e.grump = Math.max(e.grump || 0, turns);
   return true;

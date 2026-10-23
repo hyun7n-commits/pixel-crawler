@@ -1116,6 +1116,13 @@ export class DungeonScene extends Phaser.Scene {
         this.float(d.x, d.y, d.hit ? '딱!' : '톡', d.hit ? '#f4cf4f' : '#d8d2c0', 0, d.hit ? 12 : 9);
         if (!d.hit) this.noiseRing(d.x, d.y, 3, 0xd8d2c0);
         break;
+      case 'roll': {
+        // 공벌레 rolled up into a ball: a trail of dust behind it, and 데굴데굴 where it stops
+        const n = Math.max(Math.abs(d.to.x - d.from.x), Math.abs(d.to.y - d.from.y));
+        for (let k = 0; k <= n; k++) this.time.delayedCall(k * 35, () => this.fx.dust.explode(3, center(d.from.x + d.dx * k), foot(d.from.y + d.dy * k) - 2));
+        if (n) this.float(d.to.x, d.to.y, '데굴데굴', '#d8d2c0', 0, 9);
+        break;
+      }
       case 'bury':
         // the squirrel scratches a hole for its pinecone, then pats the earth down over it
         if (this.run.isVisible(d.enemy.x, d.enemy.y)) {

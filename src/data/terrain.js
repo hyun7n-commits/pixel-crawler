@@ -97,6 +97,7 @@ export const DISCOVERIES = [
   // v0.26: the meadow tools meet the rules of the fields
   { id: 'pine_cliff',  combo: '솔방울 + 절벽 끝',   result: '맞은 녀석이 절벽 아래로 데굴데굴', hint: '절벽 끝에 선 녀석한테 솔방울을 던지면 떨어진대.' },
   { id: 'pine_trap',   combo: '솔방울 + 함정',      result: '밀려난 녀석이 함정을 밟는다', hint: '솔방울에 맞고 밀려난 녀석이 함정을 밟았대.' },
+  { id: 'pine_roll', combo: '솔방울 + 공벌레', result: '동그랗게 말려 데굴데굴, 앞에 있던 녀석이 볼링 핀처럼 넘어진다', hint: '공벌레한테 솔방울을 던지면 공처럼 말려서 굴러간대. 그 앞에 누가 서 있으면 쾅!' },
   { id: 'pine_squirrel', combo: '솔방울 + 도토리 다람쥐', result: '덥석 받아 들고 묻으러 간다. 훔친 골드도 내팽개친다', hint: '도토리 다람쥐는 솔방울만 보면 정신을 못 차린대. 훔친 골드도 내팽개칠 만큼.' },
   { id: 'chili_snow',  combo: '매운 고추 + 눈사람', result: '땀을 뻘뻘 흘리다 녹아서 물웅덩이가 된다', hint: '눈사람한테 매운 고추를 먹이면 녹아 버린대. 머리까지 몽땅.' },
   { id: 'honey_bees',  combo: '꿀 병 + 화난 벌',    result: '벌들이 쏟아진 꿀로 몰려가서 나를 잊는다', hint: '벌집 털다 벌 떼한테 쫓기면 꿀 병을 던져 보래. 벌은 꿀을 못 지나친대.' },

@@ -76,6 +76,8 @@ export const pineDamage = floor => 3 + Math.floor(gfl(floor) / 3);
 export const BELL_TURNS = 4, BELL_RANGE = 7, PINE_NOISE = 3;
 // 도토리 다람쥐 + 솔방울: turns it spends running off with the pinecone and burying it (the last two digging)
 export const BURY_TURNS = 7;
+// 공벌레 + 솔방울: how far the rolled-up pill bug goes (Run.rollBug)
+export const ROLL_TILES = 6;
 // 방울 + 박쥐: bats this close to a ringing bell lose their way (stunned while it rings)
 export const BELL_BAT_RANGE = 3;
 // 방울 + 그림자 고양이: cats this close to a ringing bell play with it until it stops
