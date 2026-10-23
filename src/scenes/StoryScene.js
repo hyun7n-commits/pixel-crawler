@@ -3,8 +3,7 @@
 // text under it (ui/story.js). A tap moves on; the text box and the skip button are DOM.
 
 /* global Phaser */
-import { speechBubble } from './bubble.js';
-import { TILE, ART, dotScale, ensureHero, wallKey, floorKey, texScale, N, S, SE, SW } from './textures.js';
+import { TILE, wallKey, floorKey, texScale, S } from './textures.js';
 import { houseCanvas, lampPostCanvas } from './village-art.js';
 import { faceKey } from '../data/faces.js';
 
@@ -20,10 +19,10 @@ export class StoryScene extends Phaser.Scene {
   create() {
     this.cameras.main.setRoundPixels(true);
     this.objs = [];
-    this.spark = this.add.particles(0, 0, 'dot', dotScale({
+    this.spark = this.add.particles(0, 0, 'px', {
       emitting: false, lifespan: { min: 350, max: 750 }, speed: { min: 20, max: 70 }, scale: { start: 1.5, end: 0 },
       gravityY: 50, tint: [0xf4cf4f, 0xffffff, 0xf29bb2],
-    })).setDepth(D.fx);
+    }).setDepth(D.fx);
     // the scene is stopped after each story: let go of the screen's resize then
     const onResize = () => this.fit();
     this.scale.on('resize', onResize);
@@ -62,7 +61,7 @@ export class StoryScene extends Phaser.Scene {
       const g = this.keep(this.add.graphics().setDepth(D.sky));
       for (let k = 0; k < 160; k++) {
         const x = (k * 53 % 47) * 9 - 160, y = (k * 29 % 61) * 4 - 230;
-        g.fillStyle(0xffffff, k % 3 ? 0.5 : 0.9).fillCircle(x, y, k % 7 ? 0.5 : 0.9);
+        g.fillStyle(0xffffff, k % 3 ? 0.5 : 0.9).fillRect(x, y, 1, 1);
       }
       g.fillStyle(0xfff3b0, 1).fillCircle(VIEW.w * TILE - 12, -8, 7);
       g.fillStyle(SKY.night, 1).fillCircle(VIEW.w * TILE - 9, -10, 6);
@@ -75,9 +74,7 @@ export class StoryScene extends Phaser.Scene {
       const cloud = kind === 'day' ? 0xffffff : 0xffe2c4;
       [[8, -50, 1], [70, -110, 0.8], [-20, -170, 1.2], [90, -220, 0.9]].forEach(([x, y, s], i) => {
         const c = this.keep(this.add.graphics().setDepth(D.sky));
-        // a soft round puff: a flat bottom and three bumps on top
-        c.fillStyle(cloud, 0.95).fillRoundedRect(-16, -4, 32, 7, 3.5).fillCircle(-7, -4, 5).fillCircle(1, -7, 7).fillCircle(9, -3.5, 4.5);
-        c.fillStyle(kind === 'day' ? 0xd8eefa : 0xf2c9a8, 0.8).fillRoundedRect(-14, 0.6, 28, 2.4, 1.2);
+        c.fillStyle(cloud, 0.9).fillRect(-12, -3, 24, 6).fillRect(-7, -7, 10, 4).fillRect(0, -9, 9, 6).fillRect(-16, -1, 32, 4);
         c.setPosition(x, y).setScale(s);
         this.tweens.add({ targets: c, x: x + 14, duration: 6000 + i * 1300, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
       });
@@ -88,7 +85,7 @@ export class StoryScene extends Phaser.Scene {
   ground(zi, y0, tint) {
     for (let y = y0; y < VIEW.h + 12; y++) for (let x = -14; x < VIEW.w + 14; x++) {
       const h = (x * 7 + y * 13 + 50) % 32;
-      const im = this.keep(this.add.image(x * TILE, y * TILE, floorKey(zi, h)).setOrigin(0).setScale(ART).setDepth(D.ground));
+      const im = this.keep(this.add.image(x * TILE, y * TILE, floorKey(zi, h)).setOrigin(0).setDepth(D.ground));
       if (tint) im.setTint(tint);
     }
   }
@@ -97,7 +94,7 @@ export class StoryScene extends Phaser.Scene {
   hedge(zi, x0, x1, y, tint) {
     const out = [];
     for (let x = x0; x <= x1; x++) {
-      const im = this.keep(this.add.image(x * TILE + TILE / 2, y * TILE + TILE, wallKey(this, zi, S | SE | SW, (x * 5 + y) % 3, N)).setOrigin(0.5, 1).setScale(ART).setDepth(D.back + y / 100));
+      const im = this.keep(this.add.image(x * TILE + TILE / 2, y * TILE + TILE, wallKey(this, zi, S, (x * 5 + y) % 3)).setOrigin(0.5, 1).setDepth(D.back + y / 100));
       if (tint) im.setTint(tint);
       out.push(im);
     }
@@ -107,21 +104,20 @@ export class StoryScene extends Phaser.Scene {
   house(spec, x, y, lived = true, tint) {
     const key = `story_house_${spec.id}_${lived ? 1 : 0}`;
     if (!this.textures.exists(key)) this.textures.addCanvas(key, houseCanvas(spec, lived));
-    const im = this.keep(this.add.image(x * TILE, y * TILE, key).setOrigin(0).setScale(ART).setDepth(D.house));
+    const im = this.keep(this.add.image(x * TILE, y * TILE, key).setOrigin(0).setDepth(D.house));
     if (tint) im.setTint(tint);
     return im;
   }
 
   lamp(x, y) {
     if (!this.textures.exists('village_post')) this.textures.addCanvas('village_post', lampPostCanvas());
-    this.keep(this.add.image(x * TILE + TILE / 2, (y + 1) * TILE, 'village_post').setOrigin(0.5, 1).setScale(ART).setDepth(D.actors + y / 100));
+    this.keep(this.add.image(x * TILE + TILE / 2, (y + 1) * TILE, 'village_post').setOrigin(0.5, 1).setDepth(D.actors + y / 100));
     const glow = this.keep(this.add.image(x * TILE + TILE / 2 - 1, (y + 1) * TILE - 14, 'glow').setDepth(D.fx).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.7));
     this.tweens.add({ targets: glow, alpha: 0.35, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
   }
 
   // someone (or something) standing with their feet at tile (x, y); x and y can be fractions
   actor(key, x, y, { flip = false, face, scale = 1 } = {}) {
-    if (face) ensureHero(this, key);
     const k = face ? faceKey(key, face) : key;
     const im = this.keep(this.add.image(x * TILE + TILE / 2, (y + 1) * TILE, this.textures.exists(k) ? k : key).setOrigin(0.5, 1).setDepth(D.actors + y / 100));
     im.setScale(texScale(im) * scale).setFlipX(flip);
@@ -130,7 +126,6 @@ export class StoryScene extends Phaser.Scene {
   }
 
   face(im, face) {
-    if (face) ensureHero(this, im.base);
     const k = face ? faceKey(im.base, face) : im.base;
     if (this.textures.exists(k)) im.setTexture(k);
   }
@@ -157,7 +152,10 @@ export class StoryScene extends Phaser.Scene {
   // a word bubble over someone: '!', '?', '♥', '…'
   mark(im, text, ms = 1400) {
     const z = this.cameras.main.zoom || 3, k = this.dpr / z;
-    const b = this.keep(speechBubble(this, im.x, im.y - im.displayHeight - 2, text, { k, res: z, depth: D.bubble, pad: [7, 3] }));
+    const b = this.keep(this.add.text(im.x, im.y - im.displayHeight - 2, text, {
+      fontFamily: 'Galmuri11, sans-serif', fontSize: `${12 * k}px`, color: '#1b1424', backgroundColor: '#f4f0e8',
+      padding: { x: 6 * k, y: 3 * k },
+    }).setOrigin(0.5, 1).setDepth(D.bubble).setResolution(z));
     b.setScale(0.2);
     this.tweens.add({ targets: b, scale: 1, duration: 160, ease: 'Back.out' });
     if (ms) this.time.delayedCall(ms, () => this.tweens.add({ targets: b, alpha: 0, duration: 200 }));
@@ -168,9 +166,9 @@ export class StoryScene extends Phaser.Scene {
   dream(im, key) {
     const g = this.keep(this.add.graphics().setDepth(D.bubble));
     const cx = im.x + 22, cy = im.y - im.displayHeight - 20;
-    g.fillStyle(0x4a2a3c, 1).fillCircle(im.x + 6, im.y - im.displayHeight - 2, 2.5).fillCircle(im.x + 11, im.y - im.displayHeight - 7, 3.5).fillEllipse(cx, cy, 46, 34);
-    g.fillStyle(0xfffaf0, 1).fillCircle(im.x + 6, im.y - im.displayHeight - 2, 1.5).fillCircle(im.x + 11, im.y - im.displayHeight - 7, 2.5).fillEllipse(cx, cy, 44, 32);
-    const pic = this.keep(this.add.image(cx, cy + 1, key).setDepth(D.bubble).setScale(0.42 * ART));
+    g.fillStyle(0x1b1424, 1).fillCircle(im.x + 6, im.y - im.displayHeight - 2, 2.5).fillCircle(im.x + 11, im.y - im.displayHeight - 7, 3.5).fillEllipse(cx, cy, 46, 34);
+    g.fillStyle(0xf4f0e8, 1).fillCircle(im.x + 6, im.y - im.displayHeight - 2, 1.5).fillCircle(im.x + 11, im.y - im.displayHeight - 7, 2.5).fillEllipse(cx, cy, 44, 32);
+    const pic = this.keep(this.add.image(cx, cy + 1, key).setDepth(D.bubble).setScale(0.42));
     for (const o of [g, pic]) { o.setAlpha(0); this.tweens.add({ targets: o, alpha: 1, duration: 300 }); }
     return pic;
   }
@@ -195,7 +193,7 @@ export class StoryScene extends Phaser.Scene {
   // gold coins popping out of a spot and landing around it
   coins(x, y, n = 6) {
     for (let k = 0; k < n; k++) {
-      const c = this.keep(this.add.image(x * TILE + TILE / 2, y * TILE + TILE / 2, 'gold').setDepth(D.fx).setScale(0.6 * ART));
+      const c = this.keep(this.add.image(x * TILE + TILE / 2, y * TILE + TILE / 2, 'gold').setDepth(D.fx).setScale(0.6));
       const tx = c.x + (k - n / 2) * 7 + (Math.random() * 4 - 2), ty = c.y + 6 + Math.random() * 6;
       this.tweens.add({
         targets: c, x: tx, duration: 420, delay: k * 50, ease: 'Linear',
@@ -207,7 +205,7 @@ export class StoryScene extends Phaser.Scene {
   // the fields tossing in their sleep: bushes heave, a few shuffle over a tile and back
   toss(hedges) {
     hedges.forEach((im, i) => {
-      this.tweens.add({ targets: im, scaleY: 1.12 * ART, duration: 260 + (i % 3) * 40, yoyo: true, repeat: 3, delay: i * 35, ease: 'Sine.inOut' });
+      this.tweens.add({ targets: im, scaleY: 1.12, duration: 260 + (i % 3) * 40, yoyo: true, repeat: 3, delay: i * 35, ease: 'Sine.inOut' });
       if (i % 3 === 1) this.tweens.add({ targets: im, x: im.x + (i % 2 ? TILE : -TILE), duration: 420, yoyo: true, hold: 500, delay: 200 + i * 30, ease: 'Quad.inOut' });
     });
   }

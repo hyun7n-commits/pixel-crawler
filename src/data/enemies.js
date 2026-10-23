@@ -79,35 +79,34 @@ export const ENEMIES = {
 };
 
 // Five zones, one per stage (data/stages.js); FLOORS_PER_ZONE fields each, the last one the boss.
-// `style` picks how the walls and ground are drawn (see art/tiles.js): hedges on the meadow,
+// `style` picks how the walls and ground are drawn (see scenes/textures.js): hedges on the meadow,
 // a line of trees in the deep forest, reeds in the marsh, rock cliffs on the mountain, crystal-flecked
-// rock in the cave. `void` is the unexplored dark around a field, a deep blue like still water.
-// Colours: floor (and its dark and light flecks), the wall's top (with its light and dark), the
-// wall's front face, and the water.
-export const VILLAGE_GROUND = { name: '마을', style: 'meadow', void: '#2b4a5c',
-  floor: '#afdc72', floorDark: '#95c85e', floorLight: '#c8ea94',
-  wallTop: '#62bd5c', wallLight: '#8ad76e', wallFace: '#4c9c4c', wallDark: '#3b8044', wallLine: '#4a2a3c',
-  water: '#7ccfec', waterLight: '#c8f1fb' };
+// rock in the cave. `void` is the unexplored dark.
+// The village keeps the bright daytime green: home is where it is light; the fields are walked at night.
+export const VILLAGE_GROUND = { name: '마을', style: 'meadow', void: '#0c1a10',
+  floor: '#92c86a', floorDark: '#7cb458', floorLight: '#acdc86',
+  wallTop: '#3a8448', wallLight: '#5aad58', wallFace: '#2c6b3a', wallDark: '#1f5230', wallLine: '#10301c',
+  water: '#4a9fc4', waterLight: '#8fd8f0' };
 
 export const ZONES = [
-  { name: '초원', style: 'meadow', wallName: '산울타리', enemies: ['rat', 'rat', 'slime', 'goblin'], boss: 'ratking', void: '#2b4a5c',
-    floor: '#a6d46a', floorDark: '#8cc157', floorLight: '#c2e58c',
-    wallTop: '#5cb85a', wallLight: '#84d26a', wallFace: '#489a4a', wallDark: '#387d40', wallLine: '#4a2a3c',
-    water: '#78cdea', waterLight: '#c4f0fa' },
-  { name: '깊은숲', style: 'forest', wallName: '큰 나무', enemies: ['bat', 'skel', 'spider', 'goblin'], boss: 'skelking', void: '#203f45',
-    floor: '#93b862', floorDark: '#7ca24f', floorLight: '#afcd7c',
-    wallTop: '#3f9c66', wallLight: '#62bd76', wallFace: '#93623f', wallDark: '#2b6a4c', wallLine: '#4a2a3c',
-    water: '#62c0d8', waterLight: '#c0ebf5' },
-  { name: '반딧불 늪', style: 'marsh', wallName: '갈대숲', enemies: ['frog', 'frog', 'beetle', 'crab'], boss: 'toadking', void: '#1f3a44',
-    floor: '#9cba78', floorDark: '#84a463', floorLight: '#b8d094',
-    wallTop: '#b2c35e', wallLight: '#d3df84', wallFace: '#869b45', wallDark: '#62793a', wallLine: '#4a2a3c',
-    water: '#5fbcc2', waterLight: '#bdeee8' },
-  { name: '돌산', style: 'rock', wallName: '바위 절벽', enemies: ['knight', 'wizard', 'garg', 'skel'], boss: 'boarchief', void: '#2c3048',
-    floor: '#dccbaa', floorDark: '#c5b28d', floorLight: '#ecdfc5',
-    wallTop: '#b5aec6', wallLight: '#d4cfde', wallFace: '#8f88a4', wallDark: '#6f6887', wallLine: '#4a2a3c',
-    water: '#6cb9df', waterLight: '#c4ecfa' },
-  { name: '박쥐 동굴', style: 'cave', wallName: '동굴 벽', enemies: ['bat', 'axolotl', 'shadecat', 'crystalhog'], boss: 'lord', void: '#191630',
-    floor: '#9088aa', floorDark: '#7b7396', floorLight: '#a8a0bf',
-    wallTop: '#615784', wallLight: '#7d73a3', wallFace: '#493f69', wallDark: '#372f55', wallLine: '#4a2a3c',
-    water: '#5b90d2', waterLight: '#aad1f5' },
+  { name: '초원', style: 'meadow', wallName: '산울타리', enemies: ['rat', 'rat', 'slime', 'goblin'], boss: 'ratking', void: '#07090a',
+    floor: '#61774a', floorDark: '#536840', floorLight: '#728a57',
+    wallTop: '#34573a', wallLight: '#4b7549', wallFace: '#28452d', wallDark: '#1b3221', wallLine: '#0b160e',
+    water: '#33627c', waterLight: '#6b9db5' },
+  { name: '깊은숲', style: 'forest', wallName: '큰 나무', enemies: ['bat', 'skel', 'spider', 'goblin'], boss: 'skelking', void: '#050706',
+    floor: '#4f4f36', floorDark: '#42422d', floorLight: '#5e5f42',
+    wallTop: '#244530', wallLight: '#346440', wallFace: '#4d3a26', wallDark: '#16301d', wallLine: '#070d08',
+    water: '#26505c', waterLight: '#4e8592' },
+  { name: '반딧불 늪', style: 'marsh', wallName: '갈대숲', enemies: ['frog', 'frog', 'beetle', 'crab'], boss: 'toadking', void: '#050807',
+    floor: '#46553f', floorDark: '#3a4834', floorLight: '#56664b',
+    wallTop: '#5d6b35', wallLight: '#808f46', wallFace: '#3c4826', wallDark: '#283119', wallLine: '#0a0f07',
+    water: '#28504b', waterLight: '#5d917f' },
+  { name: '돌산', style: 'rock', wallName: '바위 절벽', enemies: ['knight', 'wizard', 'garg', 'skel'], boss: 'boarchief', void: '#09090c',
+    floor: '#6f6857', floorDark: '#5e5849', floorLight: '#807967',
+    wallTop: '#5c6068', wallLight: '#767a84', wallFace: '#484b54', wallDark: '#33353d', wallLine: '#18191e',
+    water: '#2f5b75', waterLight: '#5e8ca8' },
+  { name: '박쥐 동굴', style: 'cave', wallName: '동굴 벽', enemies: ['bat', 'axolotl', 'shadecat', 'crystalhog'], boss: 'lord', void: '#060509',
+    floor: '#4a4557', floorDark: '#3d3948', floorLight: '#5a5468',
+    wallTop: '#383347', wallLight: '#554d6c', wallFace: '#2c2839', wallDark: '#201d2b', wallLine: '#0c0a12',
+    water: '#27456a', waterLight: '#5b88b3' },
 ];
