@@ -11,6 +11,9 @@
 // Gates are read with isOpen(meta, id) where the thing would appear (core/run.js, core/specials.js).
 
 export const PER_TRIP = 2;
+// The release a save last opened in (meta.seenBuild); goes up with each release that adds unlocks, see
+// sinceUpdate.
+export const BUILD = 26;
 
 const broken = m => Object.values(m.ores || {}).reduce((a, b) => a + b, 0);
 const beat = (m, boss) => m.stats.bosses.includes(boss);
@@ -72,4 +75,13 @@ export function openNew(meta) {
     out.push(u);
   }
   return out;
+}
+
+// A worker back after an update: what has come since opens at once, the first PER_TRIP of it, so the
+// first trip out already has something new (the rest come at trips' ends as usual). Once per update;
+// a worker who has never been out has nothing waiting.
+export function sinceUpdate(meta) {
+  if ((meta.seenBuild || 0) >= BUILD) return [];
+  meta.seenBuild = BUILD;
+  return meta.stats.runs ? openNew(meta) : [];
 }

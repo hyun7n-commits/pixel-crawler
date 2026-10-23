@@ -16,7 +16,8 @@ import { ITEMS } from './data/items.js';
 import { T, isTrap } from './data/terrain.js';
 import { Hud, lowHealth } from './ui/hud.js';
 import { renderPanel, renderVillageHud } from './ui/hub.js';
-import { showChoice, showSummary, showTalk, closeTalk, closeModal, modalOpen } from './ui/modal.js';
+import { showChoice, showSummary, showTalk, closeTalk, closeModal, modalOpen, showUpdateNews } from './ui/modal.js';
+import { sinceUpdate } from './data/unlocks.js';
 import { showStages } from './ui/stages.js';
 import { showEvolve } from './ui/evo.js';
 import { showsLeft } from './ui/beat.js';
@@ -680,7 +681,12 @@ const game = new Phaser.Game({
       if (left) {
         try { startRun(left); return; } catch (e) { clearSuspended(); run = null; console.warn('could not pick the run up again', e); }
       }
-      meta.story.intro ? showVillage() : showStory('intro', () => showVillage());
+      // back after an update: the first of what has come since is open already (data/unlocks.js)
+      const news = sinceUpdate(meta);
+      saveMeta(meta);
+      if (!meta.story.intro) { showStory('intro', () => showVillage()); return; }
+      showVillage();
+      if (news.length) showUpdateNews(news);
     });
   }), new VillageScene(villageHooks), new StoryScene()],
 });
