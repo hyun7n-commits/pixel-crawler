@@ -36,7 +36,8 @@ let path = [];
 let seenCount = 0;
 let aiming = false;
 let chase = null;   // an enemy tapped from afar: walk up to it and hit it once
-let pinned = null;  // tile whose tip stays up after a long press on a phone
+let pinned = null;  // tile whose tip stays up after a long press on a phone, or a tap while looking
+let looking = false; // 살펴보기: a tap on the map shows what is there instead of walking (L key)
 let inVillage = false;
 
 const hud = new Hud({
@@ -47,6 +48,7 @@ const hud = new Hud({
   },
   onWait: () => restOnce(),
   onBag: () => setBag(!$('game').classList.contains('bag-open')),
+  onLook: () => setLook(!looking),
 });
 
 const canAct = () => run && !run.over && !modalOpen() && run.canAct() && !scene?.busy();
@@ -54,7 +56,20 @@ const clearPath = () => { path = []; chase = null; if (scene) scene.path = path;
 const tipAt = () => pinned || scene?.hover;
 
 function restOnce() {
+  setLook(false);
   if (canAct()) { clearPath(); setAim(false); run.wait(); }
+}
+
+// 살펴보기: press it, then tap a critter, a tile or a thing on the map to read about it, as many as you
+// like; press it again (or Esc, or move) to go back to walking
+function setLook(on) {
+  looking = !!(on && run && !run.over);
+  if (looking) setAim(false);
+  pinned = null;
+  hud.looking = looking;
+  if (run) hud.update(run);
+  $('lookBtn')?.classList.toggle('on', looking);
+  showTip(tipAt());
 }
 
 // On a phone the side panel is a bag that slides up from the bottom.
@@ -65,6 +80,7 @@ function setBag(open) {
 // Throwing a bomb: press the bomb (or 2), then pick a tile on the map.
 function setAim(on) {
   aiming = !!(on && canAct() && run.p.items.bomb > 0);
+  if (aiming && looking) { looking = false; hud.looking = false; $('lookBtn')?.classList.remove('on'); }
   if (scene) scene.aim = aiming;
   hud.aiming = aiming;
   if (run) hud.update(run);
@@ -79,6 +95,7 @@ function showTip(h) {
     if (!matchMedia('(pointer: coarse)').matches) text += ' · 방향키로 옮기고 Enter로 던진다';
     if (h && run.canThrowAt(h.x, h.y) && cheb(h, run.p) <= 1) text += '\n바로 옆이라 나도 맞는다!';
   } else if (run && h) text = describeTile(run, h.x, h.y, h === pinned);
+  else if (run && looking) text = '살펴볼 곳을 누른다 · 다시 누르면 끝';
   tip.textContent = text;
   tip.hidden = !text;
 }
@@ -93,6 +110,7 @@ function showVillage(from) {
   setMusic('village');
   inVillage = true;
   pinned = null;
+  looking = false; hud.looking = false; $('lookBtn')?.classList.remove('on');
   showTip(null);
   const g = $('game');
   g.hidden = false;
@@ -402,7 +420,8 @@ document.addEventListener('keydown', ev => {
     return;
   }
   if (!run || $('game').hidden) return;
-  if (k === 'Escape') { setAim(false); clearPath(); return; }
+  if (k === 'Escape') { setAim(false); setLook(false); clearPath(); return; }
+  if (k === 'l') { setLook(!looking); return; }
   // aiming a bomb from the keyboard: arrows move the mark, Enter or Space throws
   if (aiming && (KEYS[k] || k === 'Enter' || k === ' ')) {
     ev.preventDefault();
@@ -416,7 +435,7 @@ document.addEventListener('keydown', ev => {
   }
   // a held key repeats faster than the hero walks: keep to the walk's beat so each step can glide
   if (ev.repeat && (ARROWS.has(k) || KEYS[k]) && performance.now() - lastKeyStep < 120 / pace()) { ev.preventDefault(); return; }
-  if (ARROWS.has(k) || KEYS[k]) lastKeyStep = performance.now();
+  if (ARROWS.has(k) || KEYS[k]) { lastKeyStep = performance.now(); if (looking) setLook(false); }
   if (ARROWS.has(k)) {
     ev.preventDefault(); clearPath(); setAim(false);
     held.add(k); tapped.add(k);
@@ -444,6 +463,8 @@ document.addEventListener('keydown', ev => {
 // Click-walking steps around things you would rather not step on by accident: traps you know of, and fire.
 
 function onTileClick(x, y) {
+  // looking: the tap shows what is there and nothing else happens
+  if (looking) { pinned = { x, y }; showTip(pinned); return; }
   // a tap first puts away a tip left up by a long press, like closing an info window in SPD
   if (pinned) { pinned = null; showTip(scene.hover); return; }
   if (!canAct()) return;
@@ -544,6 +565,7 @@ for (const ev of ['pointerdown', 'touchend', 'click', 'keydown']) document.addEv
 document.addEventListener('gesturestart', ev => ev.preventDefault());
 
 $('waitBtn').addEventListener('click', restOnce);
+$('lookBtn').addEventListener('click', () => setLook(!looking));
 $('bagClose').addEventListener('click', () => setBag(false));
 $('shade').addEventListener('click', () => setBag(false));
 // 나가기: save the trip and go home (pick it up later from the village), or give it up for good

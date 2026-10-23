@@ -34,8 +34,8 @@ export const VILLAGE_MAP = [
   '#.T....::...........................::......#',
   '#.......::.........................::.......#',
   '#...**...::.:...................:.::......T.#',
-  '##....*...:::.....T......*......:::...##...##',
-  '##....##....::::......:......::::.....##...##',
+  '##....*...:::.....T......*......:::.........#',
+  '##....##....::::......:......::::............#',
   '##...T##.....**:::::::::::::::*............##',
   '###.....*..........:::::::......*.........###',
   '###.....*........*..................*..*.*###',
@@ -49,12 +49,12 @@ export const VILLAGE_MAP = [
 // of the bottom row; the owner stands just below it. The top three face the loop from outside it, the
 // bottom three from inside its lower half.
 export const HOUSES = [
-  { id: 'guild', x: 20, y: 1, w: 5, h: 4, roof: '#3f6fb3', sign: 'flag', chimney: true },
+  { id: 'guild', x: 20, y: 1, w: 5, h: 4, roof: '#3f6fb3', sign: 'flag' },
   { id: 'shop', x: 9, y: 4, w: 5, h: 4, roof: '#d9454a', sign: 'coin', awning: true },
   { id: 'smith', x: 31, y: 4, w: 5, h: 4, roof: '#6b6f7c', sign: 'hammer', chimney: true },
   { id: 'neighbor', x: 10, y: 18, w: 5, h: 4, roof: '#f29bb2', sign: 'heart' },
-  { id: 'rescue', x: 20, y: 20, w: 5, h: 4, roof: '#f08c3a', sign: 'cross' },
-  { id: 'rival', x: 30, y: 18, w: 5, h: 4, roof: '#7a4bb0', sign: 'star', chimney: true },
+  { id: 'rescue', x: 31, y: 25, w: 5, h: 4, roof: '#f08c3a', sign: 'cross' },
+  { id: 'rival', x: 30, y: 18, w: 5, h: 4, roof: '#7a4bb0', sign: 'star' },
 ];
 export const doorOf = h => ({ x: h.x + Math.floor(h.w / 2), y: h.y + h.h });
 
@@ -70,21 +70,25 @@ export const PROPS = [
   { x: 19, y: 2, kind: 'board' }, { x: 25, y: 2, kind: 'barrel' },
   { x: 8, y: 6, kind: 'barrel' }, { x: 14, y: 4, kind: 'crate' },
   { x: 36, y: 5, kind: 'logs' }, { x: 30, y: 5, kind: 'barrel' },
-  { x: 15, y: 18, kind: 'mushroom' }, { x: 18, y: 21, kind: 'hay' }, { x: 26, y: 22, kind: 'crate' },
+  { x: 15, y: 18, kind: 'mushroom' }, { x: 37, y: 29, kind: 'hay' }, { x: 30, y: 28, kind: 'crate' },
   { x: 36, y: 19, kind: 'dummy' }, { x: 29, y: 19, kind: 'barrel' },
   { x: 3, y: 14, kind: 'well' }, { x: 2, y: 19, kind: 'hay' }, { x: 5, y: 21, kind: 'cart' },
   { x: 2, y: 11, kind: 'pumpkin' }, { x: 2, y: 12, kind: 'pumpkin' },
-  { x: 42, y: 11, kind: 'hive' }, { x: 43, y: 12, kind: 'hive' }, { x: 41, y: 20, kind: 'logs' },
-  { x: 42, y: 19, kind: 'hay' }, { x: 40, y: 22, kind: 'rock' },
+  { x: 42, y: 11, kind: 'hive' }, { x: 43, y: 12, kind: 'hive' }, { x: 41, y: 17, kind: 'logs' },
+  { x: 42, y: 18, kind: 'hay' }, { x: 42, y: 29, kind: 'rock' },
   { x: 13, y: 10, kind: 'mushroom' }, { x: 30, y: 13, kind: 'rock' },
   { x: 9, y: 26, kind: 'veg' }, { x: 10, y: 26, kind: 'veg' }, { x: 9, y: 27, kind: 'veg' }, { x: 10, y: 27, kind: 'veg' },
   { x: 11, y: 26, kind: 'scarecrow' },
   { x: 22, y: 28, kind: 'barrel' }, { x: 23, y: 28, kind: 'crate' }, { x: 26, y: 29, kind: 'logs' },
   { x: 10, y: 2, kind: 'rock' }, { x: 30, y: 2, kind: 'mushroom' }, { x: 34, y: 3, kind: 'hay' },
 ];
+// The big old tree out east, taller than three houses: its trunk takes up `block`, the crown spreads
+// over the path and the grass, and you can walk underneath (the crown fades while you are under it).
+export const BIG_TREE = { x: 40, y: 27, block: [[39, 27], [40, 27], [41, 27]], crown: { x0: 36, x1: 44, y0: 19, y1: 26 } };
+
 // Your own house (the story's dream, scenes/storyboards.js): an empty lot until the guild's big prize
 // for all three licenses, the first win; then a yellow-roofed house with a heart over the door.
-export const HOME = { id: 'home', x: 31, y: 25, w: 5, h: 4, roof: '#f4cf4f', sign: 'heart', chimney: true };
+export const HOME = { id: 'home', x: 20, y: 20, w: 5, h: 4, roof: '#f4cf4f', sign: 'heart', chimney: true };
 export const ownsHome = m => m.stats.wins > 0;
 
 const deaths = m => m.stats.runs - m.stats.wins;

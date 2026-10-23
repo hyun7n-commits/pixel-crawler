@@ -6,10 +6,12 @@
 /* global Phaser */
 import { pixEllipse } from './pix.js';
 import { TILE, HOME_ZI, wallKey, waterKey, shadeKey, floorKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
+import { chimneyAt } from './village-houses.js';
 import { houseCanvas, pathKey, lampPostCanvas, lotCanvas, treeKey, shrubCanvas, sunRaysCanvas, glintCanvas } from './village-art.js';
 import { baseZoom } from './zoom.js';
 import { faceKey } from '../data/faces.js';
-import { VILLAGE_MAP, HOUSES, FOLK, doorOf, HERO_LINES, HOME, ownsHome, PROPS, PROP_NAMES } from '../data/village.js';
+import { VILLAGE_MAP, HOUSES, FOLK, doorOf, HERO_LINES, HOME, ownsHome, PROPS, PROP_NAMES, BIG_TREE } from '../data/village.js';
+import { bigTreeCanvas } from './landmarks.js';
 import { CHARACTERS } from '../data/characters.js';
 import { VILLAGE_GROUND } from '../data/enemies.js';
 import { DECOR, hasDecor, LETTERS } from '../data/home.js';
@@ -19,6 +21,7 @@ import { patchNoise, scatterKey, patchKey, footKey, bloomKey, moteKeys, SCATTER_
 import { propCanvas, critterCanvas } from './village-props.js';
 
 const MW = VILLAGE_MAP[0].length, MH = VILLAGE_MAP.length;
+const TOP = 2 * TILE;
 const D = { tiles: 0, deco: 1, house: 2, actors: 3, fx: 4, bubble: 5 };
 const center = v => v * TILE + TILE / 2;
 const foot = v => v * TILE + TILE;
@@ -34,6 +37,8 @@ const grassy = ch => ch === '.' || ch === '*';
 // where you walk in: beside the signpost coming back from the fields, otherwise in front of the guild
 const EXIT = (() => { const y = VILLAGE_MAP.findIndex(r => r.includes('>')); return { x: VILLAGE_MAP[y].indexOf('>'), y }; })();
 const GUILD = doorOf(HOUSES.find(h => h.id === 'guild'));
+// where the puppy curls up: on the grass beside your door
+const PUP = { x: HOME.x - 1, y: HOME.y + HOME.h };
 
 export class VillageScene extends Phaser.Scene {
   constructor(hooks) {
@@ -96,8 +101,9 @@ export class VillageScene extends Phaser.Scene {
     if (!z) return;
     cam.setZoom(z);
     const W = MW * TILE, H = MH * TILE, vw = cam.width / z, vh = cam.height / z;
-    const bw = Math.max(W, vw), bh = Math.max(H, vh);
-    cam.setBounds((W - bw) / 2, (H - bh) / 2, bw, bh);
+    // a little room over the top row, where the guild's clock tower pokes up past the hedge
+    const bw = Math.max(W, vw), bh = Math.max(H + TOP, vh);
+    cam.setBounds((W - bw) / 2, (H - TOP - bh) / 2, bw, bh);
   }
 
   // ---------- building the place ----------
@@ -111,12 +117,13 @@ export class VillageScene extends Phaser.Scene {
     // the hedge goes on past the edge, so a tall phone screen shows bushes around the village, not a void
     for (let y = -PAD.y; y < MH + PAD.y; y++) for (let x = -PAD.x; x < MW + PAD.x; x++) this.drawTile(x, y);
     this.plantTrees();
+    this.plantBigTree();
     this.sunOnPond();
     this.placeProps();
     // a house someone is just moving into still has its boards up until they arrive
     for (const h of HOUSES) {
       const f = FOLK[h.id], lived = f.when(meta), moving = lived && f.arrive && !meta.village.seen[h.id];
-      h.img = this.keep(this.add.image(h.x * TILE, h.y * TILE, this.houseKey(h, lived && !moving)).setOrigin(0).setDepth(D.actors + (h.y + h.h - 1) / 100));
+      h.img = this.keep(this.add.image(h.x * TILE, (h.y + h.h) * TILE, this.houseKey(h, lived && !moving)).setOrigin(0, 1).setDepth(D.actors + (h.y + h.h - 1) / 100));
       this.shrubs(h);
       for (let y = h.y; y < h.y + h.h; y++) for (let x = h.x; x < h.x + h.w; x++) this.blocked[y * MW + x] = 1;
       h.lived = lived;
@@ -124,7 +131,7 @@ export class VillageScene extends Phaser.Scene {
     // your own house, or the roped-off lot where it will stand
     const home = ownsHome(meta);
     if (!this.textures.exists('village_lot')) this.textures.addCanvas('village_lot', lotCanvas(HOME.w, HOME.h));
-    this.keep(this.add.image(HOME.x * TILE, HOME.y * TILE, home ? this.houseKey(HOME, true) : 'village_lot').setOrigin(0).setDepth(D.actors + (HOME.y + HOME.h - 1) / 100));
+    this.keep(this.add.image(HOME.x * TILE, (HOME.y + HOME.h) * TILE, home ? this.houseKey(HOME, true) : 'village_lot').setOrigin(0, 1).setDepth(D.actors + (HOME.y + HOME.h - 1) / 100));
     for (let y = HOME.y; y < HOME.y + HOME.h; y++) for (let x = HOME.x; x < HOME.x + HOME.w; x++) this.blocked[y * MW + x] = 1;
     // what you have put round it (data/home.js); bumping the house in front of its door opens that list
     this.homeDoor = home ? { ...doorOf(HOME), home: true } : null;
@@ -225,7 +232,7 @@ export class VillageScene extends Phaser.Scene {
       const x0 = Math.min(...d.at.map(a => a[0])), y1 = Math.max(...d.at.map(a => a[1]));
       const img = this.keep(this.add.image(x0 * TILE, foot(y1), key).setOrigin(0, 1).setDepth(D.actors + y1 / 100));
       for (const [x, y] of d.at) this.blocked[y * MW + x] = 1;
-      if (this.pup && d.at.some(([x, y]) => x === this.pup.x && y === this.pup.y)) this.movePup(39, 27);
+      if (this.pup && d.at.some(([x, y]) => x === this.pup.x && y === this.pup.y)) this.movePup(PUP.x, PUP.y);
       if (this.p && d.at.some(([x, y]) => x === this.p.x && y === this.p.y)) {
         const door = doorOf(HOME);
         this.p.x = door.x; this.p.y = door.y;
@@ -268,7 +275,7 @@ export class VillageScene extends Phaser.Scene {
   placePup() {
     if (this.pup) return;
     if (!this.textures.exists('home_pup')) this.textures.addCanvas('home_pup', pupCanvas());
-    const [x, y] = [39, 27];
+    const { x, y } = PUP;
     const s = this.keep(this.add.image(center(x), foot(y), 'home_pup').setOrigin(0.5, 1).setDepth(D.actors + y / 100));
     s.setScale(TILE * 0.8 / s.height);
     s.hop = 0;
@@ -515,6 +522,15 @@ export class VillageScene extends Phaser.Scene {
     }
   }
 
+  // the big old tree: drawn at its trunk's foot, so everything north of the trunk is under its crown
+  plantBigTree() {
+    if (!this.textures.exists('village_bigtree')) this.textures.addCanvas('village_bigtree', bigTreeCanvas());
+    const t = BIG_TREE;
+    this.bigTree = this.keep(this.add.image(center(t.x), foot(t.y) + 2, 'village_bigtree').setOrigin(0.5, 1).setDepth(D.actors + t.y / 100 + 0.002));
+    for (const [x, y] of t.block) this.blocked[y * MW + x] = 1;
+  }
+  underBigTree(x, y) { const c = BIG_TREE.crown; return x >= c.x0 && x <= c.x1 && y >= c.y0 && y <= c.y1; }
+
   // true for a cell of a little 2x2 square of hedge standing on its own in the grass: a tree grows there instead
   grove(x, y) {
     const hedge = (i, j) => this.ch(i, j) === '#';
@@ -596,6 +612,7 @@ export class VillageScene extends Phaser.Scene {
     if (d) return `${d.name}: ${d.desc}`;
     const hero = this.heroAt(x, y);
     if (hero) return `${CHARACTERS[hero.id].name}: 부딪히면 오늘은 이 친구가 나간다.`;
+    if (BIG_TREE.block.some(([bx, by]) => bx === x && by === y)) return '아주 오래된 큰 나무: 뿌리 사이에 아주 작은 문이 있다. 늘 잠겨 있다.';
     if (this.ch(x, y) === '>') return '들판 가는 땅굴: 쏙 들어가면 탐험을 나간다.';
     if (this.ch(x, y) === 'L') return '반딧불 등';
     if (this.ch(x, y) === 'T') return '나무';
@@ -815,6 +832,11 @@ export class VillageScene extends Phaser.Scene {
   update(time, delta) {
     if (!this.ps) return;
     this.moveLife(time, Math.min(delta || 16, 50));
+    // the big tree's crown goes see-through while you are under it
+    if (this.bigTree) {
+      const want = this.underBigTree(this.p.x, this.p.y) && this.p.y < BIG_TREE.y ? 0.45 : 1;
+      this.bigTree.alpha += (want - this.bigTree.alpha) * Math.min(1, (delta || 16) / 120);
+    }
     // walking: one tile at a time along the route; arriving next to whoever you were heading for, talk
     if (this.path.length && time >= this.nextStep) {
       const [x, y] = this.path.shift();
@@ -891,7 +913,7 @@ export class VillageScene extends Phaser.Scene {
     if (pup && time > pup.next && pup !== this.pending) {
       pup.next = time + 900 + Math.random() * 1800;
       const near = Math.max(Math.abs(pup.x - this.p.x), Math.abs(pup.y - this.p.y));
-      const yard = (x, y) => x >= HOME.x - 4 && x <= HOME.x + HOME.w + 6 && y >= HOME.y - 1 && y <= HOME.y + HOME.h + 1;
+      const yard = (x, y) => x >= HOME.x - 5 && x <= HOME.x + HOME.w + 4 && y >= HOME.y - 1 && y <= HOME.y + HOME.h + 1;
       const ways = DIRS.slice(0, 4).filter(([dx, dy]) => yard(pup.x + dx, pup.y + dy) && grassy(this.ch(pup.x + dx, pup.y + dy)) && this.walkable(pup.x + dx, pup.y + dy));
       const toward = ([dx, dy]) => Math.abs(pup.x + dx - this.p.x) + Math.abs(pup.y + dy - this.p.y);
       const way = near <= 4 && near > 1 ? ways.sort((a, b) => toward(a) - toward(b))[0] : near > 1 && Math.random() < 0.6 ? ways[Math.floor(Math.random() * ways.length)] : null;
@@ -948,8 +970,9 @@ export class VillageScene extends Phaser.Scene {
     // chimney smoke from the houses people live in, and the pond shimmering
     if (time > (this.nextSmoke || 0)) {
       this.nextSmoke = time + 450;
-      for (const h of HOUSES) if (h.lived && h.chimney) this.smoke.explode(1, h.x * TILE + h.w * TILE - 10, h.y * TILE + 1);
-      if (ownsHome(this.meta)) this.smoke.explode(1, HOME.x * TILE + HOME.w * TILE - 10, HOME.y * TILE + 1);
+      const puff = h => { const [cx, cy] = chimneyAt(h) || [h.w * TILE - 10, 1]; this.smoke.explode(1, h.x * TILE + cx, h.y * TILE + cy); };
+      for (const h of HOUSES) if (h.lived && h.chimney) puff(h);
+      if (ownsHome(this.meta)) puff(HOME);
     }
     // the hidden bits twinkle now and then; the lamps flicker
     for (const f of this.finds) {

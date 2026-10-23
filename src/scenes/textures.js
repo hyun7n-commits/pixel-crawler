@@ -238,8 +238,10 @@ function floorTile(z, zi, variant) {
   return c;
 }
 
+// `a` and `b` are '#rrggbb', or 'rgb(r,g,b)' from an earlier mix
+const rgbInt = c => (c[0] === '#' ? parseInt(c.slice(1), 16) : c.match(/\d+/g).reduce((n, v) => (n << 8) | +v, 0));
 const mix = (a, b, t) => {
-  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const pa = rgbInt(a), pb = rgbInt(b);
   const ch = s => Math.round(((pa >> s) & 255) * (1 - t) + ((pb >> s) & 255) * t);
   return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
 };
@@ -281,7 +283,32 @@ function reedTops(fill, r, v, y1, z, hi) {
 //   rock:   a cliff, cracked on top, with a face of rough blocks
 //   cave:   dark rock flecked with crystals, stalactites hanging off its face
 // `v` (0-2) shifts the leaves, trunks and seams so a long wall does not look stamped.
+// Out on the meadow the hedges are only a row thick: what lies beyond them is open pasture, tall grass
+// swaying in the wind with seed heads and a flower here and there, so the meadow looks like rolling
+// fields between hedgerows and not a wood.
+function pastureTile(z, v) {
+  const [c, g] = canvas(), r = noise(v * 53 + 11);
+  const fill = (col, x, y, w = 1, h = 1) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+  // uncut grass beyond the hedgerows: a touch of straw gold and tufts of tall blades,
+  // so it never reads as the mown grass you walk on
+  const base = mix(mix(z.floorLight, z.wallLight, 0.3), '#a8975a', 0.3), soft = mix(base, '#0a1408', 0.22);
+  const light = mix(base, '#eef4b8', 0.2), seed = mix(base, '#efe2a0', 0.42);
+  fill(base, 0, 0, TILE, TILE);
+  for (let k = 0; k < 3; k++) {
+    const x = 1 + Math.floor(r() * 11), y = 5 + Math.floor(r() * 9);
+    // a tuft: thin blades of different heights, the tall ones bending over at the tip
+    for (const [dx, h, lean] of [[0, 2, -1], [2, 4, 1], [4, 3, 0]]) {
+      fill(soft, x + dx, y + 1);
+      fill(light, x + dx, y - h + 2, 1, h - 1);
+      fill(light, x + dx + lean, y - h + 1);
+    }
+    if (r() < 0.5) fill(seed, x + 3, y - 3);
+  }
+  return c;
+}
+
 function wallTile(z, zi, mask, v) {
+  if (!mask && z.style === 'meadow' && !z.day) return pastureTile(z, v);
   const [c, g] = canvas(), r = noise(mask * 7 + v * 131 + zi * 977 + 1);
   const fill = (col, x, y, w = 1, h = 1) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
   const face = mask & S, topH = face ? ({ forest: 7, marsh: 6 })[z.style] || 5 : TILE;

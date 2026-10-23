@@ -2,6 +2,7 @@
 
 import { TILE, N, E, S, W_ } from './textures.js';
 import { VILLAGE_GROUND } from '../data/enemies.js';
+import { houseArt, hasHouseArt } from './village-houses.js';
 
 const mixHex = (a, b, t) => {
   const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
@@ -24,6 +25,7 @@ const SIGN_PAL = { k: '#1b1424', r: '#d9454a', y: '#f4cf4f', Y: '#c99a2b', L: '#
 // in the middle, windows on a wide house. `lived` lights the windows; an empty house has its door
 // boarded up and its windows dark until somebody moves in.
 export function houseCanvas(h, lived) {
+  if (hasHouseArt(h)) return houseArt(h, lived);
   const W = h.w * TILE, H = h.h * TILE;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;

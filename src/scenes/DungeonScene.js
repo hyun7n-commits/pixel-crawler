@@ -21,6 +21,7 @@ import { tierOf } from '../data/relics.js';
 import { baseZoom } from './zoom.js';
 import { wait, fissionMs, evolveMs, FISSION_LEAD, FISSION_STEP, EVOLVE_FLASH, GROW_MS } from '../ui/beat.js';
 import { pace } from '../ui/speed.js';
+import { LANDMARKS, landmarkSpot, stoneHead } from './landmarks.js';
 import { patchNoise, scatterKey, patchKey, PATCH_VARIANTS, footKey, sideKey, bloomKey, fieldTreeKey, fieldTreeCount, moteKeys, SCATTER_VARIANTS, FOOT_VARIANTS, SIDE_VARIANTS, BLOOM_VARIANTS, FOOT_UP } from './field-decor.js';
 
 const D = { tiles: 0, ter: 1, fire: 2, gas: 3, telegraph: 4, pickups: 5, enemies: 6, player: 7, overlay: 8, fx: 9, bubble: 10, text: 11 };
@@ -31,6 +32,8 @@ const FLIERS = new Set(['bat', 'vampLord', 'bee', 'ghostNpc']);
 // one step's glide (a touch longer than main.js's 120 ms walk beat, so steps run into each other)
 // and how quickly the view catches up with you (the time it takes to close most of the gap)
 const STEP_MS = 130, CAM_EASE_MS = 140;
+// how far above the bottom of its tile the front rim of a burrow's mouth is (sprites.js stairs, upStairs)
+const HOLE_LIP = { on: 2, back: 3 };
 const center = v => v * TILE + TILE / 2;
 const foot = v => v * TILE + TILE;
 const hash = (x, y) => {
@@ -258,6 +261,7 @@ export class DungeonScene extends Phaser.Scene {
     this.clearFloor();
     const run = this.run, map = run.map;
     this.cameras.main.setBackgroundColor(run.zone.void);
+    this.placeLandmark();
     for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) this.buildTile(x, y);
     this.buildLamps();
     this.buildAir();
@@ -270,25 +274,37 @@ export class DungeonScene extends Phaser.Scene {
     this.sync(true);
   }
 
-  // Through a burrow: you hop into the hole, the view closes in a circle around you, and the next field
-  // opens around you as you pop out of its hole. The rules have already moved you; this is only the show,
-  // and your next move waits for it (busy). `d.dir`: 1 on, -1 back, 0 the first field of a run.
+  // Through a burrow: you hop onto the mouth of the hole and drop in feet first, the rim swallowing you
+  // from the feet up; the view closes in a circle around you, and the next field opens as you climb up out
+  // of its hole. The rules have already moved you; this is only the show, and your next move waits for it
+  // (busy). `d.dir`: 1 on, -1 back, 0 the first field of a run.
   arrive(d) {
     const ps = this.playerSprite;
     if (!d.dir || !ps) { this.buildFloor(); this.popOut(); this.iris(true, 420); return; }
-    this.busyUntil = performance.now() + 1100 / pace();
+    this.busyUntil = performance.now() + 1200 / pace();
     this.diving = true;
-    const hx = center(d.from.x), hy = foot(d.from.y), k = texScale(ps);
+    const hx = center(d.from.x), lip = foot(d.from.y) - (d.dir > 0 ? HOLE_LIP.on : HOLE_LIP.back), k = texScale(ps), H = ps.frame.height;
     this.tweens.killTweensOf(ps);
     ps.dying = true; // the pose loop leaves it alone from here
-    this.tweens.add({
-      targets: ps, x: hx, y: hy - 5, duration: 140, ease: 'Quad.out',
+    ps.setCrop().setOrigin(0.5, 1).setScale(k).setRotation(0);
+    const x0 = ps.x, y0 = ps.y;
+    this.tweens.addCounter({
+      from: 0, to: 1, duration: 150, ease: 'Sine.out',
+      onUpdate: tw => { const f = tw.getValue(); ps.setPosition(x0 + (hx - x0) * f, y0 + (lip - y0) * f - Math.sin(f * Math.PI) * 6); },
       onComplete: () => {
-        this.fx.dust.explode(12, hx, hy - 3);
-        this.tweens.add({ targets: ps, y: hy + 7, scaleX: k * 0.6, scaleY: k * 0.15, duration: 170, ease: 'Quad.in' });
+        this.fx.dust.explode(10, hx, lip);
+        this.tweens.addCounter({
+          from: 0, to: 1, duration: 230, ease: 'Quad.in',
+          onUpdate: tw => {
+            const f = tw.getValue(), cut = Math.min(H - 1, Math.round(H * f)), sy = k * (1 + 0.1 * f);
+            ps.setCrop(0, 0, ps.frame.width, H - cut).setScale(k * (1 - 0.12 * f), sy);
+            ps.y = lip + cut * sy;
+          },
+          onComplete: () => { ps.setVisible(false); this.fx.dust.explode(6, hx, lip); },
+        });
       },
     });
-    this.later(120, () => this.iris(false, 340, () => this.later(90, () => {
+    this.later(200, () => this.iris(false, 340, () => this.later(90, () => {
       this.diving = false;
       this.buildFloor();
       this.popOut();
@@ -296,11 +312,26 @@ export class DungeonScene extends Phaser.Scene {
     })));
   }
 
-  // You pop up out of the hole: squashed flat, then a little hop, then you land.
+  // You come up out of the hole head first, then hop clear of it and land; with no hole under you (the
+  // first field), you pop up squashed flat.
   popOut() {
     const ps = this.playerSprite;
     if (!ps) return;
-    this.busyUntil = Math.max(this.busyUntil || 0, performance.now() + 450 / pace());
+    this.busyUntil = Math.max(this.busyUntil || 0, performance.now() + 520 / pace());
+    const t = this.run.map.tiles[idx(this.run.p.x, this.run.p.y)];
+    if (t === STAIRS || t === UPSTAIRS) {
+      ps.lip = t === STAIRS ? HOLE_LIP.on : HOLE_LIP.back;
+      ps.sink = 1;
+      this.tweens.add({
+        targets: ps, sink: 0, duration: 260, ease: 'Quad.out',
+        onComplete: () => {
+          ps.sink = 0; ps.hop = ps.lip;
+          this.tweens.add({ targets: ps, hop: 8, duration: 150, ease: 'Quad.out', onComplete: () => this.tweens.add({ targets: ps, hop: 0, duration: 150, ease: 'Quad.in' }) });
+        },
+      });
+      this.later(30, () => this.fx.dust.explode(12, ps.x, ps.y - ps.lip));
+      return;
+    }
     ps.sqx = 0.6; ps.sqy = 0.2; ps.hop = -4;
     this.tweens.add({ targets: ps, sqx: 1, sqy: 1, duration: 260, ease: 'Back.out' });
     this.tweens.add({ targets: ps, hop: 9, duration: 170, ease: 'Quad.out', onComplete: () => this.tweens.add({ targets: ps, hop: 0, duration: 150, ease: 'Quad.in' }) });
@@ -397,6 +428,11 @@ export class DungeonScene extends Phaser.Scene {
       const hb = hash(x * 7 + 3, y * 11 + 5);
       if (!(open & S) && hb % 100 < 28) add(bloomKey(this, this.run.zone, zi, (hb >> 8) % BLOOM_VARIANTS), D.tiles + 0.5);
       if (!open) this.plantTree(x, y, add);
+      const lm = map.landmark;
+      if (lm && this.inLandmark(x, y)) {
+        const f = `${x - lm.x}_${y - lm.y}`;
+        if (!this.textures.get(lm.key).empty.has(f)) this.lmImgs.push(add(this.lmOpen ? 'lm_rock_open' : lm.key, D.tiles + 0.7).setFrame(f));
+      }
     } else {
       if (ter === T.WATER) {
         const shore = around((nx, ny) => wall(nx, ny) || map.ter[idx(nx, ny)] !== T.WATER);
@@ -446,13 +482,59 @@ export class DungeonScene extends Phaser.Scene {
     this.tileImgs[i] = imgs;
   }
 
+  // The zone's one big thing (landmarks.js), where a block of wall big enough for it stands near open
+  // ground. It is cut into one picture per tile, so the fog and the light fall on it like on the
+  // tiles; those pieces are added by buildTile. map.landmark also tells the tip what it is.
+  placeLandmark() {
+    const run = this.run, map = run.map, style = run.zone.style, lm = LANDMARKS[style];
+    map.landmark = null;
+    if (!lm) return;
+    const spot = landmarkSpot(map, lm.w, lm.h, run.floor * 31 + run.stage, WALL);
+    if (!spot) return;
+    map.landmark = { ...spot, name: lm.name, tip: lm.tip, key: this.landmarkTex(style, lm) };
+    if (style === 'rock') this.landmarkTex('rock_open', { ...lm, make: () => stoneHead(true) });
+    this.lmImgs = [];
+  }
+  landmarkTex(name, lm) {
+    const key = `lm_${name}`;
+    if (this.textures.exists(key)) return key;
+    const art = lm.make(), W = lm.w * TILE, H = lm.h * TILE;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    c.getContext('2d').drawImage(art, Math.round((W - art.width) / 2), H - art.height);
+    const tex = this.textures.addCanvas(key, c), px = c.getContext('2d').getImageData(0, 0, W, H).data;
+    tex.empty = new Set();
+    for (let cy = 0; cy < lm.h; cy++) for (let cx = 0; cx < lm.w; cx++) {
+      tex.add(`${cx}_${cy}`, 0, cx * TILE, cy * TILE, TILE, TILE);
+      let any = false;
+      for (let j = 0; j < TILE && !any; j++) for (let i = 0; i < TILE; i++) if (px[((cy * TILE + j) * W + cx * TILE + i) * 4 + 3]) { any = true; break; }
+      if (!any) tex.empty.add(`${cx}_${cy}`);
+    }
+    return key;
+  }
+  inLandmark(x, y, pad = 0) {
+    const lm = this.run.map.landmark;
+    return !!lm && x >= lm.x - pad && x < lm.x + lm.w + pad && y >= lm.y - pad && y < lm.y + lm.h + pad;
+  }
+  // the stone head on the mountain opens its eyes now and then, but only while you are far from it
+  stirLandmark() {
+    const lm = this.run.map.landmark, p = this.run.p;
+    if (!lm || this.run.zone.style !== 'rock' || !this.lmImgs?.length) return;
+    const far = Math.max(Math.abs(p.x - (lm.x + lm.w / 2)), Math.abs(p.y - (lm.y + lm.h))) > 6;
+    const open = far && (this.lmOpen ? Math.random() < 0.7 : Math.random() < 0.12);
+    if (open === !!this.lmOpen) return;
+    this.lmOpen = open;
+    for (const im of this.lmImgs) if (im.active) im.setTexture(open ? 'lm_rock_open' : lm.key, im.frame.name);
+  }
+
   // A tree in the thick of a hedge or a wood, where its whole picture (two tiles wide, three high)
   // stands on wall: at most one in each 3x3 block, at a spot that block's hash picks.
   plantTree(x, y, add) {
     const map = this.run.map, style = this.run.zone.style, n = fieldTreeCount(style);
-    if (!n) return;
+    if (!n || this.inLandmark(x, y, 2)) return;
     const bx = Math.floor(x / 3), by = Math.floor(y / 3), hb = hash(bx * 13 + 1, by * 17 + 2);
-    if (x !== bx * 3 + hb % 2 || y !== by * 3 + 1 + (hb >> 4) % 2 || (hb >> 8) % 10 >= 7) return;
+    // out on the meadow only a lone tree stands in the pasture now and then; woods are thick with them
+    if (x !== bx * 3 + hb % 2 || y !== by * 3 + 1 + (hb >> 4) % 2 || (hb >> 8) % 10 >= (style === 'meadow' ? 1 : 7)) return;
     for (let dy = -2; dy <= 1; dy++) for (let dx = 0; dx <= 1; dx++) {
       if (!inMap(x + dx, y + dy) || map.tiles[idx(x + dx, y + dy)] !== WALL) return;
     }
@@ -512,6 +594,7 @@ export class DungeonScene extends Phaser.Scene {
     const dur = instant ? 0 : STEP_MS;
 
     for (const [i, img] of Object.entries(this.doorImgs)) img.setTexture(this.doorTex(map.open[i]));
+    if (!instant) this.stirLandmark();
 
     this.paintFog();
     this.moveTo(this.playerSprite, p.x, p.y, dur);
@@ -602,18 +685,40 @@ export class DungeonScene extends Phaser.Scene {
 
   // fog of war with light falling off from the player
   paintFog() {
-    const run = this.run, map = run.map, p = run.p;
+    const run = this.run, map = run.map, p = run.p, W = map.w, H = map.h, n = W * H;
     const sight = run.stat().sight;
-    for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) {
-      const i = idx(x, y), imgs = this.tileImgs[i];
-      if (!imgs) continue;
-      // the inside of a thick wall has no line of sight of its own: it shows, a shade darker, once
-      // a tile within two of it has been seen, lit as if in sight when open ground beside it is
-      const seen = imgs.deep ? this.deepSeen(x, y) : map.visible[i] ? 2 : map.explored[i] ? 1 : 0;
-      imgs.shown = !!seen;
-      if (!seen) { imgs.forEach(im => im.setVisible(false)); continue; }
-      // night: your lantern warms what is near and fades to cold blue at the edge of sight;
-      // what you only remember sinks into dim blue, like Shattered Pixel Dungeon's fog
+    if (this.fogSeen?.length !== n) { this.fogSeen = new Uint8Array(n); this.fogCol = new Float32Array(n * 3); this.fogCorner = new Float32Array((W + 1) * (H + 1) * 3); }
+    const seenA = this.fogSeen, col = this.fogCol, cor = this.fogCorner;
+    // the inside of a thick wall has no line of sight of its own: it shows, a shade darker, once a tile
+    // within two of it has been seen, lit as if in sight when open ground beside it is; and a patch of it
+    // walled in by shown wall shows too, so a big hedge has no dark holes in it
+    for (let i = 0; i < n; i++) {
+      const imgs = this.tileImgs[i];
+      seenA[i] = !imgs ? 0 : imgs.deep ? this.deepSeen(i % W, (i / W) | 0) : map.visible[i] ? 2 : map.explored[i] ? 1 : 0;
+    }
+    for (let round = 0; round < 2; round++) {
+      const fill = [];
+      for (let i = 0; i < n; i++) {
+        if (seenA[i] || !this.tileImgs[i]?.deep) continue;
+        const x = i % W, y = (i / W) | 0;
+        let k = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && inMap(x + dx, y + dy) && seenA[idx(x + dx, y + dy)]) k++;
+        if (k >= 3) fill.push(i);
+      }
+      for (const i of fill) seenA[i] = 1;
+    }
+    // the landmark shows whole as soon as any of it has been seen
+    const lm = map.landmark;
+    if (lm) {
+      let any = 0;
+      for (let y = lm.y; y < lm.y + lm.h; y++) for (let x = lm.x; x < lm.x + lm.w; x++) any = Math.max(any, seenA[idx(x, y)]);
+      if (any) for (let y = lm.y; y < lm.y + lm.h; y++) for (let x = lm.x; x < lm.x + lm.w; x++) seenA[idx(x, y)] ||= 1;
+    }
+    // night: your lantern warms what is near and fades to cold blue at the edge of sight; what you only
+    // remember sinks into dim blue, like Shattered Pixel Dungeon's fog
+    for (let i = 0; i < n; i++) {
+      const seen = seenA[i], x = i % W, y = (i / W) | 0;
+      if (!seen) { col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = 0; continue; }
       let r, v, b;
       if (seen === 2) {
         const t = Math.min(1, Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2) / (sight + 1)), warm = (1 - t) * (1 - t);
@@ -622,11 +727,41 @@ export class DungeonScene extends Phaser.Scene {
       } else { r = 50; v = 58; b = 76; }
       // lamplight warms and brightens the tiles around a lamp, even ones you only remember
       const L = this.light ? this.light[i] : 0;
-      const k = L * (seen === 2 ? 40 : 60), dim = imgs.deep ? 0.8 : 1;
-      const ch = n => Math.max(0, Math.min(255, Math.round(n * dim)));
-      const tint = (ch(r + k + L * 22) << 16) | (ch(v + k) << 8) | ch(b + k - L * 34);
-      const on = this.inView(x, y);
-      imgs.forEach(im => im.setVisible(on).setTint(tint));
+      const k = L * (seen === 2 ? 40 : 60), dim = this.tileImgs[i].deep ? 0.8 : 1;
+      col[i * 3] = (r + k + L * 22) * dim; col[i * 3 + 1] = (v + k) * dim; col[i * 3 + 2] = (b + k - L * 34) * dim;
+    }
+    // the light at each corner is the mean of the tiles that meet there, and each picture is tinted from
+    // its corners, so light and fog shade smoothly across the ground instead of in squares
+    for (let cy = 0; cy <= H; cy++) for (let cx = 0; cx <= W; cx++) {
+      const o = (cy * (W + 1) + cx) * 3;
+      let r = 0, g = 0, b = 0;
+      for (const [tx, ty] of [[cx - 1, cy - 1], [cx, cy - 1], [cx - 1, cy], [cx, cy]]) {
+        if (tx < 0 || ty < 0 || tx >= W || ty >= H) continue;
+        const j = (ty * W + tx) * 3;
+        r += col[j]; g += col[j + 1]; b += col[j + 2];
+      }
+      cor[o] = r / 4; cor[o + 1] = g / 4; cor[o + 2] = b / 4;
+    }
+    const ch = n => Math.max(0, Math.min(255, Math.round(n)));
+    const at = (gx, gy) => {
+      gx = Math.max(0, Math.min(W, gx)); gy = Math.max(0, Math.min(H, gy));
+      const x0 = Math.min(W - 1, Math.floor(gx)), y0 = Math.min(H - 1, Math.floor(gy)), fx = gx - x0, fy = gy - y0;
+      const o = (y0 * (W + 1) + x0) * 3, o2 = o + (W + 1) * 3;
+      const c = k => (cor[o + k] * (1 - fx) + cor[o + 3 + k] * fx) * (1 - fy) + (cor[o2 + k] * (1 - fx) + cor[o2 + 3 + k] * fx) * fy;
+      return (ch(c(0)) << 16) | (ch(c(1)) << 8) | ch(c(2));
+    };
+    for (let i = 0; i < n; i++) {
+      const imgs = this.tileImgs[i];
+      if (!imgs) continue;
+      imgs.shown = !!seenA[i];
+      if (!seenA[i]) { imgs.forEach(im => im.setVisible(false)); continue; }
+      const x = i % W, y = (i / W) | 0, on = this.inView(x, y);
+      for (const im of imgs) {
+        im.setVisible(on);
+        if (!on) continue;
+        const w = im.displayWidth, h = im.displayHeight, x0 = (im.x - im.originX * w) / TILE, y0 = (im.y - im.originY * h) / TILE;
+        im.setTint(at(x0, y0), at(x0 + w / TILE, y0), at(x0, y0 + h / TILE), at(x0 + w / TILE, y0 + h / TILE));
+      }
     }
     for (const l of this.lamps) {
       const seen = !!map.explored[idx(l.x, l.y)];
@@ -1548,7 +1683,7 @@ export class DungeonScene extends Phaser.Scene {
 
     // soft shadows under everyone standing on the floor (they stay put when an actor hops)
     const shadow = (s, w) => {
-      if (!s || !s.visible || s.dying || s.wet) return;
+      if (!s || !s.visible || s.dying || s.wet || s.sink > 0) return;
       if (s.flat) { this.shadowGfx.fillStyle(0x000000, 0.25); pixEllipse(this.shadowGfx, s.x, s.y - 2, 9, 3); return; }
       const lift = Math.min(1, (s.lift ?? s.hop ?? 0) / 6);
       this.shadowGfx.fillStyle(0x000000, 0.32 * (1 - 0.5 * lift));
@@ -1889,8 +2024,10 @@ export class DungeonScene extends Phaser.Scene {
     if (who.stoneT > 0) { sx = 1; sy = 1; hop = 0; }
     // wading: in water the bottom of a body is under the surface
     const wet = !s.dying && !who.d?.boss && !FLIERS.has(who.d?.sprite) && this.run.map.ter[idx(who.x, who.y)] === T.WATER;
-    const fh = s.frame.height, cut = wet ? Math.round(fh * 0.22) : 0;
-    if (cut) { s.setCrop(0, 0, s.frame.width, fh - cut); hop -= cut * TILE / fh - 1; } else if (s.isCropped) s.setCrop();
+    // half out of a burrow: what is still in the hole is hidden below the rim of its mouth
+    const fh = s.frame.height, sunk = s.sink > 0 ? Math.min(fh - 1, Math.round(fh * s.sink)) : 0;
+    const cut = sunk || (wet ? Math.round(fh * 0.22) : 0);
+    if (cut) { s.setCrop(0, 0, s.frame.width, fh - cut); hop -= cut * TILE / fh - (sunk ? s.lip : 1); } else if (s.isCropped) s.setCrop();
     s.wet = wet;
     const base = (who.d?.boss || who.chief ? 1.25 : 1) * (who.small ? 0.8 : 1);
     const k = texScale(s);

@@ -1,5 +1,6 @@
 // 새로 열림: the first trip out is plain (critters, one sparkle boulder, chests, grass, water, doors,
-// potions and six basic relics), and everything else opens one thing at a time as you play, the way
+// potions, six basic relics and the caged friend of each stage, so the first friend can be rescued on
+// the very first trip), and everything else opens one thing at a time as you play, the way
 // Vampire Crawlers and BALL x PIT hand out something new after almost every run.
 // At the end of a trip the first entries (in this order) whose `when` holds are opened, at most
 // PER_TRIP of them, and listed on the trip's end card; the rest wait for the next trip, so even a
@@ -17,7 +18,6 @@ const beat = (m, boss) => m.stats.bosses.includes(boss);
 export const UNLOCKS = [
   { id: 'request', icon: 'guildBoss', what: '조합 의뢰', desc: '나갈 때마다 작은 의뢰가 붙는다. 해내면 그 자리에서 일당을 준다', when: m => m.stats.runs >= 1 },
   { id: 'fang', relic: 'fang', when: m => m.stats.runs >= 1 },
-  { id: 'cage', icon: 'cage', what: '우리에 갇힌 친구', desc: '스테이지마다 누가 갇혀 있다. 왕관 쓴 우두머리를 잡아 열쇠를 얻으면 구할 수 있다', when: m => m.stats.runs >= 2 || m.stats.maxFloor >= 2 },
   { id: 'weeds', icon: 'weed', what: '풀뽑기 밭', desc: '들판에 잡초 밭이 생긴다. 한 포기씩 뽑으면 일당. 가끔 뭔가 소리를 지른다', when: m => m.stats.maxFloor >= 2 || m.stats.runs >= 2 },
   { id: 'hammer', relic: 'hammer', when: m => m.stats.maxFloor >= 2 || m.stats.runs >= 2 },
   { id: 'keys', icon: 'key', what: '잠긴 상자와 열쇠', desc: '들판에 잠긴 상자가 생긴다. 열쇠는 같은 들판 어딘가에', when: m => m.stats.runs >= 3 || (m.stats.runs >= 2 && m.stats.maxFloor >= 2) },

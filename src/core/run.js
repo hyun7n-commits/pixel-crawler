@@ -5,14 +5,14 @@
 import * as B from '../data/balance.js';
 import { RELICS, RECIPES, MAX_LEVEL, MAX_SLOTS, DISCOVERY_GOLD, tierOf, maxLevelOf, recipeKey, recipesWith, fusedId, isFused, fusedParts, relicName } from '../data/relics.js';
 import { CHARACTERS } from '../data/characters.js';
-import { PETS, peckGold } from '../data/pets.js';
+import { PETS, peckGold, PECKS_PER_FIELD } from '../data/pets.js';
 import { ENEMIES, ZONES } from '../data/enemies.js';
 import { ITEMS } from '../data/items.js';
 import { ORES } from '../data/ores.js';
 import { T, DISCOVERIES, GOSSIP, SLEEP_TALK, FLOOR_HINTS, isTrap } from '../data/terrain.js';
 import { rnd, rint, pick, shuffle, cheb, josa, DIRS8 } from './util.js';
 import {
-  createMap, carveRooms, carveArena, idx, inMap, passable, distMap, lineOfSight, computeFOV,
+  createMap, carveRooms, carveArena, idx, inMap, passable, squeeze, distMap, lineOfSight, computeFOV,
   FLOOR, STAIRS, ORE, UPSTAIRS, GRAVE, LOCKED, DOOR, HIVE, WEED,
 } from './dungeon.js';
 import { decorate, decorateArena, placeTraps } from './decorate.js';
@@ -200,7 +200,8 @@ export class Run {
     return this.passable(x, y) && !this.enemyAt(x, y) && !(x === this.p.x && y === this.p.y) && !isTrap(this.map.ter[idx(x, y)]);
   }
   // next to each other: close enough to hit, diagonals and doorways included
-  touching(a, b) { return cheb(a, b) === 1; }
+  // next to each other, and not only across the corner crack between two walls (dungeon.js squeeze)
+  touching(a, b) { return cheb(a, b) === 1 && !squeeze(this.map, a.x, a.y, b.x - a.x, b.y - a.y); }
   randomFloorTile() {
     for (let t = 0; t < 100; t++) {
       const x = rnd(this.map.w), y = rnd(this.map.h);
@@ -561,7 +562,7 @@ export class Run {
   step(dx, dy) {
     if (!this.canAct()) return false;
     const p = this.p, map = this.map, nx = p.x + dx, ny = p.y + dy;
-    if (!inMap(nx, ny)) return false;
+    if (!inMap(nx, ny) || squeeze(map, p.x, p.y, dx, dy)) return false;
     if (dx) p.face = Math.sign(dx);
     p.blend = p.tucked = false;
     const e = this.enemyAt(nx, ny);
@@ -596,6 +597,7 @@ export class Run {
       return true;
     }
     p.x = nx; p.y = ny;
+    p.walk = (p.walk || 0) + 1;
     p.dash = p.dash?.dx === dx && p.dash.dy === dy ? { dx, dy, n: p.dash.n + 1 } : { dx, dy, n: 1 };
     this.trail.push({ x: nx, y: ny });
     if (this.trail.length > 40) this.trail.shift();
@@ -1299,9 +1301,14 @@ export class Run {
   // the pet's little help, once a turn
   petTick() {
     const pet = PETS[this.pet], p = this.p;
-    if (pet.peck && this.turn % pet.peck === 0) {
-      this.emit('peck', { x: p.x, y: p.y });
-      this.addGold(peckGold(this.floor));
+    if (pet.peck && (p.walk || 0) >= pet.peck) {
+      p.walk = 0;
+      const pecks = (this.pecks ||= {});
+      if ((pecks[this.floor] || 0) < PECKS_PER_FIELD) {
+        pecks[this.floor] = (pecks[this.floor] || 0) + 1;
+        this.emit('peck', { x: p.x, y: p.y });
+        this.addGold(peckGold(this.floor));
+      }
     }
     if (pet.drizzle && this.turn % pet.drizzle === 0 && p.hp < this.stat().maxHp) {
       this.emit('drizzle', { x: p.x, y: p.y });

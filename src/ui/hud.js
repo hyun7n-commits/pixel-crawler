@@ -33,10 +33,12 @@ function questLines(run) {
 }
 
 export class Hud {
-  constructor({ onUseItem, onWait, onBag }) {
+  constructor({ onUseItem, onWait, onBag, onLook }) {
     this.onUseItem = onUseItem;
     this.onWait = onWait;
     this.onBag = onBag;
+    this.onLook = onLook;
+    this.looking = false;
     this.selected = null;
     this.lines = [];
     this.bannerTimer = 0;
@@ -180,7 +182,7 @@ export class Hud {
     }
   }
 
-  // phone toolbar: rest, the three consumables and the bag, big enough for a thumb
+  // phone toolbar: rest, a look at something, the consumables and the bag, big enough for a thumb
   renderBar(run) {
     const bar = $('mbar'), p = run.p;
     bar.innerHTML = '';
@@ -191,6 +193,7 @@ export class Hud {
       bar.append(b);
     };
     add('', 'rest', '쉬기', this.onWait);
+    add(this.looking ? 'aiming' : '', 'look', this.looking ? '누르기' : '살펴보기', this.onLook);
     for (const [id, d] of shownItems(run)) {
       const aim = id === 'bomb' && this.aiming;
       add(aim ? 'aiming' : '', d.sprite, aim ? '던질 곳' : `${d.name.replace('체력 ', '')} ${p.items[id]}`, () => this.onUseItem(id), !p.items[id]);

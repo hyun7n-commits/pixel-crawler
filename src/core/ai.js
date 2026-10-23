@@ -10,7 +10,7 @@
 //            (none of these act; a hit, or reaching for the mimic or the statue's chest, wakes them up)
 //   lurk   - a diving beetle under the water, only its bubbles showing; bites whoever comes next to it
 
-import { lineOfSight, distMap, idx, passable } from './dungeon.js';
+import { lineOfSight, distMap, idx, passable, squeeze } from './dungeon.js';
 import { SLEEP_MIN } from '../data/terrain.js';
 import { NPC_TEXT } from '../data/npcs.js';
 import { MAP_W, BEE_HOME, SCREAM_RANGE } from '../data/balance.js';
@@ -79,6 +79,7 @@ export function enemyAct(run, e, dmP) {
   }
   if (e.state === 'hunt' && d.flees && e.hp <= e.maxHp * 0.3) {
     e.state = 'flee';
+    e.ran = 0; e.pants = 0;
   }
   if (e.loot) e.state = 'flee'; // a goblin with your gold only wants to get away
   if (e.state === 'flee') { flee(run, e, dmP, sees); return; }
@@ -405,22 +406,20 @@ function fleeStep(run, e, dm) {
   return !!best;
 }
 
-// how far a goblin carrying your gold runs before it has to stop and catch its breath: three tiles
-// the first time, then two
-const PANT_AFTER = [3, 2];
+// how far anything running from you gets before it has to stop and catch its breath, every time: three
+// tiles, then a turn of panting, then three more
+const PANT_AFTER = 3;
 
 function flee(run, e, dm, sees) {
-  // weighed down by your gold: it gets away once out of sight, but it tires, and while it pants for a
-  // turn you catch up
-  if (e.loot) {
-    if (!sees && dm[idx(e.x, e.y)] >= 6) { run.escape(e); return; }
-    if ((e.ran || 0) >= PANT_AFTER[Math.min(e.pants || 0, PANT_AFTER.length - 1)]) {
-      e.ran = 0; e.pants = (e.pants || 0) + 1;
-      run.emit('pant', { enemy: e });
-      return;
-    }
+  // a goblin weighed down by your gold gets away once out of sight
+  if (e.loot && !sees && dm[idx(e.x, e.y)] >= 6) { run.escape(e); return; }
+  // it runs at your pace, so it tires, and while it pants for a turn you catch up
+  if ((e.ran || 0) >= PANT_AFTER) {
+    e.ran = 0; e.pants = (e.pants || 0) + 1;
+    run.emit('pant', { enemy: e });
+    return;
   }
-  if (fleeStep(run, e, dm)) { if (e.loot) e.ran = (e.ran || 0) + 1; }
+  if (fleeStep(run, e, dm)) e.ran = (e.ran || 0) + 1;
   else if (run.touching(e, run.p)) {
     run.emit('attack', { from: { x: e.x, y: e.y }, to: { x: run.p.x, y: run.p.y }, who: e });
     run.damagePlayer(e.atk, e, 'melee');
@@ -513,7 +512,7 @@ function stepToward(run, e, dm) {
   return true;
 }
 
-const canStep = (run, e, x, y) => run.canEnemyEnter(x, y);
+const canStep = (run, e, x, y) => run.canEnemyEnter(x, y) && !squeeze(run.map, e.x, e.y, x - e.x, y - e.y);
 
 function moveEnemy(run, e, x, y) {
   e.face = x < e.x ? -1 : x > e.x ? 1 : e.face;
