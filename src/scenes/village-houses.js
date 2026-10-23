@@ -1,318 +1,356 @@
-// The village's houses, each its own shape: the guild's tall hall with a clock tower, a mushroom shop,
-// the smith's stone kiln, a tree you live inside, the rescue team's striped tent, the rival's
-// witch-hat tower, and your own straw-roofed cottage. Each stands on its footprint (h.w x h.h tiles,
-// the door in the middle of the bottom row) and may rise above it by `up` pixels, so the canvas is
-// placed by its bottom edge. Drawn on a pixel grid with one dark outline round the whole outside.
+// The village's houses, each its own shape: the guild's timber hall with a clock tower, a mushroom
+// shop, the smith's stone forge, a cherry tree you live inside, the rescue team's striped tent, the
+// rival's witch-hat tower, and your own straw-roofed cottage. Each stands on its footprint (h.w x h.h
+// tiles, the door in the middle of the bottom row) and rises above it by `up` pixels, so the canvas is
+// placed by its bottom edge.
+// v0.24: drawn with pixkit at the props' own detail (shingles a hand wide, stones a few pixels, leaf
+// clumps a tree's size), lit from the upper left, an outline only round the outside, a shadow on the
+// grass and grass growing over the foot of the walls, so they sit in the village rather than on it.
 
 import { TILE } from './textures.js';
+import {
+  Pix, mixc, ramp, tone, hash, smooth, seeded, shingles, thatch, plaster, stones, planks, foliage, sprinkle, tufts,
+  windowBox, roundWindow, doorway, lantern, signboard, groundShadow, WOOD, WOOD_WARM, STONE, INK,
+} from './pixkit.js';
 
-const INK = '#1b1424';
-const hex = n => `#${n.toString(16).padStart(6, '0')}`;
-const toInt = c => parseInt(c.slice(1), 16);
-// blend two #rrggbb colours
-export const mixc = (a, b, t) => {
-  const pa = toInt(a), pb = toInt(b);
-  const ch = s => Math.round(((pa >> s) & 255) * (1 - t) + ((pb >> s) & 255) * t);
-  return hex((ch(16) << 16) | (ch(8) << 8) | ch(0));
-};
+export { Pix, mixc };
 
-// a little pixel buffer: shapes are filled in, then `outline` draws the dark edge just outside them
-export class Pix {
-  constructor(w, h) { this.w = w; this.h = h; this.c = new Array(w * h).fill(null); }
-  set(x, y, col) { x = Math.round(x); y = Math.round(y); if (x >= 0 && y >= 0 && x < this.w && y < this.h) this.c[y * this.w + x] = col; }
-  get(x, y) { return x >= 0 && y >= 0 && x < this.w && y < this.h ? this.c[y * this.w + x] : null; }
-  rect(x, y, w, h, col) {
-    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) this.set(x + i, y + j, typeof col === 'function' ? col(x + i, y + j, i, j) : col);
-  }
-  // pixels whose centres fall inside the ellipse; `col` may be a function of (x, y, nx, ny), nx/ny in -1..1
-  ell(cx, cy, rx, ry, col, clip) {
-    for (let y = Math.floor(cy - ry); y <= cy + ry; y++) for (let x = Math.floor(cx - rx); x <= cx + rx; x++) {
-      const nx = (x + 0.5 - cx) / rx, ny = (y + 0.5 - cy) / ry;
-      if (nx * nx + ny * ny > 1 || (clip && !clip(x, y))) continue;
-      this.set(x, y, typeof col === 'function' ? col(x, y, nx, ny) : col);
-    }
-  }
-  poly(P, col) {
-    const ys = P.map(p => p[1]), y0 = Math.floor(Math.min(...ys)), y1 = Math.ceil(Math.max(...ys));
-    for (let y = y0; y <= y1; y++) for (let x = 0; x < this.w; x++) {
-      let inside = false;
-      for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
-        const [xi, yi] = P[i], [xj, yj] = P[j], px = x + 0.5, py = y + 0.5;
-        if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
-      }
-      if (inside) this.set(x, y, typeof col === 'function' ? col(x, y) : col);
-    }
-  }
-  line(x0, y0, x1, y1, col) {
-    const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
-    for (let k = 0; k <= n; k++) this.set(x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n, col);
-  }
-  outline(col = INK) {
-    const add = [];
-    for (let y = 0; y < this.h; y++) for (let x = 0; x < this.w; x++) {
-      if (this.get(x, y)) continue;
-      if (this.get(x + 1, y) || this.get(x - 1, y) || this.get(x, y + 1) || this.get(x, y - 1)) add.push([x, y]);
-    }
-    for (const [x, y] of add) this.set(x, y, col);
-  }
-  // rows of text art (palette letters) stamped at (x, y)
-  stamp(x, y, rows, pal) { rows.forEach((r, j) => [...r].forEach((ch, i) => { if (ch !== '.') this.set(x + i, y + j, pal[ch]); })); }
-  draw(g, ox = 0, oy = 0) {
-    for (let y = 0; y < this.h; y++) for (let x = 0; x < this.w; x++) {
-      const c = this.c[y * this.w + x];
-      if (c) { g.fillStyle = c; g.fillRect(ox + x, oy + y, 1, 1); }
-    }
-  }
-}
+const CREAM = '#efe0c2';
+// an empty house's colours are faded to grey until somebody moves in
+const maker = lived => base => ramp(lived ? base : mixc(base, '#8f8a99', 0.55));
+// a front wall lit from the left, in the shade of the eave at its top and a little darker at the foot
+const wallLit = (x0, x1, eave, gy) => (x, y) => (x - x0) / (x1 - x0) * 0.9 - 0.35 + (y < eave + 4 ? (eave + 4 - y) * 0.32 : 0) + (y > gy - 3 ? 0.25 : 0);
+// a round body (cylinder, dome) lit from the upper left
+const roundLit = (cx, rx, k = 1.15) => (x) => ((x + 0.5 - cx) / rx) * k;
+const domeLit = (cx, cy, rx, ry, k = 1.4) => (x, y) => -(0.55 * -((x + 0.5 - cx) / rx) + 0.75 * -((y + 0.5 - cy) / ry)) * k;
+const PETALS = ['#f8b4cc', '#f4cf4f', '#fff7f0', '#e0646e'];
 
-// The little board over a door says what the house is for, as a picture.
-const SIGNS = {
-  flag: ['..k.....', '..krrr..', '..krrrrr', '..krr...', '..k.....', '..k.....'],
-  coin: ['..kkkk..', '.kyyyyk.', 'kyyYyyyk', 'kyyYyyyk', '.kyyyyk.', '..kkkk..'],
-  hammer: ['.kkkkkk.', '.kLLLLk.', '.kkLLkk.', '...nk...', '...nk...', '...nk...'],
-  heart: ['.kk..kk.', 'kqqkkqqk', 'kqqqqqqk', '.kqqqqk.', '..kqqk..', '...kk...'],
-  cross: ['...kk...', '..krrk..', '.kkrrkk.', 'krrrrrrk', '.kkrrkk.', '..krrk..'],
-  star: ['...kk...', '...yy...', 'kyyyyyyk', '.kyyyyk.', '.kyk.yk.', '.k....k.'],
-};
-const SIGN_PAL = { k: INK, r: '#d9454a', y: '#f4cf4f', Y: '#c99a2b', L: '#b8bccb', n: '#a0703f', q: '#f29bb2' };
-
-const WOOD = '#8a5634', WOOD_L = '#a0703f', WOOD_D = '#5a3520', CREAM = '#f1e3c6', CREAM_D = '#d8c49c';
-const LIT = '#ffe08a', LIT_L = '#fff3b0', DARK_WIN = '#3a3646';
-
-// the parts every house shares
-function door(p, cx, gy, lived, round = false) {
-  const x = cx - 5, y = gy - 13;
-  p.rect(x, y + 1, 10, 13, INK); p.rect(x + 1, y, 8, 1, INK);
-  if (round) { p.rect(x + 2, y - 1, 6, 1, INK); p.set(x + 1, y, INK); p.set(x + 8, y, INK); }
-  p.rect(x + 1, y + 1, 8, 12, WOOD);
-  if (round) p.rect(x + 2, y, 6, 1, WOOD);
-  p.rect(x + 1, y + 1, 2, 12, WOOD_L); p.rect(x + 5, y + 2, 1, 11, WOOD_D);
-  p.set(x + 7, y + 7, '#f4cf4f');
-  if (!lived) for (let k = 0; k < 8; k++) { p.rect(x + 1 + k, y + 3 + k, 2, 1, '#c9a878'); p.set(x + 8 - k, y + 3 + k, '#c9a878'); }
-}
-function windowSq(p, x, y, lived, w = 7, h = 6) {
-  p.rect(x - 1, y - 1, w + 2, h + 2, INK);
-  p.rect(x, y, w, h, lived ? LIT : DARK_WIN);
-  p.rect(x + (w >> 1), y, 1, h, INK); p.rect(x, y + (h >> 1) - 1, w, 1, INK);
-  if (lived) p.rect(x, y, 2, 1, LIT_L);
-  else p.rect(x - 1, y + 2, w + 2, 1, WOOD_L);
-}
-function windowRound(p, cx, cy, r, lived) {
-  p.ell(cx, cy, r + 1, r + 1, INK);
-  p.ell(cx, cy, r, r, (x, y, nx, ny) => lived ? (nx < -0.2 && ny < -0.2 ? LIT_L : LIT) : DARK_WIN);
-  p.rect(Math.round(cx - 0.5), Math.round(cy - r), 1, Math.round(r * 2), INK);
-  if (!lived) p.rect(Math.round(cx - r - 1), Math.round(cy - 0.5), Math.round(r * 2 + 2), 1, WOOD_L);
-}
-function sign(p, cx, y, kind, lived) {
-  const sx = cx - 6;
-  p.rect(sx, y, 12, 9, INK); p.rect(sx + 1, y + 1, 10, 7, '#c9a878');
-  if (lived) p.stamp(sx + 2, y + 1, SIGNS[kind], SIGN_PAL);
-}
-// roof colours: an empty house's are faded grey until somebody moves in
-const tones = (base, lived) => {
-  const b = lived ? base : mixc(base, '#8a8794', 0.55);
-  return { b, d: mixc(b, '#000000', 0.28), dd: mixc(b, '#000000', 0.45), l: mixc(b, '#ffffff', 0.3) };
-};
-
-// ---------- the houses ----------
-// each draws into a Pix of the footprint's width and footprint height + up; gy is the ground row
 const HOUSE_ART = {
-  // the guild: a big timber-framed hall, a clock tower in the middle with one round window like an
-  // eye, and the guild's flag on top. The tallest thing in the village.
-  guild: { up: 44, draw(p, W, H, lived, h) {
-    const t = tones(h.roof, lived), gy = H - 1, wallTop = H - 30;
-    // tower
-    const tx = W / 2 - 9;
-    p.rect(tx, 14, 18, wallTop - 14, CREAM);
-    p.rect(tx, 14, 2, wallTop - 14, WOOD); p.rect(tx + 16, 14, 2, wallTop - 14, WOOD);
-    p.poly([[tx - 3, 15], [W / 2, 2], [tx + 21, 15]], (x, y) => (x < W / 2 ? t.b : t.d));
-    p.rect(tx - 3, 14, 24, 2, t.dd);
-    windowRound(p, W / 2, 26, 4, lived);
-    // the flag on its pole
-    p.rect(W / 2, 0, 1, 4, INK);
-    // the hall's roof, steep, shingled
-    p.poly([[0, wallTop + 2], [10, wallTop - 18], [W - 10, wallTop - 18], [W, wallTop + 2]], (x, y) => {
-      const row = Math.floor((y - (wallTop - 18)) / 4);
-      return (y - (wallTop - 18)) % 4 === 3 ? t.d : (x + row * 3) % 6 === 0 ? t.d : x < 16 ? t.l : t.b;
-    });
-    // walls with beams
-    p.rect(3, wallTop + 2, W - 6, gy - wallTop - 2, CREAM);
-    p.rect(3, gy - 2, W - 6, 2, CREAM_D);
-    for (const x of [3, 21, W - 23, W - 5]) p.rect(x, wallTop + 2, 2, gy - wallTop - 2, WOOD);
-    p.rect(3, wallTop + 2, W - 6, 2, WOOD);
-    windowSq(p, 9, wallTop + 9, lived); windowSq(p, W - 16, wallTop + 9, lived);
-    door(p, W / 2, gy + 1, lived);
-    sign(p, W / 2, wallTop - 6, h.sign, lived);
+  // your own house: a cottage under a thick straw roof, a round stone chimney, shutters and flower
+  // boxes, a heart over the door and a lantern beside it
+  home: { up: 18, draw(p, W, H, lived, h) {
+    const gy = H - 1, eave = H - 31, mk = maker(true);
+    const straw = mk('#e2b553'), plas = mk(CREAM), stoneR = mk('#a9a6ae');
+    // the chimney, behind the roof
+    stones(p, [55, 2, 63, 24], null, stoneR, (x) => (x - 55) / 8 * 0.9 - 0.3, { ch: 3, wmin: 3, wmax: 5, seed: 11 });
+    p.rect(54, 1, 11, 2, (x, y, i, j) => tone(stoneR, j === 0 ? 0.8 : 3, x, y));
+    // walls: plaster over a stone footing, posts at the corners
+    plaster(p, [9, eave, 70, gy - 4], null, plas, wallLit(9, 70, eave, gy), { seed: 12 });
+    for (const x of [9, 69]) planks(p, [x, eave, x + 1, gy - 4], null, WOOD, () => (x > 40 ? 0.8 : 0), { pw: 2, seed: 13 });
+    stones(p, [7, gy - 4, 72, gy], null, stoneR, (x) => (x - 7) / 65 * 0.8 - 0.1, { ch: 3, wmin: 4, wmax: 7, seed: 14 });
+    // the straw roof: a fat dome, its fringe hanging ragged over the walls
+    const cx = W / 2, cy = eave + 4, rx = W / 2 + 0.5, ry = eave - 2;
+    const inRoof = (x, y) => { const nx = (x + 0.5 - cx) / rx, ny = (y + 0.5 - cy) / ry; return nx * nx + ny * ny <= 1 && y <= eave + 3 + Math.floor(hash(x, 0, 15) * 3); };
+    thatch(p, [0, 0, W - 1, eave + 6], inRoof, straw, domeLit(cx, cy * 0.75, rx, ry), { bh: 6, seed: 16 });
+    // a ridge of darker straw bound along the top
+    for (let x = 22; x < 58; x++) { const y = Math.round(cy - ry * Math.sqrt(Math.max(0, 1 - ((x + 0.5 - cx) / rx) ** 2))) + 2; if (x % 3) p.set(x, y, straw[4]); p.set(x, y + 1, straw[x % 4 ? 3 : 4]); }
+    // windows with shutters and flower boxes, the door, a lantern
+    windowBox(p, 17, eave + 9, 8, 7, { shutters: mk('#5d8a5a'), box: ['#f29bb2', '#f4cf4f', '#fff7f0'], curtain: ['#f8b4cc', '#e58aa5'] });
+    windowBox(p, 55, eave + 9, 8, 7, { shutters: mk('#5d8a5a'), box: ['#e0646e', '#f4cf4f', '#9fc2ff'], curtain: ['#f8b4cc', '#e58aa5'] });
+    doorway(p, cx, gy, 10, 17, { arch: true, seed: 17 });
+    signboard(p, cx, eave - 4, h.sign, true);
+    lantern(p, cx + 8, gy - 17);
     p.outline();
-    // the flag itself, after the outline so it stays thin
-    p.rect(W / 2 + 1, 0, 6, 3, lived ? '#d9454a' : '#8a8794'); p.rect(W / 2 + 1, 3, 3, 1, lived ? '#d9454a' : '#8a8794');
+    tufts(p, 5, W - 6, gy, 18);
   } },
 
-  // the shop: a giant red mushroom, the cap spotted white, the door and windows in its fat stem
-  shop: { up: 18, draw(p, W, H, lived, h) {
-    const t = tones(h.roof, lived), gy = H - 1, capY = H - 36;
-    // stem, bulging a little at the foot
-    p.poly([[12, gy + 1], [14, capY + 6], [W - 14, capY + 6], [W - 12, gy + 1]], (x, y) => x < 20 ? '#fbf3e2' : x > W - 22 ? CREAM_D : CREAM);
-    // the cap: a wide dome, its underside showing gills
-    p.ell(W / 2, capY + 6, W / 2 + 1, 8, (x, y) => (x % 3 === 0 ? '#c9a878' : '#e8d3a8'), (x, y) => y >= capY + 5);
-    p.ell(W / 2, capY + 4, W / 2, capY + 4, (x, y, nx, ny) => {
-      const T = -(0.6 * nx + 0.8 * ny);
-      return T > 0.75 ? t.l : T > -0.1 ? t.b : t.d;
-    }, (x, y) => y <= capY + 5);
-    // white spots
-    for (const [cx, cy, r] of [[22, capY - 8, 4], [44, capY - 14, 5], [61, capY - 4, 3.5], [33, capY - 1, 2.5], [10, capY - 1, 2.5], [54, capY - 19, 2]]) {
-      p.ell(cx, cy, r, r * 0.85, (x, y, nx, ny) => (nx > 0.3 && ny > 0.3 ? '#e8ddd4' : '#fff7f0'));
+  // the guild: a big timber-framed hall with a clock tower rising out of its roof, a notice board by
+  // the double door, the guild's flag on the spire. The tallest thing in the village.
+  guild: { up: 46, draw(p, W, H, lived, h) {
+    const gy = H - 1, wallTop = H - 33, mk = maker(lived);
+    const roof = mk(h.roof), plas = mk(CREAM), wood = mk('#7a4a2e'), stoneR = mk('#a3a2ad');
+    // the tower: plaster between corner posts, a clock face, a little window, a spire of shingles
+    const tx0 = 30, tx1 = 49, tTop = 22;
+    plaster(p, [tx0, tTop, tx1, wallTop], null, plas, (x, y) => (x - tx0) / 19 * 0.9 - 0.3 + (y < tTop + 4 ? (tTop + 4 - y) * 0.3 : 0), { seed: 21 });
+    for (const x of [tx0, tx1 - 1]) planks(p, [x, tTop, x + 1, wallTop], null, wood, () => (x > 40 ? 0.8 : 0), { pw: 2 });
+    p.rect(tx0, tTop + 22, 20, 2, (x, y, i, j) => tone(wood, j ? 3 : 1.4, x, y));
+    p.ell(39.5, tTop + 11, 6.2, 6.2, (x, y, nx, ny) => tone(stoneR, nx + ny < -0.5 ? 1 : 3, x, y));
+    p.ell(39.5, tTop + 11, 5, 5, (x, y, nx, ny) => (lived ? (nx + ny < -0.9 ? '#ffffff' : '#fbf3dc') : '#c9c4c8'));
+    for (const [a, l] of [[-Math.PI / 2, 4], [0.5, 3]]) for (let k = 1; k <= l; k++) p.set(39 + Math.round(Math.cos(a) * k), tTop + 11 + Math.round(Math.sin(a) * k), '#3d3a48');
+    for (const a of [0, 1, 2, 3]) p.set(39 + Math.round(Math.cos(a * Math.PI / 2) * 4.3), tTop + 11 + Math.round(Math.sin(a * Math.PI / 2) * 4.3), '#8a8794');
+    p.set(39, tTop + 11, '#d9454a');
+    windowBox(p, 37, tTop + 26, 5, 6, { lived, frame: wood });
+    const spire = [[tx0 - 4, tTop + 1], [39.5, 3], [tx1 + 4, tTop + 1]];
+    shingles(p, [tx0 - 4, 3, tx1 + 4, tTop + 1], (x, y) => inPolyF(spire, x, y), roof, (x, y) => (x < 39.5 ? -0.5 : 0.8) + (y - 3) / 20 * 0.4, { sw: 5, rh: 3, seed: 22 });
+    p.rect(tx0 - 4, tTop, 28, 2, (x, y, i, j) => tone(roof, j ? 4 : 3, x, y));
+    // the hall's hipped roof, the tower standing up through it
+    const rTop = wallTop - 21, hall = [[-1, wallTop + 3], [13, rTop], [W - 13, rTop], [W, wallTop + 3]];
+    shingles(p, [0, rTop, W - 1, wallTop + 3], (x, y) => inPolyF(hall, x, y) && !(x >= tx0 && x <= tx1 && y < rTop + 14 - Math.abs(x - 39.5) * 0), roof,
+      (x, y) => { const t = (y - rTop) / (wallTop + 3 - rTop), left = 13 - 14 * t, right = W - 13 + 14 * t; return (x < left + 10 ? -0.7 : x > right - 10 ? 0.9 : 0) + t * 0.3; }, { sw: 6, rh: 4, seed: 23 });
+    // tower in front of the ridge: redraw its face over the back slope
+    plaster(p, [tx0, rTop, tx1, rTop + 13], null, plas, (x) => (x - tx0) / 19 * 0.9 - 0.3, { seed: 24 });
+    for (const x of [tx0, tx1 - 1]) planks(p, [x, rTop, x + 1, rTop + 13], null, wood, () => (x > 40 ? 0.8 : 0), { pw: 2 });
+    for (let x = tx0 - 1; x <= tx1 + 1; x++) p.set(x, rTop + 14, roof[4]);
+    p.rect(2, wallTop + 2, W - 4, 2, (x, y, i, j) => tone(roof, j ? 5 : 4, x, y));
+    // the hall: plaster panels in a timber frame, braces in the end bays, on a stone footing
+    plaster(p, [3, wallTop + 4, W - 4, gy - 4], null, plas, wallLit(3, W - 4, wallTop + 4, gy), { seed: 25 });
+    const beam = (x0, y0, w, hh) => planks(p, [x0, y0, x0 + w - 1, y0 + hh - 1], null, wood, (x) => (x - 3) / (W - 6) * 0.7 - 0.1, { pw: hh > w ? 2 : 9, vert: hh > w, seed: x0 + y0 });
+    for (const x of [3, 21, W - 23, W - 5]) beam(x, wallTop + 4, 2, gy - wallTop - 8);
+    beam(3, wallTop + 4, W - 6, 2); beam(3, gy - 6, W - 6, 2);
+    for (const [x0, dir] of [[5, 1], [W - 21, -1]]) p.line(dir > 0 ? x0 : x0 + 15, gy - 7, dir > 0 ? x0 + 15 : x0, wallTop + 7, (k, n) => wood[k % 4 ? 2 : 3]);
+    stones(p, [1, gy - 4, W - 2, gy], null, stoneR, (x) => (x - 1) / W * 0.8 - 0.1, { ch: 3, wmin: 4, wmax: 8, seed: 26 });
+    // the double door under an arch, lanterns either side, a notice board with requests pinned up
+    doorway(p, 39.5, gy, 13, 18, { arch: true, pw: 3, boarded: !lived, frame: wood });
+    p.rect(39, gy - 15, 1, 15, wood[4]);
+    lantern(p, 30, gy - 18, lived); lantern(p, 47, gy - 18, lived);
+    windowBox(p, 9, wallTop + 10, 8, 8, { lived, frame: wood, box: lived ? ['#f29bb2', '#fff7f0', '#f4cf4f'] : null });
+    windowBox(p, W - 17, wallTop + 10, 8, 8, { lived, frame: wood, box: lived ? ['#e0646e', '#f4cf4f', '#9fc2ff'] : null });
+    signboard(p, 39.5, wallTop + 6, h.sign, lived);
+    p.outline();
+    // the flag, thin, after the outline
+    for (let y = 0; y < 4; y++) p.set(39, y, '#3d3a48');
+    p.rect(40, 0, 6, 3, lived ? '#d9454a' : '#8a8794'); p.rect(40, 0, 6, 1, lived ? '#f06a6a' : '#a3a2ad'); p.rect(40, 3, 3, 1, lived ? '#b02f3a' : '#77737f');
+    tufts(p, 0, W - 1, gy, 27);
+  } },
+
+  // the shop: a giant red mushroom, the cap spotted white, a striped awning over a round-topped door,
+  // a crate and a sack of goods outside
+  shop: { up: 22, draw(p, W, H, lived, h) {
+    const gy = H - 1, capB = H - 40, mk = maker(lived);
+    const cap = mk(h.roof), stem = mk('#f1e6cf'), gill = mk('#d9c4a0'), spot = mk('#fbf5ec');
+    // the stem: wider at the foot, cream fibres, deep shade under the cap
+    const stemX = y => 15 - Math.round((gy - y) / (gy - capB) * 3) - (y > gy - 4 ? gy - 4 - y + 1 : 0) * 0;
+    p.fill(0, capB, W - 1, gy, (x, y) => x >= stemX(y) && x <= W - 1 - stemX(y), (x, y) => {
+      let v = 2 + roundLit(W / 2, W / 2 - 14, 1.2)(x) + (y < capB + 7 ? (capB + 7 - y) * 0.4 : 0);
+      if (hash(x, Math.floor(y / 4), 31) < 0.12) v += 0.5;
+      if (hash(x, y, 32) < 0.03) v += 0.7;
+      return tone(stem, v, x, y);
+    });
+    // the gills under the rim
+    p.ell(W / 2, capB + 1, W / 2 - 1, 5, (x, y, nx) => tone(gill, 3 + Math.abs(nx) * 0.8 + ((x * 3) % 5 === 0 ? 0.8 : 0) - (y > capB + 2 ? 0.5 : 0), x, y), (x, y) => y >= capB);
+    // the cap: a dome, lit from the upper left, flecked, with a pale lip
+    const ccx = W / 2, ccy = capB + 2, crx = W / 2, cry = capB - 1;
+    const inCap = (x, y) => { const nx = (x + 0.5 - ccx) / crx, ny = (y + 0.5 - ccy) / cry; return nx * nx + ny * ny <= 1 && y <= capB; };
+    const capLit = domeLit(ccx - 6, ccy - 14, crx, cry, 1.5);
+    p.fill(0, 0, W - 1, capB, inCap, (x, y) => {
+      let v = 2 + capLit(x, y);
+      if (y >= capB - 1) v -= 0.6;
+      const f = hash(x, y, 33);
+      if (f < 0.015) v += 0.8; else if (f > 0.99) v -= 0.8;
+      return tone(cap, v, x, y);
+    });
+    // white spots, flatter towards the edge, each a little raised
+    for (const [sx, sy, r] of [[24, 13, 5], [45, 8, 6], [61, 19, 4], [34, 25, 3.5], [12, 27, 3], [53, 30, 3], [68, 30, 2.4], [8, 18, 2.2], [40, 33, 2.2], [30, 6, 2.2]]) {
+      const nx = (sx - ccx) / crx, sq = 1 - nx * nx * 0.55;
+      p.ell(sx, sy, r * sq + 0.3, r * 0.8, (x, y, ex, ey) => tone(spot, (ex + ey > 0.7 ? 2.6 : ex + ey < -0.8 ? 0.4 : 1.2) + capLit(x, y) * 0.3, x, y), inCap);
+      p.ell(sx + 1, sy + 1, r * sq + 0.3, r * 0.8, (x, y) => (p.get(x, y) && !spot.includes(p.get(x, y)) ? tone(cap, 3.4 + capLit(x, y) * 0.5, x, y) : p.get(x, y)), (x, y) => inCap(x, y) && !spot.includes(p.get(x, y)) && Math.hypot((x + 0.5 - sx) / (r * sq + 0.3), (y + 0.5 - sy) / (r * 0.8)) > 1);
     }
-    windowRound(p, 22, gy - 13, 3.5, lived); windowRound(p, W - 22, gy - 13, 3.5, lived);
-    door(p, W / 2, gy + 1, lived, true);
-    // a striped awning over the door
-    if (lived) for (let i = 0; i < 16; i++) { p.rect(W / 2 - 8 + i, gy - 18, 1, 3, i % 4 < 2 ? '#d9454a' : '#f4f0e8'); }
-    sign(p, W / 2, capY - 2 + 2, h.sign, lived);
+    // windows, the door with its awning, the sign
+    roundWindow(p, 24, gy - 16, 3.6, { lived }); roundWindow(p, W - 24, gy - 16, 3.6, { lived });
+    doorway(p, W / 2, gy, 10, 16, { arch: true, boarded: !lived });
+    if (lived) {
+      // a striped awning, scalloped along its lower edge, throwing a shadow on the stem
+      const aw = gy - 22, ax = W / 2 - 11;
+      for (let i = 0; i < 22; i++) {
+        for (let j = 1; j <= 2; j++) p.set(ax + i, aw + 5 + j - 1, tone(stem, 3.2 + j * -0.4, ax + i, aw + 5 + j));
+        for (let j = 0; j < 5; j++) {
+          if (j === 4 && i % 4 === 3) continue;
+          const R = Math.floor(i / 4) % 2 === 0 ? ramp('#d9454a') : ramp('#fff3e6');
+          p.set(ax + i, aw + j, j === 0 ? '#8e2433' : tone(R, (j === 1 ? 0.8 : 1.8) + (i > 15 ? 0.7 : i < 3 ? -0.3 : 0) + (j === 4 ? 1 : 0), i, j));
+        }
+      }
+    }
+    signboard(p, W / 2, capB + 6, h.sign, lived);
+    // goods outside: a crate and a sack
+    planks(p, [61, gy - 7, 69, gy - 1], null, WOOD_WARM, (x, y) => (y === gy - 7 ? -0.8 : 0) + (x > 66 ? 0.6 : 0), { pw: 3, vert: false, seed: 34 });
+    p.line(61, gy - 6, 69, gy - 1, WOOD_WARM[3]);
+    p.ell(14, gy - 3.5, 4, 4.2, (x, y, nx, ny) => tone(ramp('#c9a878'), 2 + nx * 0.8 + ny * 0.6, x, y));
+    p.rect(13, gy - 9, 3, 2, ramp('#c9a878')[3]);
     p.outline();
+    tufts(p, 4, W - 5, gy, 35);
   } },
 
-  // the smith: a squat round kiln of stone blocks under a slate dome, a fat brick chimney with the
-  // forge glowing orange at its foot
-  smith: { up: 20, draw(p, W, H, lived, h) {
-    const t = tones(h.roof, lived), gy = H - 1, wallTop = H - 34;
-    const stone = lived ? '#a3a7b4' : '#8f8d98', mortar = mixc(stone, '#000000', 0.35), stoneL = mixc(stone, '#ffffff', 0.25);
-    // chimney (behind the dome)
-    p.rect(W - 22, 0, 13, wallTop + 8, (x, y, i, j) => (j % 4 === 3 || (i + (j >> 2) * 3) % 6 === 0 ? '#7a3b2a' : '#a8553c'));
-    p.rect(W - 23, 0, 15, 3, '#5e5a66');
-    // walls of stone blocks
-    p.ell(W / 2, gy - 2, W / 2 - 4, 6, stone);
-    p.rect(4, wallTop + 4, W - 8, gy - wallTop - 6, (x, y, i, j) => {
-      const row = j >> 2, off = (row % 2) * 4;
-      if (j % 4 === 3 || (i + off) % 8 === 0) return mortar;
-      return i < 10 ? stoneL : stone;
+  // the smith: a squat stone forge under a slate dome, a fat brick chimney, the furnace glowing orange
+  // in an arch at one end, an anvil and a water barrel out front
+  smith: { up: 24, draw(p, W, H, lived, h) {
+    const gy = H - 1, wallTop = H - 36, mk = maker(lived);
+    const slate = mk(h.roof), stoneR = mk('#a8a6b0'), brick = mk('#b05a40');
+    // chimney, behind the roof, sooty at the top
+    p.rect(54, 8, 12, wallTop - 8, (x, y, i, j) => {
+      const row = Math.floor(j / 3), lx = (i + (row & 1) * 3) % 6;
+      let v = 2 + (i / 11) * 1.1 - 0.4;
+      if (j % 3 === 2 || lx === 0) v += 1.3;
+      if (j < 7 && hash(x, y, 41) < 0.55 - j * 0.07) v += 1.4;
+      return tone(brick, v, x, y);
     });
-    // slate dome
-    p.ell(W / 2, wallTop + 5, W / 2 - 2, 18, (x, y, nx, ny) => {
-      const ring = Math.floor((y - wallTop + 13) / 4);
-      if ((y - wallTop + 13) % 4 === 0) return t.d;
-      return nx < -0.4 && ny < -0.2 ? t.l : (x + ring * 2) % 7 === 0 ? t.d : t.b;
-    }, (x, y) => y <= wallTop + 5);
-    p.rect(2, wallTop + 4, W - 4, 2, t.dd);
-    // the forge mouth, glowing
-    p.ell(W - 16, gy - 5, 6, 5, INK, (x, y) => y <= gy);
-    p.ell(W - 16, gy - 4, 4.5, 4, (x, y, nx, ny) => (lived ? (ny > 0.2 ? '#f4cf4f' : '#f08c3a') : '#3a3646'), (x, y) => y <= gy);
-    windowSq(p, 10, wallTop + 12, lived, 6, 6);
-    door(p, W / 2 - 4, gy + 1, lived);
-    sign(p, W / 2 - 4, wallTop - 4, h.sign, lived);
+    p.rect(53, 6, 14, 3, (x, y, i, j) => tone(stoneR, j === 0 ? 0.8 : j === 1 ? 2 : 3.6, x, y));
+    // the slate dome
+    const cx = W / 2, cy = wallTop + 4, rx = W / 2 - 3, ry = 26;
+    shingles(p, [3, cy - ry, W - 4, cy], (x, y) => { const nx = (x + 0.5 - cx) / rx, ny = (y + 0.5 - cy) / ry; return nx * nx + ny * ny <= 1 && y <= wallTop + 3; },
+      slate, domeLit(cx - 8, cy - 12, rx, ry, 1.5), { sw: 6, rh: 4, seed: 42 });
+    p.rect(3, wallTop + 3, W - 6, 2, (x, y, i, j) => tone(slate, j ? 5 : 4, x, y));
+    // the walls: rough stone courses
+    stones(p, [5, wallTop + 5, W - 6, gy], null, stoneR, (x, y) => (x - 5) / (W - 10) * 1 - 0.35 + (y < wallTop + 9 ? (wallTop + 9 - y) * 0.3 : 0), { ch: 4, wmin: 4, wmax: 8, seed: 43 });
+    // the furnace: an arch of big pale stones, dark inside, coals glowing at the bottom
+    const fx = 59, fy = gy - 6;
+    p.ell(fx, fy, 9, 10, (x, y, nx, ny) => {
+      const seg = Math.floor((Math.atan2(ny, nx) + Math.PI) / (Math.PI / 6));
+      return tone(stoneR, (seg & 1 ? 1.2 : 1.9) + (nx > 0.3 ? 0.8 : 0) + (Math.hypot(nx, ny) > 0.86 ? 0.9 : 0), x, y);
+    }, (x, y) => y <= gy);
+    p.ell(fx, fy + 1, 6.2, 8, (x, y, nx, ny) => {
+      if (!lived) return ny > 0.5 ? '#3d3b50' : '#2e2c3e';
+      if (ny > 0.55) return ['#fff3b0', '#ffd25a', '#f59a3a', '#ffd25a'][Math.floor(hash(x, y, 44) * 4)];
+      return ['#d9542e', '#9a3a2a', '#5a2424', '#3a1c20'][Math.max(0, Math.min(3, Math.floor((0.55 - ny) * 2.6)))];
+    }, (x, y) => y <= gy - 1);
+    if (lived) for (const [ex, ey] of [[57, gy - 10], [61, gy - 12], [59, gy - 8]]) p.set(ex, ey, '#ffd25a');
+    // the door, a window with shutters, the sign
+    doorway(p, 30, gy, 10, 16, { boarded: !lived, pw: 2 });
+    windowBox(p, 11, wallTop + 11, 7, 7, { lived, shutters: mk('#6a4a3a') });
+    signboard(p, 30, wallTop + 7, h.sign, lived);
+    // an anvil on a stump, a barrel of water
+    const iron = ramp('#5e5c6c');
+    p.rect(41, gy - 4, 6, 4, (x, y, i) => tone(WOOD, 1.6 + i * 0.35, x, y));
+    p.rect(38, gy - 8, 11, 3, (x, y, i, j) => tone(iron, j === 0 ? 0.6 : 2 + i * 0.12, x, y));
+    p.rect(36, gy - 8, 2, 2, (x, y, i, j) => iron[1 + j]);
+    p.rect(42, gy - 5, 4, 1, iron[4]);
+    planks(p, [71, gy - 8, 77, gy - 1], null, WOOD, (x) => (x - 71) / 6 - 0.3, { pw: 2 });
+    for (const y of [gy - 7, gy - 3]) p.rect(71, y, 7, 1, '#4b4858');
+    p.rect(72, gy - 8, 5, 1, lived ? '#7cc0dc' : '#4f4e64');
     p.outline();
+    tufts(p, 3, W - 4, gy, 45, { flowers: 0.05 });
   } },
 
-  // the neighbour lives inside a cherry tree: a fat trunk with a round door and round windows,
-  // roots spreading over the grass, the blossom crown for a roof
-  neighbor: { up: 44, draw(p, W, H, lived, h) {
-    const gy = H - 1, trunkTop = H - 56;
-    const bark = lived ? '#8a5634' : '#7a6656', barkL = mixc(bark, '#ffffff', 0.2), barkD = mixc(bark, '#000000', 0.32);
-    // trunk with roots
-    p.poly([[4, gy + 1], [12, gy - 3], [17, gy - 12], [21, trunkTop], [W - 21, trunkTop], [W - 17, gy - 12], [W - 12, gy - 3], [W - 4, gy + 1]], (x, y) => {
-      if (x < 22) return barkL;
-      if (x > W - 24) return barkD;
-      return (x * 7 + (y >> 3) * 5) % 13 === 0 ? barkD : bark;
+  // the neighbour lives inside a cherry tree: a fat trunk with a round door and round windows, roots
+  // spreading over the grass, and a crown of blossom made of tree-sized clumps
+  neighbor: { up: 40, draw(p, W, H, lived, h) {
+    const gy = H - 1, trunkTop = 54, mk = maker(lived);
+    const bark = mk('#8a5634'), pal = lived ? ['#ffe6ef', '#f9bfd3', '#ee97b7', '#cf6f97', '#9a4a72'] : ['#e6dde2', '#cbbfc6', '#ada0a8', '#8d8189', '#6d6269'];
+    // trunk and roots: thick, a little waist, flaring out over the grass
+    const half = y => { const t = (y - trunkTop) / (gy - trunkTop); return 17 - Math.sin(t * Math.PI) * 2 + Math.max(0, t - 0.7) ** 2 * 190; };
+    const hw = y => (y < trunkTop ? 17 - (trunkTop - y) * 0.45 : half(y));
+    p.fill(0, trunkTop - 14, W - 1, gy, (x, y) => Math.abs(x + 0.5 - W / 2) <= hw(y), (x, y) => {
+      const u = (x + 0.5 - W / 2) / hw(y);
+      let v = 2 + u * 1.3 - 0.25;
+      // bark ridges running up the trunk, wandering a little
+      const col = x + Math.round(smooth(x, y, 9, 50) * 3);
+      if (col % 4 === 0) v += 0.9; else if (col % 4 === 1) v -= 0.4;
+      if (hash(x, y, 52) < 0.03) v += 0.9;
+      return tone(bark, v, x, y);
     });
-    for (let y = trunkTop + 4; y < gy - 4; y += 7) { p.rect(26 + (y % 3), y, 1, 4, barkD); p.rect(W - 28 - (y % 2), y + 2, 1, 4, barkD); }
-    // blossom crown: clumps lit from the top left
-    const leaf = lived ? ['#ffe1ec', '#f8b4cc', '#ec8db0', '#cc6b93', '#9a4a72'] : ['#e6dde2', '#cbbfc6', '#ada0a8', '#8d8189', '#6d6269'];
-    const clumps = [[12, 40, 11], [W - 12, 40, 11], [W / 2, 26, 14], [24, 25, 11], [W - 24, 25, 11], [W / 2 - 17, 46, 10], [W / 2 + 17, 46, 10], [W / 2, 46, 12]];
-    p.ell(W / 2, 38, W / 2 - 6, 14, leaf[3]);
-    for (const [cx, cy, r] of clumps) p.ell(cx, cy, r, r * 0.9, (x, y, nx, ny) => {
-      const T = -(0.55 * nx + 0.8 * ny);
-      return leaf[T > 0.6 ? 0 : T > 0.1 ? 1 : T > -0.4 ? 2 : 3];
+    for (const [kx, ky] of [[26, 74], [55, 68], [50, 92]]) { p.ell(kx, ky, 2.2, 1.7, bark[4]); p.set(kx - 1, ky - 1, bark[1]); }
+    // two big limbs forking out of the trunk up into the crown
+    for (const [x0, x1, sgn] of [[33, 20, -1], [47, 60, 1]]) for (let y = trunkTop + 4; y >= 34; y--) {
+      const t = (trunkTop + 4 - y) / (trunkTop - 30), xc = x0 + (x1 - x0) * t, hw = 5 - t * 2;
+      for (let x = Math.floor(xc - hw); x <= xc + hw; x++) p.set(x, y, tone(bark, 2 + ((x - xc) / hw) * 1.1 + (sgn > 0 ? 0.4 : -0.1) + ((x + y) % 4 === 0 ? 0.6 : 0), x, y));
+    }
+    // the crown: lumps of blossom, a dip in the middle of its underside where the limbs go in
+    const lumps = [[W / 2, 24, 35, 16], [19, 40, 19, 12], [W - 19, 39, 19, 12], [34, 9, 17, 8], [55, 12, 13, 8]];
+    const shape = (x, y) => lumps.some(([cx, cy, rx, ry]) => ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2 <= 1);
+    const { own } = foliage(p, [0, 0, W - 1, 52], shape, pal, { seed: 53, mid: 0.36, step: 6.6, rmin: 4.2, rmax: 7.2, side: (x) => (x - W / 2) / W * 0.9, line: 1 });
+    sprinkle(p, [2, 4, W - 3, 50], own, 30, 54, (x, y) => p.set(x, y, lived ? '#fff7fa' : '#f0eaee'));
+    // the round door (warm boards in a bark frame), round windows, the sign, a lantern on a branch stub
+    doorway(p, W / 2, gy, 11, 16, { arch: true, boarded: !lived, frame: mk('#c9a070') });
+    roundWindow(p, 27, gy - 30, 3.6, { lived, frame: bark }); roundWindow(p, 53, gy - 37, 3.2, { lived, frame: bark });
+    signboard(p, W / 2, gy - 29, h.sign, lived);
+    p.rect(58, gy - 22, 7, 2, (x, y, i, j) => tone(bark, j ? 3 : 1.4, x, y));
+    lantern(p, 62, gy - 20, lived);
+    // little mushrooms among the roots
+    for (const [mx, my] of [[14, gy - 2], [66, gy - 1]]) { p.rect(mx, my - 2, 3, 2, ['#e0646e', '#d9454a'][0]); p.set(mx + 1, my - 2, '#fff7f0'); p.set(mx + 1, my, '#efe0c2'); }
+    p.outline();
+    const r = seeded(55);
+    if (lived) for (let k = 0; k < 9; k++) p.front(4 + Math.floor(r() * (W - 8)), gy - Math.floor(r() * 2), r() < 0.5 ? '#f9bfd3' : '#fff7fa');
+    tufts(p, 2, W - 3, gy, 56);
+  } },
+
+  // the rescue team: a big round tent striped orange and cream, a red-cross pennant on the pole, guy
+  // ropes pegged into the grass, a supply crate by the open flap
+  rescue: { up: 18, draw(p, W, H, lived, h) {
+    const gy = H - 1, eave = H - 30, mk = maker(lived), apex = 10;
+    const orange = mk(h.roof), cream = mk('#f6efe2');
+    // the pole
+    for (let y = 0; y < apex + 2; y++) p.set(W / 2, y, y < 2 ? '#c9a878' : '#6a4a2a');
+    // the cone: stripes running up to the top, folds, lit from the left
+    p.poly([[1, eave + 2], [W / 2, apex], [W - 1, eave + 2]], (x, y) => {
+      const t = (y - apex) / (eave + 2 - apex), u = (x + 0.5 - W / 2) / (W / 2 * Math.max(0.05, t));
+      const k = Math.floor((Math.asin(Math.max(-1, Math.min(1, u))) / Math.PI + 0.5) * 12);
+      const R = k & 1 ? cream : orange;
+      let v = 2 + u * 1.3 - 0.2 + (1 - t) * -0.3;
+      if (hash(Math.floor(x / 2), Math.floor(y / 6), 61) < 0.12) v += 0.6;
+      return tone(R, v, x, y);
     });
-    // petals sprinkled on the crown
-    for (let k = 0, sd = 7; k < 30; k++) { sd = (sd * 9301 + 49297) % 233280; const x = 4 + sd % (W - 8), y = 14 + (sd >> 7) % 44; if (p.get(x, y) && p.get(x, y) !== bark) p.set(x, y, '#fff7fa'); }
-    windowRound(p, 26, gy - 22, 3.5, lived); windowRound(p, W - 26, gy - 26, 3, lived);
-    door(p, W / 2, gy + 1, lived, true);
-    sign(p, W / 2, gy - 25, h.sign, lived);
-    p.outline();
-  } },
-
-  // the rescue team: a big round tent striped orange and cream, a red-cross pennant on the pole
-  rescue: { up: 14, draw(p, W, H, lived, h) {
-    const t = tones(h.roof, lived), gy = H - 1, eave = H - 28;
-    const cream = lived ? '#f4f0e8' : '#cfc9c4';
-    p.rect(W / 2, 0, 1, 12, INK);
-    // the cone
-    p.poly([[2, eave + 2], [W / 2, 8], [W - 2, eave + 2]], (x, y) => {
-      const k = Math.floor((x - W / 2) / ((y - 7) * 0.32 + 1));
-      return (k & 1) ? (x < W / 2 ? cream : mixc(cream, '#000000', 0.12)) : (x < W / 2 ? t.b : t.d);
+    // a scalloped valance round the eave
+    for (let x = 1; x < W - 1; x++) {
+      const s = Math.floor(x / 6), lx = x % 6, R = s & 1 ? cream : orange, u = (x - W / 2) / (W / 2);
+      const d = lx === 0 || lx === 5 ? 2 : lx === 1 || lx === 4 ? 3 : 4;
+      for (let j = 0; j < d; j++) p.set(x, eave + 2 + j, tone(R, 1.6 + u * 1.2 + (j === d - 1 ? 0.7 : 0), x, j));
+    }
+    // the round wall, stripes bending round it
+    p.fill(5, eave + 5, W - 6, gy, null, (x, y) => {
+      const u = (x + 0.5 - W / 2) / (W / 2 - 5), k = Math.floor((Math.asin(Math.max(-1, Math.min(1, u))) / Math.PI + 0.5) * 10);
+      let v = 2 + u * 1.3 - 0.2 + (y < eave + 9 ? (eave + 9 - y) * 0.35 : 0) + (y > gy - 2 ? 0.4 : 0);
+      return tone(k & 1 ? cream : orange, v, x, y);
     });
-    // scalloped eave
-    for (let x = 2; x < W - 2; x++) { const s = Math.floor(x / 6); p.rect(x, eave + 2, 1, 2 + ((x % 6 > 0 && x % 6 < 5) ? 1 : 0), s & 1 ? cream : t.b); }
-    // the round wall
-    p.rect(5, eave + 4, W - 10, gy - eave - 4, (x, y, i) => (Math.floor(i / 7) & 1 ? cream : t.b));
-    p.rect(5, gy - 1, W - 10, 1, t.dd);
-    // the door flap, tied back
-    p.poly([[W / 2 - 9, gy + 1], [W / 2, eave + 6], [W / 2 + 9, gy + 1]], t.dd);
-    p.poly([[W / 2 - 6, gy + 1], [W / 2, eave + 10], [W / 2 + 6, gy + 1]], lived ? '#5a3a2a' : '#3a3646');
-    if (!lived) for (let k = 0; k < 6; k++) p.rect(W / 2 - 5 + k * 2, gy - 9 + (k & 1), 2, 1, '#c9a878');
-    sign(p, W / 2, eave - 10, h.sign, lived);
+    // the door flaps, tied back, the dark inside
+    const fl = [[W / 2 - 10, gy + 1], [W / 2, eave + 6], [W / 2 + 10, gy + 1]];
+    p.poly(fl, (x, y) => tone(orange, 3.4 + (x > W / 2 ? 0.6 : 0), x, y));
+    p.poly([[W / 2 - 7, gy + 1], [W / 2, eave + 10], [W / 2 + 7, gy + 1]], (x, y) => (lived ? ['#5a3a2a', '#4a2e22', '#3a2420'][Math.min(2, Math.floor((y - eave - 10) / 6))] : '#2e2c3e'));
+    if (lived) for (let y = gy - 8; y < gy; y++) p.set(W / 2 - 1 + ((y >> 1) & 1), y, '#f4cf4f');
+    for (const sx of [-1, 1]) { p.set(W / 2 + sx * 8, gy - 9, '#c9a878'); p.set(W / 2 + sx * 8, gy - 8, '#8a6a4a'); }
+    if (!lived) for (let k = 0; k < 6; k++) p.rect(W / 2 - 6 + k * 2, gy - 9 + (k & 1), 2, 1, '#c9a878');
+    signboard(p, W / 2, eave - 10, h.sign, lived);
+    // a crate of supplies with a red cross
+    planks(p, [8, gy - 8, 18, gy - 1], null, WOOD_WARM, (x, y) => (y === gy - 8 ? -0.8 : 0) + (x > 15 ? 0.6 : 0), { pw: 3, vert: false, seed: 62 });
+    if (lived) { p.rect(12, gy - 6, 3, 1, '#d9454a'); p.rect(13, gy - 7, 1, 3, '#d9454a'); }
     p.outline();
-    p.rect(W / 2 + 1, 0, 5, 4, lived ? '#f4f0e8' : '#8a8794'); if (lived) { p.rect(W / 2 + 3, 0, 1, 4, '#d9454a'); p.rect(W / 2 + 2, 1, 3, 1, '#d9454a'); }
+    // guy ropes and pegs (thin, over the outline)
+    for (const [x0, x1] of [[4, -2], [W - 5, W + 1]]) for (let k = 0; k <= 8; k++) { const x = Math.round(x0 + (x1 - x0) * k / 8), y = eave + 4 + Math.round((gy - eave - 4) * k / 8); if (x >= 0 && x < W) p.front(x, y, '#d8c49c'); }
+    if (lived) { p.front(W / 2 + 1, 1, '#f6efe2'); p.front(W / 2 + 2, 1, '#d9454a'); p.front(W / 2 + 3, 1, '#f6efe2'); p.front(W / 2 + 1, 2, '#d9454a'); p.front(W / 2 + 2, 2, '#d9454a'); p.front(W / 2 + 3, 2, '#d9454a'); p.front(W / 2 + 1, 3, '#f6efe2'); p.front(W / 2 + 2, 3, '#d9454a'); p.front(W / 2 + 3, 3, '#f6efe2'); p.front(W / 2 + 4, 2, '#f6efe2'); }
+    tufts(p, 3, W - 4, gy, 63);
   } },
 
-  // the rival: a round tower under a tall pointed witch-hat roof, the tip bent over, a star on it
-  rival: { up: 46, draw(p, W, H, lived, h) {
-    const t = tones(h.roof, lived), gy = H - 1, wallTop = H - 30;
-    p.rect(14, wallTop, W - 28, gy - wallTop, (x, y, i, j) => (j % 6 === 5 || (i + ((j / 6) | 0) * 4) % 9 === 0 ? CREAM_D : CREAM));
-    p.rect(14, wallTop, 3, gy - wallTop, WOOD_L); p.rect(W - 17, wallTop, 3, gy - wallTop, WOOD);
-    // the hat: brim, cone, the bent tip
-    p.ell(W / 2, wallTop + 1, W / 2 - 4, 5, (x, y, nx) => (nx < -0.3 ? t.l : t.d));
-    p.poly([[12, wallTop - 1], [W / 2 - 2, 6], [W / 2 + 6, 4], [W - 12, wallTop - 1]], (x, y) => (x < W / 2 - 6 + (y / 6) ? t.l : x < W / 2 + 10 ? t.b : t.d));
-    p.poly([[W / 2 - 2, 7], [W / 2 + 6, 3], [W / 2 + 14, 9], [W / 2 + 12, 11], [W / 2 + 5, 7]], t.b);
-    p.rect(14, wallTop - 4, W - 28, 3, lived ? '#f4cf4f' : '#a8a296');
-    windowSq(p, 20, wallTop + 9, lived, 5, 6); windowSq(p, W - 25, wallTop + 9, lived, 5, 6);
-    door(p, W / 2, gy + 1, lived, true);
-    sign(p, W / 2, wallTop - 14, h.sign, lived);
+  // the rival: a round stone tower under a tall witch-hat roof of little purple shingles, the tip bent
+  // over with a star on it, a broom by the door and a cauldron bubbling green
+  rival: { up: 50, draw(p, W, H, lived, h) {
+    const gy = H - 1, wallTop = H - 35, mk = maker(lived);
+    const hat = mk(h.roof), stoneR = mk('#c9bfae'), band = mk('#e2b84a');
+    // the tower: round, stone, lit from the left
+    stones(p, [15, wallTop, W - 16, gy], null, stoneR, (x, y) => roundLit(W / 2, W / 2 - 15, 1.3)(x) - 0.1 + (y < wallTop + 6 ? (wallTop + 6 - y) * 0.35 : 0), { ch: 4, wmin: 4, wmax: 7, seed: 71 });
+    // the hat: brim, cone leaning over to the right, the bent tip
+    const tipX = 47, tipY = 12;
+    const cone = [[13, wallTop - 1], [tipX - 4, tipY + 2], [tipX + 3, tipY], [W - 13, wallTop - 1]];
+    shingles(p, [13, tipY, W - 13, wallTop], (x, y) => inPolyF(cone, x, y), hat,
+      (x, y) => { const t = (y - tipY) / (wallTop - tipY), mid = tipX + (W / 2 - tipX) * t; return (x - mid) / (W / 2 - 13) * 1.4 - 0.2; }, { sw: 5, rh: 3, seed: 72 });
+    const tip = [[tipX - 4, tipY + 3], [tipX + 1, tipY - 6], [tipX + 9, tipY - 9], [tipX + 15, tipY - 4], [tipX + 13, tipY - 2], [tipX + 8, tipY - 5], [tipX + 4, tipY + 1]];
+    shingles(p, [tipX - 4, tipY - 10, tipX + 16, tipY + 3], (x, y) => inPolyF(tip, x, y), hat, (x, y) => (y < tipY - 5 ? -0.4 : 0.6), { sw: 5, rh: 3, seed: 73 });
+    p.fill(13, wallTop - 6, W - 13, wallTop - 3, (x, y) => inPolyF(cone, x, y), (x, y, i) => tone(band, (y === wallTop - 6 ? 0.8 : 2) + (x - W / 2) / 30, x, y));
+    p.ell(W / 2, wallTop + 1, W / 2 - 5, 5, (x, y, nx, ny) => tone(hat, (ny < 0 ? 1.2 : 3) + nx * 0.9, x, y));
+    // windows with purple curtains, the arched door, the sign
+    windowBox(p, 22, wallTop + 11, 6, 8, { lived, curtain: ['#b48ade', '#8a5fc0'], frame: mk('#6a4a7a') });
+    windowBox(p, W - 28, wallTop + 11, 6, 8, { lived, curtain: ['#b48ade', '#8a5fc0'], frame: mk('#6a4a7a') });
+    doorway(p, W / 2, gy, 10, 16, { arch: true, boarded: !lived, frame: mk('#6a4a7a'), wood: mk('#7a4f8a') });
+    signboard(p, W / 2, wallTop + 6, h.sign, lived);
+    // a broom leaning by the door, a cauldron
+    p.line(50, gy - 15, 47, gy - 3, (k) => (k % 3 ? '#a0703f' : '#7a5232'));
+    p.fill(44, gy - 4, 50, gy, (x, y) => Math.abs(x - 47) <= (y - gy + 5) * 0.8, (x, y) => tone(ramp('#d8b45a'), 1.5 + (x - 47) * 0.3, x, y));
+    p.ell(66, gy - 3, 5, 3.6, (x, y, nx, ny) => tone(ramp('#4b4858'), 2 + nx + ny * 0.5, x, y), (x, y) => y >= gy - 4);
+    p.rect(61, gy - 5, 11, 2, (x, y, i, j) => tone(ramp('#4b4858'), j ? 3 : 1, x, y));
+    if (lived) for (const [bx, by, c] of [[64, gy - 6, '#9be07a'], [67, gy - 7, '#c9f5a8'], [69, gy - 6, '#6cc45a']]) p.set(bx, by, c);
     p.outline();
-    // the star on the tip
-    p.stamp(W / 2 + 12, 6, ['.y.', 'yyy', '.y.'], { y: lived ? '#f4cf4f' : '#a8a296' });
-  } },
-
-  // your own house: a round cottage under a thick straw roof, a heart over the door, a round
-  // chimney, flower boxes under the windows
-  home: { up: 16, draw(p, W, H, lived, h) {
-    const gy = H - 1, eave = H - 26;
-    const straw = '#e9c35a', strawL = '#f8e08a', strawD = '#b8913a', strawDD = '#8a6a2a';
-    // chimney
-    p.rect(W - 22, 2, 9, 16, (x, y, i, j) => (j % 4 === 3 ? '#7d8398' : i < 2 ? '#c9ccd8' : '#a3a7b4'));
-    // walls
-    p.rect(6, eave, W - 12, gy - eave, (x, y, i) => (i < 4 ? '#fbf3e2' : x > W - 12 ? CREAM_D : CREAM));
-    p.rect(6, gy - 2, W - 12, 2, CREAM_D);
-    // the straw dome, with a ragged fringe at the eave
-    p.ell(W / 2, eave + 2, W / 2, eave - 2, (x, y, nx, ny) => {
-      const T = -(0.6 * nx + 0.8 * ny), streak = (x * 5 + Math.floor(y / 3) * 3) % 7 === 0;
-      return streak ? strawD : T > 0.7 ? strawL : T > -0.2 ? straw : strawD;
-    }, (x, y) => y <= eave + 2);
-    for (let x = 1; x < W - 1; x++) { const d = (x * 7) % 3; p.rect(x, eave + 3, 1, d, x < W / 2 ? straw : strawD); p.set(x, eave + 3 + d, strawDD); }
-    windowRound(p, 18, gy - 12, 3.5, true); windowRound(p, W - 18, gy - 12, 3.5, true);
-    for (const cx of [18, W - 18]) { p.rect(cx - 5, gy - 7, 11, 3, WOOD); for (let k = 0; k < 5; k++) p.set(cx - 4 + k * 2, gy - 8, ['#f29bb2', '#f4cf4f', '#d9454a'][k % 3]); }
-    door(p, W / 2, gy + 1, true, true);
-    sign(p, W / 2, eave - 9, h.sign, true);
-    p.outline();
+    p.stamp(tipX + 13, tipY - 7, ['.y.', 'yYy', '.y.'], { y: lived ? '#f4cf4f' : '#a8a296', Y: lived ? '#fff3b0' : '#c9c4c8' });
+    tufts(p, 12, W - 13, gy, 74);
   } },
 };
+
+function inPolyF(P, x, y) {
+  let inside = false;
+  const px = x + 0.5, py = y + 0.5;
+  for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
+    const [xi, yi] = P[i], [xj, yj] = P[j];
+    if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
 
 // how far above its footprint a house rises
 export const houseUp = h => HOUSE_ART[h.id]?.up || 0;
 // where the chimney smoke comes out, from the house's footprint top-left in pixels
-export const chimneyAt = h => ({ smith: [h.w * TILE - 15, -20], home: [h.w * TILE - 17, -14] })[h.id];
+export const chimneyAt = h => ({ smith: [h.w * TILE - 22, -houseUp(h) + 1], home: [h.w * TILE - 21, -houseUp(h) + 2] })[h.id];
 
 export function houseArt(h, lived) {
   const art = HOUSE_ART[h.id];
   const W = h.w * TILE, H = h.h * TILE + art.up;
-  const c = document.createElement('canvas');
-  c.width = W; c.height = H;
-  const g = c.getContext('2d');
-  // a soft shadow on the grass under it
-  g.fillStyle = 'rgba(16,28,18,0.22)';
-  for (let k = 0; k < 4; k++) g.fillRect(4 + k * 2, H - 4 + k, W - 8 - k * 4, 1);
   const p = new Pix(W, H);
   art.draw(p, W, H, lived, h);
-  p.draw(g);
-  return c;
+  return p.canvas(g => groundShadow(g, 2, W - 2, H - 1, 6, 7, 0.24));
 }
 export const hasHouseArt = h => !!HOUSE_ART[h.id];

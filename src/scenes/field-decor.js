@@ -274,7 +274,7 @@ function bloomCanvas(z, zi, v) {
 }
 
 // Trees standing in the thick of a hedge or a wood, darker than the village's, for the night.
-const FIELD_TREES = {
+export const FIELD_TREES = {
   meadow: [
     { leaf: ['#7aa45a', '#5a8a48', '#446e3c', '#33573a', '#22402a'], line: '#0b160e' },
     { leaf: ['#7aa45a', '#5a8a48', '#446e3c', '#33573a', '#22402a'], line: '#0b160e', fruit: true },
