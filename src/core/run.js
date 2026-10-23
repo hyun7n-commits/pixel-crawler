@@ -25,6 +25,7 @@ import { REQUESTS, pickRequest } from '../data/requests.js';
 import { isOpen, openNew, RELIC_GATES } from '../data/unlocks.js';
 import { caged, cleared, stageOpen, loopsOpen, loopFoe, loopGold, FRIENDS } from '../data/stages.js';
 import { daresOn, daresOpen, dareGold } from '../data/dares.js';
+import { homePerks } from '../data/home.js';
 import { enemyAct, rouse, awaken, angerSwarm, twist, inReach, canSee, brawl, vex } from './ai.js';
 import { onEnter, explosion, envTick, waterBody, ignite, addGas, spotTraps, revealTraps, openGrave, setBurn, springTrap } from './world.js';
 
@@ -117,6 +118,11 @@ export class Run {
     this.kit = kit.picks;
     this.p.kitAtk = kit.atk;
     this.p.kitHp = kit.hp;
+    // a cosy house sends you off stronger (data/home.js): more health, and the stove's honey water
+    const home = homePerks(meta);
+    this.p.homeHp = home.hp;
+    this.lunch = home.lunch && !this.dare('nopotion');
+    if (this.lunch) this.p.items.potion++;
     this.p.hp = this.stat().maxHp;
     meta.stats.runs++;
     meta.stats.maxFloor = Math.max(meta.stats.maxFloor, this.floor);
@@ -171,7 +177,7 @@ export class Run {
       atk: ch.atk + up.atk + (this.p.kitAtk || 0) + (wet ? 3 : 0) + 2 * lv('blade') + f('flamesword', 4, 2) + 2 * lv('volcano') + (on('minecrown') ? 5 : 0) +
         f('bloodblade', 3, 1) + f('whirl', 4, 1) + f('dagger', 2, 1) + lv('giantfist') + 2 * lv('bloodmoon') + lv('stormlord') + lv('whirlwind') + lv('grumpclub') + (on('godhammer') ? 5 : 0),
       def: ch.def + lv('shield') + f('fortress', 2, 1) + lv('undying') + lv('ironheart') + f('embermail', 1, 1) + lv('guardian'),
-      maxHp: ch.hp + up.hp * B.UP_HP + (this.p.kitHp || 0) + 8 * lv('heart') + f('bloodcrown', 15, 5) + 10 * lv('lifetree') + (on('eternity') ? 30 : 0) +
+      maxHp: ch.hp + up.hp * B.UP_HP + (this.p.kitHp || 0) + (this.p.homeHp || 0) + 8 * lv('heart') + f('bloodcrown', 15, 5) + 10 * lv('lifetree') + (on('eternity') ? 30 : 0) +
         f('ironheart', 10, 5) + f('pillow', 16, 4) + f('giantfist', 12, 4) + 10 * lv('guardian') + (on('bloodking') ? 20 : 0) +
         (this.p.lvl - 1) * B.HP_PER_LEVEL + (this.p.honey || 0),
       goldMult: (1 + 0.4 * lv('coin') + f('goldbolt', 0.75, 0.25) + 0.25 * lv('goldstorm') + (on('minecrown') ? 0.5 : 0) + 0.1 * up.greed +
@@ -261,6 +267,8 @@ export class Run {
     if (this.request) this.log(`오늘의 조합 의뢰: ${this.request.text} (일당 ${this.request.pay}G)`, 'quest');
     if (this.packed) this.log(`챙겨 온 ${RELICS[this.packed].name} Lv${this.p.relics[this.packed]}`, 'good');
     if (this.forged) this.log(`대장장이가 만들어 준 ${josa(RELICS[this.forged].name, '을', '를')} 들고 나왔다.`, 'good');
+    if (this.p.homeHp) this.log(`집에서 푹 쉬고 나왔다. 최대 체력 +${this.p.homeHp}`, 'good');
+    if (this.lunch) this.log('난로가 싸 준 꿀물 도시락(체력 물약)을 챙겼다.', 'good');
     // 도구 주머니 (village upgrade): a meadow tool or two to start with
     const pouch = [];
     for (let k = 0; k < (this.meta.up.tool || 0); k++) { const t = this.pickTool(); if (t) { this.p.items[t]++; pouch.push(ITEMS[t].name); } }

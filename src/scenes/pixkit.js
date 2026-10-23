@@ -113,6 +113,15 @@ export function groundShadow(g, x0, x1, y, depth = 5, lean = 5, alpha = 0.26) {
   }
 }
 
+// ---------- light ----------
+// an empty house's colours are faded to grey until somebody moves in
+export const maker = lived => base => ramp(lived ? base : mixc(base, '#8f8a99', 0.55));
+// a front wall lit from the left, in the shade of the eave at its top and a little darker at the foot
+export const wallLit = (x0, x1, eave, gy) => (x, y) => (x - x0) / (x1 - x0) * 0.9 - 0.35 + (y < eave + 4 ? (eave + 4 - y) * 0.32 : 0) + (y > gy - 3 ? 0.25 : 0);
+// a round body (cylinder, dome) lit from the upper left
+export const roundLit = (cx, rx, k = 1.15) => (x) => ((x + 0.5 - cx) / rx) * k;
+export const domeLit = (cx, cy, rx, ry, k = 1.4) => (x, y) => -(0.55 * -((x + 0.5 - cx) / rx) + 0.75 * -((y + 0.5 - cy) / ry)) * k;
+
 // ---------- materials ----------
 // Each takes `inside(x, y)` for where it goes, a ramp, and `lit(x, y)`: how far from the base tone a
 // pixel sits before texture (negative is lighter). Feature sizes match the small props.
@@ -195,6 +204,52 @@ export function planks(p, box, inside, R, lit, o = {}) {
     if (la === pw - 1) v += 1.4;
     else if (la === 0) v -= 0.6;
     if (hash(k, Math.floor(b / 3), seed + 1) < 0.18 && la > 0 && la < pw - 1) v += 0.6;
+    return tone(R, v, x, y);
+  });
+}
+
+// round logs laid one on another (a log cabin's wall), `lh` tall: each lit like a cylinder (its top
+// catches the light, its underside sits in shade), dark chinking between them, grain streaks a few
+// pixels long and now and then a knot
+export function logs(p, box, inside, R, lit, o = {}) {
+  const [bx0, by0, bx1, by1] = box, lh = o.lh || 4, seed = o.seed || 6;
+  p.fill(bx0, by0, bx1, by1, inside, (x, y) => {
+    const ry = y - by0, k = Math.floor(ry / lh), ly = ry - k * lh;
+    let v = 2 + lit(x, y) + (hash(k, 0, seed) - 0.5) * 0.7;
+    if (ly === lh - 1) v += 1.6;
+    else if (ly === 0) v -= 0.8;
+    else if (ly === lh - 2 && lh > 3) v += 0.5;
+    if (ly > 0 && ly < lh - 1) {
+      if (hash(Math.floor((x + k * 3) / 5), k, seed + 1) < 0.22) v += 0.5;
+      if (hash(x, k, seed + 2) < 0.03) v += 1.3;
+    }
+    return tone(R, v, x, y);
+  });
+}
+// the cut ends of a cabin's logs where its walls meet, stacked at x: rings of pale end grain
+export function logEnds(p, x, y0, y1, lh, R, o = {}) {
+  const END = o.end || ramp('#d9b27a');
+  for (let y = y0; y + lh - 1 <= y1 + (o.loose ? 1 : 0); y += lh) {
+    const w = lh, cy = y + (lh - 1) / 2, cx = x + (w - 1) / 2;
+    for (let j = 0; j < lh - 1; j++) for (let i = 0; i < w; i++) {
+      const corner = (j === 0 || j === lh - 2) && (i === 0 || i === w - 1);
+      if (corner) continue;
+      const ring = j === 0 || j === lh - 2 || i === 0 || i === w - 1;
+      p.set(x + i, y + j, ring ? tone(R, (j === 0 ? 1.4 : 2.8) + (i === w - 1 ? 0.5 : 0), x + i, y + j) : tone(END, 1.6 + (i + j > 2 ? 0.8 : 0), x + i, y + j));
+    }
+    p.set(Math.round(cx), Math.round(cy - 0.5), END[3]);
+  }
+}
+// overlapping boards running across a wall (clapboard): each board's lower edge throws a thin shadow
+// on the one below it
+export function clapboard(p, box, inside, R, lit, o = {}) {
+  const [bx0, by0, bx1, by1] = box, bh = o.bh || 3, seed = o.seed || 8;
+  p.fill(bx0, by0, bx1, by1, inside, (x, y) => {
+    const ry = y - by0, k = Math.floor(ry / bh), ly = ry - k * bh;
+    let v = 2 + lit(x, y) + (hash(k, Math.floor(x / 23), seed) - 0.5) * 0.5;
+    if (ly === 0) v += 1.2;
+    else if (ly === bh - 1) v -= 0.5;
+    if (hash(x, k, seed + 1) < 0.02) v += 0.7;
     return tone(R, v, x, y);
   });
 }
@@ -347,8 +402,11 @@ const SIGN_ART = {
   heart: ['.kk..kk.', 'kqqkkqqk', 'kqqqqqqk', '.kqqqqk.', '..kqqk..', '...kk...'],
   cross: ['...kk...', '..krrk..', '.kkrrkk.', 'krrrrrrk', '.kkrrkk.', '..krrk..'],
   star: ['...kk...', '...yy...', 'kyyyyyyk', '.kyyyyk.', '.kyk.yk.', '.k....k.'],
+  saw: ['rrr.....', 'r.rLLLL.', 'rrrLLLLL', '..rLLLLL', '...kLkLk', '........'],
+  bread: ['..kkkk..', '.kbwbbk.', 'kbbwbwbk', 'kbbbbbbk', '.kBBBBk.', '..kkkk..'],
+  moon: ['..kkk...', '.kyyk..y', 'kyyk...k', 'kyyk....', '.kyyykk.', '..kkkk..'],
 };
-const SIGN_PAL = { k: '#3a2a2a', r: '#d9454a', y: '#f4cf4f', Y: '#c99a2b', L: '#b8bccb', n: '#a0703f', q: '#f29bb2' };
+const SIGN_PAL = { k: '#3a2a2a', r: '#d9454a', y: '#f4cf4f', Y: '#c99a2b', L: '#b8bccb', n: '#a0703f', q: '#f29bb2', b: '#d9944a', B: '#a8622e', w: '#f6dca6' };
 export function signboard(p, cx, y, kind, lived = true) {
   const x = Math.round(cx - 6);
   p.rect(x, y, 12, 9, (px, py, i, j) => tone(WOOD_WARM, i === 0 || j === 0 ? 3.4 : i === 11 || j === 8 ? 3.6 : j === 1 || i === 1 ? 0.6 : 1.4, px, py));

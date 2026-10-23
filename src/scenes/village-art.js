@@ -24,8 +24,8 @@ const SIGN_PAL = { k: '#1b1424', r: '#d9454a', y: '#f4cf4f', Y: '#c99a2b', L: '#
 // A cottage seen from above and in front: a shingled roof over most of it, a cream wall with the door
 // in the middle, windows on a wide house. `lived` lights the windows; an empty house has its door
 // boarded up and its windows dark until somebody moves in.
-export function houseCanvas(h, lived) {
-  if (hasHouseArt(h)) return houseArt(h, lived);
+export function houseCanvas(h, lived, lvl = 0) {
+  if (hasHouseArt(h, lvl)) return houseArt(h, lived, lvl);
   const W = h.w * TILE, H = h.h * TILE;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
@@ -68,7 +68,7 @@ export function houseCanvas(h, lived) {
   // the sign over the door: what the house is for (blank while empty)
   const sx = Math.floor(W / 2) - 6, sy = rh - 8;
   fill(ink, sx, sy, 12, 9); fill('#c9a878', sx + 1, sy + 1, 10, 7);
-  if (lived) SIGNS[h.sign].forEach((row, j) => [...row].forEach((ch, i) => { if (ch !== '.') fill(SIGN_PAL[ch], sx + 2 + i, sy + 1 + j); }));
+  if (lived) SIGNS[h.sign]?.forEach((row, j) => [...row].forEach((ch, i) => { if (ch !== '.') fill(SIGN_PAL[ch], sx + 2 + i, sy + 1 + j); }));
   // a striped awning over the shop door
   if (h.awning && lived) for (let i = 0; i < 14; i++) { fill(i % 4 < 2 ? '#d9454a' : '#f4f0e8', dx - 2 + i, dy - 3, 1, 3); fill(ink, dx - 2 + i, dy, 1, 1); }
   // a chimney
@@ -77,14 +77,30 @@ export function houseCanvas(h, lived) {
 }
 
 // A dirt path. Bits in `mask` are the sides where grass meets it: the grass fringe overlaps a little there.
-function pathTile(mask) {
+function pathTile(mask, cobble) {
   const c = document.createElement('canvas');
   c.width = TILE; c.height = TILE;
   const g = c.getContext('2d'), z = VILLAGE_GROUND;
   let s = mask * 31 + 7;
   const r = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
-  g.fillStyle = '#c9a878'; g.fillRect(0, 0, TILE, TILE);
-  for (let k = 0; k < 8; k++) { g.fillStyle = r() < 0.6 ? '#b08f60' : '#dcc196'; g.fillRect(Math.floor(r() * 15), Math.floor(r() * 15), r() < 0.3 ? 2 : 1, 1); }
+  if (cobble) {
+    // cobbles (once the village has grown a bit): rounded stones in staggered rows, dark joints between,
+    // each stone lit on its upper left
+    g.fillStyle = '#8c8478'; g.fillRect(0, 0, TILE, TILE);
+    const tones = ['#c9c1b2', '#bdb4a4', '#d4ccbc', '#b3aa99'];
+    for (let row = 0; row < 4; row++) {
+      const off = row & 1 ? -2 : 0;
+      for (let x0 = off; x0 < TILE; x0 += 5) {
+        const w = 4, h = 3, y0 = row * 4, t = tones[Math.floor(r() * tones.length)];
+        g.fillStyle = t; g.fillRect(x0 + 1, y0, w - 2, h); g.fillRect(x0, y0 + 1, w, h - 2);
+        g.fillStyle = '#e4dccd'; g.fillRect(x0 + 1, y0, 1, 1);
+        g.fillStyle = '#9c9384'; g.fillRect(x0 + w - 2, y0 + h - 1, 1, 1);
+      }
+    }
+  } else {
+    g.fillStyle = '#c9a878'; g.fillRect(0, 0, TILE, TILE);
+    for (let k = 0; k < 8; k++) { g.fillStyle = r() < 0.6 ? '#b08f60' : '#dcc196'; g.fillRect(Math.floor(r() * 15), Math.floor(r() * 15), r() < 0.3 ? 2 : 1, 1); }
+  }
   g.fillStyle = z.floor;
   for (let i = 0; i < TILE; i++) {
     const d = (i * 7 + mask) % 3 === 0 ? 2 : 1;
@@ -95,9 +111,9 @@ function pathTile(mask) {
   }
   return c;
 }
-export function pathKey(scene, mask) {
-  const key = `village_path_${mask}`;
-  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, pathTile(mask));
+export function pathKey(scene, mask, cobble = false) {
+  const key = `village_path_${mask}${cobble ? '_c' : ''}`;
+  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, pathTile(mask, cobble));
   return key;
 }
 

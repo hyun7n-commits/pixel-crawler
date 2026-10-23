@@ -18,7 +18,8 @@ export function freshMeta() {
     recipes: {},  // relic recipes found at least once, by recipeKey, see data/relics.js
     ores: {},     // ore grades seen: id -> how many broken open, see data/ores.js
     critters: {}, // kinds of critter met: type -> how many knocked out, see data/enemies.js
-    village: { seen: {} },  // villagers who have already moved in with a hello, see data/village.js
+    village: { seen: {}, last: null },  // villagers who have already moved in with a hello, and the village as you last saw it
+                                        // ({ P, arr }: how far grown, who lived there), see data/village.js
     lastRun: null,          // how the last run went, for the village gossip
     story: {},              // picture-book scenes already shown: intro, ratking, skelking, ending (ui/story.js)
     pack: null,             // a basic relic paid for in the shop to take on the next run (data/upgrades.js PACK_COST)
@@ -27,6 +28,9 @@ export function freshMeta() {
     stage: 0, loop: 1,      // what the stage select has picked for the next trip
     dares: { on: {}, won: {} },  // the rival's dares: switched on, and the furthest stage won with each (data/dares.js)
     home: [],               // 집 꾸미기 pieces put up round your house (data/home.js)
+    house: { lvl: 0, own: {}, at: null, plant: 0, visit: null, seen: false, dark: false },  // inside the house: how big, the furniture ordered and where it
+                            // stands (null: as the guild left it), trips since the plant went in, a friend dropping by,
+                            // been in yet, the lamp off
     bookGifts: 0,           // the smith's recipe-book gifts already taken (data/balance.js bookGift)
     pets: {},               // pets bought at the shop, and the one that comes along (data/pets.js)
     pet: null,
@@ -65,10 +69,14 @@ export function loadMeta() {
         ores: { ...m.ores },
         // saves from before the critter book already knew the bosses they beat
         critters: m.critters ? { ...m.critters } : Object.fromEntries((m.stats?.bosses || []).map(b => [b, 1])),
-        village: { seen: { ...m.village?.seen } },
+        village: { seen: { ...m.village?.seen }, last: m.village?.last || null },
         open: { ...m.open },
         story: { ...m.story },
         home: Array.isArray(m.home) ? m.home : [],
+        house: {
+          lvl: m.house?.lvl || 0, own: { ...m.house?.own }, at: m.house?.at ? { ...m.house.at } : null, plant: m.house?.plant || 0,
+          visit: m.house?.visit || null, seen: !!m.house?.seen, dark: !!m.house?.dark,
+        },
         clears: { ...m.clears },
         dares: { on: { ...m.dares?.on }, won: { ...m.dares?.won } },
         pets: { ...m.pets },

@@ -340,6 +340,26 @@ export const SPR = {
     '..kXXXXXXXXXXk..',
     ...feet('Z'),
   ],
+  // 비버 목수: a beaver with a red carpenter's bandana, two big front teeth, a green work apron with a
+  // pencil in the pocket, and its flat tail peeping out at the side
+  beaver: [
+    '................',
+    '..kk........kk..',
+    '.kVTk......kTVk.',
+    '.kTTkkkkkkkkTTk.',
+    '.krrrrrrrrrrrrkr',
+    'kTRRRRRRRRRRRRkk',
+    'kTTTTTkTTTTkTTTk',
+    'kTTTTTkTTTTkTTTk',
+    'kTTqTTEEEEEETqTk',
+    'kTTTTEEEkkEETTTk',
+    '.kTTTTEEwwETTTk.',
+    '.kkTTTTEwwTTTkkk',
+    'kTkgggggggggkVXk',
+    '.kVggggyGggggkXk',
+    '...kVVkkkkVVk.k.',
+    '....kk....kk....',
+  ],
   // ---------- things on the floor ----------
   chest: [
     '................',
