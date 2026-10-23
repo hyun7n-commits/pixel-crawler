@@ -1278,6 +1278,16 @@ export class Run {
       // the nappers of a 낮잠 방 trooping off to the bell, the chest left alone
       const den = this.map.den, troop = heard.filter(e => e.den);
       if (troop.length && ((den && this.isVisible(den.x, den.y)) || troop.some(e => this.isVisible(e.x, e.y)))) this.discover('bell_den');
+      // 박쥐 find their way by sound: close to the ringing they flap about lost and dizzy, every turn it
+      // rings (a blow on one then is a surprise one)
+      const lost = this.enemies.filter(e => e.hp > 0 && e.type === 'bat' && !['sleep', 'lurk'].includes(e.state) && cheb(e, b) <= B.BELL_BAT_RANGE);
+      for (const e of lost) { e.stun = Math.max(e.stun || 0, 1); e.aim = false; e.backoff = 0; }
+      if (lost.length) this.emit('reel', { list: lost.map(e => ({ x: e.x, y: e.y })) });
+      if (lost.some(e => this.isVisible(e.x, e.y)) && !b.bats) {
+        b.bats = true;
+        this.log('방울 소리에 박쥐들이 길을 잃고 어질어질 헤맨다!', 'good');
+        this.discover('bell_bats');
+      }
       for (const e of this.enemies) {
         if (e.hp <= 0 || e.d.npc || e.d.boss || this.calm(e) || cheb(e, b) > B.BELL_RANGE || e.fear > 0) continue;
         if (!['search', 'wander', 'hunt'].includes(e.state) || (e.state === 'hunt' && canSee(this, e, 9))) continue;
