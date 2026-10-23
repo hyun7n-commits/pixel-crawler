@@ -38,6 +38,7 @@ export const UNLOCKS = [
   { id: 'map', icon: 'map', what: '지도', desc: '구역 전체와 땅굴 자리를 보여 주는 지도가 나온다', when: m => m.stats.maxFloor >= 5 },
   { id: 'mint', relic: 'mint', when: m => m.stats.maxFloor >= 5 },
   { id: 'sleepy', icon: 'sleepflower', what: '졸음 꽃', desc: '던지면 졸음 꽃가루가 퍼져서 적이 잠든다. 너무 가까우면 나도 잠든다', when: m => m.stats.maxFloor >= 6 || m.stats.runs >= 10 },
+  { id: 'den', icon: 'chest', what: '낮잠 방', desc: '들판 구석 방에 녀석들이 상자를 둘러싸고 모여 잔다. 깨우지 않고 털어 볼까?', when: m => m.stats.maxFloor >= 7 || m.stats.runs >= 11 },
   { id: 'chili', icon: 'chili', what: '매운 고추', desc: '적에게 던지면 매워서 한동안 허둥지둥 달아난다', when: m => m.stats.maxFloor >= 9 || m.stats.runs >= 12 },
   { id: 'bell', icon: 'bell', what: '방울', desc: '던지면 몇 턴 동안 딸랑딸랑 울린다. 나를 못 보는 적은 그리로 간다', when: m => m.stats.maxFloor >= 13 || m.stats.runs >= 15 },
   { id: 'pick', relic: 'pick', when: m => broken(m) >= 8 },

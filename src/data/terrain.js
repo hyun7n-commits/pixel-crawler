@@ -142,4 +142,5 @@ export const FLOOR_HINTS = [
   { has: 'mimic',  text: '이 구역 상자 중 하나에는 소라게가 산대.' },
   { has: 'flood',  text: '물에 잠긴 방에 번개 떨어지면 다 찌릿하대.' },
   { has: 'weeds',  text: '이 구역에 잡초 밭이 있대. 다 뽑으면 별사탕이 나온다던데.' },
+  { has: 'den',    text: '구석 방에서 다 같이 낮잠 잔대. 깨우면 큰일 난대.' },
 ];

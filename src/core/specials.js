@@ -13,6 +13,12 @@
 //   hive   - a honey stump in a grassy patch, its bees humming round it. Bump it for the honey pot
 //            (more max HP for the run) and every bee that is awake comes after you, until you get
 //            far enough away. Smoke from a fire next to it, or sleepy pollen, puts them to sleep first.
+//   den    - 낮잠 방 (v0.26, Shiren's monster house): a dead-end room where a heap of the field's
+//            critters nap round a chest, gold all about. Each sleeper dozes on for a few turns yet,
+//            then stirs as any sleeper does when it sees you, and the first one up squeaks the
+//            rest awake (ai.js sleepTick); a fight or a bomb wakes them, a bell far off draws them
+//            out, sleep pollen keeps them under. Its sleepers are part of the field's lot (Run takes
+//            half as many from the wanderers).
 // Floors without a vault sometimes have a locked chest instead, with its key elsewhere.
 // Some floors (most in the deep forest) also get a pair of fairy rings in two far-apart rooms:
 // step into one and you pop out of the other (world.js warp).
@@ -20,10 +26,10 @@
 
 import { T } from '../data/terrain.js';
 import { idx, FLOOR, DOOR, GRAVE, LOCKED, HIVE, WEED, distMap } from './dungeon.js';
-import { pick, shuffle, DIRS8 } from './util.js';
+import { pick, shuffle, rint, DIRS8 } from './util.js';
 import * as B from '../data/balance.js';
 
-export const SET_PIECES = new Set(['vault', 'grave', 'statue', 'traps', 'hive', 'weeds', 'cage']);
+export const SET_PIECES = new Set(['vault', 'grave', 'statue', 'traps', 'hive', 'weeds', 'cage', 'den']);
 
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 const inRoom = (r, x, y) => x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
@@ -126,10 +132,12 @@ export function placeSpecials(map, rooms, deco, ctx) {
     traps: (r, i) => leaf(i) && Math.min(r.w, r.h) >= 3 && Math.max(r.w, r.h) >= 5 && r.w * r.h <= 35,
     hive: (r) => r.w >= 4 && r.h >= 4 && hiveSpots(map, r).length > 0,
     weeds: (r) => r.w >= 4 && r.h >= 3,
+    // never the first field of a trip, never on the way: a room with one door, well away from where you come in
+    den: (r, i) => leaf(i) && r.w >= 4 && r.h >= 4 && B.localOf(ctx.floor) >= 2 && cheb(mid(r), ctx.start) >= 8,
   };
-  const make = { grave, statue, traps, hive, weeds };
+  const make = { grave, statue, traps, hive, weeds, den };
   const zone = B.stageOf(ctx.floor);
-  const chance = { hive: B.HIVE_CHANCE, weeds: B.WEED_CHANCE[zone] };
+  const chance = { hive: B.HIVE_CHANCE, weeds: B.WEED_CHANCE[zone], den: B.DEN_CHANCE };
   let made = 0;
   // a caged friend takes the floor's one set piece: the room farthest from where you come in that has
   // space for the cage and its 우두머리
@@ -144,7 +152,7 @@ export function placeSpecials(map, rooms, deco, ctx) {
   }
   // one set piece a field at most, so each one gets your full attention; the weed patch, the
   // meadow's everyday job, gets the first pick of the rooms
-  for (const kind of ['weeds', ...shuffle(['grave', 'statue', 'traps', 'hive'])]) {
+  for (const kind of ['weeds', ...shuffle(['grave', 'statue', 'traps', 'hive', 'den'])]) {
     if (made >= 1 || !open(kind) || Math.random() > (chance[kind] ?? B.SPECIAL_CHANCE)) continue;
     const fits = ids().filter(i => fit[kind](rooms[i], i));
     if (!fits.length) continue;
@@ -155,6 +163,21 @@ export function placeSpecials(map, rooms, deco, ctx) {
   }
   if (open('rings') && Math.random() < B.RING_CHANCE[zone]) rings(map, rooms, ids());
   return out;
+}
+
+// 낮잠 방: the chest in the middle, the nappers all round it, the gold (and a meadow tool) among them
+function den(map, r, out, ctx) {
+  const tiles = floorTiles(map, r).filter(t => map.ter[idx(t.x, t.y)] !== T.WATER);
+  const c = tiles.reduce((a, t) => (cheb(t, mid(r)) < cheb(a, mid(r)) ? t : a), tiles[0]);
+  out.pickups.push({ x: c.x, y: c.y, type: 'chest' });
+  map.den = { x: c.x, y: c.y };
+  const rest = shuffle(tiles.filter(t => t !== c));
+  const n = Math.max(B.DEN_MIN, Math.min(B.DEN_MAX, Math.round(tiles.length * 0.2)));
+  for (const t of rest.slice(0, n)) out.enemies.push({ type: ctx.napper(), x: t.x, y: t.y, state: 'sleep', doze: rint(1, 5), den: true });
+  for (const t of rest.slice(n, n + 3)) out.pickups.push({ x: t.x, y: t.y, type: 'gold', amount: ctx.gold() });
+  const tool = ctx.tool?.(), t = rest[n + 3];
+  if (tool && t) out.pickups.push({ x: t.x, y: t.y, type: tool });
+  out.den = n;
 }
 
 // two fairy rings on open ground, as far apart as the free rooms allow (never set pieces, never by a door)

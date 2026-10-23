@@ -181,6 +181,7 @@ export const VAULT_CHANCE = 0.45;      // floor 2 on: a locked crystal vault, it
 export const LOCKED_CHEST_CHANCE = 0.55; // otherwise: a locked chest and its key
 export const SPECIAL_CHANCE = 0.55;    // each of grave room, statue room and trap room
 export const HIVE_CHANCE = 0.35;       // the honey stump, a little rarer
+export const DEN_CHANCE = 0.4, DEN_MIN = 4, DEN_MAX = 7;   // 낮잠 방 (v0.26): how often, and how many nap in it
 // the honey stump: its honey pot adds max HP for the run; its bees (normal zone strength, not a
 // gimmick's) give up once you are farther than BEE_HOME from it; a fire within HIVE_SMOKE smokes them to sleep
 export const honeyHp = floor => 3 + Math.floor(gs(stageOf(floor)));

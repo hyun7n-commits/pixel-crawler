@@ -351,6 +351,9 @@ export class Run {
       relicOffers: n => this.offers(n).filter(o => o.kind === 'relic').map(o => o.id),
       cage: this.floor === this.cageFloor && caged(this.meta, this.stage, this.loop) ? 'cage' : null,
       chief: () => pick(this.zone.enemies.filter(t => !ENEMIES[t].pack) || this.zone.enemies) || this.zone.enemies[0],
+      napper: () => pick(this.zone.enemies.filter(t => !ENEMIES[t].lurk)),
+      gold: () => Math.round((B.gs(zi) + 1) * rint(5, 9)),
+      tool: () => this.pickTool(),
     });
     if (sp.cage) this.has.add('cage');
     // 온천: up in the hills, a flooded room's pool may be warm (map.spring: its tiles); set pieces
@@ -391,7 +394,7 @@ export class Run {
     const place = (fn) => { const s = free(); if (s) fn(s); };
     const scale = this.foeScale;
     // about half of them start asleep
-    for (let i = 0; i < B.enemiesPerFloor(this.floor); i++) {
+    for (let i = 0; i < B.enemiesPerFloor(this.floor) - Math.floor((sp.den || 0) / 2); i++) {
       place(s => {
         // nothing awake near where you come in: the first steps of a field are yours to look around
         const type = pick(this.zone.enemies), state = cheb(s, this.p) < B.CALM_START || Math.random() < B.START_ASLEEP ? 'sleep' : 'wander';
@@ -425,8 +428,9 @@ export class Run {
 
     this.pickups.push(...sp.pickups);
     for (const o of sp.enemies) {
-      const e = this.spawnEnemy(o.type, o.x, o.y, ENEMIES[o.type].swarm || o.chief ? this.foeScale : this.oddScale);
+      const e = this.spawnEnemy(o.type, o.x, o.y, ENEMIES[o.type].swarm || o.chief || o.den ? this.foeScale : this.oddScale);
       e.state = o.state;
+      if (o.den) Object.assign(e, { doze: o.doze, den: true });
       if (o.chief) this.crown(e);
       if (o.type === 'cage') e.friend = this.friend;
     }
@@ -2175,6 +2179,12 @@ export class Run {
     this.refreshDoors();
     computeFOV(this.map, this.p.x, this.p.y, this.stat().sight, this.lights());
     this.meetCritters();
+    // 낮잠 방: a word the first time you see into it
+    const den = this.map.den;
+    if (den && !this.map.denSeen && this.isVisible(den.x, den.y)) {
+      this.map.denSeen = true;
+      this.log('쉿… 녀석들이 상자를 둘러싸고 한데 모여 낮잠을 자고 있다.', 'warn');
+    }
     // 갈림길: the first time a burrow with a sign comes into view, a word on what the sign is
     if (!this.meta.found.fork_seen && this.map.routes?.some(r => this.isVisible(r.x, r.y))) {
       this.meta.found.fork_seen = true;

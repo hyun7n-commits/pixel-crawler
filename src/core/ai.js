@@ -132,6 +132,13 @@ function sleepTick(run, e) {
     e.last = { x: run.p.x, y: run.p.y };
     run.say(e, '!');
     run.emit('alert', { enemy: e });
+    // 낮잠 방: the first one up squeaks, and the whole heap jumps up with it (unless the pollen holds them)
+    if (e.den) for (const o of run.enemies) {
+      if (o === e || !o.den || o.hp <= 0 || o.state !== 'sleep' || cheb(o, e) > 4 || run.map.gas.sleep[idx(o.x, o.y)] >= SLEEP_MIN) continue;
+      Object.assign(o, { state: 'hunt', wake: 0, doze: 0, last: { x: run.p.x, y: run.p.y } });
+      run.say(o, '!');
+      run.emit('alert', { enemy: o });
+    }
   }
 }
 
