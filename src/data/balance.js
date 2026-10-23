@@ -182,6 +182,9 @@ export const LOCKED_CHEST_CHANCE = 0.55; // otherwise: a locked chest and its ke
 export const SPECIAL_CHANCE = 0.55;    // each of grave room, statue room and trap room
 export const HIVE_CHANCE = 0.35;       // the honey stump, a little rarer
 export const DEN_CHANCE = 0.4, DEN_MIN = 4, DEN_MAX = 7;   // 낮잠 방 (v0.26): how often, and how many nap in it
+// 다툼 (core/ai.js brawl): the critter that wins a scrap swells up once, the way Shiren's monsters grow
+// on a kill: this much more health and bite, and twice the experience for whoever beats it after
+export const SWELL_HP = 0.5, SWELL_ATK = 0.25;
 // the honey stump: its honey pot adds max HP for the run; its bees (normal zone strength, not a
 // gimmick's) give up once you are farther than BEE_HOME from it; a fire within HIVE_SMOKE smokes them to sleep
 export const honeyHp = floor => 3 + Math.floor(gs(stageOf(floor)));

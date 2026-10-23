@@ -245,6 +245,7 @@ export function onRunEvent(type, d) {
     case 'boom': case 'gasboom': play('boom'); break;
     case 'alert': play('alert'); break;
     case 'brawl': play('scuffle'); break;
+    case 'puffUp': play('puff'); play('rise', 0); break;
     case 'snore': play('snore'); break;
     case 'zap': play('zap'); break;
     case 'wand': play('wand'); break;

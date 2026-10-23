@@ -1219,6 +1219,15 @@ export class DungeonScene extends Phaser.Scene {
         this.heardMarks = d.list.map(e => ({ e, until: this.time.now + 2200 }));
         break;
       case 'say': this.say(d.who, d.text); break;
+      // 다툼: the winner puffs up a size (run.puffUp), with a sparkle and a 쑥
+      case 'puffUp': {
+        const s = this.enemySprites[d.enemy.id];
+        if (!s || !this.run.isVisible(d.enemy.x, d.enemy.y)) break;
+        this.fx.spark.explode(14, center(d.enemy.x), center(d.enemy.y) - 4);
+        this.float(d.enemy.x, d.enemy.y - 0.4, '쑥!', '#ffb07a', 60, 11);
+        this.tweens.add({ targets: s, hop: 8, duration: 120, yoyo: true, ease: 'Quad.out' });
+        break;
+      }
       // 다툼: hit by another critter, it bristles at that one (💢)
       case 'brawl': {
         const s = this.enemySprites[d.enemy.id];
@@ -2138,7 +2147,7 @@ export class DungeonScene extends Phaser.Scene {
       s.cage?.setVisible(s.visible);
       if (!s.visible) continue;
       if (s.crown) s.crown.setPosition(s.x, s.y - TILE * 1.25 + 2 - s.lift);
-      const top = s.y - TILE * (s.scaleY / texScale(s)) * (e.d.boss || e.chief ? 1.25 : 1) - s.lift;
+      const top = s.y - TILE * (s.scaleY / texScale(s)) * (e.d.boss || e.chief ? 1.25 : e.big ? 1.2 : 1) - s.lift;
       if (e.type === 'peddler' && run.stall.some(x => !x.sold)) { // a coin over the stall while there's stock
         const gy = Math.round(top - 4 + Math.sin(time / 260) * 1.2), sx = Math.round(s.x);
         g.fillStyle(0x1b1424, 1); pixDisc(g, sx, gy, 3.5);
@@ -2382,7 +2391,7 @@ export class DungeonScene extends Phaser.Scene {
     const cut = sunk || (wet ? Math.round(fh * 0.22) : 0);
     if (cut) { s.setCrop(0, 0, s.frame.width, fh - cut); hop -= cut * TILE / fh - (sunk ? s.lip : 1); } else if (s.isCropped) s.setCrop();
     s.wet = wet;
-    const base = (who.d?.boss || who.chief ? 1.25 : 1) * (who.small ? 0.8 : 1);
+    const base = (who.d?.boss || who.chief ? 1.25 : who.big ? 1.2 : 1) * (who.small ? 0.8 : 1);
     const k = texScale(s);
     if (!s.dying) s.setScale(base * sx * k * (s.sqx ?? 1), base * sy * k * (s.sqy ?? 1));
     s.setOrigin(0.5 + jitter / TILE, 1 + hop / TILE);

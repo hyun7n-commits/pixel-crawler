@@ -90,7 +90,7 @@ export function describeTile(run, x, y, always = false) {
       const foe = e.foe != null && run.enemies.find(o => o.id === e.foe && o.hp > 0);
       const scrap = foe ? `${josa(foe.d.name, '과', '와')} 싸우는 중. 나는 안중에도 없다 (지금 치면 기습)` : '';
       const how = [hot || stuck || scrap || dizzy || heap || STATE[e.state] || '', fire].filter(Boolean).join(', ');
-      lines.push(`${e.chief ? '우두머리 ' : ''}${e.d.name} · 체력 ${e.hp}/${e.maxHp} · 공격 ${e.atk} · ${how}${e.d.tip ? ` · ${e.d.tip}` : ''}`);
+      lines.push(`${e.chief ? '우두머리 ' : e.big ? '기세등등한 ' : ''}${e.d.name} · 체력 ${e.hp}/${e.maxHp} · 공격 ${e.atk} · ${how}${e.d.tip ? ` · ${e.d.tip}` : ''}`);
     }
   }
   const t = map.tiles[i], lm = map.landmark;

@@ -1550,6 +1550,7 @@ export class Run {
     if (e.hp <= 0) {
       if (by && this.isVisible(e.x, e.y)) this.log(`${josa(by.d.name, '이', '가')} ${josa(e.d.name, '을', '를')} 쓰러뜨렸다!`, 'good');
       this.onKill(e);
+      if (by && by.hp > 0 && !by.d.boss && !by.d.npc && !by.big) this.puffUp(by);
     } else {
       // 다툼: a blow of yours (not the fire, the spores or a falling stone) turns a scrapper back to you
       if (e.foe != null && !by && !['fire', 'bones', 'rock', 'slam'].includes(kind)) Object.assign(e, { foe: null, foeT: 0, state: 'hunt', last: { x: this.p.x, y: this.p.y } });
@@ -1565,6 +1566,19 @@ export class Run {
         this.log(`${josa(e.d.name, '이', '가')} 훔친 골드를 떨어뜨렸다!`, 'good');
         e.loot = 0;
       }
+    }
+  }
+
+  // 다툼: the winner swells up a size (once), the way Shiren's monsters grow on a kill: tougher, bitier,
+  // and worth twice the experience. Let a scrap run its course and this is what is left; jump in first
+  // and it never happens.
+  puffUp(e) {
+    const add = Math.max(2, Math.round(e.maxHp * B.SWELL_HP));
+    Object.assign(e, { big: true, maxHp: e.maxHp + add, hp: e.hp + add, atk: e.atk + Math.max(1, Math.round(e.atk * B.SWELL_ATK)), xp: 2 * (e.xp ?? e.d.xp) });
+    this.emit('puffUp', { enemy: e });
+    if (this.isVisible(e.x, e.y)) {
+      this.say(e, '흥!');
+      this.log(`싸움에서 이긴 ${josa(e.d.name, '이', '가')} 기세등등하게 부풀었다!`, 'warn');
     }
   }
 
