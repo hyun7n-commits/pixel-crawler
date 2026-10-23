@@ -83,7 +83,7 @@ export const ENEMIES = {
 // a line of trees in the deep forest, reeds in the marsh, rock cliffs on the mountain, crystal-flecked
 // rock in the cave. `void` is the unexplored dark.
 // The village keeps the bright daytime green: home is where it is light; the fields are walked at night.
-export const VILLAGE_GROUND = { name: '마을', style: 'meadow', void: '#0c1a10',
+export const VILLAGE_GROUND = { name: '마을', style: 'meadow', day: true, void: '#0c1a10',
   floor: '#92c86a', floorDark: '#7cb458', floorLight: '#acdc86',
   wallTop: '#3a8448', wallLight: '#5aad58', wallFace: '#2c6b3a', wallDark: '#1f5230', wallLine: '#10301c',
   water: '#4a9fc4', waterLight: '#8fd8f0' };

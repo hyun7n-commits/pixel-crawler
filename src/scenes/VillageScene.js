@@ -9,12 +9,14 @@ import { TILE, HOME_ZI, wallKey, waterKey, shadeKey, floorKey, texScale, N, E, S
 import { houseCanvas, pathKey, lampPostCanvas, lotCanvas, treeKey, shrubCanvas, sunRaysCanvas, glintCanvas } from './village-art.js';
 import { baseZoom } from './zoom.js';
 import { faceKey } from '../data/faces.js';
-import { VILLAGE_MAP, HOUSES, FOLK, doorOf, HERO_LINES, HOME, ownsHome } from '../data/village.js';
+import { VILLAGE_MAP, HOUSES, FOLK, doorOf, HERO_LINES, HOME, ownsHome, PROPS, PROP_NAMES } from '../data/village.js';
 import { CHARACTERS } from '../data/characters.js';
 import { VILLAGE_GROUND } from '../data/enemies.js';
 import { DECOR, hasDecor, LETTERS } from '../data/home.js';
 import { decorCanvas, pupCanvas } from './home-art.js';
 import { setEmote, drawEmote } from './emotes.js';
+import { patchNoise, scatterKey, patchKey, footKey, bloomKey, moteKeys, SCATTER_VARIANTS, PATCH_VARIANTS, FOOT_VARIANTS, BLOOM_VARIANTS, FOOT_UP } from './field-decor.js';
+import { propCanvas, critterCanvas } from './village-props.js';
 
 const MW = VILLAGE_MAP[0].length, MH = VILLAGE_MAP.length;
 const D = { tiles: 0, deco: 1, house: 2, actors: 3, fx: 4, bubble: 5 };
@@ -110,6 +112,7 @@ export class VillageScene extends Phaser.Scene {
     for (let y = -PAD.y; y < MH + PAD.y; y++) for (let x = -PAD.x; x < MW + PAD.x; x++) this.drawTile(x, y);
     this.plantTrees();
     this.sunOnPond();
+    this.placeProps();
     // a house someone is just moving into still has its boards up until they arrive
     for (const h of HOUSES) {
       const f = FOLK[h.id], lived = f.when(meta), moving = lived && f.arrive && !meta.village.seen[h.id];
@@ -158,6 +161,7 @@ export class VillageScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.ps, true, 0.2, 0.2, 0, TILE / 2);
     this.cameras.main.centerOn(center(start.x), foot(start.y) - TILE / 2);
     this.hideFinds(2 + Math.floor(Math.random() * 2));
+    this.placeLife();
     if (arrivals.length) this.welcome(arrivals);
   }
 
@@ -357,7 +361,10 @@ export class VillageScene extends Phaser.Scene {
     const hedge = (nx, ny) => this.ch(nx, ny) === '#' && !this.grove(nx, ny);
     if (ch === '#' && this.grove(x, y)) { add(floorKey(HOME_ZI, hash(x, y) & 31)); return; } // grass under a lone tree (plantTrees)
     if (ch === '#') {
-      add(wallKey(this, HOME_ZI, around((nx, ny) => !hedge(nx, ny)), hash(x + 99, y + 99) % 3));
+      const open = around((nx, ny) => !hedge(nx, ny)), hb = hash(x * 7 + 3, y * 11 + 5);
+      add(wallKey(this, HOME_ZI, open, hash(x + 99, y + 99) % 3));
+      // flowers peeping out of the top of the hedge
+      if (!(open & S) && hb % 100 < 30) add(bloomKey(this, VILLAGE_GROUND, HOME_ZI, (hb >> 8) % BLOOM_VARIANTS), D.tiles + 0.5);
       return;
     }
     if (ch === '~') {
@@ -372,12 +379,120 @@ export class VillageScene extends Phaser.Scene {
     else add(ch === '*' ? `z${HOME_ZI}_floor${4 + (hash(x, y) % 3)}` : floorKey(HOME_ZI, hash(x, y) & 31)); // '*': daisies, pink flowers, buttercups
     const shade = around(hedge) & (N | E | W_ | NE | NW);
     if (shade) add(shadeKey(this, shade));
+    if (grassy(ch)) this.decorate(x, y, add, hedge);
     if (ch === '>') add('t_stairs', D.deco);
     if (ch === 'L') {
       if (!this.textures.exists('village_post')) this.textures.addCanvas('village_post', lampPostCanvas());
       this.keep(this.add.image(center(x), foot(y), 'village_post').setOrigin(0.5, 1).setDepth(D.actors + y / 100));
       const glow = this.keep(this.add.image(center(x) - 1, foot(y) - 14, 'glow').setDepth(D.fx).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.6));
       this.glows.push(glow);
+    }
+  }
+
+  // Flowers, clover and pebbles in the grass (field-decor.js, in the daytime colours): thick in the
+  // flower beds ('*') and in patches here and there, a band of leaves and flowers along the hedge's foot.
+  decorate(x, y, add, hedge) {
+    const z = VILLAGE_GROUND, zi = HOME_ZI, h = hash(x * 3 + 11, y * 5 + 7);
+    if (hedge(x, y - 1)) { add(footKey(this, z, zi, h % FOOT_VARIANTS), D.tiles + 0.5).setY(y * TILE - FOOT_UP); return; }
+    if (this.ch(x, y) === '*' || patchNoise(x, y, 5) > 0.62) add(patchKey(this, z, zi, (h >> 12) % PATCH_VARIANTS), D.tiles + 0.5);
+    else if ((h >> 9) % 100 < 40) add(scatterKey(this, z, zi, (h >> 12) % SCATTER_VARIANTS), D.tiles + 0.5);
+  }
+
+  // The odds and ends round the village (data/village.js PROPS): each stands on its tile like a house.
+  placeProps() {
+    for (const pr of PROPS) {
+      const key = `village_prop_${pr.kind}`;
+      if (!this.textures.exists(key)) this.textures.addCanvas(key, propCanvas(pr.kind));
+      this.keep(this.add.image(center(pr.x), foot(pr.y), key).setOrigin(0.5, 1).setDepth(D.actors + pr.y / 100));
+      this.blocked[pr.y * MW + pr.x] = 1;
+    }
+  }
+
+  // Little lives about the place: butterflies over the grass, a duck and her ducklings on the pond,
+  // sparrows hopping about that fly off when you come too close, petals drifting down.
+  placeLife() {
+    const tex = (key, make) => { if (!this.textures.exists(key)) this.textures.addCanvas(key, make()); return key; };
+    const wings = ['#ffffff', '#ffe066', '#ffb0c8', '#b8d8ff'];
+    this.flutters = wings.concat(wings).slice(0, 7).map((w, i) => {
+      const k0 = tex(`vfly0_${i % 4}`, () => critterCanvas('fly0', w)), k1 = tex(`vfly1_${i % 4}`, () => critterCanvas('fly1', w));
+      const spot = this.freeGrassTile() || { x: 20, y: 12 };
+      return { img: this.keep(this.add.image(center(spot.x), center(spot.y), k0).setDepth(D.fx - 0.2)), k0, k1, x: center(spot.x), y: center(spot.y), a: Math.random() * 6.3, seed: i * 1.3 };
+    });
+    const pond = this.pondTiles || [];
+    this.ducks = [];
+    if (pond.length) {
+      const t = pond[Math.floor(pond.length / 2)];
+      const mk = (name, n) => ({ img: this.keep(this.add.image(center(t.x) - n * 7, center(t.y), tex(`v_${name}`, () => critterCanvas(name))).setDepth(D.deco + 0.6)), x: center(t.x) - n * 7, y: center(t.y) });
+      this.ducks = [mk('duck', 0), mk('duckling', 1), mk('duckling', 2)];
+      this.duckGoal = null;
+    }
+    this.birds = [];
+    tex('v_bird1', () => critterCanvas('bird1'));
+    for (let k = 0; k < 4; k++) {
+      const spot = this.freeGrassTile();
+      if (!spot) continue;
+      const img = this.keep(this.add.image(center(spot.x) + (k % 2 ? 3 : -3), foot(spot.y) - 3, tex('v_bird0', () => critterCanvas('bird0'))).setOrigin(0.5, 1).setDepth(D.actors + spot.y / 100));
+      this.birds.push({ img, x: spot.x, y: spot.y, next: 0, gone: 0 });
+    }
+    this.motes = moteKeys(this, 'meadow').map((key, i) => ({ img: this.keep(this.add.image(0, 0, key).setOrigin(0).setDepth(D.fx).setAlpha(0.9)), x: 0, y: -999, seed: i * 2.1 }))
+      .concat(moteKeys(this, 'meadow').map((key, i) => ({ img: this.keep(this.add.image(0, 0, key).setOrigin(0).setDepth(D.fx).setAlpha(0.9)), x: 0, y: -999, seed: i * 1.7 + 4 })));
+  }
+
+  moveLife(time, dt) {
+    const s = dt / 1000, view = this.cameras.main.worldView;
+    for (const f of this.flutters || []) {
+      // a wandering heading, a bob, and wings that beat
+      f.a += (Math.sin(time / 900 + f.seed * 3) * 1.6) * s;
+      f.x += Math.cos(f.a) * 14 * s; f.y += Math.sin(f.a) * 10 * s + Math.sin(time / 160 + f.seed) * 0.25;
+      if (f.x < TILE || f.x > (MW - 1) * TILE || f.y < TILE * 2 || f.y > (MH - 2) * TILE) f.a += Math.PI * s * 4;
+      f.img.setTexture(Math.floor(time / 110 + f.seed * 5) % 2 ? f.k0 : f.k1).setPosition(Math.round(f.x), Math.round(f.y));
+    }
+    // the duck paddles to a spot on the pond, the ducklings in a line behind her
+    const d = this.ducks || [];
+    if (d.length) {
+      if (!this.duckGoal || Math.hypot(this.duckGoal.x - d[0].x, this.duckGoal.y - d[0].y) < 2) {
+        const t = this.pondTiles[Math.floor(Math.random() * this.pondTiles.length)];
+        this.duckGoal = { x: center(t.x) + (Math.random() - 0.5) * 8, y: center(t.y) + (Math.random() - 0.5) * 6 };
+      }
+      const lead = d[0], gx = this.duckGoal.x - lead.x, gy = this.duckGoal.y - lead.y, gl = Math.hypot(gx, gy) || 1;
+      lead.x += gx / gl * 5 * s; lead.y += gy / gl * 5 * s;
+      if (Math.abs(gx) > 0.5) lead.img.setFlipX(gx > 0);
+      for (let i = 1; i < d.length; i++) {
+        const a = d[i - 1], b = d[i], dx = a.x - b.x, dy = a.y - b.y, l = Math.hypot(dx, dy) || 1;
+        if (l > 7) { b.x += dx / l * (l - 7); b.y += dy / l * (l - 7); }
+        if (Math.abs(dx) > 0.5) b.img.setFlipX(dx > 0);
+      }
+      d.forEach((one, i) => one.img.setPosition(Math.round(one.x), Math.round(one.y + Math.sin(time / 400 + i) * 0.6)));
+    }
+    // sparrows: a hop now and then; too close and they are off, back somewhere else in a while
+    for (const b of this.birds || []) {
+      if (b.gone) {
+        if (time < b.gone) { b.img.y -= 60 * s; b.img.x += (b.img.flipX ? 40 : -40) * s; continue; }
+        const spot = this.freeGrassTile();
+        if (!spot) continue;
+        b.gone = 0; b.x = spot.x; b.y = spot.y;
+        b.img.setPosition(center(spot.x), foot(spot.y) - 3).setDepth(D.actors + spot.y / 100).setVisible(true);
+        continue;
+      }
+      if (Math.max(Math.abs(b.x - this.p.x), Math.abs(b.y - this.p.y)) <= 1) {
+        b.gone = time + 2500 + Math.random() * 6000;
+        b.img.setFlipX(b.x > this.p.x ? false : true).setTexture('v_bird1').setDepth(D.fx);
+        this.time.delayedCall(1500, () => b.img.setVisible(false));
+        continue;
+      }
+      if (time > b.next) {
+        b.next = time + 700 + Math.random() * 1800;
+        b.img.setTexture(Math.random() < 0.5 ? 'v_bird0' : 'v_bird1').setFlipX(Math.random() < 0.5);
+        const nx = b.img.x + (Math.random() - 0.5) * 6;
+        if (Math.abs(nx - center(b.x)) < 6) this.tweens.add({ targets: b.img, x: Math.round(nx), y: b.img.y - 2, duration: 90, yoyo: true });
+      }
+    }
+    // petals drifting down across the view
+    for (const m of this.motes || []) {
+      if (m.y < view.y - 20 || m.y > view.bottom + 4 || m.x > view.right + 20) { m.x = view.x - 10 + Math.random() * (view.width + 10); m.y = view.y - 4 - Math.random() * 30; m.vx = 3 + Math.random() * 6; m.vy = 7 + Math.random() * 7; }
+      const t = time / 1000 + m.seed;
+      m.x += (m.vx + Math.sin(t * 1.5) * 7) * s; m.y += m.vy * s;
+      m.img.setPosition(Math.round(m.x), Math.round(m.y));
     }
   }
 
@@ -484,6 +599,8 @@ export class VillageScene extends Phaser.Scene {
     if (this.ch(x, y) === '>') return '들판 가는 땅굴: 쏙 들어가면 탐험을 나간다.';
     if (this.ch(x, y) === 'L') return '반딧불 등';
     if (this.ch(x, y) === 'T') return '나무';
+    const pr = PROPS.find(o => o.x === x && o.y === y);
+    if (pr) return PROP_NAMES[pr.kind];
     return '';
   }
 
@@ -695,8 +812,9 @@ export class VillageScene extends Phaser.Scene {
   }
 
   // ---------- every frame ----------
-  update(time) {
+  update(time, delta) {
     if (!this.ps) return;
+    this.moveLife(time, Math.min(delta || 16, 50));
     // walking: one tile at a time along the route; arriving next to whoever you were heading for, talk
     if (this.path.length && time >= this.nextStep) {
       const [x, y] = this.path.shift();

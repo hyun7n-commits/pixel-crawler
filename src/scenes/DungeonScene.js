@@ -9,8 +9,8 @@ import { TILE, buildTextures, wallKey, waterKey, shadeKey, floorKey, oreFrame, d
 import { CHARACTERS } from '../data/characters.js';
 import { PETS } from '../data/pets.js';
 import { ITEMS } from '../data/items.js';
-import { T, TERRAIN, GASES, GAS_KEYS } from '../data/terrain.js';
-import { idx, inMap, lineOfSight, WALL, STAIRS, DOOR, ORE, UPSTAIRS, GRAVE, LOCKED, HIVE, WEED } from '../core/dungeon.js';
+import { T, TERRAIN, GASES, GAS_KEYS, isTrap } from '../data/terrain.js';
+import { idx, inMap, lineOfSight, WALL, FLOOR, STAIRS, DOOR, ORE, UPSTAIRS, GRAVE, LOCKED, HIVE, WEED } from '../core/dungeon.js';
 import { WAKE_AT } from '../core/ai.js';
 import { BOMB_RANGE } from '../core/run.js';
 import { ORE_HITS, HEAR_STEPS, FLOORS_PER_ZONE } from '../data/balance.js';
@@ -21,6 +21,7 @@ import { tierOf } from '../data/relics.js';
 import { baseZoom } from './zoom.js';
 import { wait, fissionMs, evolveMs, FISSION_LEAD, FISSION_STEP, EVOLVE_FLASH, GROW_MS } from '../ui/beat.js';
 import { pace } from '../ui/speed.js';
+import { patchNoise, scatterKey, patchKey, PATCH_VARIANTS, footKey, sideKey, bloomKey, fieldTreeKey, fieldTreeCount, moteKeys, SCATTER_VARIANTS, FOOT_VARIANTS, SIDE_VARIANTS, BLOOM_VARIANTS, FOOT_UP } from './field-decor.js';
 
 const D = { tiles: 0, ter: 1, fire: 2, gas: 3, telegraph: 4, pickups: 5, enemies: 6, player: 7, overlay: 8, fx: 9, bubble: 10, text: 11 };
 // what a pickup looks like on the floor (items use their own sprite)
@@ -37,6 +38,7 @@ const hash = (x, y) => {
   h = (h ^ (h >> 13)) * 1274126177;
   return (h ^ (h >> 16)) >>> 0;
 };
+
 
 export class DungeonScene extends Phaser.Scene {
   constructor(onReady) {
@@ -226,8 +228,11 @@ export class DungeonScene extends Phaser.Scene {
     this.petSprite = null;
     (this.lamps || []).forEach(l => { l.lamp.destroy(); l.glow.destroy(); });
     this.lamps = [];
+    (this.air || []).forEach(a => { a.img.destroy(); a.glow?.destroy(); });
+    this.air = [];
     this.light = null;
     this.tileImgs = [];
+    this.cull = null;
     this.waterImgs = new Set();
     this.shyWeeds = new Set();
     this.flyImgs = new Set();
@@ -255,6 +260,7 @@ export class DungeonScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(run.zone.void);
     for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) this.buildTile(x, y);
     this.buildLamps();
+    this.buildAir();
     this.heroKey = CHARACTERS[run.charId].sprite;
     this.playerSprite = this.makeActor(this.heroKey, run.p.x, run.p.y).setDepth(D.player);
     // the pet trots along a step behind (data/pets.js)
@@ -383,8 +389,14 @@ export class DungeonScene extends Phaser.Scene {
       add(`t_prop_${style}`, D.ter);
     } else if (t === WALL) {
       const open = around((nx, ny) => !wall(nx, ny));
-      if (!open) { this.tileImgs[i] = null; return; }
+      // deep inside a hedge, a wood or a cliff: more of the same, so the field has no black holes
+      // (it shows once something near it has been seen; see paintFog)
       add(wallKey(this, zi, open, hash(x, y) % 3));
+      if (!open) imgs.deep = true;
+      // flowers, berries, cattail heads or crystals on top now and then (not on a face you look at)
+      const hb = hash(x * 7 + 3, y * 11 + 5);
+      if (!(open & S) && hb % 100 < 28) add(bloomKey(this, this.run.zone, zi, (hb >> 8) % BLOOM_VARIANTS), D.tiles + 0.5);
+      if (!open) this.plantTree(x, y, add);
     } else {
       if (ter === T.WATER) {
         const shore = around((nx, ny) => wall(nx, ny) || map.ter[idx(nx, ny)] !== T.WATER);
@@ -400,6 +412,7 @@ export class DungeonScene extends Phaser.Scene {
         add(floorKey(zi, hash(x, y) & 31));
         const shade = around(wall) & (N | E | W_ | NE | NW);
         if (shade) add(shadeKey(this, shade));
+        this.decorate(x, y, add);
       }
       const spr = !map.hidden[i] && TERRAIN[ter]?.sprite;
       // grass comes in a few looks so a meadow does not look tiled
@@ -431,6 +444,41 @@ export class DungeonScene extends Phaser.Scene {
       }
     }
     this.tileImgs[i] = imgs;
+  }
+
+  // A tree in the thick of a hedge or a wood, where its whole picture (two tiles wide, three high)
+  // stands on wall: at most one in each 3x3 block, at a spot that block's hash picks.
+  plantTree(x, y, add) {
+    const map = this.run.map, style = this.run.zone.style, n = fieldTreeCount(style);
+    if (!n) return;
+    const bx = Math.floor(x / 3), by = Math.floor(y / 3), hb = hash(bx * 13 + 1, by * 17 + 2);
+    if (x !== bx * 3 + hb % 2 || y !== by * 3 + 1 + (hb >> 4) % 2 || (hb >> 8) % 10 >= 7) return;
+    for (let dy = -2; dy <= 1; dy++) for (let dx = 0; dx <= 1; dx++) {
+      if (!inMap(x + dx, y + dy) || map.tiles[idx(x + dx, y + dy)] !== WALL) return;
+    }
+    add(fieldTreeKey(this, style, (hb >> 12) % n), D.tiles + 0.6 + y / 1000).setY((y + 1) * TILE + 2).setOrigin(0, 1);
+  }
+
+  // The little things on the ground (field-decor.js): a band of leaves and flowers at the foot of a
+  // wall, tufts along a wall to the side, and things scattered over more than half the open ground.
+  // Only on plain ground; a hidden trap's tile gets them like any other, so they give nothing away.
+  decorate(x, y, add) {
+    const map = this.run.map, i = idx(x, y), ter = map.ter[i], z = this.run.zone, zi = this.zi;
+    if (map.tiles[i] !== FLOOR) return;
+    if (ter !== T.NONE && !(isTrap(ter) && map.hidden[i])) return;
+    const plainWall = (nx, ny) => inMap(nx, ny) && map.tiles[idx(nx, ny)] === WALL && !map.props?.[idx(nx, ny)];
+    const h = hash(x * 3 + 11, y * 5 + 7);
+    if (plainWall(x, y - 1)) {
+      add(footKey(this, z, zi, h % FOOT_VARIANTS), D.tiles + 0.5).setY(y * TILE - FOOT_UP);
+      return;
+    }
+    let side = false;
+    if (plainWall(x - 1, y) && h % 5 < 3) { add(sideKey(this, z, zi, (h >> 3) % SIDE_VARIANTS, false), D.tiles + 0.5); side = true; }
+    if (plainWall(x + 1, y) && (h >> 5) % 5 < 3) { add(sideKey(this, z, zi, (h >> 7) % SIDE_VARIANTS, true), D.tiles + 0.5); side = true; }
+    if (side) return;
+    // patches where things grow thick, over a soft noise so they come in clumps, not evenly
+    if (patchNoise(x, y, this.run.floor) > 0.6) add(patchKey(this, z, zi, (h >> 12) % PATCH_VARIANTS), D.tiles + 0.5);
+    else if ((h >> 9) % 100 < 58) add(scatterKey(this, z, zi, (h >> 12) % SCATTER_VARIANTS), D.tiles + 0.5);
   }
 
   // `soft`: only the look of the tiles changed (grass flattened, a trap went off), so actors keep gliding
@@ -559,27 +607,111 @@ export class DungeonScene extends Phaser.Scene {
     for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) {
       const i = idx(x, y), imgs = this.tileImgs[i];
       if (!imgs) continue;
-      if (!map.explored[i]) { imgs.forEach(im => im.setVisible(false)); continue; }
+      // the inside of a thick wall has no line of sight of its own: it shows, a shade darker, once
+      // a tile within two of it has been seen, lit as if in sight when open ground beside it is
+      const seen = imgs.deep ? this.deepSeen(x, y) : map.visible[i] ? 2 : map.explored[i] ? 1 : 0;
+      imgs.shown = !!seen;
+      if (!seen) { imgs.forEach(im => im.setVisible(false)); continue; }
       // night: your lantern warms what is near and fades to cold blue at the edge of sight;
       // what you only remember sinks into dim blue, like Shattered Pixel Dungeon's fog
       let r, v, b;
-      if (map.visible[i]) {
+      if (seen === 2) {
         const t = Math.min(1, Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2) / (sight + 1)), warm = (1 - t) * (1 - t);
         v = 255 - t * 120;
         r = v; b = v - warm * 38 + t * 12; v -= warm * 8;
       } else { r = 50; v = 58; b = 76; }
       // lamplight warms and brightens the tiles around a lamp, even ones you only remember
       const L = this.light ? this.light[i] : 0;
-      const k = L * (map.visible[i] ? 40 : 60);
-      const ch = n => Math.max(0, Math.min(255, Math.round(n)));
+      const k = L * (seen === 2 ? 40 : 60), dim = imgs.deep ? 0.8 : 1;
+      const ch = n => Math.max(0, Math.min(255, Math.round(n * dim)));
       const tint = (ch(r + k + L * 22) << 16) | (ch(v + k) << 8) | ch(b + k - L * 34);
-      imgs.forEach(im => im.setVisible(true).setTint(tint));
+      const on = this.inView(x, y);
+      imgs.forEach(im => im.setVisible(on).setTint(tint));
     }
     for (const l of this.lamps) {
       const seen = !!map.explored[idx(l.x, l.y)];
       l.lamp.setVisible(seen);
       l.glow.setVisible(seen);
     }
+  }
+
+  // What drifts in the air over a field (field-decor.js): petals on the meadow, leaves in the forest,
+  // fluff over the marsh, specks in the hills and the cave, and fireflies blinking about, all inside
+  // the view and only over ground you have seen. Moved in update (moveAir).
+  buildAir() {
+    const style = this.run.zone.style, keys = moteKeys(this, style);
+    this.air = [];
+    const motes = style === 'cave' ? 8 : 14, flies = style === 'rock' ? 3 : style === 'cave' ? 5 : 8;
+    for (let k = 0; k < motes; k++) {
+      this.air.push({ kind: 'mote', img: this.add.image(0, 0, keys[k % keys.length]).setOrigin(0).setDepth(D.player + 0.5).setAlpha(0.85), seed: k * 1.7 });
+    }
+    for (let k = 0; k < flies; k++) {
+      const glow = this.add.image(0, 0, 'glow').setScale(0.4).setDepth(D.player + 0.4).setBlendMode(Phaser.BlendModes.ADD);
+      const img = this.add.image(0, 0, 'px').setOrigin(0).setTint(style === 'cave' ? 0x9af0e0 : 0xeaff9a).setDepth(D.player + 0.45);
+      this.air.push({ kind: 'fly', img, glow, seed: k * 2.3 + 0.5 });
+    }
+    this.air.forEach(a => this.placeAir(a, true));
+  }
+
+  placeAir(a, anywhere) {
+    const v = this.cameras.main.worldView, m = 24;
+    a.x = v.x - m + Math.random() * (v.width + 2 * m);
+    a.y = anywhere || a.kind === 'fly' ? v.y + Math.random() * v.height : v.y - 6;
+    a.vx = a.kind === 'fly' ? (Math.random() - 0.5) * 8 : 2 + Math.random() * 6;
+    a.vy = a.kind === 'fly' ? (Math.random() - 0.5) * 6 : 5 + Math.random() * 6;
+  }
+
+  moveAir(time, dt) {
+    const map = this.run.map, v = this.cameras.main.worldView, s = dt / 1000;
+    for (const a of this.air || []) {
+      const t = time / 1000 + a.seed;
+      if (a.kind === 'mote') { a.x += (a.vx + Math.sin(t * 1.6) * 6) * s; a.y += a.vy * s; }
+      else { a.x += (a.vx + Math.sin(t * 0.9) * 5) * s; a.y += (a.vy + Math.cos(t * 1.3) * 4) * s; }
+      if (a.x < v.x - 40 || a.x > v.right + 40 || a.y < v.y - 40 || a.y > v.bottom + 10) this.placeAir(a, false);
+      const tx = Math.floor(a.x / TILE), ty = Math.floor(a.y / TILE);
+      const seen = inMap(tx, ty) && !!map.explored[idx(tx, ty)];
+      a.img.setPosition(Math.round(a.x), Math.round(a.y)).setVisible(seen);
+      if (a.glow) {
+        const on = 0.5 + 0.5 * Math.sin(t * 2.2);
+        a.img.setAlpha(0.35 + 0.65 * on);
+        a.glow.setPosition(Math.round(a.x) + 0.5, Math.round(a.y) + 0.5).setAlpha(0.25 + 0.6 * on).setVisible(seen);
+      }
+    }
+  }
+
+  // Only the tiles on screen (and a few round it, for the trees reaching up and the bands at the
+  // walls' feet) are drawn: a field with all its flowers and trees is thousands of pictures.
+  inView(x, y) {
+    const c = this.cull;
+    return !c || (x >= c.x0 && x <= c.x1 && y >= c.y0 && y <= c.y1);
+  }
+  cullTiles() {
+    const map = this.run.map, v = this.cameras.main.worldView, M = 3;
+    const r = { x0: Math.floor(v.x / TILE) - M, x1: Math.ceil(v.right / TILE) + M, y0: Math.floor(v.y / TILE) - M, y1: Math.ceil(v.bottom / TILE) + M };
+    const c = this.cull;
+    if (c && c.x0 === r.x0 && c.x1 === r.x1 && c.y0 === r.y0 && c.y1 === r.y1) return;
+    this.cull = r;
+    const bx0 = Math.max(0, Math.min(r.x0, c ? c.x0 : 0)), bx1 = Math.min(map.w - 1, Math.max(r.x1, c ? c.x1 : map.w - 1));
+    const by0 = Math.max(0, Math.min(r.y0, c ? c.y0 : 0)), by1 = Math.min(map.h - 1, Math.max(r.y1, c ? c.y1 : map.h - 1));
+    for (let y = by0; y <= by1; y++) for (let x = bx0; x <= bx1; x++) {
+      const imgs = this.tileImgs[idx(x, y)];
+      if (!imgs) continue;
+      const on = !!imgs.shown && x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1;
+      if (imgs.length && imgs[0].visible !== on) imgs.forEach(im => im.setVisible(on));
+    }
+  }
+
+  // 2: open ground within two tiles is in sight; 1: something within two has been seen; 0: neither
+  deepSeen(x, y) {
+    const map = this.run.map;
+    let seen = 0;
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+      if (!inMap(x + dx, y + dy)) continue;
+      const j = idx(x + dx, y + dy);
+      if (map.visible[j] && map.tiles[j] !== WALL) return 2;
+      if (map.explored[j]) seen = 1;
+    }
+    return seen;
   }
 
   // Steps glide frame by frame (glideAll) rather than by tween: a new tween stands still for its
@@ -1396,6 +1528,8 @@ export class DungeonScene extends Phaser.Scene {
     if (!run || !this.playerSprite || this.diving) return;
     const map = run.map, p = run.p;
     this.glideAll(dt * this.tweens.timeScale);
+    this.moveAir(time, dt);
+    this.cullTiles();
 
     // fireflies drift about their spot and pulse
     for (const f of this.flyImgs) {
