@@ -71,7 +71,8 @@ function spread(tiles, n, away = []) {
 }
 
 // ctx: { floor, start, stairs, open(id) -> has that unlock come (data/unlocks.js), relicOffers(n) -> relic ids,
-//        cage: 'cage' when a friend waits on this floor, chief() -> the critter type its 우두머리 is }
+//        cage: 'cage' when a friend waits on this floor, chief() -> the critter type its 우두머리 is,
+//        den: true when the burrow's sign promised a 낮잠 방, napper() / gold() / tool() for its contents }
 // deco: { has, themes } from decorate(); set pieces take over a room's theme.
 export function placeSpecials(map, rooms, deco, ctx) {
   const out = { pickups: [], enemies: [] };
@@ -147,6 +148,18 @@ export function placeSpecials(map, rooms, deco, ctx) {
     if (fits.length) {
       claim(fits[0], 'cage');
       cage(map, rooms[fits[0]], out, ctx);
+      made++;
+    }
+  }
+  // the burrow you took said a 낮잠 방 waits here (갈림길): it comes first, and if no room is quite
+  // right for it, any one-door room will do, then any room at all off the way
+  if (ctx.den) {
+    const any = ids().filter(i => rooms[i].w >= 3 && rooms[i].h >= 3 && cheb(mid(rooms[i]), ctx.start) >= 5);
+    const fits = [ids().filter(i => fit.den(rooms[i], i)), any.filter(i => leaf(i)), any].find(f => f.length);
+    if (fits) {
+      const i = pick(fits);
+      claim(i, 'den');
+      den(map, rooms[i], out, ctx);
       made++;
     }
   }

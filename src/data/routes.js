@@ -12,4 +12,5 @@ export const ROUTES = {
   candy: { icon: 'candy', name: '별사탕', sign: '별사탕이 하나 있다' },
   gold:  { icon: 'gold', name: '반짝 바위', sign: '반짝 바위가 모두 한 등급 좋다' },
   chief: { icon: 'crown', name: '우두머리', sign: '왕관 쓴 우두머리가 있다. 쓰러뜨리면 좋은 보물 상자를 떨군다' },
+  den:   { icon: 'napper', name: '낮잠 방', sign: '녀석들이 상자를 둘러싸고 모여 자는 방이 있다' },
 };

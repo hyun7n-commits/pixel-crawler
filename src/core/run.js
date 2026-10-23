@@ -351,6 +351,7 @@ export class Run {
       relicOffers: n => this.offers(n).filter(o => o.kind === 'relic').map(o => o.id),
       cage: this.floor === this.cageFloor && caged(this.meta, this.stage, this.loop) ? 'cage' : null,
       chief: () => pick(this.zone.enemies.filter(t => !ENEMIES[t].pack) || this.zone.enemies) || this.zone.enemies[0],
+      den: route === 'den',
       napper: () => pick(this.zone.enemies.filter(t => !ENEMIES[t].lurk)),
       gold: () => Math.round((B.gs(zi) + 1) * rint(5, 9)),
       tool: () => this.pickTool(),
@@ -482,7 +483,7 @@ export class Run {
     if (!best) return;
     m.tiles[idx(best.x, best.y)] = STAIRS;
     const safe = TOOLS.some(id => this.open(id)) && Math.random() < 0.5 ? 'tools' : 'rest';
-    const prize = pick(['chest', 'gold', 'chief', ...(this.open('candy') ? ['candy'] : [])]);
+    const prize = pick(['chest', 'gold', 'chief', ...(this.open('candy') ? ['candy'] : []), ...(this.open('den') ? ['den'] : [])]);
     const [a, b] = shuffle([safe, prize]);
     m.routes = [{ x: first.x, y: first.y, kind: a }, { x: best.x, y: best.y, kind: b }];
     this.has.add('fork');
@@ -505,6 +506,7 @@ export class Run {
       place(s => { if (this.bareSpot(s.x, s.y)) m.ter[idx(s.x, s.y)] = T.BERRY; });
     }
     if (kind === 'gold') for (const o of m.ores) o.tier = Math.min(ORES.length - 1, o.tier + 1);
+    if (kind === 'den' && !m.den) place(s => this.addChest(s.x, s.y));   // no room would take it: a chest all the same
     if (kind === 'chief') {
       place(s => {
         const type = pick(this.zone.enemies.filter(t => !ENEMIES[t].pack)) || this.zone.enemies[0];
