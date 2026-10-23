@@ -5,7 +5,7 @@
 
 import { $, el, button, icon } from './dom.js';
 import { CHARACTERS } from '../data/characters.js';
-import { UPGRADES, PACK_COST } from '../data/upgrades.js';
+import { UPGRADES, PACK_COST, FORGE_COST, FORGE_LEGEND_LOOP, forgeable } from '../data/upgrades.js';
 import { PETS } from '../data/pets.js';
 import { isOpen, RELIC_GATES } from '../data/unlocks.js';
 import { RELICS, RECIPES, recipeKey, tierOf, DISCOVERY_GOLD } from '../data/relics.js';
@@ -39,10 +39,10 @@ export function renderVillageHud(meta, saved = savedRun()) {
 const startButton = (meta, onStart) => {
   const saved = savedRun();
   const b = button('btn primary enter', saved ? `이어서 탐험 · ${saved.label}` : `${josa(CHARACTERS[meta.sel].name, '으로', '로')} 들판으로 출발`, onStart);
-  if (!meta.pack) return b;
-  // what you packed at the shop goes out with you
+  if (!meta.pack && !meta.forge) return b;
+  // what you packed at the shop, and what the smith made to order, go out with you
   const wrap = el('div', 'go-wrap'), note = el('span', 'packed-note');
-  note.append(icon(meta.pack, 16), el('span', null, `${RELICS[meta.pack].name} 챙김`));
+  for (const id of [meta.forge, meta.pack].filter(Boolean)) note.append(icon(id, 16), el('span', null, `${RELICS[id].name} 챙김`));
   wrap.append(note, b);
   return wrap;
 };
@@ -221,8 +221,9 @@ function rumor(box, { meta }) {
   box.append(book);
 }
 
-// ---------- 두더지 대장장이: the recipe book and the ore book ----------
+// ---------- 두더지 대장장이: made to order, the recipe book and the ore book ----------
 function books(box, { meta, changed }) {
+  forge(box, meta, changed);
   // every recipe, found ones in full, the rest as a shadow of what they make
   const book = el('div', 'shop');
   const found = RECIPES.filter(rc => meta.recipes[recipeKey(rc)]).length;
@@ -272,6 +273,33 @@ function books(box, { meta, changed }) {
   }
   ores.append(row);
   box.append(ores);
+}
+
+// 주문 제작: an evolved relic you have made before (from the second 회차 a legend too), forged for the
+// next run. Paid now; tap it again to call it off and get the gold back, or tap another to swap.
+function forge(box, meta, changed) {
+  const list = el('div', 'shop'), ids = forgeable(meta), cost = id => FORGE_COST[tierOf(id)];
+  list.append(el('h3', null, '주문 제작'));
+  list.append(el('p', 'row-sub', ids.length
+    ? `찾아낸 조합의 진화 유물을 만들어 준다. 다음 판에 Lv1로 들고 나간다. 한 판에 하나.${loopsOpen(meta) >= FORGE_LEGEND_LOOP ? ' 전설도 만들 수 있다.' : ` ${FORGE_LEGEND_LOOP}회차가 열리면 전설도 만들어 준다.`}`
+    : '아직 만들 줄 아는 게 없다. 들판에서 유물을 진화시켜 조합을 찾아 오자.'));
+  const grid = el('div', 'pack-grid forge-grid');
+  for (const id of ids) {
+    const on = meta.forge === id, back = meta.forge ? cost(meta.forge) : 0;
+    const b = button(`pack t${tierOf(id)}${on ? ' on' : ''}`, null, () => {
+      meta.gold += back;                       // the one ordered before is called off (money back)
+      meta.forge = on ? null : id;
+      if (!on) meta.gold -= cost(id);
+      changed();
+    });
+    b.append(icon(id, 32), el('span', null, RELICS[id].name), el('span', 'forge-price', on ? '주문함' : `${cost(id)}G`));
+    b.title = RELICS[id].desc(1);
+    b.disabled = !on && meta.gold + back < cost(id);
+    grid.append(b);
+  }
+  if (ids.length) list.append(grid);
+  if (meta.forge) list.append(el('p', 'row-sub', `${josa(RELICS[meta.forge].name, '을', '를')} 주문했다. 다시 누르면 취소하고 골드를 돌려받는다.`));
+  box.append(list);
 }
 
 // ---------- 구조대원: the records ----------

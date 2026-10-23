@@ -12,6 +12,7 @@ import { daresOn, dareGold, DARE_BY_ID } from '../data/dares.js';
 import { josa } from '../core/util.js';
 import { isOpen } from '../data/unlocks.js';
 import { stageKit } from '../data/balance.js';
+import { RELICS } from '../data/relics.js';
 
 // a small view of the zone's ground: a strip of its wall over its floor, a pool in the corner
 function swatch(z, open) {
@@ -51,6 +52,13 @@ export function showStages({ meta, onGo, onClose }) {
     } else if (LOOPS > 1) sh.append(el('p', 'loop-note', '열 스테이지를 다 깨면 더 어려운 2회차가 열린다.'));
     const dares = daresOn(meta);
     if (dares.length) sh.append(el('p', 'loop-note dare-note', `라이벌 내기 ${dares.length}개: ${dares.map(id => DARE_BY_ID[id].name).join(', ')} · 골드 ×${dareGold(dares.length).toFixed(1)}`));
+    // what the shop packed and the smith made to order go out with you, whichever stage it is
+    const bag = [meta.forge, meta.pack].filter(Boolean);
+    if (bag.length) {
+      const note = el('p', 'loop-note packed-note');
+      for (const id of bag) note.append(icon(id, 16), el('span', null, `${RELICS[id].name} 챙김`));
+      sh.append(note);
+    }
 
     const list = el('div', 'stages');
     ZONES.forEach((z, s) => {

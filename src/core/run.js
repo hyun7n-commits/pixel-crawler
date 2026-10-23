@@ -92,6 +92,12 @@ export class Run {
       this.packed = id;
       meta.pack = null;
     }
+    // what the smith made to order (ui/hub.js): out of the forge at Lv1, already paid for
+    if (meta.forge && RELICS[meta.forge] && [1, 2].includes(tierOf(meta.forge))) {
+      this.p.relics[meta.forge] = 1;
+      this.forged = meta.forge;
+      meta.forge = null;
+    }
     // 출발 보급 (balance.js stageKit): the level now, the relic picks when the trip starts
     const kit = B.stageKit(stage);
     this.p.lvl = kit.lvl;
@@ -240,6 +246,7 @@ export class Run {
     this.log(`${josa(this.char.name, '으로', '로')} ${this.zone.name}에 나왔다. 깃발 꽂힌 땅굴을 찾아 앞으로 가자.`, 'good');
     if (this.request) this.log(`오늘의 조합 의뢰: ${this.request.text} (일당 ${this.request.pay}G)`, 'quest');
     if (this.packed) this.log(`챙겨 온 ${RELICS[this.packed].name} Lv${this.p.relics[this.packed]}`, 'good');
+    if (this.forged) this.log(`대장장이가 만들어 준 ${josa(RELICS[this.forged].name, '을', '를')} 들고 나왔다.`, 'good');
     if (this.kit) {
       for (let k = 1; k <= this.kit; k++) this.queue.push({ kind: 'kit', k, n: this.kit });
       this.log(`조합이 출발 보급을 챙겨 줬다. 유물 ${this.kit}개를 고른다.`, 'good');
