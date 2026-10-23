@@ -339,13 +339,21 @@ function brickTop(fill, r, v, y1, z) {
   for (let k = 0; k < 3; k++) if (r() < 0.5) { const x = Math.floor(r() * 13), y = Math.floor(r() * Math.max(1, y1 - 2)); fill('#4f7a42', x, y, 3, 2); fill('#6f9a5a', x, y); }
 }
 
-// The top of a reed bed: thin upright blades in rows, pale tips, and now and then a cattail.
+// The top of a reed bed: tufts of blades fanning up from a dark root, pale at the tips, in loose
+// staggered rows, and now and then a cattail. (Single blades on every third pixel read as static
+// over a big reed bed, v0.26.)
+const TUFTS = [['h...h', 'l.h.l', '.lll.', '.ddd.'], ['.h.h.', '.lhl.', '.lll.', '.ddd.'], ['h.h..', 'l.lh.', '.lll.', '.ddd.'], ['..h.h', '.hl.l', '.lll.', '.ddd.']];
 function reedTops(fill, r, v, y1, z, hi) {
-  for (let x = 0; x < TILE; x++) {
-    for (let y = (x + v) % 3; y < y1; y += 3) {
-      const c = r();
-      fill(c < 0.3 ? z.wallDark : c < 0.75 ? z.wallLight : hi, x, y, 1, Math.min(2, y1 - y));
-    }
+  const lit = { h: hi, l: z.wallLight, d: z.wallDark }, shade = { h: z.wallLight, l: mix(z.wallTop, z.wallDark, 0.5), d: z.wallDark };
+  for (let gy = -1; gy < 4; gy++) for (let gx = -1; gx < 2; gx++) {
+    if (r() < 0.25) continue;
+    // a few shapes, some tufts in the shade of the others, so the bed never looks stamped
+    const tuft = TUFTS[Math.floor(r() * TUFTS.length)], col = r() < 0.3 ? shade : lit;
+    const ox = gx * 8 + (gy % 2 ? 4 : 0) + ((v + gy + 3) % 3) - 1, oy = gy * 4 + (gx % 2) + (r() < 0.3 ? 1 : 0);
+    tuft.forEach((row, j) => [...row].forEach((ch, i) => {
+      const x = ox + i, y = oy + j;
+      if (ch !== '.' && x >= 0 && x < TILE && y >= 0 && y < y1) fill(col[ch], x, y);
+    }));
   }
   if (r() < 0.5) { const x = 2 + Math.floor(r() * 11), y = Math.floor(r() * Math.max(1, y1 - 3)); fill('#7a5230', x, y, 1, 2); fill('#4f331d', x, y + 1); }
 }
