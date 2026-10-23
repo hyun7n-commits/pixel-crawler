@@ -1821,7 +1821,13 @@ export class DungeonScene extends Phaser.Scene {
   // `size` in world pixels picks the pixel font whose grid matches the art: 10 (small), 12, 15 (big)
   float(x, y, text, color, delay = 0, size = 10) {
     const [family, px] = size >= 14 ? ['Galmuri14', 15] : size >= 11 ? ['Galmuri11', 12] : ['Galmuri9', 10];
-    const t = this.add.text(center(x), y * TILE, text, {
+    // words that come up on the same spot at once sit one above the other instead of on top of each
+    // other (the melting snowman's 주르륵 used to print right over its 20)
+    const at = this.time.now + delay, key = `${x},${y}`;
+    this.floats = (this.floats || []).filter(f => f.at > this.time.now - 1000);
+    const lift = this.floats.filter(f => f.key === key && Math.abs(f.at - at) < 600).reduce((a, f) => Math.max(a, f.lift + f.px + 1), 0);
+    this.floats.push({ key, at, lift, px });
+    const t = this.add.text(center(x), y * TILE - lift, text, {
       fontFamily: `${family}, sans-serif`, fontSize: `${px}px`, color, stroke: '#000000', strokeThickness: 2,
     }).setOrigin(0.5, 1).setDepth(D.text).setResolution(this.textRes()).setAlpha(delay ? 0 : 1);
     this.tweens.add({ targets: t, alpha: 1, duration: 1, delay });
