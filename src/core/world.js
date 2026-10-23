@@ -44,7 +44,11 @@ export function onEnter(run, who, x, y) {
   if (ter === T.HONEY && who === 'player') {
     run.p.sticky = 1;
     if (!run.told.honey) { run.told.honey = true; run.log('꿀을 밟았다! 끈적끈적, 다음 걸음은 발을 떼느라 한 턴이 간다.', 'warn'); }
-  } else if (ter === T.HONEY && !who.d.flies && who.type !== 'queen') who.stun = Math.max(who.stun || 0, 1);
+  } else if (ter === T.HONEY && !who.d.flies && who.type !== 'queen') {
+    who.stun = Math.max(who.stun || 0, 1);
+    // come to a bell a moment ago and stuck in the honey round it
+    if (who.lured != null && run.turn - who.lured <= 8 && run.isVisible(x, y)) run.discover('bell_honey');
+  }
 }
 
 // 요정 고리: step into one and you pop out of its partner. The fairies only carry you, so whoever

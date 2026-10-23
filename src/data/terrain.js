@@ -89,6 +89,10 @@ export const DISCOVERIES = [
   { id: 'smoke_bees',  combo: '연기 + 벌집',        result: '벌들이 꾸벅꾸벅 존다', hint: '벌집 옆에 불을 피우면 벌들이 졸린대.' },
   { id: 'hush_root',   combo: '졸음 꽃가루 + 비명 뿌리', result: '비명 뿌리가 쿨쿨 잠들어 조용해진다', hint: '꺄아아 우는 뿌리도 졸음 꽃가루엔 못 버틴대.' },
   { id: 'daze_sneak',  combo: '어질어질한 적 + 공격', result: '별이 도는 동안은 기습이 된다', hint: '별이 빙빙 도는 녀석은 내가 다가오는 걸 못 본대. 그때 치면 기습이래.' },
+  // v0.26: the meadow tools meet the rules of the fields
+  { id: 'pine_cliff',  combo: '솔방울 + 절벽 끝',   result: '맞은 녀석이 절벽 아래로 데굴데굴', hint: '절벽 끝에 선 녀석한테 솔방울을 던지면 떨어진대.' },
+  { id: 'pine_trap',   combo: '솔방울 + 함정',      result: '밀려난 녀석이 함정을 밟는다', hint: '솔방울에 맞고 밀려난 녀석이 함정을 밟았대.' },
+  { id: 'bell_honey',  combo: '방울 + 꿀',          result: '방울 소리 따라온 녀석이 꿀에 붙는다', hint: '방울 둘레에 꿀을 부어 두면 몰려온 녀석들이 다 붙는대.' },
 ];
 
 // Things enemies mutter when you overhear them unseen

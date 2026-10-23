@@ -1134,7 +1134,15 @@ export class Run {
       this.emit('pine', { x, y, hit: true });
       if (this.isVisible(x, y)) this.log(`솔방울이 ${josa(e.d.name, '을', '를')} 딱 맞혔다!`, 'good');
       this.hurt(e, B.pineDamage(this.floor), 'pine');
-      if (e.hp > 0 && !e.d.boss && !['hide', 'stone', 'lurk'].includes(e.state)) this.knock(e, 2 + Math.floor(this.floor / 4));
+      if (e.hp > 0 && !e.d.boss && !['hide', 'stone', 'lurk'].includes(e.state)) {
+        // where it is knocked to: over a cliff edge, or onto a trap, is a thing to remember
+        const tx = e.x + Math.sign(e.x - this.p.x), ty = e.y + Math.sign(e.y - this.p.y), to = inMap(tx, ty) ? this.map.ter[idx(tx, ty)] : T.NONE;
+        this.knock(e, 2 + Math.floor(this.floor / 4));
+        if (e.x === tx && e.y === ty && this.isVisible(tx, ty)) {
+          if (to === T.CHASM) this.discover('pine_cliff');
+          else if (isTrap(to)) this.discover('pine_trap');
+        }
+      }
       if (e.hp > 0 && !['hide', 'stone', 'lurk'].includes(e.state)) {
         e.stun = Math.max(e.stun || 0, 1);
         this.emit('stun', { x: e.x, y: e.y });
@@ -1208,7 +1216,7 @@ export class Run {
         if (e.hp <= 0 || e.d.npc || e.d.boss || this.calm(e) || cheb(e, b) > B.BELL_RANGE || e.fear > 0) continue;
         if (!['search', 'wander', 'hunt'].includes(e.state) || (e.state === 'hunt' && canSee(this, e, 9))) continue;
         if (e.state !== 'search' && !heard.includes(e)) heard.push(e);
-        Object.assign(e, { state: 'search', searchT: 0, last: { x: b.x, y: b.y }, aim: false });
+        Object.assign(e, { state: 'search', searchT: 0, last: { x: b.x, y: b.y }, aim: false, lured: this.turn });
       }
       if (heard.length) this.emit('heard', { x: b.x, y: b.y, list: heard });
       if (--b.t <= 0) {
