@@ -1420,10 +1420,20 @@ export class Run {
       if (heard.length) this.emit('heard', { x: b.x, y: b.y, list: heard });
       if (--b.t <= 0) {
         bells.splice(bells.indexOf(b), 1);
-        this.pickups.push({ x: b.x, y: b.y, type: 'bell' });
-        this.emit('bellDone', { x: b.x, y: b.y });
-        // the frog coughs it back up
+        // the frog coughs it back up, out onto the ground in front of it (not under its own feet)
         const frog = b.frog != null && this.enemies.find(e => e.id === b.frog && e.hp > 0);
+        let at = { x: b.x, y: b.y };
+        if (frog) {
+          const p = this.p, sx = Math.sign(p.x - frog.x), sy = Math.sign(p.y - frog.y);
+          const free = (x, y) => this.canEnemyEnter(x, y) && !this.pickups.some(o => o.x === x && o.y === y) && ![T.LAVA, T.CHASM].includes(this.map.ter[idx(x, y)]) && !isPool(this.map.ter[idx(x, y)]);
+          const spot = [[sx, 0], [0, sy], [1, 0], [-1, 0], [0, 1], [0, -1]].find(([dx, dy]) => (dx || dy) && free(frog.x + dx, frog.y + dy));
+          if (spot) {
+            at = { x: frog.x + spot[0], y: frog.y + spot[1] };
+            if (this.isVisible(frog.x, frog.y)) this.emit('throw', { from: { x: frog.x, y: frog.y }, to: at, sprite: ITEMS.bell.sprite });
+          }
+        }
+        this.pickups.push({ x: at.x, y: at.y, type: 'bell' });
+        this.emit('bellDone', { x: at.x, y: at.y });
         if (frog) { frog.belly = false; if (this.isVisible(frog.x, frog.y)) this.say(frog, '퉤!'); }
       }
     }
