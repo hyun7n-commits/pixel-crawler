@@ -11,6 +11,9 @@
 // Gates are read with isOpen(meta, id) where the thing would appear (core/run.js, core/specials.js).
 
 export const PER_TRIP = 2;
+// The release a save last opened in (meta.seenBuild); goes up with each release that adds unlocks, see
+// sinceUpdate.
+export const BUILD = 26;
 
 const broken = m => Object.values(m.ores || {}).reduce((a, b) => a + b, 0);
 const beat = (m, boss) => m.stats.bosses.includes(boss);
@@ -21,17 +24,29 @@ export const UNLOCKS = [
   { id: 'weeds', icon: 'weed', what: '풀뽑기 밭', desc: '들판에 잡초 밭이 생긴다. 한 포기씩 뽑으면 일당. 가끔 뭔가 소리를 지른다', when: m => m.stats.maxFloor >= 2 || m.stats.runs >= 2 },
   { id: 'hammer', relic: 'hammer', when: m => m.stats.maxFloor >= 2 || m.stats.runs >= 2 },
   { id: 'keys', icon: 'key', what: '잠긴 상자와 열쇠', desc: '들판에 잠긴 상자가 생긴다. 열쇠는 같은 들판 어딘가에', when: m => m.stats.runs >= 3 || (m.stats.runs >= 2 && m.stats.maxFloor >= 2) },
+  // v0.26 들판 도구 (data/items.js), one every few trips
+  { id: 'pinecone', icon: 'pinecone', what: '솔방울', desc: '들판에 솔방울이 떨어져 있다. 던지면 맞은 적이 밀려나고 어질어질해진다', when: m => m.stats.runs >= 3 || m.stats.maxFloor >= 3 },
   { id: 'bomb', icon: 'bomb', what: '폭탄', desc: '상자와 들판에서 폭탄이 나온다. 던지면 덤불도 바위도 날아간다', when: m => m.stats.maxFloor >= 3 || m.stats.runs >= 4 },
   { id: 'ring', relic: 'ring', when: m => m.stats.maxFloor >= 3 || m.stats.runs >= 4 },
+  { id: 'fork', icon: 'routeSign', what: '갈림길', desc: '들판에 땅굴이 두 개 생긴다. 굴 옆 표지판에 그 너머 들판에 뭐가 있는지 나온다', when: m => m.stats.maxFloor >= 4 || m.stats.runs >= 5 },
+  // early in the list, so a seasoned worker who has evolved plenty gets it among the first new things
+  { id: 'well', icon: 'well', what: '소원 우물', desc: '들판에 작은 우물이 생긴다. 유물을 하나 던져 넣으면 같은 레벨의 다른 유물로 바뀌어 떠오른다', when: m => (m.stats.evos || 0) >= 3 || m.stats.runs >= 14 },
+  { id: 'dandelion', icon: 'dandelion', what: '민들레 홀씨', desc: '후 불면 이 들판의 먼 곳으로 날아간다. 쫓아오던 적이 나를 놓친다', when: m => m.stats.maxFloor >= 4 || m.stats.runs >= 6 },
   { id: 'candy', icon: 'candy', what: '별사탕', desc: '반짝 바위와 잡초 밭에서도 별사탕이 나온다. 먹으면 유물이 다다닥 자란다', when: m => beat(m, 'ratking') },
   { id: 'stall', icon: 'peddler', what: '대장 앞 좌판', desc: '대장 바로 앞 들판에 상점 주인이 좌판을 편다', when: m => beat(m, 'ratking') },
   { id: 'shelf', icon: 'shopkeep', what: '상점 유물 진열대', desc: '마을 상점에서 새 유물을 사서 들판에 풀 수 있다', when: m => beat(m, 'ratking') },
   { id: 'coin', relic: 'coin', when: m => broken(m) >= 4 },
   { id: 'ghost', icon: 'ghostNpc', what: '울보 아기새', desc: '들판 어딘가에서 아기새가 운다. 부탁을 들어주면 보답한다', when: m => m.stats.runs >= 3 },
   { id: 'hive', icon: 'hive', what: '꿀벌 그루터기', desc: '꿀단지를 먹으면 최대 체력이 오른다. 벌들은 화를 낸다', when: m => m.stats.maxFloor >= 5 },
+  { id: 'honeyjar', icon: 'honeyjar', what: '꿀 병', desc: '던지면 둘레에 꿀이 쏟아져서 거기 있던 적이 꼼짝 못 한다', when: m => m.stats.maxFloor >= 5 || m.stats.runs >= 8 },
   { id: 'rings', icon: 'fairyRing', what: '요정 고리', desc: '들어가면 멀리 있는 다른 고리로 뿅 나온다', when: m => m.stats.maxFloor >= 5 },
   { id: 'map', icon: 'map', what: '지도', desc: '구역 전체와 땅굴 자리를 보여 주는 지도가 나온다', when: m => m.stats.maxFloor >= 5 },
   { id: 'mint', relic: 'mint', when: m => m.stats.maxFloor >= 5 },
+  { id: 'sleepy', icon: 'sleepflower', what: '졸음 꽃', desc: '던지면 졸음 꽃가루가 퍼져서 적이 잠든다. 너무 가까우면 나도 잠든다', when: m => m.stats.maxFloor >= 6 || m.stats.runs >= 10 },
+  { id: 'den', icon: 'napper', what: '낮잠 방', desc: '들판 구석 방에 녀석들이 상자를 둘러싸고 모여 잔다. 깨우지 않고 털어 볼까?', when: m => m.stats.maxFloor >= 7 || m.stats.runs >= 11 },
+  { id: 'chili', icon: 'chili', what: '매운 고추', desc: '적에게 던지면 매워서 한동안 허둥지둥 달아난다', when: m => m.stats.maxFloor >= 9 || m.stats.runs >= 12 },
+  { id: 'grump', icon: 'grump', what: '심술 버섯', desc: '들판에 빨간 버섯이 난다. 밟거나 뭘 던져 맞히면 포자가 퍼지고, 마신 녀석들은 옆에 있는 녀석을 문다', when: m => m.stats.maxFloor >= 10 || m.stats.runs >= 13 },
+  { id: 'bell', icon: 'bell', what: '방울', desc: '던지면 몇 턴 동안 딸랑딸랑 울린다. 나를 못 보는 적은 그리로 간다', when: m => m.stats.maxFloor >= 13 || m.stats.runs >= 15 },
   { id: 'pick', relic: 'pick', when: m => broken(m) >= 8 },
   { id: 'turtle', icon: 'turtle', what: '반짝 거북', desc: '먼저 건드리지 않으면 싸우지 않는 거북. 쓰러뜨리면 보물을 떨군다', when: m => m.stats.kills >= 60 },
   { id: 'traps', icon: 'trapAlarm', what: '숨은 함정', desc: '함정이 늘고, 어떤 건 풀숲처럼 숨어 있다', when: m => m.stats.maxFloor >= 6 },
@@ -60,4 +75,13 @@ export function openNew(meta) {
     out.push(u);
   }
   return out;
+}
+
+// A worker back after an update: what has come since opens at once, the first PER_TRIP of it, so the
+// first trip out already has something new (the rest come at trips' ends as usual). Once per update;
+// a worker who has never been out has nothing waiting.
+export function sinceUpdate(meta) {
+  if ((meta.seenBuild || 0) >= BUILD) return [];
+  meta.seenBuild = BUILD;
+  return meta.stats.runs ? openNew(meta) : [];
 }

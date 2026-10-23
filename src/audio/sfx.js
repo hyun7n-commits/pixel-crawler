@@ -147,6 +147,8 @@ const SOUNDS = {
   warp() { chime([1047, 1319, 1568, 2093], 0.035, 0.09); hiss(0.18, { vol: 0.05, freq: 4000, to: 8000, type: 'highpass' }); },
   // the honey stump: a sweet glug, the swarm's angry buzz
   honey() { chime([784, 1047, 1319], 0.06, 0.12); },
+  // 방울: a little brass bell, two strikes
+  bell() { chime([1568, 2349], 0.05, 0.16, 0.12); chime([1568, 2349], 0.05, 0.16, 0.1, 0.22); },
   // 풀뽑기: a soft pop of roots coming loose; the screaming root's squeal, wobbling up and down
   pluck() { hiss(0.12, { vol: 0.12, freq: 1200, to: 500, q: 0.8 }); tone(520, 0.08, { type: 'triangle', vol: 0.1, to: 900, delay: 0.03 }); },
   scream(k = 1) {
@@ -156,6 +158,10 @@ const SOUNDS = {
   buzz() { tone(210, 0.45, { type: 'sawtooth', vol: 0.035, to: 250 }); tone(226, 0.45, { type: 'sawtooth', vol: 0.03, to: 196, delay: 0.04 }); },
   boom() { hiss(0.8, { vol: 0.65, freq: 1800, to: 70, type: 'lowpass' }); tone(70, 0.6, { vol: 0.5, to: 28 }); },
   alert() { tone(880, 0.05, { type: 'square', vol: 0.05 }); tone(1320, 0.07, { type: 'square', vol: 0.05, delay: 0.05 }); },
+  // 에취!: a breath in, then the sneeze, a burst of noise falling away
+  sneeze() { tone(500, 0.18, { type: 'triangle', vol: 0.06, to: 900 }); hiss(0.2, { vol: 0.2, freq: 2600, to: 900, q: 0.6, delay: 0.2 }); tone(820, 0.1, { type: 'square', vol: 0.04, to: 400, delay: 0.2 }); },
+  // 다툼: an indignant little squeak, twice, and a scuffle of dust
+  scuffle() { tone(700, 0.06, { type: 'square', vol: 0.05, to: 1000 }); tone(620, 0.07, { type: 'square', vol: 0.045, to: 950, delay: 0.09 }); hiss(0.16, { vol: 0.1, freq: 1400, q: 0.7, delay: 0.05 }); },
   snore() { hiss(0.55, { vol: 0.14, freq: 320, to: 160, type: 'lowpass', attack: 0.25 }); },
   zap() { tone(1400, 0.12, { type: 'sawtooth', vol: 0.06, to: 300 }); hiss(0.1, { vol: 0.15, freq: 5000, type: 'highpass' }); },
   // 마법사's wand: a soft whoosh up and a twinkle; a spark coming back is a tiny ding
@@ -176,6 +182,7 @@ const SOUNDS = {
     hiss(0.12, { vol: 0.14, freq: 700, to: 1600, q: 0.8, delay });
     tone(320, 0.14, { type: 'triangle', vol: 0.16, to: 900, delay: delay + 0.04 });
   },  dodge() { hiss(0.12, { vol: 0.12, freq: 2000, to: 4500, q: 2 }); },
+  roll() { hiss(0.3, { vol: 0.12, freq: 420, to: 200, type: 'lowpass', attack: 0.02 }); tone(150, 0.28, { type: 'triangle', vol: 0.07, to: 95 }); },
   puff() { hiss(0.35, { vol: 0.15, freq: 900, to: 300, q: 0.6, attack: 0.02 }); },
   levelup() { chime([659, 784, 988, 1319], 0.07, 0.13); },
   // a relic you picked lands: one pip, a little run up when it is full
@@ -240,6 +247,11 @@ export function onRunEvent(type, d) {
     case 'bossChest': play('jackpot'); break;
     case 'boom': case 'gasboom': play('boom'); break;
     case 'alert': play('alert'); break;
+    case 'brawl': play('scuffle'); break;
+    case 'grump': play('scuffle'); break;
+    case 'sneeze': play('sneeze'); break;
+    case 'puffUp': play('puff'); play('rise', 0); break;
+    case 'well': play('splash'); play('rise', 1); break;
     case 'snore': play('snore'); break;
     case 'zap': play('zap'); break;
     case 'wand': play('wand'); break;
@@ -291,6 +303,17 @@ export function onRunEvent(type, d) {
     case 'rumble': case 'quake': play('boom'); break;
     case 'fly': play('rise', 0); break;
     case 'berry': play('honey'); break;
+    // the meadow tools (v0.26)
+    case 'pine': play(d.hit ? 'hit' : 'pop'); if (d.caught != null) play('swap'); break;
+    case 'roll': play('roll'); break;
+    case 'melt': play('splash'); break;
+    case 'yum': play('honey'); break;
+    case 'honeyPour': play('splash'); play('honey'); break;
+    case 'doze': play('puff'); play('snore'); break;
+    case 'chili': play('puff'); play('scream', 0.5); break;
+    case 'ring': play('bell'); break;
+    case 'bellDone': play('pop'); break;
+    case 'blow': play('puff'); play('rise', 0); break;
     default: break;
   }
 }

@@ -339,15 +339,71 @@ function brickTop(fill, r, v, y1, z) {
   for (let k = 0; k < 3; k++) if (r() < 0.5) { const x = Math.floor(r() * 13), y = Math.floor(r() * Math.max(1, y1 - 2)); fill('#4f7a42', x, y, 3, 2); fill('#6f9a5a', x, y); }
 }
 
-// The top of a reed bed: thin upright blades in rows, pale tips, and now and then a cattail.
+// The top of a reed bed: tufts of blades fanning up from a dark root, pale at the tips, in loose
+// staggered rows, and now and then a cattail. (Single blades on every third pixel read as static
+// over a big reed bed, v0.26.)
+const TUFTS = [['h...h', 'l.h.l', '.lll.', '.ddd.'], ['.h.h.', '.lhl.', '.lll.', '.ddd.'], ['h.h..', 'l.lh.', '.lll.', '.ddd.'], ['..h.h', '.hl.l', '.lll.', '.ddd.']];
 function reedTops(fill, r, v, y1, z, hi) {
-  for (let x = 0; x < TILE; x++) {
-    for (let y = (x + v) % 3; y < y1; y += 3) {
-      const c = r();
-      fill(c < 0.3 ? z.wallDark : c < 0.75 ? z.wallLight : hi, x, y, 1, Math.min(2, y1 - y));
-    }
+  const lit = { h: hi, l: z.wallLight, d: z.wallDark }, shade = { h: z.wallLight, l: mix(z.wallTop, z.wallDark, 0.5), d: z.wallDark };
+  for (let gy = -1; gy < 4; gy++) for (let gx = -1; gx < 2; gx++) {
+    if (r() < 0.25) continue;
+    // a few shapes, some tufts in the shade of the others, so the bed never looks stamped
+    const tuft = TUFTS[Math.floor(r() * TUFTS.length)], col = r() < 0.3 ? shade : lit;
+    const ox = gx * 8 + (gy % 2 ? 4 : 0) + ((v + gy + 3) % 3) - 1, oy = gy * 4 + (gx % 2) + (r() < 0.3 ? 1 : 0);
+    tuft.forEach((row, j) => [...row].forEach((ch, i) => {
+      const x = ox + i, y = oy + j;
+      if (ch !== '.' && x >= 0 && x < TILE && y >= 0 && y < y1) fill(col[ch], x, y);
+    }));
   }
   if (r() < 0.5) { const x = 2 + Math.floor(r() * 11), y = Math.floor(r() * Math.max(1, y1 - 3)); fill('#7a5230', x, y, 1, 2); fill('#4f331d', x, y + 1); }
+}
+
+// The plateau's top: snow lying over the rocks in soft drifts, white where the light catches them and
+// blue in the hollows between, a dark stone with a cap of snow poking out now and then, a glint of
+// frost. (The mountain's boulders recoloured white read as cobbles, v0.26.)
+const DRIFTS = [['h......', 'x.....x', '.xdddx.'], ['.h...', 'x...x', '.ddd.'], ['h........', 'x.......x', '.xddddddx']];
+function driftTop(fill, r, v, y1, z) {
+  const col = { h: '#ffffff', x: mix(z.wallLight, z.wallTop, 0.6), d: mix(z.wallTop, '#5a6a8a', 0.35) };
+  fill(z.wallLight, 0, 0, TILE, y1);
+  for (let gy = -1; gy < 4; gy++) for (let gx = -1; gx < 2; gx++) {
+    if (r() < 0.3) continue;
+    const shape = DRIFTS[Math.floor(r() * DRIFTS.length)];
+    const ox = gx * 8 + (gy % 2 ? 4 : 0) + ((v + gy + 3) % 3) - 1, oy = gy * 5 + (gx % 2) + 1;
+    shape.forEach((row, j) => [...row].forEach((ch, i) => {
+      const x = ox + i, y = oy + j;
+      if (ch !== '.' && x >= 0 && x < TILE && y >= 0 && y < y1) fill(col[ch], x, y);
+    }));
+  }
+  if (y1 > 6 && r() < 0.35) {
+    const x = 2 + Math.floor(r() * 10), y = 1 + Math.floor(r() * (y1 - 5));
+    fill(z.wallFace, x, y + 1, 3, 2); fill(z.wallDark, x, y + 2, 3, 1); fill(mix(z.wallFace, '#ffffff', 0.25), x, y + 1);
+    fill('#ffffff', x, y, 3, 1);
+  }
+  if (r() < 0.5) { const x = 1 + Math.floor(r() * 13), y = Math.floor(r() * Math.max(1, y1 - 1)); fill('#ffffff', x, y); fill('#dff4ff', x + 1, y); }
+}
+
+// The mountain's and the sea cliffs' top: bare rock with a few boulders of different sizes lying on
+// it, each lit from the top left with its shadow on the rock, and a crack or two between them. (A
+// close mosaic of one size of boulder read as cobbles, a paved road, v0.26.)
+const STONES = [['.hhh.', 'hlllx', 'lllxx', '.xxx.'], ['..hhh..', '.hlllll', 'hllllxx', 'lllllxx', '.xxxxx.'], ['.hh', 'hlx', '.x.']];
+function rockTop(fill, r, v, y1, z, hi) {
+  const col = { h: hi, l: z.wallLight, x: mix(z.wallLight, z.wallTop, 0.5) }, shadow = z.wallDark, crack = mix(z.wallTop, z.wallDark, 0.6);
+  for (let k = 0; k < 2; k++) {
+    let x = 1 + Math.floor(r() * 14), y = Math.floor(r() * y1);
+    const dx = r() < 0.5 ? 1 : -1;
+    for (let n = 0; n < 3 + Math.floor(r() * 4) && x >= 0 && x < TILE && y < y1; n++) { fill(crack, x, y); if (r() < 0.55) x += dx; else y++; }
+  }
+  for (let gy = -1; gy < 4; gy++) for (let gx = -1; gx < 3; gx++) {
+    if (r() < 0.45) continue;
+    const st = STONES[Math.floor(r() * STONES.length)];
+    const ox = gx * 6 + (gy % 2 ? 3 : 0) + ((v + gy + 3) % 3) - 1, oy = gy * 5 + (gx % 2) + Math.floor(r() * 2);
+    st.forEach((row, j) => [...row].forEach((ch, i) => {
+      const x = ox + i, y = oy + j;
+      if (ch === '.' || x < 0 || x >= TILE || y < 0 || y >= y1) return;
+      fill(col[ch], x, y);
+      if (y + 1 < y1 && (j === st.length - 1 || st[j + 1][i] === '.')) fill(shadow, x, y + 1);
+    }));
+  }
 }
 
 // A wall seen from above. Its top fills the tile; where floor lies below it, its front shows on the
@@ -393,8 +449,9 @@ function wallTile(z, zi, mask, v) {
   if (z.style === 'marsh') reedTops(fill, r, v, topH, z, hi);
   else if (z.style === 'garden') leafTop(fill, r, v, topH, z, hi);
   else if (z.style === 'ruins') brickTop(fill, r, v, topH, z);
-  else if (z.style === 'snow') clumps(fill, r, v, 0, topH, BOULDER, { h: '#ffffff', l: z.wallLight, d: mix(z.wallTop, '#5a6a8a', 0.45) });
-  else clumps(fill, r, v, 0, topH, ['rock', 'cave', 'volcano', 'sea'].includes(z.style) ? BOULDER : LEAVES, { h: hi, l: z.wallLight, d: z.wallDark });
+  else if (z.style === 'snow') driftTop(fill, r, v, topH, z);
+  else if (z.style === 'rock' || z.style === 'sea') rockTop(fill, r, v, topH, z, hi);
+  else clumps(fill, r, v, 0, topH, ['cave', 'volcano'].includes(z.style) ? BOULDER : LEAVES, { h: hi, l: z.wallLight, d: z.wallDark });
   // tufts of sea grass cling to the clifftop rocks
   if (z.style === 'sea') for (let k = 0; k < 2; k++) if (r() < 0.55) {
     const x = 1 + Math.floor(r() * 12), y = 1 + Math.floor(r() * Math.max(1, topH - 3));
@@ -507,6 +564,10 @@ function wallTile(z, zi, mask, v) {
       fill(mix(z.wallFace, '#ffffff', 0.15), s1 + 1, topH + 1, 4, 1); fill(mix(z.wallFace, '#ffffff', 0.15), 0, topH + 6, s2, 1);
       fill(z.wallDark, 0, TILE - 3, TILE, 1);
       fill(z.wallLine, 0, TILE - 2, TILE, 2);
+      // icicles hang from the snow's lip, one or two a tile
+      if (z.style === 'snow') for (const [x, len] of [[(v * 5 + 2) % 14 + 1, 3 + (v % 2)], [(v * 5 + 9) % 14 + 1, 2]].slice(0, v === 2 ? 1 : 2)) {
+        fill('#dff4ff', x, topH + 1, 1, len); fill('#a8cfe6', x, topH + 1 + len, 1, 1); fill('#a8cfe6', x + 1, topH + 1, 1, 1);
+      }
     }
   }
   // dark edges along every side that faces open ground

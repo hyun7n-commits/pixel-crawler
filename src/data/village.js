@@ -146,12 +146,44 @@ const EERIE = [
   '들판 친구들 말이야, 가끔 우리랑 똑같이 웃지 않아?',
 ];
 
+const TOOL_TALK = {
+  pinecone: '솔방울로 딱 맞혔다며? 다람쥐들이 그거 자기네 거라고 투덜대더라.',
+  dandelion: '민들레 홀씨 타고 날아갔다며? 위에서 보면 들판이 어떻게 생겼어?',
+  honeyjar: '꿀 병을 통째로 던졌다며? 아깝다… 다음엔 한 숟갈만 남겨 와.',
+  sleepy: '졸음 꽃가루를 뿌렸다며? 그 동네 녀석들 아직도 하품한대.',
+  chili: '고추를 먹였다며? 그 녀석 아직도 혀가 얼얼하대. 조금 불쌍해.',
+  bell: '어제 저녁에 딸랑딸랑 소리 들리던데, 그거 네 방울이었어?',
+};
+// a critter's odd answer to a tool, or a trick, that you saw for the first time on this trip
+const FOUND_TALK = {
+  pine_roll: '공벌레로 볼링을 쳤다며? 데구르르 쾅! 나도 한 번 보고 싶다.',
+  pine_seal: '물범이 코끝으로 솔방울 묘기를 부렸다며? 박수는 쳐 줬어?',
+  pine_squirrel: '다람쥐가 네 솔방울을 받아서 묻으러 갔다며? 봄 되면 거기서 솔방울 나무 나겠다!',
+  bell_frog: '개구리가 방울을 꿀꺽 삼켰다며? 딸꾹딸꾹 소리가 여기까지 들리는 것 같아.',
+  bell_bats: '방울 소리에 박쥐들이 길을 잃었다며? 귀가 너무 밝아도 고생이구나.',
+  bell_cat: '그림자 고양이가 방울 갖고 노느라 숨는 것도 잊었다며? 고양이는 다 똑같네.',
+  honey_bees: '벌들이 쏟아진 꿀에 홀딱 빠졌다며? 벌도 꿀은 못 참나 봐.',
+  chili_snow: '눈사람한테 고추를 줬다며? 주르륵 녹았겠다… 조금 미안하네.',
+  chili_salamander: '불도마뱀이 고추를 받아먹고 부풀었다며? 매운 걸 좋아하는 녀석도 있구나.',
+  den_sneak: '다들 자는 사이에 낮잠 방 상자를 열었다며? 발소리 하나 안 냈구나!',
+  well_evo: '소원 우물에 유물을 던졌더니 진화해서 떠올랐다며? 나도 동전 하나 던져 볼까.',
+  big_prize: '기세등등해진 녀석이 별사탕을 떨궜다며? 그거 진짜 달아?',
+  grump_brawl: '심술 버섯 포자 때문에 녀석들끼리 물고 뜯었다며? 재채기는 멈췄어?',
+};
+// the last-moment line is the hero's own ("내가 던진 폭탄"); a neighbour says it back to you ("네가 던진 폭탄")
+const yours = s => s.replace(/^내가 /, '네가 ').replace(/^내 /, '네 ');
+const ROUTE_TALK = {
+  chief: '왕관 쓴 녀석 있는 굴로 일부러 들어갔다며? 간도 크다!',
+  rest: '표지판 보고 쉬어 가는 굴로 갔구나. 잘했어, 쉬는 것도 일이야.',
+  den: '다 같이 낮잠 자는 방이 있다는 굴로 들어갔다며? 걔들 깨면 어쩌려고!',
+};
+
 export function gossip(last, meta) {
   if (!last) return ['아직 아무 일도 없었어. 얼른 들판에 다녀와!'];
   const out = [];
   if (last.won) out.push(`들었어? ${josa(last.who, '이', '가')} ${last.zone} 대장을 쓰러뜨렸대! 온 마을이 들썩들썩해.`);
   if (last.won && last.stage === 4 && last.loop === 1 && meta.home?.length === 0) out.push('조합장이 상으로 집을 줬다며? 집들이 때 나도 꼭 불러 줘!');
-  else if (last.cause) out.push(`${last.zone}에서 ${last.cause}면서? 다들 걱정했어.`);
+  else if (last.cause) out.push(`${last.zone}에서 ${yours(last.cause)}면서? 다들 걱정했어.`);
   if (last.friend) out.push(`우리에 갇혀 있던 ${josa(last.friend, '을', '를')} 구해 왔다며? 마을이 더 북적북적해졌어.`);
   if (last.kills >= 15) out.push(`적을 ${last.kills}마리나 쓰러뜨렸다며? 대단해.`);
   if (last.recipes) out.push(`새 합성 조합을 ${last.recipes}개나 찾았다던데? 대장장이가 궁금해하더라.`);
@@ -162,6 +194,16 @@ export function gossip(last, meta) {
   else if (last.honey && out.length < 3) out.push('벌집 꿀 먹었다며? 벌한테 쏘인 데는 괜찮아? 꿀 냄새 난다.');
   else if (last.screams && out.length < 3) out.push('어제 들판에서 꺄아아 소리 들렸는데, 너였어? 비명 뿌리 뽑았구나.');
   else if (last.weeds && out.length < 3) out.push(`풀뽑기도 했다며? ${last.weeds}포기나! 일꾼 다 됐네.`);
+  // something new you saw a critter do this trip
+  const found = (last.found || []).find(id => FOUND_TALK[id]);
+  if (found && out.length < 3) out.push(FOUND_TALK[found]);
+  // the meadow tools you used and the burrows you took (v0.26): the one you used most gets a word
+  const used = Object.entries(last.tools || {}).sort((a, b) => b[1] - a[1])[0]?.[0];
+  if (used && out.length < 3) out.push(TOOL_TALK[used]);
+  const route = (last.routes || []).find(k => ROUTE_TALK[k]);
+  if (route && out.length < 3) out.push(ROUTE_TALK[route]);
+  // 다툼: the critters you set on each other
+  if (last.brawls >= 2 && out.length < 3) out.push(`녀석들끼리 ${last.brawls}번이나 싸움 붙였다며? 투닥투닥하는 거 구경하고 싶다!`);
   // and once in a while, after the name tags start turning up, something nobody quite finishes saying
   const tags = meta.stats?.tags || 0;
   if (tags >= 3 && out.length < 3 && Math.random() < 0.35) out.push(EERIE[Math.floor(Math.random() * Math.min(EERIE.length, 1 + (tags >> 1)))]);

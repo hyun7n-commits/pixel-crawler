@@ -45,4 +45,6 @@ export const UPGRADES = {
   pot:    { name: '비상 물약',   eff: '체력 물약 1개 들고 시작',           costs: [900] },
   greed:  { name: '욕심쟁이',    eff: '얻는 골드 +10%',                    costs: [200, 500, 1000, 1800, 3000] },
   reroll: { name: '다시 뽑기',   eff: '판마다 유물 선택지 다시 뽑기 +1회', costs: [400, 1200, 2800] },
+  // v0.26: shown once the first meadow tool has opened (`open`)
+  tool:   { name: '도구 주머니', eff: '들판 도구 1개 들고 시작',           costs: [700, 2200], open: 'pinecone' },
 };

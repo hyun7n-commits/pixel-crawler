@@ -3,10 +3,11 @@
 import { T, TERRAIN, TILE_INFO, GASES, GAS_KEYS } from '../data/terrain.js';
 import { ORE_HITS, candySteps } from '../data/balance.js';
 import { ITEMS } from '../data/items.js';
+import { ROUTES } from '../data/routes.js';
 import { ORES } from '../data/ores.js';
 import { idx, inMap, STAIRS, DOOR, ORE, UPSTAIRS, WALL, GRAVE, LOCKED, HIVE, WEED } from '../core/dungeon.js';
 import { RELICS } from '../data/relics.js';
-import { cheb } from '../core/util.js';
+import { josa } from '../core/util.js';
 
 const CHEST = '보물 상자: 열면 유물을 하나 고른다.';
 const PICKUP = {
@@ -69,7 +70,7 @@ export function describeTile(run, x, y, always = false) {
   }
   const e = run.enemyAt(x, y);
   // 그림자 고양이 farther than its reach is not there as far as you can tell
-  const shaded = e?.d.shade && cheb(e, p) > e.d.shade && !e.stun && !e.burn;
+  const shaded = e && run.shaded(e);
   if (e && run.isVisible(x, y) && !shaded) {
     if (e.state === 'hide') lines.push(CHEST); // a mimic looks just like one
     else if (e.state === 'lurk') lines.push('수상한 거품: 물 밑에서 보글보글 거품이 올라온다. 뭔가 숨어 있다.');
@@ -80,16 +81,37 @@ export function describeTile(run, x, y, always = false) {
       // stars round its head: a blow now is a surprise attack (run.unaware)
       const dizzy = run.dizzy(e) && !['sleep', 'wander', 'search'].includes(e.state) ? '어질어질해서 지금 치면 기습' : '';
       const fire = e.burn > 0 ? '불붙음' : '';
-      const how = [dizzy || STATE[e.state] || '', fire].filter(Boolean).join(', ');
-      lines.push(`${e.chief ? '우두머리 ' : ''}${e.d.name} · 체력 ${e.hp}/${e.maxHp} · 공격 ${e.atk} · ${how}${e.d.tip ? ` · ${e.d.tip}` : ''}`);
+      // the meadow tools at work: a chili still burning its tongue, honey holding its feet
+      const hot = e.fear > 0 ? `매워서 달아나는 중 (${e.fear}턴)` : '';
+      const stuck = e.stun > 0 && map.ter[i] === T.HONEY ? '꿀에 붙어 꼼짝 못 함' : '';
+      // 낮잠 방: one of the heap
+      const heap = e.den && e.state === 'sleep' ? '모여 자는 중. 하나가 깨면 다 같이 깬다' : '';
+      // 다툼: busy with another critter, it pays you no mind
+      const foe = e.foe != null && run.enemies.find(o => o.id === e.foe && o.hp > 0);
+      const scrap = foe ? `${josa(foe.d.name, '과', '와')} 싸우는 중. 나는 안중에도 없다 (지금 치면 기습)` : '';
+      // 심술 버섯: cross with everyone
+      const cross = e.grump > 0 ? `심술 나서 옆에 있는 녀석을 무는 중 (${e.grump}턴)` : '';
+      // 도토리 다람쥐 with a pinecone in its paws
+      const busy = e.belly ? '배 속에서 방울이 딸랑거려 딸꾹질하는 중 (지금 치면 기습)' : e.juggle > 0 ? '코끝에 솔방울을 올리고 묘기를 부리는 중. 나는 안중에도 없다 (지금 치면 기습)' : e.bury > 0 ? '솔방울을 묻으러 가는 중. 나는 안중에도 없다 (지금 치면 기습)' : e.sweetT > 0 ? (e.toy ? '방울을 갖고 노느라 정신이 없다 (지금 치면 기습)' : '쏟아진 꿀에 정신이 팔려 있다') : '';
+      const how = [hot || stuck || cross || scrap || busy || dizzy || heap || STATE[e.state] || '', fire].filter(Boolean).join(', ');
+      lines.push(`${e.chief ? '우두머리 ' : e.big ? '기세등등한 ' : ''}${e.d.name} · 체력 ${e.hp}/${e.maxHp} · 공격 ${e.atk} · ${how}${e.d.tip ? ` · ${e.d.tip}` : ''}`);
     }
   }
   const t = map.tiles[i], lm = map.landmark;
   if (t === WALL && lm && x >= lm.x && x < lm.x + lm.w && y >= lm.y && y < lm.y + lm.h) lines.push(`${lm.name}: ${lm.tip}`);
   else if (t === WALL && map.props?.[i]) lines.push(`${PROP_NAME[run.zone.style] || TILE_INFO.prop.name}: ${TILE_INFO.prop.tip}`);
   if (map.drips?.some(o => o.x === x && o.y === y)) lines.push(`${TILE_INFO.drip.name}: ${TILE_INFO.drip.tip}`);
+  if (map.nests?.includes(i) && !e) lines.push('짚 잠자리: 낮잠 방 녀석이 웅크리고 자던 자리다. 아직 따뜻하다.');
+  if (map.well && map.well.x === x && map.well.y === y) lines.push(map.well.dry ? '마른 우물: 바닥이 드러났다. 소원은 한 번뿐이었다.'
+    : '소원 우물: 다가가서 유물을 하나 던져 넣으면 같은 레벨의 다른 유물로 바뀌어 떠오른다. 한 번뿐이다.');
+  const bell = map.bells?.find(o => o.x === x && o.y === y && o.frog == null);
+  if (bell) lines.push(`방울: 딸랑딸랑 울리는 중 (${bell.t}턴 더). 나를 못 보는 적은 이리로 온다. 다 울리면 주울 수 있다.`);
   if (map.flies?.some(o => o.x === x && o.y === y)) lines.push(`${TILE_INFO.fly.name}: ${TILE_INFO.fly.tip}`);
-  if (t === STAIRS) lines.push(`${TILE_INFO.stairs.name}: ${TILE_INFO.stairs.tip}`);
+  if (t === STAIRS) {
+    // 갈림길: the sign by the hole says what the field past it has
+    const r = map.routes?.find(o => o.x === x && o.y === y);
+    lines.push(`${TILE_INFO.stairs.name}: ${TILE_INFO.stairs.tip}${r ? `\n표지판: 이 굴 너머 들판엔 ${ROUTES[r.kind].sign}.` : ''}`);
+  }
   if (t === UPSTAIRS) lines.push(`${TILE_INFO.upStairs.name}: ${TILE_INFO.upStairs.tip}`);
   if (t === DOOR) lines.push(`${TILE_INFO.door.name}: ${TILE_INFO.door.tip}`);
   if (t === LOCKED) lines.push(`${TILE_INFO.locked.name}: ${TILE_INFO.locked.tip}${map.keyHeld ? ' 열쇠가 있다!' : ''}`);
@@ -108,7 +130,7 @@ export function describeTile(run, x, y, always = false) {
   if (map.fire[i] && map.visible[i]) lines.push(`${TILE_INFO.fire.name}: ${TILE_INFO.fire.tip}`);
   if (map.visible[i]) {
     for (const k of GAS_KEYS) {
-      if (map.gas[k][i] < 0.5) continue;
+      if (!(map.gas[k]?.[i] >= 0.5)) continue;
       const extra = k === 'mine' && run.meta.found.fire_mine ? ' 불이 닿으면 한꺼번에 터진다!' : '';
       lines.push(`${GASES[k].name}: ${GASES[k].tip}${extra}`);
     }

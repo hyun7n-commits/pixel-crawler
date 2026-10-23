@@ -9,6 +9,8 @@ export const T = {
   DUG: 11, ANVIL: 12, RING: 13, BERRY: 14,
   // v0.23: the new stages' grounds
   LAVA: 15, ICE: 16, CHASM: 17, BRIDGE: 18, SLIME: 19, HONEY: 20,
+  // v0.26: 심술 버섯, a plant that goes off like a trap (always in plain sight)
+  TRAP_GRUMP: 21,
 };
 // you cannot walk onto these (a drop, molten rock), but you can see across them
 export const isGap = t => t === T.CHASM || t === T.LAVA;
@@ -18,7 +20,7 @@ export const isPool = t => t === T.WATER || t === T.ICE || t === T.LAVA;
 // Like Shattered Pixel Dungeon traps: a plate that goes off once when stepped on (or blown up).
 // Some are hidden (map.hidden) until you spot them standing next to them.
 export const TRAPS = [T.TRAP_SLEEP, T.TRAP_SUMMON, T.TRAP_ALARM, T.TRAP_SPIKE];
-export const isTrap = t => t >= T.TRAP_SLEEP && t <= T.TRAP_SPIKE;
+export const isTrap = t => (t >= T.TRAP_SLEEP && t <= T.TRAP_SPIKE) || t === T.TRAP_GRUMP;
 
 // burn: turns a fire lasts on this feature (0 = does not burn)
 // sprite: overlay drawn on the floor tile (see TER_SPR in sprites.js)
@@ -32,6 +34,7 @@ export const TERRAIN = {
   [T.TRAP_SUMMON]: { name: '수상한 굴',  sprite: 'trapSummon', tip: '밟으면 굴 속에서 몬스터가 우르르 튀어나온다.' },
   [T.TRAP_ALARM]: { name: '방울 덫',      sprite: 'trapAlarm',  tip: '밟으면 방울이 울려 구역 전체의 적이 몰려온다.' },
   [T.TRAP_SPIKE]: { name: '밤송이',       sprite: 'trapSpike',  tip: '밟으면 가시에 찔린다.' },
+  [T.TRAP_GRUMP]: { name: '심술 버섯',    sprite: 'trapGrump',  tip: '밟거나 뭘 던져 맞히면 포자가 퍼진다. 포자를 마신 녀석은 심술이 나서 옆에 있는 녀석을 문다. 나는 재채기만 난다.' },
   [T.TRAP_OFF]:   { name: '밟힌 덫',      sprite: 'trapOff',    tip: '이미 작동한 덫이다.' },
   [T.DUG]:        { name: '파헤친 흙',    sprite: 'dug',        tip: '누군가 파헤친 자리다.' },
   [T.ANVIL]:      { name: '모루',         sprite: 'anvil',      tip: '대장장이의 모루다.' },
@@ -67,12 +70,14 @@ export const TILE_INFO = {
 export const GASES = {
   sleep: { name: '졸음 꽃가루', color: 0xb58cf0, tip: '마시면 잠든다. 적도 잠든다.' },
   mine:  { name: '늪 가스', color: 0xf4d35a, tip: '그 자체는 무해하다.' },
+  grump: { name: '심술 포자', color: 0xf08c3a, tip: '마신 녀석은 심술이 나서 옆에 있는 녀석을 문다. 나는 재채기만 난다.' },
 };
-export const GAS_KEYS = ['sleep', 'mine'];
+export const GAS_KEYS = ['sleep', 'mine', 'grump'];
 
 // How strong a gas must be to do something
 export const SLEEP_MIN = 2;
 export const MINE_MIN = 1;
+export const GRUMP_MIN = 2;
 
 // basic: the rule is common sense and its tooltip already says it
 // hint: what villagers or overheard enemies say before you find it
@@ -89,6 +94,26 @@ export const DISCOVERIES = [
   { id: 'smoke_bees',  combo: '연기 + 벌집',        result: '벌들이 꾸벅꾸벅 존다', hint: '벌집 옆에 불을 피우면 벌들이 졸린대.' },
   { id: 'hush_root',   combo: '졸음 꽃가루 + 비명 뿌리', result: '비명 뿌리가 쿨쿨 잠들어 조용해진다', hint: '꺄아아 우는 뿌리도 졸음 꽃가루엔 못 버틴대.' },
   { id: 'daze_sneak',  combo: '어질어질한 적 + 공격', result: '별이 도는 동안은 기습이 된다', hint: '별이 빙빙 도는 녀석은 내가 다가오는 걸 못 본대. 그때 치면 기습이래.' },
+  // v0.26: the meadow tools meet the rules of the fields
+  { id: 'pine_cliff',  combo: '솔방울 + 절벽 끝',   result: '맞은 녀석이 절벽 아래로 데굴데굴', hint: '절벽 끝에 선 녀석한테 솔방울을 던지면 떨어진대.' },
+  { id: 'pine_trap',   combo: '솔방울 + 함정',      result: '밀려난 녀석이 함정을 밟는다', hint: '솔방울에 맞고 밀려난 녀석이 함정을 밟았대.' },
+  { id: 'pine_roll', combo: '솔방울 + 공벌레', result: '동그랗게 말려 데굴데굴, 앞에 있던 녀석이 볼링 핀처럼 넘어진다', hint: '공벌레한테 솔방울을 던지면 공처럼 말려서 굴러간대. 그 앞에 누가 서 있으면 쾅!' },
+  { id: 'pine_seal', combo: '솔방울 + 물범', result: '코끝으로 받아 묘기를 부리느라 나를 잊는다', hint: '물범한테 솔방울을 던지면 코끝으로 받아서 묘기를 부린대. 박수까지 친대.' },
+  { id: 'pine_squirrel', combo: '솔방울 + 도토리 다람쥐', result: '덥석 받아 들고 묻으러 간다. 훔친 골드도 내팽개친다', hint: '도토리 다람쥐는 솔방울만 보면 정신을 못 차린대. 훔친 골드도 내팽개칠 만큼.' },
+  { id: 'chili_snow',  combo: '매운 고추 + 눈사람', result: '땀을 뻘뻘 흘리다 녹아서 물웅덩이가 된다', hint: '눈사람한테 매운 고추를 먹이면 녹아 버린대. 머리까지 몽땅.' },
+  { id: 'honey_bees',  combo: '꿀 병 + 화난 벌',    result: '벌들이 쏟아진 꿀로 몰려가서 나를 잊는다', hint: '벌집 털다 벌 떼한테 쫓기면 꿀 병을 던져 보래. 벌은 꿀을 못 지나친대.' },
+  { id: 'bell_honey',  combo: '방울 + 꿀',          result: '방울 소리 따라온 녀석이 꿀에 붙는다', hint: '방울 둘레에 꿀을 부어 두면 몰려온 녀석들이 다 붙는대.' },
+  { id: 'bell_frog', combo: '방울 + 개구리', result: '혀로 낚아채 꿀꺽 삼키고, 배 속에서 울리는 동안 딸꾹질만 한다', hint: '개구리는 눈앞에서 딸랑거리는 건 뭐든 혀로 낚아챈대. 방울을 삼키면 어떻게 될까?' },
+  { id: 'bell_bats',   combo: '방울 + 박쥐',        result: '박쥐들이 방울 소리에 길을 잃고 어질어질 헤맨다', hint: '박쥐는 소리로 길을 찾는대. 바로 옆에서 방울이 울리면 정신을 못 차린대.' },
+  { id: 'chili_salamander', combo: '매운 고추 + 불도마뱀', result: '한입에 꿀꺽하고 기세등등하게 부푼다', hint: '불도마뱀은 매운 걸 엄청 좋아한대. 고추를 던져 주면 신나서 몸집이 커진다나.' },
+  { id: 'bell_cat',    combo: '방울 + 그림자 고양이', result: '방울을 갖고 노느라 나를 잊는다', hint: '그림자 고양이도 결국 고양이래. 딸랑딸랑 소리만 나면 사냥이고 뭐고 다 잊는다나.' },
+  { id: 'bell_den',    combo: '방울 + 낮잠 방',     result: '자던 녀석들이 우르르 방울 쪽으로 몰려간다', hint: '모여 자는 녀석들 근처에서 방울을 울리면 다 같이 보러 간대.' },
+  { id: 'brawl',       combo: '빗나간 공격 + 다른 녀석', result: '대신 맞은 녀석이 화가 나서 둘이 싸운다', hint: '멧돼지 돌진을 옆으로 피하면 뒤에 있던 녀석이 대신 받힌대. 그럼 둘이 싸운대.' },
+  { id: 'pine_brawl',  combo: '솔방울 + 두 녀석',   result: '부딪힌 녀석이 밀고 온 녀석과 싸운다', hint: '솔방울로 한 녀석을 다른 녀석한테 밀어붙이면 둘이 싸운대.' },
+  { id: 'grump_brawl', combo: '심술 포자 + 녀석들', result: '심술 난 녀석들끼리 물고 뜯는다', hint: '빨간 버섯 포자를 마신 녀석은 옆에 있는 녀석을 문대. 몰려 있을 때 터뜨려 봐.' },
+  { id: 'big_prize',   combo: '기세등등한 녀석 + 공격', result: '쓰러뜨리면 별사탕을 떨군다', hint: '싸움에서 이기고 부푼 녀석을 쓰러뜨리면 별사탕을 떨군대.' },
+  { id: 'well_evo',    combo: '소원 우물 + 유물',  result: '떠오른 유물이 가방 속 유물과 만나 진화한다', hint: '소원 우물에 유물을 던졌더니 떠오른 게 바로 진화했대.' },
+  { id: 'den_sneak',   combo: '살금살금 + 낮잠 방', result: '다 자는 동안 연 상자는 넷 중 하나를 고른다', hint: '낮잠 방 녀석들이 다 자는 동안 상자를 열면 더 좋은 게 들어 있대. 졸음 꽃가루를 뿌려 두면 쉽대.' },
 ];
 
 // Things enemies mutter when you overhear them unseen
@@ -120,6 +145,14 @@ export const GOSSIP = [
   '박하사탕 물고 졸음 꽃가루 속에 들어가면 잠든 녀석들을 마음껏 때릴 수 있대.',
   '불꽃 반지 낀 일꾼이 풀밭에서 싸우다가 들판을 홀랑 태웠대.',
   '낭떠러지 옆에서 세게 밀쳐지면 그대로 떨어진대. 조심해.',
+  // v0.26: what the meadow tools do to whom
+  '도토리 다람쥐는 솔방울만 보면 하던 일도 잊는대. 훔친 것까지.',
+  '벌들은 꿀을 그냥 못 지나친대. 화가 나 있어도.',
+  '눈사람 앞에서 매운 걸 먹는 건 예의가 아니래. 땀나서 녹는대.',
+  '박쥐는 귀로 길을 찾는대. 시끄러우면 헤맨대.',
+  '낮잠 방 녀석들 다 잘 때 상자를 열면 좋은 게 더 들어 있대.',
+  '불도마뱀한테 고추를 주면 안 된대. 좋아서 난리가 난대.',
+  '그림자 고양이도 방울 소리는 못 참는대. 고양이는 고양이야.',
 ];
 export const SLEEP_TALK = ['음냐… 반짝돌…', '쿨… 쿨…', '으음… 오 분만…', '음냐… 치즈…'];
 
@@ -129,6 +162,8 @@ export const FLOOR_HINTS = [
   { has: 'ore',    text: '반짝 바위 옆 틈에서 가스 샌다던데. 불은 조심해.' },
   { has: 'garden', text: '저쪽 풀숲은 키가 커서 안이 하나도 안 보여.' },
   { has: 'trap',   text: '이 구역 땅 어딘가에 함정이 숨어 있대. 발밑 조심해.' },
+  { has: 'grump',  text: '빨간 버섯 근처에선 녀석들이 서로 물어뜯는대. 포자 때문이래.' },
+  { has: 'well',   text: '이 들판 어딘가에 소원 우물이 있대. 뭘 빠뜨리면 딴 걸로 바꿔 준대.' },
   { has: 'vault',  text: '잠긴 비밀 정원이 있대. 열쇠는 다른 방에 있다던데.' },
   { has: 'locked', text: '잠긴 상자가 하나 있대. 열쇠만 찾으면 좋은 게 들었대.' },
   { has: 'grave',  text: '다람쥐 도토리 창고가 있대. 파헤치면 청설모가 화낸대.' },
@@ -138,4 +173,5 @@ export const FLOOR_HINTS = [
   { has: 'mimic',  text: '이 구역 상자 중 하나에는 소라게가 산대.' },
   { has: 'flood',  text: '물에 잠긴 방에 번개 떨어지면 다 찌릿하대.' },
   { has: 'weeds',  text: '이 구역에 잡초 밭이 있대. 다 뽑으면 별사탕이 나온다던데.' },
+  { has: 'den',    text: '구석 방에서 다 같이 낮잠 잔대. 깨우면 큰일 난대.' },
 ];

@@ -1,16 +1,19 @@
 // The living dungeon: fire, gas, explosions and what happens when you step on things.
 // Like run.js these are pure rules. They change the run and emit events for the scene to draw.
 
-import { T, TERRAIN, GAS_KEYS, SLEEP_MIN, MINE_MIN, isTrap } from '../data/terrain.js';
+import { T, TERRAIN, GAS_KEYS, SLEEP_MIN, MINE_MIN, GRUMP_MIN, isTrap } from '../data/terrain.js';
 import { idx, inMap, passable, isBorder, WALL, FLOOR, DOOR, GRAVE, LOCKED } from './dungeon.js';
 import { ITEMS } from '../data/items.js';
 import { DIRS8, pick, rint, shuffle, josa } from './util.js';
 import * as B from '../data/balance.js';
+import { vex } from './ai.js';
 
 const { SNORE_NOISE } = B;
 
 const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-const GAS_DECAY = { sleep: 0.8, mine: 0.97 };
+const GAS_DECAY = { sleep: 0.8, mine: 0.97, grump: 0.75 };
+// a field from before v0.26 (a trip saved mid-way) has no tray for the newer gases yet
+export const gasOf = (map, kind) => (map.gas[kind] ||= new Float32Array(map.tiles.length));
 
 // 'player', an enemy, or null
 export function whoAt(run, x, y) {
@@ -44,7 +47,11 @@ export function onEnter(run, who, x, y) {
   if (ter === T.HONEY && who === 'player') {
     run.p.sticky = 1;
     if (!run.told.honey) { run.told.honey = true; run.log('꿀을 밟았다! 끈적끈적, 다음 걸음은 발을 떼느라 한 턴이 간다.', 'warn'); }
-  } else if (ter === T.HONEY && !who.d.flies && who.type !== 'queen') who.stun = Math.max(who.stun || 0, 1);
+  } else if (ter === T.HONEY && !who.d.flies && who.type !== 'queen') {
+    who.stun = Math.max(who.stun || 0, 1);
+    // come to a bell a moment ago and stuck in the honey round it
+    if (who.lured != null && run.turn - who.lured <= 8 && run.isVisible(x, y)) run.discover('bell_honey');
+  }
 }
 
 // 요정 고리: step into one and you pop out of its partner. The fairies only carry you, so whoever
@@ -97,6 +104,12 @@ export function springTrap(run, x, y) {
     for (const [dx, dy] of DIRS8) addGas(run, x + dx, y + dy, 'sleep', 30);
     run.emit('puff', { x, y, kind: 'sleep' });
     if (seen) run.log('퐁! 졸음 꽃에서 꽃가루가 퍼졌다!', 'warn');
+  } else if (t === T.TRAP_GRUMP) {
+    // 심술 버섯: a cloud of orange spores; whoever breathes it gets cross (creatureTick)
+    addGas(run, x, y, 'grump', 60);
+    for (const [dx, dy] of DIRS8) addGas(run, x + dx, y + dy, 'grump', 30);
+    run.emit('puff', { x, y, kind: 'grump' });
+    if (seen) run.log('퍽! 심술 버섯에서 주황색 포자가 확 퍼졌다!', 'warn');
   } else if (t === T.TRAP_SPIKE) {
     if (seen) run.log('따끔! 풀숲에 밤송이가 숨어 있었다!', 'warn');
     damageAt(run, x, y, B.trapSpike(run.floor), '밤송이를 밟았다', 'spike');
@@ -155,7 +168,9 @@ export function openGrave(run, x, y) {
     run.pickups.push({ x, y, type: 'gold', amount: B.graveGold(run.floor) });
     run.log('흙 속에서 골드가 나왔다.', 'good');
   } else if (roll >= 0.7 && roll < 0.9) {
-    const type = run.dare?.('nopotion') ? 'bomb' : pick(['potion', 'bomb']);
+    // a potion or a bomb; once the meadow tools are about, now and then one of those
+    const tool = run.pickTool?.();
+    const type = tool && Math.random() < 0.4 ? tool : run.dare?.('nopotion') ? 'bomb' : pick(['potion', 'bomb']);
     run.pickups.push({ x, y, type });
     run.log(`흙 속에서 ${josa(ITEMS[type].name, '이', '가')} 나왔다.`, 'good');
   } else if (roll >= 0.9) run.log('도토리 껍질뿐이다.');
@@ -253,12 +268,12 @@ function fireTick(run) {
 // ---------- gas ----------
 export function addGas(run, x, y, kind, amount) {
   if (!passable(run.map, x, y)) return;
-  run.map.gas[kind][idx(x, y)] += amount;
+  gasOf(run.map, kind)[idx(x, y)] += amount;
   run.gasActive = true;
 }
 
 function diffuse(map, kind) {
-  const g = map.gas[kind], next = new Float32Array(g.length), decay = GAS_DECAY[kind];
+  const g = gasOf(map, kind), next = new Float32Array(g.length), decay = GAS_DECAY[kind];
   let any = false;
   for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) {
     if (!passable(map, x, y)) continue;
@@ -415,6 +430,19 @@ function creatureTick(run, who) {
     } else who.doze = 2;
   } else if (who === 'player' && run.p.sleep > 0 && --run.p.sleep === 0) {
     run.log('잠에서 깼다.', 'good');
+  }
+  // 심술 포자: a critter in the cloud gets cross and bites whoever is beside it (ai.js grumpTick); you
+  // only sneeze, loud enough to turn heads
+  if ((map.gas.grump?.[i] || 0) >= GRUMP_MIN) {
+    if (who === 'player') {
+      if (run.p.sneezed !== run.turn - 1) {
+        run.say('player', '에취!');
+        run.emit('sneeze', { x: b.x, y: b.y });
+        run.noise(b.x, b.y, B.SNEEZE_NOISE);
+        if (!run.told.sneeze) { run.told.sneeze = true; run.log('에취! 심술 포자는 나한테는 재채기만 나게 한다. 대신 소리가 크다.', 'warn'); }
+      }
+      run.p.sneezed = run.turn;
+    } else vex(run, who, B.GRUMP_TURNS);
   }
   // asleep you snore, and anything awake nearby comes to see
   if (who === 'player' && run.p.sleep > 0) {

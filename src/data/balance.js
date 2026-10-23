@@ -42,7 +42,10 @@ export const STAGE_UP = +(globalThis.process?.env?.STAGE_UP ?? 0);
 // with the stage's 출발 보급 finds each of them about as hard as the meadow (FOE_UP env: a test override).
 // v0.25: the legends' moves made the later stages' kit hands stronger, so those critters went up a little
 // (160 bot runs a stage, a fresh worker wins about one in five everywhere)
-const FOE_UP = (globalThis.process?.env?.FOE_UP || '0,-0.12,0,0.08,0.09,0.42,0.46,0.6,0.18,0.66').split(',').map(Number);
+// v0.26: 다툼 made the rock mountain (boar charges, fox fire, dung balls all going astray into each other)
+// and a little the deep forest (spider shots) easier, so their critters went up a touch; the old guild
+// grounds came out a little harder, so theirs went down a touch (320 runs a stage)
+const FOE_UP = (globalThis.process?.env?.FOE_UP || '0,-0.08,0,0.08,0.16,0.42,0.46,0.6,0.18,0.62').split(',').map(Number);
 export const foeUp = s => FOE_UP[Math.min(s, FOE_UP.length - 1)] + 0.1 * Math.max(0, s - (FOE_UP.length - 1));
 // 출발 보급: a deeper stage is entered as a seasoned explorer, the guild sees to that. You start at a
 // higher level, a little stronger and sturdier, and pick some relics (two levels each) before the
@@ -66,6 +69,26 @@ export const FALL_HURT = 0.2;
 export const lavaHurt = floor => 6 + Math.floor(gfl(floor) / 3);
 // how long a snail's slime and the queen bee's honey stay on the ground
 export const GOO_TURNS = 14;
+// v0.26 들판 도구 (data/items.js): a meadow tool lies somewhere on a field this often (one of the ones
+// opened so far), and a second one now and then
+export const TOOL_CHANCE = 0.6, TOOL_MORE = 0.2;
+export const pineDamage = floor => 3 + Math.floor(gfl(floor) / 3);
+export const BELL_TURNS = 4, BELL_RANGE = 7, PINE_NOISE = 3;
+// 도토리 다람쥐 + 솔방울: turns it spends running off with the pinecone and burying it (the last two digging)
+export const BURY_TURNS = 7;
+// 공벌레 + 솔방울: how far the rolled-up pill bug goes (Run.rollBug)
+export const ROLL_TILES = 6;
+// 물범 + 솔방울: how many turns the seal shows off with the pinecone on its nose
+export const JUGGLE_TURNS = 6;
+// 방울 + 박쥐: bats this close to a ringing bell lose their way (stunned while it rings)
+export const BELL_BAT_RANGE = 3;
+// 방울 + 그림자 고양이: cats this close to a ringing bell play with it until it stops
+export const BELL_CAT_RANGE = 5;
+export const CHILI_TURNS = 5, CHILI_BOSS = 2;
+// 민들레 홀씨 carries you at least this many steps' walk from where you were
+export const BLOW_MIN = 10;
+// 갈림길 (data/routes.js): the second burrow is at least this many steps from where you come in and from the first
+export const FORK_APART = 10;
 
 // v0.21 zones. The marsh is darker (MARSH_DARK tiles of sight) but its fireflies light FLY_LIGHT tiles
 // around them, and each one caught in a jar gives a tile of sight back for the trip (FLY_MAX at most).
@@ -171,10 +194,21 @@ export const VAULT_CHANCE = 0.45;      // floor 2 on: a locked crystal vault, it
 export const LOCKED_CHEST_CHANCE = 0.55; // otherwise: a locked chest and its key
 export const SPECIAL_CHANCE = 0.55;    // each of grave room, statue room and trap room
 export const HIVE_CHANCE = 0.35;       // the honey stump, a little rarer
+export const DEN_CHANCE = 0.4, DEN_MIN = 4, DEN_MAX = 7;   // 낮잠 방 (v0.26): how often, and how many nap in it
+// 다툼 (core/ai.js brawl): the critter that wins a scrap swells up once, the way Shiren's monsters grow
+// on a kill: this much more health and bite, and twice the experience for whoever beats it after
+export const SWELL_HP = 0.5, SWELL_ATK = 0.25;
+// 심술 버섯 (v0.26): how often a field has some (one or two), and how many turns a whiff of the spores
+// keeps a critter cross
+export const GRUMP_CHANCE = 0.45, GRUMP_TURNS = 5, SNEEZE_NOISE = 5;
+// 소원 우물 (v0.26): the chance a field has one, once it has opened
+export const WELL_CHANCE = 0.22;
 // the honey stump: its honey pot adds max HP for the run; its bees (normal zone strength, not a
 // gimmick's) give up once you are farther than BEE_HOME from it; a fire within HIVE_SMOKE smokes them to sleep
 export const honeyHp = floor => 3 + Math.floor(gs(stageOf(floor)));
 export const BEE_HOME = 6;
+// 꿀 병 + 벌: bees this close to the spilt honey go to it and stay this many turns
+export const BEE_SWEET_RANGE = 8, BEE_SWEET_TURNS = 10;
 // 요정 고리: the chance a field has a pair of fairy rings, by zone (most in the deep forest)
 export const RING_CHANCE = [0.2, 0.7, 0.3, 0.2, 0.3, 0.5, 0.2, 0.25, 0.1, 0.3];
 // 온천: the chance a flooded room's pool is a hot spring, by zone (most up the rocky hills); anyone

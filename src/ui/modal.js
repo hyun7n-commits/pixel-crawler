@@ -71,6 +71,13 @@ export function showChoice({ title, sub, run, opts, onPick, onReroll, who }) {
         );
         const rc = recipeFor(run, o.id, o.id);
         if (rc) info.append(rc);
+      } else if (o.kind === 'swap') {
+        // 소원 우물: this one goes in, and something else of its kind comes up at its level
+        const lv = run.p.relics[o.id] || 1;
+        b.append(icon(o.id));
+        if (tierOf(o.id)) b.classList.add('t' + tierOf(o.id));
+        info.append(el('span', 'nm', RELICS[o.id].name), el('span', 'tag', `Lv${lv} 던져 넣기`),
+          el('span', 'ds', `${tierOf(o.id) ? '다른 진화 유물' : '다른 유물'} Lv${lv}로 바뀌어 떠오른다`));
       } else if (o.kind === 'fuse') {
         // two full relics squeezed into one slot: both icons melt into one
         const pic = el('span', 'fuse-pic');
@@ -140,6 +147,31 @@ export function closeTalk() {
   return true;
 }
 
+// 새로 열림 rows (data/unlocks.js): a picture, the name and one line each
+function openedBox(opened) {
+  const box = el('div', 'opened');
+  box.append(el('h3', null, '새로 열림'));
+  for (const u of opened) {
+    const row = el('div', 'open-row');
+    if (u.relic || u.icon) row.append(icon(u.relic || u.icon));
+    const t = el('div');
+    t.append(el('b', null, u.relic ? RELICS[u.relic].name : u.what), el('span', null, u.relic ? `새 유물. 이제 유물 카드에 나온다. ${RELICS[u.relic].desc(1)}` : u.desc));
+    row.append(t);
+    box.append(row);
+  }
+  return box;
+}
+
+// Back in the village after an update: what opened while you were away (data/unlocks.js sinceUpdate)
+export function showUpdateNews(opened) {
+  openSheet(sh => {
+    sh.append(el('h2', null, '그새 들판이 달라졌다'), el('p', null, '다음 탐험부터 나온다.'), openedBox(opened));
+    const foot = el('div', 'sheet-foot');
+    foot.append(button('btn primary', '좋아', closeModal));
+    sh.append(foot);
+  });
+}
+
 export function showSummary({ won, run, rescued = [], news = {}, opened = [], onClose }) {
   openSheet(sh => {
     const zone = run.zone.name, boss = run.boss?.d?.name || ENEMIES[run.zone.boss].name;
@@ -164,19 +196,7 @@ export function showSummary({ won, run, rescued = [], news = {}, opened = [], on
       sh.append(row);
     }
     // 새로 열림: what this trip opened up (data/unlocks.js), a line or two each time
-    if (opened.length) {
-      const box = el('div', 'opened');
-      box.append(el('h3', null, '새로 열림'));
-      for (const u of opened) {
-        const row = el('div', 'open-row');
-        if (u.relic || u.icon) row.append(icon(u.relic || u.icon));
-        const t = el('div');
-        t.append(el('b', null, u.relic ? RELICS[u.relic].name : u.what), el('span', null, u.relic ? `새 유물. 이제 유물 카드에 나온다. ${RELICS[u.relic].desc(1)}` : u.desc));
-        row.append(t);
-        box.append(row);
-      }
-      sh.append(box);
-    }
+    if (opened.length) sh.append(openedBox(opened));
     const q = run.request;
     if (q) sh.append(el('div', 'unlock-note' + (q.done ? ' req-done' : ''), q.done ? `조합 의뢰 완료: ${q.text} · 일당 ${q.pay}G를 받았다` : `조합 의뢰 미완료: ${q.text} (${q.got}/${q.n})`));
     if (run.newRecipes.length) {

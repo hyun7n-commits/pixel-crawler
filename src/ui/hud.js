@@ -14,8 +14,9 @@ import { xpToLevel, WAND_CHARGES, WAND_RECHARGE } from '../data/balance.js';
 import { playerStatus } from './tip.js';
 import { wait, fissionMs, FISSION_LEAD, FISSION_STEP, GROW_MS } from './beat.js';
 
-// The consumables you can have by now: bombs and maps only show once they have opened (data/unlocks.js).
-const shownItems = run => Object.entries(ITEMS).filter(([id]) => isOpen(run.meta, id) || run.p.items[id]);
+// The consumables you can have by now: bombs and maps only show once they have opened (data/unlocks.js),
+// the meadow tools only while you carry one.
+const shownItems = run => Object.entries(ITEMS).filter(([id, d]) => run.p.items[id] > 0 || (!d.tool && isOpen(run.meta, id)));
 
 // What the quest folk asked of you and have not had back yet.
 function questLines(run) {
@@ -43,7 +44,8 @@ export class Hud {
     this.selected = null;
     this.lines = [];
     this.bannerTimer = 0;
-    this.aiming = false;
+    this.aiming = null;    // the item being thrown, while its spot is picked (main.js setAim)
+    this.trayOpen = false; // phone: the 도구 tray over the toolbar
   }
 
   reset() {
@@ -182,9 +184,9 @@ export class Hud {
       items.append(b);
     }
     for (const [id, d] of shownItems(run)) {
-      const aim = id === 'bomb' && this.aiming;
+      const aim = this.aiming === id;
       const b = button('item' + (aim ? ' aiming' : ''), null, () => this.onUseItem(id));
-      b.append(icon(d.sprite), el('span', null, aim ? '던질 곳 고르기…' : `${d.name} ×${p.items[id]}`), el('kbd', null, `키 ${d.key}`));
+      b.append(icon(d.sprite), el('span', null, aim ? '던질 곳 고르기…' : `${d.name} ×${p.items[id] || 0}`), el('kbd', null, `키 ${d.key}`));
       b.title = d.desc;
       b.disabled = !p.items[id];
       items.append(b);
@@ -209,11 +211,39 @@ export class Hud {
       bar.append(b);
     }
     add(this.looking ? 'aiming' : '', 'look', this.looking ? '누르기' : '살펴보기', this.onLook);
-    for (const [id, d] of shownItems(run)) {
-      const aim = id === 'bomb' && this.aiming;
-      add(aim ? 'aiming' : '', d.sprite, aim ? '던질 곳' : `${d.name.replace('체력 ', '')} ${p.items[id]}`, () => this.onUseItem(id), !p.items[id]);
+    // the potion keeps its own button; everything else waits in the 도구 tray, so the bar stays the
+    // same five buttons however full your pockets get
+    const shown = shownItems(run), potion = shown.find(([id]) => id === 'potion'), rest = shown.filter(([id]) => id !== 'potion');
+    if (potion) add('', 'potion', `물약 ${p.items.potion || 0}`, () => this.onUseItem('potion'), !p.items.potion);
+    if (rest.length) {
+      const aim = this.aiming && ITEMS[this.aiming];
+      const n = rest.reduce((a, [id]) => a + (p.items[id] || 0), 0);
+      add(aim ? 'aiming' : this.trayOpen ? 'on' : '', aim ? aim.sprite : 'toolpouch', aim ? '던질 곳' : `도구 ${n}`, () => {
+        if (this.aiming) { this.onUseItem(this.aiming); return; }   // a second press puts it away again
+        this.trayOpen = !this.trayOpen;
+        this.renderTray(run);
+        this.renderBar(run);
+      }, !n && !aim);
     }
     add('', 'bag', `가방 ${Object.keys(p.relics).length}/${run.slots}`, this.onBag);
+    if (this.trayOpen && (!rest.some(([id]) => p.items[id] > 0) || this.aiming)) this.trayOpen = false;
+    this.renderTray(run);
+  }
+
+  // phone: what the 도구 button holds, in a row over the map; one tap uses it (or picks where to throw it)
+  renderTray(run) {
+    const tray = $('mtray'), p = run.p;
+    if (!tray) return;
+    tray.innerHTML = '';
+    tray.hidden = !this.trayOpen;
+    if (!this.trayOpen) return;
+    for (const [id, d] of shownItems(run).filter(([id]) => id !== 'potion')) {
+      const b = button('mt', null, () => { this.trayOpen = false; tray.hidden = true; this.onUseItem(id); });
+      b.append(icon(d.sprite), el('span', null, `${d.name} ${p.items[id] || 0}`));
+      b.title = d.desc;
+      b.disabled = !p.items[id];
+      tray.append(b);
+    }
   }
 }
 

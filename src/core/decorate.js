@@ -215,6 +215,26 @@ export function placeTraps(map, rooms, { start, stairs }, floor, all = true) {
   return n;
 }
 
+// 심술 버섯 (v0.26): one or two toadstools out on open ground in rooms of their own, well away from
+// where you come in and from doors and other traps, with room round them for a crowd. Returns how many.
+export function placeGrumps(map, rooms, { start, stairs }) {
+  const near = (x, y, cond) => DIRS8.some(([dx, dy]) => inMap(x + dx, y + dy) && cond(idx(x + dx, y + dy)));
+  const used = new Set();
+  let n = 0;
+  for (const r of shuffle(rooms.slice(1).filter(r => r.w >= 4 && r.h >= 4))) {
+    if (n >= rint(1, 2)) break;
+    const spot = shuffle(roomTiles(r)).find(([x, y]) => free(map, x, y) &&
+      Math.max(Math.abs(x - start.x), Math.abs(y - start.y)) > 5 && Math.max(Math.abs(x - stairs.x), Math.abs(y - stairs.y)) > 1 &&
+      DIRS8.every(([dx, dy]) => inMap(x + dx, y + dy) && map.tiles[idx(x + dx, y + dy)] === FLOOR) &&
+      !near(x, y, i => map.tiles[i] === DOOR || map.tiles[i] === ORE || TRAPS.includes(map.ter[i])));
+    if (!spot || used.has(r)) continue;
+    used.add(r);
+    map.ter[idx(...spot)] = T.TRAP_GRUMP;
+    n++;
+  }
+  return n;
+}
+
 // The boss arena by its shape: grass to hide in, a puddle or two; the pond's rim gets reeds of grass.
 export function decorateArena(map, room, keep, layout = 'pillars') {
   hangLamp(map, { ...room, cx: room.x + 3 });

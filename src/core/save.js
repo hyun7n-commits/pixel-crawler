@@ -8,7 +8,7 @@ const SAVE_KEY = 'pixel-crawler-save-v2';
 export function freshMeta() {
   return {
     gold: 0,
-    up: { hp: 0, atk: 0, pot: 0, greed: 0, reroll: 0 },
+    up: { hp: 0, atk: 0, pot: 0, greed: 0, reroll: 0, tool: 0 },
     relicUnlock: {},
     chars: { adv: true },
     sel: 'adv',

@@ -113,8 +113,8 @@ export const ENEMIES = {
   cage:     { name: '갇힌 친구', sprite: 'rogue', hp: 1, atk: 0, xp: 0, npc: true, peaceful: true, tip: CAGE_TIP },
   peddler:  { name: '상점 주인', sprite: 'peddler', hp: 1, atk: 0, xp: 0, npc: true, peaceful: true, tip: '보스 앞에 좌판을 폈다. 부딪히면 물건을 판다. 여기서 쓴 골드는 마을로 못 가져간다.' },
 
-  ratking:  { name: '왕쥐',          sprite: 'rat',  hp: 45,  atk: 3, xp: 20, boss: true, arenas: ['grove', 'pillars'], intro: '찍찍! 이 들판은 내 거다!', tip: '가끔 쥐를 불러낸다.' },
-  skelking: { name: '버섯 왕',       sprite: 'skel', hp: 90, atk: 6, xp: 30, boss: true, arenas: ['ring', 'grove'], intro: '포자 냄새 좋지? 후후후…', tip: '붉게 표시된 칸을 내려친다. 칸 밖으로 피해야 한다. 내려친 자리엔 꼬마 독버섯이 솟는다.' },
+  ratking:  { name: '왕쥐',          sprite: 'ratking',  hp: 45,  atk: 3, xp: 20, boss: true, arenas: ['grove', 'pillars'], intro: '찍찍! 이 들판은 내 거다!', tip: '가끔 쥐를 불러낸다.' },
+  skelking: { name: '버섯 왕',       sprite: 'skelking', hp: 90, atk: 6, xp: 30, boss: true, arenas: ['ring', 'grove'], intro: '포자 냄새 좋지? 후후후…', tip: '붉게 표시된 칸을 내려친다. 칸 밖으로 피해야 한다. 내려친 자리엔 꼬마 독버섯이 솟는다.' },
   toadking: { name: '개굴 대왕', sprite: 'toadking', hp: 100, atk: 7, xp: 35, boss: true, arenas: ['pond'], tongue: 6, intro: '개굴! 내 늪에서 첨벙대는 게 누구냐!',
               tip: '물속으로 잠수했다가 물결이 이는 곳에서 튀어나와 둘레를 덮친다. 붉은 칸에서 벗어나자. 혀로 끌어당기기도 한다.' },
   boarchief: { name: '멧돼지 대장', sprite: 'boarchief', hp: 115, atk: 8, def: 1, xp: 40, boss: true, arenas: ['lanes', 'pillars'], charge: 9, intro: '쿵! 쿵! 내 산에서 나가라!',
