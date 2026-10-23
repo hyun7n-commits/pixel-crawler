@@ -1116,7 +1116,7 @@ export class DungeonScene extends Phaser.Scene {
         this.float(d.x, d.y, d.hit ? '딱!' : '톡', d.hit ? '#f4cf4f' : '#d8d2c0', 0, d.hit ? 12 : 9);
         if (!d.hit) this.noiseRing(d.x, d.y, 3, 0xd8d2c0);
         break;
-      case 'dig':
+      case 'bury':
         // the squirrel scratches a hole for its pinecone, then pats the earth down over it
         if (this.run.isVisible(d.enemy.x, d.enemy.y)) {
           this.fx.dust.explode(4, center(d.enemy.x), center(d.enemy.y) + 4);

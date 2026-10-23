@@ -81,7 +81,7 @@ export function enemyAct(run, e, dmP) {
     if (e.state !== 'wander' || e.grump > 0 || e.foe != null) e.bury = 0;
     else {
       if (--e.bury >= 2) wander(run, e);
-      else run.emit('dig', { enemy: e, done: e.bury === 0 });
+      else run.emit('bury', { enemy: e, done: e.bury === 0 });
       return;
     }
   }
