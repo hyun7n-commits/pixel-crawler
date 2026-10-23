@@ -78,6 +78,8 @@ export const BELL_TURNS = 4, BELL_RANGE = 7, PINE_NOISE = 3;
 export const BURY_TURNS = 7;
 // 방울 + 박쥐: bats this close to a ringing bell lose their way (stunned while it rings)
 export const BELL_BAT_RANGE = 3;
+// 방울 + 그림자 고양이: cats this close to a ringing bell play with it until it stops
+export const BELL_CAT_RANGE = 5;
 export const CHILI_TURNS = 5, CHILI_BOSS = 2;
 // 민들레 홀씨 carries you at least this many steps' walk from where you were
 export const BLOW_MIN = 10;

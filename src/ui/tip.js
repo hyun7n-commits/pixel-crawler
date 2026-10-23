@@ -7,7 +7,7 @@ import { ROUTES } from '../data/routes.js';
 import { ORES } from '../data/ores.js';
 import { idx, inMap, STAIRS, DOOR, ORE, UPSTAIRS, WALL, GRAVE, LOCKED, HIVE, WEED } from '../core/dungeon.js';
 import { RELICS } from '../data/relics.js';
-import { cheb, josa } from '../core/util.js';
+import { josa } from '../core/util.js';
 
 const CHEST = '보물 상자: 열면 유물을 하나 고른다.';
 const PICKUP = {
@@ -70,7 +70,7 @@ export function describeTile(run, x, y, always = false) {
   }
   const e = run.enemyAt(x, y);
   // 그림자 고양이 farther than its reach is not there as far as you can tell
-  const shaded = e?.d.shade && cheb(e, p) > e.d.shade && !e.stun && !e.burn;
+  const shaded = e && run.shaded(e);
   if (e && run.isVisible(x, y) && !shaded) {
     if (e.state === 'hide') lines.push(CHEST); // a mimic looks just like one
     else if (e.state === 'lurk') lines.push('수상한 거품: 물 밑에서 보글보글 거품이 올라온다. 뭔가 숨어 있다.');
@@ -92,7 +92,7 @@ export function describeTile(run, x, y, always = false) {
       // 심술 버섯: cross with everyone
       const cross = e.grump > 0 ? `심술 나서 옆에 있는 녀석을 무는 중 (${e.grump}턴)` : '';
       // 도토리 다람쥐 with a pinecone in its paws
-      const busy = e.bury > 0 ? '솔방울을 묻으러 가는 중. 나는 안중에도 없다 (지금 치면 기습)' : e.sweetT > 0 ? '쏟아진 꿀에 정신이 팔려 있다' : '';
+      const busy = e.bury > 0 ? '솔방울을 묻으러 가는 중. 나는 안중에도 없다 (지금 치면 기습)' : e.sweetT > 0 ? (e.toy ? '방울을 갖고 노느라 정신이 없다 (지금 치면 기습)' : '쏟아진 꿀에 정신이 팔려 있다') : '';
       const how = [hot || stuck || cross || scrap || busy || dizzy || heap || STATE[e.state] || '', fire].filter(Boolean).join(', ');
       lines.push(`${e.chief ? '우두머리 ' : e.big ? '기세등등한 ' : ''}${e.d.name} · 체력 ${e.hp}/${e.maxHp} · 공격 ${e.atk} · ${how}${e.d.tip ? ` · ${e.d.tip}` : ''}`);
     }

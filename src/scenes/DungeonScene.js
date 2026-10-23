@@ -735,7 +735,7 @@ export class DungeonScene extends Phaser.Scene {
       // the owl's eye feels sleepers through the walls: a faint shape above the dark
       const sensed = run.sensed(e);
       // 그림자 고양이: out of reach of your light it melts into the dark
-      const hidden = e.d.shade && cheb(e, run.p) > e.d.shade && !e.stun && !e.burn;
+      const hidden = run.shaded(e);
       s.setVisible(((run.isVisible(e.x, e.y) && !hidden) || (still && !!map.explored[idx(e.x, e.y)]) || sensed));
       s.setAlpha(sensed ? 0.5 : 1).setDepth(sensed ? D.overlay + 0.5 : D.enemies);
       // footsteps in the dark: an awake critter moving out of sight within earshot leaves a faint print
@@ -1131,7 +1131,9 @@ export class DungeonScene extends Phaser.Scene {
         }
         break;
       case 'reel': for (const t of d.list) if (this.run.isVisible(t.x, t.y)) this.fx.spark.explode(3, center(t.x), center(t.y) - 8); break;
-      case 'sweet': for (const e of d.list) if (this.run.isVisible(e.x, e.y)) this.float(e.x, e.y, '♥', '#f29bb2', 160, 8); break;
+      case 'sweet': for (const e of d.list) if (this.run.isVisible(e.x, e.y)) this.float(e.x, e.y, d.mark || '♥', d.mark ? '#f4cf4f' : '#f29bb2', 160, 8); break;
+      // 불도마뱀 + 매운 고추: gulped down with relish
+      case 'yum': if (this.run.isVisible(d.enemy.x, d.enemy.y)) this.float(d.enemy.x, d.enemy.y + 0.1, '꿀꺽!', '#ff9a3a', 0, 10); break;
       case 'honeyPour': {
         const ring = this.add.circle(center(d.x), center(d.y), TILE * 0.6).setStrokeStyle(2, 0xf4cf4f, 0.9).setDepth(D.fx).setScale(0.4);
         this.tweens.add({ targets: ring, scale: 2.2, alpha: 0, duration: 380, ease: 'Quad.out', onComplete: () => ring.destroy() });
@@ -1256,7 +1258,7 @@ export class DungeonScene extends Phaser.Scene {
         const s = this.enemySprites[d.enemy.id];
         if (!s || !this.run.isVisible(d.enemy.x, d.enemy.y)) break;
         this.fx.spark.explode(14, center(d.enemy.x), center(d.enemy.y) - 4);
-        this.float(d.enemy.x, d.enemy.y - 0.4, '쑥!', '#ffb07a', 60, 11);
+        this.float(d.enemy.x, d.enemy.y - 0.4, '쑥!', '#ffb07a', d.late ? 520 : 60, 11); // (after what set it off, '꿀꺽!')
         this.tweens.add({ targets: s, hop: 8, duration: 120, yoyo: true, ease: 'Quad.out' });
         break;
       }

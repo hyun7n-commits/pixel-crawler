@@ -1253,6 +1253,20 @@ export class Run {
       if (seen) this.discover('chili_snow');
       return;
     }
+    // 불도마뱀 is mad about hot food: it gulps the chili down, delighted, and puffs up a size instead of
+    // running off (a bigger lizard, but one that drops a star candy when it falls)
+    if (e.type === 'salamander') {
+      const seen = this.isVisible(e.x, e.y);
+      this.emit('yum', { enemy: e });
+      if (!e.big) this.puffUp(e, seen && `${josa(e.d.name, '이', '가')} 매운 고추를 한입에 꿀꺽했다! 너무 맛있어서 기세등등하게 부풀었다.`);
+      else {
+        e.hp = Math.min(e.maxHp, e.hp + Math.round(e.maxHp * 0.3));
+        if (seen) this.log(`${josa(e.d.name, '이', '가')} 매운 고추를 또 꿀꺽했다! 기운이 펄펄 난다.`, 'warn');
+      }
+      this.say(e, '♥');
+      if (seen) this.discover('chili_salamander');
+      return;
+    }
     e.fear = e.d.boss ? B.CHILI_BOSS : B.CHILI_TURNS;
     Object.assign(e, { state: 'flee', ran: 0, pants: 0, aim: false, wake: 0, doze: 0 });
     this.emit('chili', { enemy: e });
@@ -1287,6 +1301,17 @@ export class Run {
         b.bats = true;
         this.log('방울 소리에 박쥐들이 길을 잃고 어질어질 헤맨다!', 'good');
         this.discover('bell_bats');
+      }
+      // a 그림자 고양이 is a cat all the same: a jingling bell close by and it forgets the hunt and bats
+      // the toy about until it stops ringing (ai.js e.sweetT); a blow brings it back to its senses
+      const cats = this.enemies.filter(e => e.hp > 0 && e.type === 'shadecat' && !(e.sweetT > 0) && !['sleep', 'lurk'].includes(e.state) && cheb(e, b) <= B.BELL_CAT_RANGE);
+      for (const e of cats) Object.assign(e, { toy: true, state: 'wander', aim: false, foe: null, foeT: 0, sweet: { x: b.x, y: b.y }, sweetT: b.t + 1 });
+      const shown = cats.filter(e => this.isVisible(e.x, e.y));
+      if (shown.length) this.emit('sweet', { x: b.x, y: b.y, list: shown.map(e => ({ x: e.x, y: e.y })), mark: '냥!' });
+      if (!b.cats && shown.length) {
+        b.cats = true;
+        this.log('그림자 고양이가 방울 소리에 귀를 쫑긋하더니 방울을 갖고 놀기 시작했다!', 'good');
+        this.discover('bell_cat');
       }
       for (const e of this.enemies) {
         if (e.hp <= 0 || e.d.npc || e.d.boss || this.calm(e) || cheb(e, b) > B.BELL_RANGE || e.fear > 0) continue;
@@ -1500,6 +1525,9 @@ export class Run {
   // shakes it off quicker: only its last dizzy turn counts.
   // (one busy scrapping with another critter does not see you coming either)
   unaware(e) { return ['sleep', 'wander', 'search'].includes(e.state) || this.calm(e) || this.dizzy(e) || e.foe != null; }
+  // 그림자 고양이 farther off than its reach melts into the dark, unless it is dazed, on fire or too busy
+  // with a bell to remember to hide
+  shaded(e) { return !!e.d.shade && cheb(e, this.p) > e.d.shade && !e.stun && !e.burn && !(e.toy && e.sweetT > 0); }
   dizzy(e) { return !!e.dazed || (e.stun > 0 && !e.d.boss); }
 
   playerAttack(e, ram = false) {
@@ -1640,6 +1668,7 @@ export class Run {
     e.hp -= dmg;
     e.hitAt = this.turn;
     e.bury = 0;   // a blow brings a squirrel busy with its pinecone back to its senses
+    if (e.toy) { e.toy = false; e.sweetT = 0; }  // and a cat playing with a bell
     this.emit('hit', { enemy: e, x: e.x, y: e.y, dmg, kind });
     // 무당벌레: the first time it should fall, it flips over and plays dead
     if (e.hp <= 0 && e.d.playDead && !e.faked) {
@@ -1687,11 +1716,13 @@ export class Run {
   // 다툼: the winner swells up a size (once), the way Shiren's monsters grow on a kill: tougher, bitier,
   // and worth twice the experience. Let a scrap run its course and this is what is left; jump in first
   // and it never happens.
-  puffUp(e) {
+  // (`line`: what the log says when it was not a scrap that did it; false keeps it quiet)
+  puffUp(e, line) {
     const add = Math.max(2, Math.round(e.maxHp * B.SWELL_HP));
     Object.assign(e, { big: true, maxHp: e.maxHp + add, hp: e.hp + add, atk: e.atk + Math.max(1, Math.round(e.atk * B.SWELL_ATK)), xp: 2 * (e.xp ?? e.d.xp) });
-    this.emit('puffUp', { enemy: e });
-    if (this.isVisible(e.x, e.y)) {
+    this.emit('puffUp', { enemy: e, late: line !== undefined });
+    if (line !== undefined) { if (line) this.log(line, 'warn'); }
+    else if (this.isVisible(e.x, e.y)) {
       this.say(e, '흥!');
       this.log(`싸움에서 이긴 ${josa(e.d.name, '이', '가')} 기세등등하게 부풀었다!`, 'warn');
     }
@@ -2372,7 +2403,7 @@ export class Run {
     const book = this.meta.critters ||= {};
     for (const e of this.enemies) {
       if (e.hp <= 0 || e.d.npc || e.type in book || !this.isVisible(e.x, e.y) || e.state === 'lurk' || e.diving) continue;
-      if (e.d.shade && cheb(e, this.p) > e.d.shade) continue;
+      if (this.shaded(e)) continue;
       book[e.type] = 0;
       (this.newCritters ||= []).push(e.type);
     }
