@@ -2,13 +2,15 @@
 //   ore    - one of the floor's big ores (1 to 4 tiles), with a gas crack beside it (mining makes noise and leaks gas)
 //   garden - a room overgrown with tall grass you cannot see through (one per floor at most)
 //   flood  - groundwater with a little grass around the edges
-//   plain  - nothing much, maybe a patch of grass
-// Corridors stay bare.
+//   plain  - nothing much, maybe a patch of grass or a puddle
+// Corridors stay bare. The marsh floods more of its rooms. Bigger rooms may have a lone bush or boulder
+// standing in them (cover to break line of sight, a corner to lose a chaser round), and a berry bush
+// grows by the tall grass now and then.
 
 import { T, TRAPS } from '../data/terrain.js';
-import { idx, inMap, passable, FLOOR, ORE, DOOR, distMap } from './dungeon.js';
+import { idx, inMap, passable, FLOOR, ORE, DOOR, WALL, distMap } from './dungeon.js';
 import { rint, pick, shuffle, DIRS8 } from './util.js';
-import { trapsPerFloor, trapHidden, ORES_PER_FLOOR, ORE_SIZE_CHANCE } from '../data/balance.js';
+import { trapsPerFloor, trapHidden, ORES_PER_FLOOR, ORE_SIZE_CHANCE, BERRY_CHANCE, PROPS_PER_ROOM } from '../data/balance.js';
 
 const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const free = (map, x, y) => inMap(x, y) && map.tiles[idx(x, y)] === FLOOR && map.ter[idx(x, y)] === T.NONE;
@@ -122,7 +124,8 @@ function placeOre(map, r, keep, start, floor) {
 }
 
 // Returns { has, themes }: what this floor contains (for overheard hints) and each room's theme.
-export function decorate(map, rooms, { start, stairs, floor = 1 }) {
+export function decorate(map, rooms, { start, stairs, floor = 1, style = 'meadow' }) {
+  const wet = style === 'marsh' ? 0.45 : 0.25;
   const has = new Set(), themes = [];
   const keep = (x, y) => (Math.abs(x - start.x) <= 1 && Math.abs(y - start.y) <= 1) || (x === stairs.x && y === stairs.y);
 
@@ -147,18 +150,50 @@ export function decorate(map, rooms, { start, stairs, floor = 1 }) {
       if (roll < 0.3 && !has.has('garden')) {
         theme = 'garden';
         grass(map, r, Math.round(r.w * r.h * 0.5), keep);
-      } else if (roll >= 0.3 && roll < 0.55) {
+      } else if (roll >= 0.3 && roll < 0.3 + wet) {
         theme = 'flood';
-        blob(map, r, Math.round(r.w * r.h * 0.4), T.WATER, keep);
+        blob(map, r, Math.round(r.w * r.h * (style === 'marsh' ? 0.5 : 0.4)), T.WATER, keep);
         grass(map, r, rint(2, 4), keep);
-      } else if (Math.random() < 0.6) {
-        grass(map, r, rint(3, 7), keep);
+      } else {
+        if (Math.random() < 0.6) grass(map, r, rint(3, 7), keep);
+        if (Math.random() < (style === 'marsh' ? 0.7 : 0.25)) blob(map, r, rint(2, 4), T.WATER, keep);
       }
     }
     themes[i] = theme;
     if (theme !== 'plain') has.add(theme);
   });
+  rooms.forEach((r, i) => { if (i > 0 && themes[i] !== 'garden') placeProps(map, r, keep, start); });
+  if (Math.random() < BERRY_CHANCE) placeBerry(map, rooms, keep);
   return { has, themes };
+}
+
+// A lone bush (or stump, reeds, boulder, stalagmite: drawn by zone) in the middle of a bigger room,
+// never next to a door or the walls and never cutting the floor in two.
+function placeProps(map, r, keep, start) {
+  if (r.w < 5 || r.h < 5) return;
+  const want = rint(...PROPS_PER_ROOM);
+  if (!want) return;
+  const reach = () => { const dm = distMap(map, start.x, start.y); let n = 0; for (const d of dm) if (d < 9999) n++; return n; };
+  let before = reach(), made = 0;
+  for (const [x, y] of shuffle(roomTiles(r, 1))) {
+    if (made >= want) break;
+    if (!free(map, x, y) || keep(x, y)) continue;
+    // room to walk around it: nothing but plain floor in the ring of tiles around
+    if (DIRS8.some(([dx, dy]) => map.tiles[idx(x + dx, y + dy)] !== FLOOR || map.props[idx(x + dx, y + dy)])) continue;
+    map.tiles[idx(x, y)] = WALL;
+    if (reach() !== before - 1) { map.tiles[idx(x, y)] = FLOOR; continue; }
+    map.props[idx(x, y)] = 1;
+    before--;
+    made++;
+  }
+}
+
+// A berry bush at the edge of some tall grass (or anywhere in a room if there is no grass).
+function placeBerry(map, rooms, keep) {
+  const spots = shuffle(rooms.slice(1).flatMap(r => roomTiles(r))).filter(([x, y]) => free(map, x, y) && !keep(x, y) &&
+    !DIRS8.some(([dx, dy]) => map.tiles[idx(x + dx, y + dy)] === DOOR));
+  const t = spots.find(([x, y]) => DIRS8.some(([dx, dy]) => inMap(x + dx, y + dy) && map.ter[idx(x + dx, y + dy)] === T.BRUSH)) || spots[0];
+  if (t) map.ter[idx(...t)] = T.BERRY;
 }
 
 // A few traps on room floors (never in the start room, a doorway's mouth or next to another trap).
@@ -180,9 +215,12 @@ export function placeTraps(map, rooms, { start, stairs }, floor, all = true) {
   return n;
 }
 
-export function decorateArena(map, room, keep) {
+// The boss arena by its shape: grass to hide in, a puddle or two; the pond's rim gets reeds of grass.
+export function decorateArena(map, room, keep, layout = 'pillars') {
   hangLamp(map, { ...room, cx: room.x + 3 });
   hangLamp(map, { ...room, cx: room.x + room.w - 4 });
-  for (let n = 0; n < 3; n++) grass(map, room, rint(4, 7), keep);
-  blob(map, room, rint(3, 5), T.WATER, keep);
+  const patches = { grove: 5, pond: 4, lanes: 2, cavern: 2 }[layout] ?? 3;
+  for (let n = 0; n < patches; n++) grass(map, room, rint(4, 7), keep);
+  if (layout !== 'pond') blob(map, room, rint(3, 5), T.WATER, keep);
+  if (layout === 'cavern' || layout === 'lanes') blob(map, room, rint(2, 4), T.WATER, keep);
 }

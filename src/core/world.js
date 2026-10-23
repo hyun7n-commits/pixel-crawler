@@ -36,6 +36,7 @@ export function onEnter(run, who, x, y) {
   }
   // tall grass is flattened by whoever walks into it, like in Shattered Pixel Dungeon
   if (ter === T.BRUSH) trample(run, who, x, y);
+  if (ter === T.BERRY && who === 'player') eatBerries(run, x, y);
   if (who === 'player' && isTrap(ter)) springTrap(run, x, y);
   if (who === 'player' && ter === T.RING) warp(run, x, y);
 }
@@ -50,6 +51,16 @@ function warp(run, x, y) {
   run.trail = [{ x: to.x, y: to.y }];
   run.emit('warp', { from: { x, y }, to: { x: to.x, y: to.y } });
   if (!run.told.ring) { run.told.ring = true; run.log('요정 고리에 들어갔더니 다른 고리로 뿅 하고 나왔다!', 'good'); }
+}
+
+// 산딸기 덤불: walking in, you pick the berries and eat them; what is left is an ordinary bush
+function eatBerries(run, x, y) {
+  const i = idx(x, y);
+  run.map.ter[i] = T.BRUSH;
+  run.emit('tiles', { list: [i], soft: true });
+  run.emit('berry', { x, y });
+  run.heal(B.berryHeal(run.floor));
+  run.log('산딸기를 따 먹었다. 새콤달콤하다.', 'good');
 }
 
 function trample(run, who, x, y) {

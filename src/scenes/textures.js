@@ -196,6 +196,20 @@ const DETAILS = {
     px => px('#7fb35a', [[4, 9], [5, 8], [6, 7], [7, 8], [8, 9], [6, 8], [10, 5], [11, 4], [12, 5]]), // a fern
     px => { px('#a0703f', [[4, 6], [5, 6], [10, 10], [11, 10], [9, 11]]); px('#f4f0e8', [[4, 7], [5, 7], [10, 11], [11, 11]]); },
   ],
+  marsh: [null, null, null,
+    (px, z) => { px(z.water, [[5, 8], [6, 8], [7, 8], [8, 8], [4, 9], [5, 9], [6, 9], [7, 9], [8, 9], [9, 9], [5, 10], [6, 10], [7, 10], [8, 10]]); px(z.waterLight, [[6, 9], [7, 9]]); }, // a puddle
+    px => { px('#6f7d3a', [[4, 12], [5, 11], [5, 10], [6, 9], [10, 12], [10, 11], [11, 10], [7, 12], [7, 11]]); px('#7a5230', [[5, 8], [5, 9], [11, 8], [11, 9]]); }, // two cattails
+    px => { px('#c8f07a', [[4, 5], [11, 9], [7, 12]]); px('#f4ffb8', [[4, 5]]); }, // firefly specks
+    px => { px('#d8c9a0', [[6, 9], [7, 9], [8, 9], [7, 8]]); px('#9a8c66', [[6, 10], [7, 10], [8, 10]]); px('#e58aa5', [[7, 8]]); }, // a little mushroom
+    (px, z) => { px(z.floorDark, [[4, 6], [5, 6], [6, 7], [10, 10], [11, 10], [9, 11]]); px('#7f8f5a', [[5, 5], [10, 9]]); }, // moss lumps
+  ],
+  cave: [null, null, null,
+    (px, z) => px(z.floorDark, [[3, 4], [4, 5], [5, 5], [6, 6], [7, 7], [8, 7], [9, 8], [9, 9]]), // a crack
+    (px, z) => { px(z.floorDark, [[4, 11], [5, 11], [11, 6], [12, 6]]); px(z.floorLight, [[4, 10], [5, 10], [11, 5], [12, 5]]); }, // pebbles
+    px => { px('#3d8fb3', [[6, 10], [7, 10], [7, 9], [8, 10]]); px('#8fd8f0', [[7, 8], [6, 9]]); px('#e8fbff', [[7, 8]]); }, // a blue crystal
+    px => { px('#7a4fb0', [[9, 9], [10, 9], [10, 8], [11, 9]]); px('#c49aff', [[10, 7], [9, 8]]); }, // a violet crystal
+    px => { px('#6fe0c8', [[5, 6], [11, 11]]); px('#2f8a7a', [[5, 7], [11, 12], [4, 7], [12, 12]]); }, // glowing moss
+  ],
   rock: [null, null, null,
     (px, z) => px(z.floorDark, [[3, 3], [4, 4], [5, 4], [6, 5], [7, 6], [7, 7], [8, 8], [9, 8], [10, 9]]), // a crack
     (px, z) => { px(z.floorDark, [[4, 11], [5, 11], [10, 5], [11, 5], [12, 12]]); px(z.floorLight, [[4, 10], [5, 10], [10, 4], [11, 4], [12, 11]]); },
@@ -210,7 +224,7 @@ function floorTile(z, zi, variant) {
   g.fillStyle = z.floor; g.fillRect(0, 0, TILE, TILE);
   for (let k = 0; k < 4 + (variant % 3); k++) {
     const x = 1 + Math.floor(r() * 14), y = 1 + Math.floor(r() * 14);
-    if (z.style === 'rock') px(r() < 0.6 ? z.floorDark : z.floorLight, r() < 0.4 ? [[x, y], [x + 1, y]] : [[x, y]]);
+    if (z.style === 'rock' || z.style === 'cave') px(r() < 0.6 ? z.floorDark : z.floorLight, r() < 0.4 ? [[x, y], [x + 1, y]] : [[x, y]]);
     else { px(z.floorDark, [[x, y], [x, y - 1]]); px(z.floorDark, [[x + 2, y], [x + 2, y - 1], [x + 1, y + 1]]); } // a blade or two
   }
   for (let k = 0; k < 5; k++) px(z.floorLight, [[Math.floor(r() * TILE), Math.floor(r() * TILE)]]);
@@ -242,20 +256,40 @@ function clumps(fill, r, v, y0, y1, shape, col) {
   }
 }
 
+// The top of a reed bed: thin upright blades in rows, pale tips, and now and then a cattail.
+function reedTops(fill, r, v, y1, z, hi) {
+  for (let x = 0; x < TILE; x++) {
+    for (let y = (x + v) % 3; y < y1; y += 3) {
+      const c = r();
+      fill(c < 0.3 ? z.wallDark : c < 0.75 ? z.wallLight : hi, x, y, 1, Math.min(2, y1 - y));
+    }
+  }
+  if (r() < 0.5) { const x = 2 + Math.floor(r() * 11), y = Math.floor(r() * Math.max(1, y1 - 3)); fill('#7a5230', x, y, 1, 2); fill('#4f331d', x, y + 1); }
+}
+
 // A wall seen from above. Its top fills the tile; where floor lies below it, its front shows on the
 // lower part of the tile. A dark line marks every side that faces open ground.
 //   meadow: a clipped hedge, leafy on top and in front
 //   forest: the canopy on top, and in front tree trunks standing in the dark under it
+//   marsh:  a reed bed, blades on top, stalks and cattails in front
 //   rock:   a cliff, cracked on top, with a face of rough blocks
+//   cave:   dark rock flecked with crystals, stalactites hanging off its face
 // `v` (0-2) shifts the leaves, trunks and seams so a long wall does not look stamped.
 function wallTile(z, zi, mask, v) {
   const [c, g] = canvas(), r = noise(mask * 7 + v * 131 + zi * 977 + 1);
   const fill = (col, x, y, w = 1, h = 1) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
-  const face = mask & S, topH = face ? (z.style === 'forest' ? 7 : 5) : TILE;
+  const face = mask & S, topH = face ? ({ forest: 7, marsh: 6 })[z.style] || 5 : TILE;
   // the top: rows of round leaf clumps (or boulders on the mountain), lit from the top left
   fill(z.wallTop, 0, 0, TILE, topH);
   const hi = mix(z.wallLight, '#ffffff', 0.3);
-  clumps(fill, r, v, 0, topH, z.style === 'rock' ? BOULDER : LEAVES, { h: hi, l: z.wallLight, d: z.wallDark });
+  if (z.style === 'marsh') reedTops(fill, r, v, topH, z, hi);
+  else clumps(fill, r, v, 0, topH, z.style === 'rock' || z.style === 'cave' ? BOULDER : LEAVES, { h: hi, l: z.wallLight, d: z.wallDark });
+  // the cave's rock is flecked with crystals that catch the light
+  if (z.style === 'cave') for (let k = 0; k < 2; k++) if (r() < 0.45) {
+    const x = 1 + Math.floor(r() * 13), y = 1 + Math.floor(r() * Math.max(1, topH - 3));
+    const blue = r() < 0.6;
+    fill(blue ? '#8fd8f0' : '#c49aff', x, y); fill(blue ? '#3d8fb3' : '#7a4fb0', x, y + 1); fill(blue ? '#3d8fb3' : '#7a4fb0', x + 1, y + 1);
+  }
   // the front
   if (face) {
     if (z.style === 'meadow') {
@@ -280,6 +314,27 @@ function wallTile(z, zi, mask, v) {
         fill(z.wallTop, x, topH, 1, d + 1);
         if (d) fill(z.wallDark, x, topH + 2, 1, 1);
       }
+    } else if (z.style === 'marsh') {
+      // reeds standing in the dark: stalks of two shades, a few cattails with brown heads
+      fill(z.wallLine, 0, topH, TILE, TILE - topH);
+      for (let x = (v % 2); x < TILE; x += 2) {
+        const tall = (x * 7 + v * 3) % 5, col = (x + v) % 4 === 0 ? z.wallLight : z.wallFace;
+        fill(col, x, topH, 1, TILE - topH - 1);
+        if (tall === 0) { fill('#7a5230', x, topH + 1, 1, 3); fill('#4f331d', x, topH + 3, 1, 1); }
+      }
+      for (let x = 0; x < TILE; x++) if ((x + v) % 3 === 0) fill(z.wallTop, x, topH, 1, 1);
+      fill(mix(z.water, '#000000', 0.3), 0, TILE - 2, TILE, 1);
+      fill(z.wallLine, 0, TILE - 1, TILE, 1);
+    } else if (z.style === 'cave') {
+      // a rough rock face with stalactites hanging from the brow
+      fill(z.wallFace, 0, topH, TILE, TILE - topH);
+      fill(z.wallLight, 0, topH, TILE, 1);
+      const sx = 2 + v * 4, sx2 = (sx + 7) % 14 + 1;
+      fill(z.wallDark, sx, topH + 1, 1, 6); fill(z.wallDark, sx2, topH + 3, 1, 5);
+      fill(mix(z.wallFace, '#ffffff', 0.12), sx + 1, topH + 1, 1, 5);
+      for (const [x, len] of [[sx + 3, 3], [sx2 - 2, 2]]) if (x >= 0 && x < TILE) { fill(z.wallLight, x, topH + 1, 1, len); fill(z.wallLight, x - 1, topH + 1, 3, 1); }
+      fill(z.wallDark, 0, TILE - 3, TILE, 1);
+      fill(z.wallLine, 0, TILE - 2, TILE, 2);
     } else {
       fill(z.wallFace, 0, topH, TILE, TILE - topH);
       fill(z.wallLight, 0, topH, TILE, 1);

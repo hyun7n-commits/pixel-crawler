@@ -28,10 +28,18 @@ export const HP_PER_LEVEL = 1;     // a level up heals nothing (v0.20): health o
 // (enemies.js), so walking in and trading blows with two at once loses;
 // doorways, surprise hits, bombs and backing off are what win.
 export const enemiesPerFloor = floor => 5 + localOf(floor) + stageOf(floor);
-// stat multiplier for enemies: grows field by field within a trip, and from stage to stage. Every trip
-// starts from nothing, so later stages lean on their critters' tricks more than on raw numbers; the
-// town's upgrades and the friends you bring carry you there. Attack grows by ATK_SHARE of it, health in full.
-export const STAGE_UP = 0.35;
+// stat multiplier for enemies: grows field by field within a trip (and with STAGE_UP from stage to
+// stage, none for now: each zone's critters are tougher to begin with, and the 회차 adds the rest).
+// Attack grows by ATK_SHARE of it, health in full.
+export const STAGE_UP = +(globalThis.process?.env?.STAGE_UP ?? 0);
+// 출발 보급: a deeper stage is entered as a seasoned explorer, the guild sees to that. You start at a
+// higher level, a little stronger and sturdier, and pick some relics (two levels each) before the
+// first step. Tuned with the bot (relicsim) so each stage is about as hard as the first, fresh.
+const ENV = globalThis.process?.env || {};
+export const stageKit = stage => ({
+  lvl: 1 + 2 * stage, picks: Math.round(+(ENV.KIT ?? 1.5) * stage),
+  atk: Math.round(+(ENV.KIT_ATK ?? 1.5) * stage), hp: Math.round(+(ENV.KIT_HP ?? 6) * stage),
+});
 export const enemyScale = floor => 1 + 0.15 * (localOf(floor) - 1) + STAGE_UP * stageOf(floor);
 export const ATK_SHARE = 1.6;
 export const POTION_CHANCE = 0.35;  // a potion lying somewhere on a floor (scarce: healing is precious)
@@ -39,6 +47,19 @@ export const bossScale = floor => 1 + STAGE_UP * stageOf(floor);
 // 우두머리: the crowned mid-boss that carries a caged friend's key (data/stages.js): this many times a
 // critter of its kind on that field, in health and in attack
 export const CHIEF_HP = 3, CHIEF_ATK = 1.4;
+
+// v0.21 zones. The marsh is darker (MARSH_DARK tiles of sight) but its fireflies light FLY_LIGHT tiles
+// around them, and each one caught in a jar gives a tile of sight back for the trip (FLY_MAX at most).
+export const MARSH_DARK = 2, FLY_LIGHT = 2, FLY_MAX = 2, FLIES_PER_FLOOR = [3, 5];
+// The cave: stalactites over the rooms (DRIPS_PER_ROOM), shaken loose by a noise within DRIP_SHAKE tiles.
+// A falling stone (theirs, or the boar chief's) hits for rockDmg, critters twice as hard.
+export const DRIPS_PER_ROOM = [0, 1], DRIP_SHAKE = 5;
+export const rockDmg = floor => 4 + Math.floor(floor / 2);
+
+// field terrain (v0.21): a berry bush heals a little; lone bushes and boulders stand in bigger rooms
+export const BERRY_CHANCE = 0.55;
+export const berryHeal = floor => 4 + Math.floor(floor / 3);
+export const PROPS_PER_ROOM = [0, 2];
 
 export const GOLD_DROP_CHANCE = 0.4;
 // beating a stage's boss pays this much on top (times the 회차's and the dares' gold)

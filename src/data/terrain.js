@@ -6,7 +6,7 @@
 export const T = {
   NONE: 0, BRUSH: 1, ASH: 2, WATER: 3, VENT: 4, GRASS: 5,
   TRAP_SLEEP: 6, TRAP_SUMMON: 7, TRAP_ALARM: 8, TRAP_SPIKE: 9, TRAP_OFF: 10,
-  DUG: 11, ANVIL: 12, RING: 13,
+  DUG: 11, ANVIL: 12, RING: 13, BERRY: 14,
 };
 // Like Shattered Pixel Dungeon traps: a plate that goes off once when stepped on (or blown up).
 // Some are hidden (map.hidden) until you spot them standing next to them.
@@ -28,6 +28,7 @@ export const TERRAIN = {
   [T.TRAP_OFF]:   { name: '밟힌 덫',      sprite: 'trapOff',    tip: '이미 작동한 덫이다.' },
   [T.DUG]:        { name: '파헤친 흙',    sprite: 'dug',        tip: '누군가 파헤친 자리다.' },
   [T.ANVIL]:      { name: '모루',         sprite: 'anvil',      tip: '대장장이의 모루다.' },
+  [T.BERRY]:      { name: '산딸기 덤불',  sprite: 'berry',     burn: 4, tip: '빨간 산딸기가 열렸다. 들어가면 따 먹고 체력이 조금 찬다. 덤불이라 앞을 가린다.' },
   [T.RING]:       { name: '요정 고리',    sprite: 'fairyRing',  tip: '버섯이 동그랗게 났다. 들어가면 이 구역 어딘가의 짝 고리로 뿅 하고 나간다.' },
 };
 
@@ -45,6 +46,9 @@ export const TILE_INFO = {
   fire:    { name: '불', tip: '닿으면 몸에 불이 붙는다. 웅덩이에 들어가면 꺼진다.' },
   floor:   { name: '땅', tip: '아무것도 없다.' },
   wall:    { name: '덤불', tip: '지나갈 수 없다. 폭탄으로 날려 버릴 수 있다.' },
+  prop:    { name: '덤불', tip: '방 한가운데 자란 덤불. 지나갈 수도 너머를 볼 수도 없어서 숨거나 돌아가기 좋다. 폭탄으로 날려 버릴 수 있다.' },
+  drip:    { name: '종유석', tip: '천장에 종유석이 매달려 있다. 근처에서 큰 소리가 나면 떨어져서 밑에 있는 누구든 다친다. 적을 꾀어 오자.' },
+  fly:     { name: '반딧불이', tip: '둘레를 밝힌다. 들어가면 병에 담겨서 이번 탐험 동안 조금 더 멀리 보인다.' },
 };
 
 export const GASES = {

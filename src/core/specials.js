@@ -77,6 +77,11 @@ export function placeSpecials(map, rooms, deco, ctx) {
     used.add(i);
     deco.themes[i] = theme;
     deco.has.add(theme);
+    // a set piece wants its room clear: any lone bush standing in it goes
+    const r = rooms[i];
+    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
+      if (map.props[idx(x, y)]) { delete map.props[idx(x, y)]; map.tiles[idx(x, y)] = FLOOR; }
+    }
     for (const t of floorTiles(map, rooms[i])) map.ter[idx(t.x, t.y)] = T.NONE;
   };
 

@@ -8,6 +8,7 @@
 //   flee   - badly hurt and running away (only enemies with `flees`)
 //   hide   - a mimic posing as a chest · stone - a statue standing still · npc - quest folk
 //            (none of these act; a hit, or reaching for the mimic or the statue's chest, wakes them up)
+//   lurk   - a diving beetle under the water, only its bubbles showing; bites whoever comes next to it
 
 import { lineOfSight, distMap, idx, passable } from './dungeon.js';
 import { SLEEP_MIN } from '../data/terrain.js';
@@ -37,6 +38,12 @@ export function enemyAct(run, e, dmP) {
     return;
   }
   if (e.state === 'hide' || e.state === 'stone') return;
+  // 우파루파: a turn without a hit and its wounds close a little
+  if (d.regen && e.hp < e.maxHp && run.turn - (e.hitAt ?? -9) >= 2) {
+    e.hp = Math.min(e.maxHp, e.hp + d.regen);
+    run.emit('regen', { enemy: e, n: d.regen });
+  }
+  if (e.state === 'lurk') { lurk(run, e); return; }
   if (e.stun > 0) { e.stun--; return; }
   if (e.stoneT > 0) { e.stoneT--; return; }
   // bees after you turn back once you are far enough from their stump
@@ -144,6 +151,10 @@ export function awaken(run, e) {
 // Woken by a hit (`by` = 'hit') or a noise at (x, y)
 export function rouse(run, e, by, x, y) {
   if (e.state === 'npc') return false;
+  if (e.state === 'lurk') {
+    if (by === 'hit') surface(run, e, false);
+    return false;
+  }
   if (e.state === 'hide' || e.state === 'stone') {
     if (by === 'hit') awaken(run, e);
     return false;
@@ -178,6 +189,7 @@ function hunt(run, e, dm) {
   if (run.bossSpecial(e)) return;
   if (e.backoff > 0) { e.backoff--; retreat(run, e, dm, d.fast ? 2 : 1); return; }
   if (d.charge && charge(run, e)) return;
+  if (d.tongue && tongue(run, e)) return;
   if (d.blink && blink(run, e)) return;
   const dist = cheb(e, p);
   if (d.ranged) {
@@ -200,6 +212,13 @@ function hunt(run, e, dm) {
     run.emit('attack', { from: { x: e.x, y: e.y }, to: { x: p.x, y: p.y }, who: e });
     const landed = run.damagePlayer(e.atk, e, 'melee');
     if (d.thief && landed && run.gold > 0) steal(run, e);
+    // 가재: a pinch that holds on (not every turn: it lets go to snap again)
+    if (d.grab && landed && p.hp > 0 && e.timer - (e.grabT ?? -9) >= 3) {
+      e.grabT = e.timer;
+      p.held = e.id;
+      run.emit('grab', { enemy: e, x: p.x, y: p.y });
+      run.log(`${josa(d.name, '이', '가')} 집게로 꽉 붙잡았다! 이번 턴엔 못 걸어간다.`, 'warn');
+    }
     if (d.hitAndRun) e.backoff = 2;
     if (d.stoneSkin && e.hp > 0) { e.stoneT = 1; run.emit('stone', { enemy: e }); }
     return;
@@ -273,13 +292,19 @@ function charge(run, e) {
     if (at.x !== e.x || at.y !== e.y) moveEnemy(run, e, at.x, at.y);
     run.emit('charge', { enemy: e, from, to: at, hit });
     if (hit) run.damagePlayer(e.atk * 2, e, 'charge');
-    else { e.stun = 2; run.emit('stun', { x: e.x, y: e.y }); }
+    else {
+      e.stun = 2;
+      run.emit('stun', { x: e.x, y: e.y });
+      // the boar chief hits the rock so hard that stones come down
+      if (e.d.boss) run.quake(e);
+    }
     e.chargeT = e.timer;
     return true;
   }
   const dx = p.x - e.x, dy = p.y - e.y, dist = cheb(e, p);
   const straight = dx === 0 || dy === 0 || Math.abs(dx) === Math.abs(dy);
-  if (!straight || dist < 2 || dist > e.d.charge || e.timer - (e.chargeT ?? -99) < 4) return false;
+  const rest = e.d.boss && e.hp <= e.maxHp / 2 ? 3 : 4;
+  if (!straight || dist < 2 || dist > e.d.charge || e.timer - (e.chargeT ?? -99) < rest) return false;
   const sx = Math.sign(dx), sy = Math.sign(dy), lane = [];
   for (let k = 1; k <= dist + 2; k++) {
     const x = e.x + sx * k, y = e.y + sy * k;
@@ -291,6 +316,56 @@ function charge(run, e) {
   e.charge = lane;
   run.emit('aimCharge', { enemy: e });
   return true;
+}
+
+// The frog: lined up with you a few tiles off (straight or on the slant, nothing in between), it aims its
+// tongue at your tile; next turn it shoots it, and if you are still on that tile you are reeled in
+// right up to it. Stepping off the tile is all it takes to make it miss.
+function tongue(run, e) {
+  const p = run.p, d = e.d;
+  if (e.lick) {
+    const at = e.lick;
+    e.lick = null; e.aim = false; e.aimAt = null;
+    const hit = p.x === at.x && p.y === at.y && lineOfSight(run.map, e.x, e.y, p.x, p.y);
+    const sx = Math.sign(p.x - e.x), sy = Math.sign(p.y - e.y);
+    // where you land: the first free tile next to it along the line
+    const land = { x: e.x + sx, y: e.y + sy };
+    run.emit('tongue', { enemy: e, to: { ...at }, hit, land });
+    e.lickT = e.timer;
+    if (!hit) { if (run.isVisible(e.x, e.y)) run.log(`${d.name}의 혀가 헛쳤다!`, 'good'); return true; }
+    if ((land.x !== p.x || land.y !== p.y) && run.passable(land.x, land.y) && !run.enemyAt(land.x, land.y)) {
+      run.pullPlayer(land.x, land.y, e);
+      run.log(`${d.name}의 혀에 붙잡혀 끌려갔다!`, 'warn');
+    }
+    return true;
+  }
+  const dx = p.x - e.x, dy = p.y - e.y, dist = cheb(e, p);
+  const straight = dx === 0 || dy === 0 || Math.abs(dx) === Math.abs(dy);
+  if (!straight || dist < 2 || dist > d.tongue || e.timer - (e.lickT ?? -99) < 4) return false;
+  const sx = Math.sign(dx), sy = Math.sign(dy);
+  for (let k = 1; k < dist; k++) if (!passable(run.map, e.x + sx * k, e.y + sy * k) || run.enemyAt(e.x + sx * k, e.y + sy * k)) return false;
+  if (!lineOfSight(run.map, e.x, e.y, p.x, p.y)) return false;
+  e.lick = { x: p.x, y: p.y };
+  e.aim = true; e.aimAt = { x: p.x, y: p.y };
+  run.emit('aimTongue', { enemy: e });
+  return true;
+}
+
+// 물방개: under the water it does nothing but wait, a few bubbles rising. Come next to it (or step
+// in the water beside it) and it bursts up with a bite. Spotted first, it can be hit before it moves.
+function lurk(run, e) {
+  if (!run.touching(e, run.p) || run.p.hp <= 0) return;
+  surface(run, e, true);
+}
+export function surface(run, e, bite) {
+  e.state = 'hunt';
+  e.last = { x: run.p.x, y: run.p.y };
+  run.emit('surface', { enemy: e });
+  run.say(e, '!');
+  if (!bite) return;
+  run.log(`물속에서 ${josa(e.d.name, '이', '가')} 튀어나와 덥석 물었다!`, 'warn');
+  run.emit('attack', { from: { x: e.x, y: e.y }, to: { x: run.p.x, y: run.p.y }, who: e });
+  run.damagePlayer(e.atk, e, 'melee');
 }
 
 // The wizard: let you get next to it and it pops away to somewhere it can still see you, and aims.

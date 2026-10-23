@@ -261,6 +261,16 @@ export function onRunEvent(type, d) {
     case 'swarm': play('buzz'); break;
     case 'smoke': play('puff'); play('snore'); break;
     case 'bang': play('mine', d.n + 1); if (d.last) play('levelup'); break;
+    // the marsh and the cave (v0.21)
+    case 'aimTongue': play('alert'); break;
+    case 'tongue': play(d.hit ? 'pluck' : 'dodge'); break;
+    case 'surface': case 'dive': case 'splash': play('splash'); break;
+    case 'grab': play('hit'); break;
+    case 'prick': play('hit'); break;
+    case 'rockfall': play('mine', 1); break;
+    case 'rumble': case 'quake': play('boom'); break;
+    case 'fly': play('rise', 0); break;
+    case 'berry': play('honey'); break;
     default: break;
   }
 }

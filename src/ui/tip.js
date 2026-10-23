@@ -6,6 +6,7 @@ import { ITEMS } from '../data/items.js';
 import { ORES } from '../data/ores.js';
 import { idx, inMap, STAIRS, DOOR, ORE, UPSTAIRS, WALL, GRAVE, LOCKED, HIVE, WEED } from '../core/dungeon.js';
 import { RELICS } from '../data/relics.js';
+import { cheb } from '../core/util.js';
 
 const CHEST = '보물 상자: 열면 유물을 하나 고른다.';
 const PICKUP = {
@@ -37,6 +38,9 @@ export function playerStatus(p) {
   return s;
 }
 
+// what a lone wall standing in a room is, by zone
+const PROP_NAME = { meadow: '둥근 덤불', forest: '그루터기', marsh: '갈대 무더기', rock: '바위', cave: '석순' };
+
 export function describeTile(run, x, y, always = false) {
   if (!inMap(x, y)) return '';
   const map = run.map, i = idx(x, y), p = run.p;
@@ -47,13 +51,20 @@ export function describeTile(run, x, y, always = false) {
     lines.push(`나${st.length ? ` · ${st.join(', ')}` : ''}`);
   }
   const e = run.enemyAt(x, y);
-  if (e && run.isVisible(x, y)) {
+  // 그림자 고양이 farther than its reach is not there as far as you can tell
+  const shaded = e?.d.shade && cheb(e, p) > e.d.shade && !e.stun && !e.burn;
+  if (e && run.isVisible(x, y) && !shaded) {
     if (e.state === 'hide') lines.push(CHEST); // a mimic looks just like one
+    else if (e.state === 'lurk') lines.push('수상한 거품: 물 밑에서 보글보글 거품이 올라온다. 뭔가 숨어 있다.');
+    else if (e.diving) lines.push(`${e.d.name}: 물속에 들어가 있다. 곧 튀어나온다!`);
     else if (e.state === 'stone') lines.push(`${e.d.name}: ${e.d.stoneTip}`);
     else if (e.d.npc) lines.push(`${e.d.name}: ${e.d.tip}`);
     else lines.push(`${e.chief ? '우두머리 ' : ''}${e.d.name} · 체력 ${e.hp}/${e.maxHp} · 공격 ${e.atk} · ${STATE[e.state] || ''}${e.d.tip ? ` · ${e.d.tip}` : ''}`);
   }
   const t = map.tiles[i];
+  if (t === WALL && map.props?.[i]) lines.push(`${PROP_NAME[run.zone.style] || TILE_INFO.prop.name}: ${TILE_INFO.prop.tip}`);
+  if (map.drips?.some(o => o.x === x && o.y === y)) lines.push(`${TILE_INFO.drip.name}: ${TILE_INFO.drip.tip}`);
+  if (map.flies?.some(o => o.x === x && o.y === y)) lines.push(`${TILE_INFO.fly.name}: ${TILE_INFO.fly.tip}`);
   if (t === STAIRS) lines.push(`${TILE_INFO.stairs.name}: ${TILE_INFO.stairs.tip}`);
   if (t === UPSTAIRS) lines.push(`${TILE_INFO.upStairs.name}: ${TILE_INFO.upStairs.tip}`);
   if (t === DOOR) lines.push(`${TILE_INFO.door.name}: ${TILE_INFO.door.tip}`);

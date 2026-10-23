@@ -1,6 +1,6 @@
 // The stage select, BALL x PIT style: where today's trip goes and at which 회차 (data/stages.js).
 // Each stage is a card: a little picture of its ground, its name, its boss once met, whether it has
-// been beaten at this 회차, and the friend waiting there (a dark shape until rescued). Stages not open
+// been beaten at this 회차, what the guild sends you off with (출발 보급), and the friend waiting there (a dark shape until rescued). Stages not open
 // yet show only as a locked shape, one more opening each time the one before is beaten.
 
 import { el, button, icon } from './dom.js';
@@ -11,6 +11,7 @@ import { FRIENDS, LOOPS, loopsOpen, stageOpen, cleared, loopFoe, loopGold } from
 import { daresOn, dareGold, DARE_BY_ID } from '../data/dares.js';
 import { josa } from '../core/util.js';
 import { isOpen } from '../data/unlocks.js';
+import { stageKit } from '../data/balance.js';
 
 // a small view of the zone's ground: a strip of its wall over its floor, a pool in the corner
 function swatch(z, open) {
@@ -61,6 +62,9 @@ export function showStages({ meta, onGo, onClose }) {
       const boss = ENEMIES[z.boss], met = meta.critters?.[z.boss];
       info.append(el('span', 'stage-sub', !open ? '앞 스테이지를 깨면 열린다'
         : won ? `${loop}회차 깼다 · 대장 ${boss.name}` : met ? `대장 ${boss.name}` : '대장: ???'));
+      // 출발 보급: what the guild sends you off with into a deeper stage
+      const kit = stageKit(s);
+      if (open && kit.picks) info.append(el('span', 'stage-sub kit', `출발 보급: 유물 ${kit.picks}개, 공격 +${kit.atk}, 체력 +${kit.hp}`));
       card.append(info);
       // the friend locked up here at this 회차: a dark shape until rescued
       const fid = isOpen(meta, 'cage') && FRIENDS[s][loop - 1], got = fid && meta.chars[fid];

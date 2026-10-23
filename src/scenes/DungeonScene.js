@@ -71,6 +71,9 @@ export class DungeonScene extends Phaser.Scene {
       // a hot spring's steam: soft wisps drifting up and fading
       warm: burst([0xffffff, 0xe8f6f2], { gravityY: -18, speed: { min: 2, max: 8 }, angle: { min: 250, max: 290 }, lifespan: { min: 900, max: 1500 }, scale: { start: 2.5, end: 4.5 }, alpha: { start: 0.6, end: 0 } }),
       leaf: burst([0x6cc45a, 0x2f7a43, 0xb5e08a], { gravityY: 60, speed: { min: 12, max: 36 }, lifespan: { min: 300, max: 600 }, scale: { start: 1.5, end: 0.5 } }),
+      splash: burst([0x8fd8f0, 0xffffff, 0x4f8de0], { gravityY: 160, speed: { min: 20, max: 60 }, angle: { min: 220, max: 320 } }),
+      firefly: burst([0xe6ff9a, 0xc8f07a], { gravityY: -20, speed: { min: 6, max: 24 }, lifespan: { min: 500, max: 900 }, scale: { start: 1, end: 0 } }),
+      berry: burst([0xd9454a, 0xf29bb2, 0x6cc45a], { gravityY: 60 }),
     };
     // Restraint: every burst is a few pixels, never a fountain (Shattered Pixel Dungeon keeps it this small).
     for (const em of Object.values(this.fx)) {
@@ -219,6 +222,7 @@ export class DungeonScene extends Phaser.Scene {
     this.tileImgs = [];
     this.waterImgs = new Set();
     this.shyWeeds = new Set();
+    this.flyImgs = new Set();
     this.enemySprites = {};
     this.pickupSprites = {};
     this.doorImgs = {};
@@ -312,6 +316,13 @@ export class DungeonScene extends Phaser.Scene {
 
   busy() { return performance.now() < (this.busyUntil || 0); }
 
+  // each zone's doors: a fence gate on the meadow, a log door in the forest, a reed curtain in the
+  // marsh, a stone slab on the mountain, a curtain of moss in the cave
+  doorTex(open) {
+    const key = `t_door${open ? 'Open' : ''}_${this.run.zone.style}`;
+    return this.textures.exists(key) ? key : open ? 't_doorOpen' : 't_door';
+  }
+
   makeActor(tex, x, y) {
     const s = this.add.image(center(x), foot(y), tex).setOrigin(0.5, 1);
     s.setScale(texScale(s));
@@ -341,7 +352,7 @@ export class DungeonScene extends Phaser.Scene {
   buildTile(x, y) {
     if (!inMap(x, y)) return;
     const map = this.run.map, i = idx(x, y), t = map.tiles[i], ter = map.ter[i], zi = this.zi;
-    (this.tileImgs[i] || []).forEach(img => { this.waterImgs.delete(img); this.shyWeeds.delete(img); img.destroy(); });
+    (this.tileImgs[i] || []).forEach(img => { this.waterImgs.delete(img); this.shyWeeds.delete(img); this.flyImgs.delete(img); img.destroy(); });
     const imgs = [];
     const add = (key, depth = D.tiles) => {
       const img = this.add.image(x * TILE, y * TILE, key).setOrigin(0).setDepth(depth).setVisible(false);
@@ -354,7 +365,12 @@ export class DungeonScene extends Phaser.Scene {
     const around = test => (test(x, y - 1) && N) | (test(x + 1, y) && E) | (test(x, y + 1) && S) | (test(x - 1, y) && W_) |
       (test(x + 1, y - 1) && NE) | (test(x + 1, y + 1) && SE) | (test(x - 1, y + 1) && SW) | (test(x - 1, y - 1) && NW);
     const wall = (nx, ny) => !inMap(nx, ny) || map.tiles[idx(nx, ny)] === WALL;
-    if (t === WALL) {
+    const style = this.run.zone.style;
+    if (t === WALL && map.props?.[i]) {
+      // a lone bush, stump, reed clump, boulder or stalagmite standing in a room
+      add(floorKey(zi, hash(x, y) & 31));
+      add(`t_prop_${style}`, D.ter);
+    } else if (t === WALL) {
       const open = around((nx, ny) => !wall(nx, ny));
       if (!open) { this.tileImgs[i] = null; return; }
       add(wallKey(this, zi, open, hash(x, y) % 3));
@@ -366,6 +382,9 @@ export class DungeonScene extends Phaser.Scene {
         img.shore = shore;
         img.warm = warm;
         this.waterImgs.add(img);
+        // lily pads float on the meadow's, the forest's and above all the marsh's water
+        const h = hash(x, y);
+        if (!warm && style !== 'rock' && style !== 'cave' && h % (style === 'marsh' ? 4 : 9) === 0) add(`t_lily${h % 2}`, D.ter);
       } else {
         add(floorKey(zi, hash(x, y) & 31));
         const shade = around(wall) & (N | E | W_ | NE | NW);
@@ -376,7 +395,15 @@ export class DungeonScene extends Phaser.Scene {
       if (spr) add(ter === T.BRUSH || ter === T.GRASS ? `t_${spr}${hash(x, y) % 3}` : `t_${spr}`, D.ter);
       if (t === STAIRS) add('t_stairs', D.ter);
       if (t === UPSTAIRS) add('t_upStairs', D.ter);
-      if (t === DOOR) this.doorImgs[i] = add(map.open[i] ? 't_doorOpen' : 't_door', D.ter);
+      if (t === DOOR) this.doorImgs[i] = add(this.doorTex(map.open[i]), D.ter);
+      // a stalactite overhead (its shadow and drip mark on the ground); a firefly swarm
+      if (map.drips?.some(o => o.x === x && o.y === y)) add('t_drip', D.ter);
+      if (map.flies?.some(o => o.x === x && o.y === y)) {
+        const g = add('glow', D.ter + 0.5).setOrigin(0.5).setPosition(center(x), center(y)).setBlendMode(Phaser.BlendModes.ADD);
+        const f = add('t_fly', D.ter + 0.6);
+        f.fly = g; f.seed = hash(x, y) % 1000; f.home = { x: x * TILE, y: y * TILE };
+        this.flyImgs.add(f);
+      }
       if (t === LOCKED) add('t_doorLocked', D.ter);
       if (t === GRAVE) add(map.bigGrave === i ? 't_graveBig' : 't_grave', D.ter);
       if (t === HIVE) add(map.hive?.honey ? 't_hive' : 't_hiveEmpty', D.ter);
@@ -423,7 +450,7 @@ export class DungeonScene extends Phaser.Scene {
     const map = run.map, p = run.p;
     const dur = instant ? 0 : 90;
 
-    for (const [i, img] of Object.entries(this.doorImgs)) img.setTexture(map.open[i] ? 't_doorOpen' : 't_door');
+    for (const [i, img] of Object.entries(this.doorImgs)) img.setTexture(this.doorTex(map.open[i]));
 
     this.paintFog();
     this.moveTo(this.playerSprite, p.x, p.y, dur);
@@ -445,11 +472,18 @@ export class DungeonScene extends Phaser.Scene {
         if (e.type === 'cage') s.cage = this.add.image(center(e.x), foot(e.y), 'cage').setOrigin(0.5, 1).setDepth(D.enemies + 0.1);
         this.enemySprites[e.id] = s;
       }
+      // a beetle under the water, or the toad king mid-dive: only the ripples show
+      const under = e.state === 'lurk' || e.diving, tex = under ? 'ripple' : e.state === 'hide' ? 'chest' : e.friend ? CHARACTERS[e.friend].sprite : e.d.sprite;
+      if (s.texture.key !== tex && !s.dying) { s.setTexture(tex); if (!e.d.boss && !e.chief) s.setScale(texScale(s)); }
+      s.crown?.setVisible(!under);
+      s.wet = under;
       // things that stand still (a "chest", a statue, quest folk) stay drawn once seen, like items
       const still = e.state === 'hide' || e.state === 'stone' || e.state === 'npc';
       // the owl's eye feels sleepers through the walls: a faint shape above the dark
       const sensed = run.sensed(e);
-      s.setVisible(run.isVisible(e.x, e.y) || (still && !!map.explored[idx(e.x, e.y)]) || sensed);
+      // 그림자 고양이: out of reach of your light it melts into the dark
+      const hidden = e.d.shade && cheb(e, run.p) > e.d.shade && !e.stun && !e.burn;
+      s.setVisible(((run.isVisible(e.x, e.y) && !hidden) || (still && !!map.explored[idx(e.x, e.y)]) || sensed));
       s.setAlpha(sensed ? 0.5 : 1).setDepth(sensed ? D.overlay + 0.5 : D.enemies);
       // footsteps in the dark: an awake critter moving out of sight within earshot leaves a faint print
       if (s.at && (s.at.x !== e.x || s.at.y !== e.y) && !s.visible && !['sleep', 'npc'].includes(e.state) && !e.d.npc && cheb(e, run.p) <= HEAR_STEPS) {
@@ -547,6 +581,22 @@ export class DungeonScene extends Phaser.Scene {
 
   spriteFor(who) {
     return who === 'player' ? this.playerSprite : this.enemySprites[who.id];
+  }
+
+  // A frog's tongue: a pink line shoots out to the tile it aimed at and snaps back.
+  tongue(d) {
+    const s = this.enemySprites[d.enemy.id];
+    if (!s) return;
+    const g = this.add.graphics().setDepth(D.fx);
+    const x0 = s.x, y0 = s.y - TILE * 0.45, x1 = center(d.to.x), y1 = center(d.to.y);
+    const o = { t: 0 };
+    const draw = () => {
+      g.clear();
+      const x = x0 + (x1 - x0) * o.t, y = y0 + (y1 - y0) * o.t;
+      g.lineStyle(2, 0xe58aa5, 1).lineBetween(x0, y0, x, y);
+      g.fillStyle(0xf29bb2, 1).fillCircle(x, y, 2);
+    };
+    this.tweens.add({ targets: o, t: 1, duration: 110, ease: 'Quad.out', yoyo: true, hold: 60, onUpdate: draw, onComplete: () => g.destroy() });
   }
 
   // ---------- events ----------
@@ -753,6 +803,53 @@ export class DungeonScene extends Phaser.Scene {
         break;
       }
       case 'stone': this.fx.dust.explode(8, center(d.enemy.x), center(d.enemy.y)); break;
+      // the marsh and the cave (v0.21)
+      case 'aimTongue': {
+        const s = this.enemySprites[d.enemy.id];
+        if (s) this.tweens.add({ targets: s, sqy: 1.15, sqx: 0.9, duration: 120, yoyo: true });
+        break;
+      }
+      case 'tongue': this.tongue(d); break;
+      case 'pull': this.fx.dust.explode(10, center(d.from.x), foot(d.from.y) - 2); this.face('shock', 700); break;
+      case 'surface': {
+        this.fx.splash.explode(20, center(d.enemy.x), center(d.enemy.y) + 2);
+        const s = this.enemySprites[d.enemy.id];
+        if (s) { s.hop = 6; this.tweens.add({ targets: s, hop: 0, duration: 220, ease: 'Bounce.out' }); }
+        this.face('shock', 800);
+        break;
+      }
+      case 'grab': this.float(d.x, d.y, '꽉!', '#ff9a9a', 60); break;
+      case 'struggle': {
+        const ps = this.playerSprite;
+        if (ps) this.tweens.add({ targets: ps, hop: 2, duration: 60, yoyo: true, repeat: 2 });
+        this.fx.dust.explode(6, center(d.x), foot(d.y) - 2);
+        break;
+      }
+      case 'regen': if (this.run.isVisible(d.enemy.x, d.enemy.y)) { this.float(d.enemy.x, d.enemy.y, `+${d.n}`, '#8fd36a', 0, 9); this.fx.heal.explode(4, center(d.enemy.x), center(d.enemy.y)); } break;
+      case 'prick': this.float(d.x, d.y, '따끔', '#c8f6ff', 60); this.fx.crystal.explode(8, center(d.from.x), center(d.from.y)); break;
+      case 'rockfall':
+        this.fx.rock.explode(14, center(d.x), center(d.y));
+        this.fx.dust.explode(14, center(d.x), center(d.y) + 3);
+        if (this.run.map.drips) this.rebuildAround([idx(d.x, d.y)], true);
+        break;
+      case 'rumble':
+        for (const r of this.run.rocks || []) this.fx.dust.explode(4, center(r.x), r.y * TILE + 2);
+        break;
+      case 'quake': this.fx.rock.explode(20, center(d.x), center(d.y) - 6); this.fx.dust.explode(20, center(d.x), center(d.y)); break;
+      case 'dive':
+        this.fx.splash.explode(24, center(d.from.x), center(d.from.y) + 2);
+        this.fx.splash.explode(10, center(d.to.x), center(d.to.y) + 2);
+        break;
+      case 'splash':
+        d.tiles.forEach(t => this.fx.splash.explode(5, center(t.x), center(t.y) + 3));
+        this.fx.splash.explode(20, center(d.enemy.x), center(d.enemy.y));
+        break;
+      case 'fly':
+        this.fx.firefly.explode(16, center(d.x), center(d.y));
+        this.float(d.x, d.y, '반딧불이!', '#e6ff9a', 0, 10);
+        this.rebuildAround([idx(d.x, d.y)], true);
+        break;
+      case 'berry': this.fx.berry.explode(14, center(d.x), center(d.y)); break;
       case 'aimCharge': {
         const s = this.enemySprites[d.enemy.id];
         if (s) this.tweens.add({ targets: s, hop: 4, duration: 90, yoyo: true, repeat: 1 });
@@ -1185,6 +1282,14 @@ export class DungeonScene extends Phaser.Scene {
     if (!run || !this.playerSprite || this.diving) return;
     const map = run.map, p = run.p;
 
+    // fireflies drift about their spot and pulse
+    for (const f of this.flyImgs) {
+      if (!f.visible) continue;
+      const a = time / 700 + f.seed;
+      f.setPosition(f.home.x + Math.round(1.5 * Math.sin(a)), f.home.y + Math.round(1.5 * Math.cos(a * 1.3)));
+      f.fly.setAlpha(0.55 + 0.25 * Math.sin(time / 160 + f.seed)).setScale(0.8);
+    }
+
     // lamps flicker
     for (const l of this.lamps) {
       if (!l.glow.visible) continue;
@@ -1249,6 +1354,14 @@ export class DungeonScene extends Phaser.Scene {
     const pulse = 0.35 + 0.25 * Math.sin(time / 110);
     this.teleGfx.fillStyle(0xff4646, pulse);
     for (const t of run.telegraph) this.teleGfx.fillRect(t.x * TILE, t.y * TILE, TILE, TILE);
+    // stones about to fall: the tile goes red and a shadow grows on it
+    for (const r of run.rocks || []) {
+      if (!map.explored[idx(r.x, r.y)]) continue;
+      this.teleGfx.fillStyle(0xff4646, pulse);
+      this.teleGfx.fillRect(r.x * TILE, r.y * TILE, TILE, TILE);
+      this.teleGfx.fillStyle(0x000000, 0.35 + 0.1 * Math.sin(time / 90));
+      this.teleGfx.fillEllipse(center(r.x), center(r.y) + 2, 10, 5);
+    }
     for (const e of run.enemies) {
       if (!e.charge || e.hp <= 0 || !run.isVisible(e.x, e.y)) continue;
       e.charge.forEach((t, k) => {
@@ -1456,6 +1569,15 @@ export class DungeonScene extends Phaser.Scene {
       if (time >= s.flashUntil) s.setTint(who.state === 'stone' ? 0xa8a8b8 : 0xffffff);
       return;
     }
+    if (who.state === 'lurk' || who.diving) {
+      // only ripples on the water: they spread and shrink, no body, no shadow
+      const w = 1 + 0.08 * Math.sin(time / 260 + id);
+      if (s.isCropped) s.setCrop();
+      s.wet = true; s.flat = false;
+      s.setFlipX(false).setRotation(0).setScale(texScale(s) * w * (who.diving ? 1.3 : 1), texScale(s) * (who.diving ? 1.3 : 1)).setOrigin(0.5, 1);
+      if (time >= s.flashUntil) s.setTint(0xffffff);
+      return;
+    }
     s.flat = false;
     let sx = 1, sy = 1, hop = s.hop || 0, jitter = 0, rot = 0;
     // each kind has its own way of standing about (faster when it is after you)
@@ -1477,6 +1599,13 @@ export class DungeonScene extends Phaser.Scene {
         case 'garg': sx = 1 + 0.05 * Math.sin(t / 150); break; // crawling
         case 'knight': if (t % 3000 < 220) { sx = 1.07; sy = 0.93; } break; // a snort
         case 'turtle': rot = 0.03 * Math.sin(t / 900); break;
+        case 'frog': case 'toadking': { const ph = t % 2200; if (ph < 300) hop = Math.max(hop, Math.sin(ph / 300 * Math.PI) * 3); else sy = 1 + 0.05 * Math.sin(t / 120); break; } // a throat that puffs, a hop now and then
+        case 'beetle': rot = 0.04 * Math.sin(t / 300); break;
+        case 'crab': if (t % 1800 < 300) { sx = 1.06; sy = 0.95; } break; // snapping
+        case 'axolotl': rot = 0.05 * Math.sin(t / 600); break; // waving its frills
+        case 'shadecat': if (t % 4000 < 200) flip = !flip; break;
+        case 'crystalhog': if (who.state === 'hunt') jitter = Math.sin(t / 50) * 0.4; break; // bristling
+        case 'boarchief': if (t % 2600 < 260) { sx = 1.08; sy = 0.92; } break;
         case 'root': hop = Math.max(hop, Math.abs(Math.sin(t / 60)) * 2); rot = 0.12 * Math.sin(t / 45); break; // running about in a panic
       }
     }

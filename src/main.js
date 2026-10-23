@@ -333,8 +333,9 @@ function nextChoice() {
     showChoice({ title: npc.name, sub: q.text, run, who: npc.sprite, opts: q.smithPick ? run.smithOffers() : q.opts, onPick });
     return;
   }
-  const title = q.kind === 'level' ? `레벨 ${run.p.lvl}!` : q.vein ? '바위 속 상자' : q.rich ? '잠긴 상자' : '보물 상자';
-  const sub = q.kind === 'level' ? '유물을 하나 고르자.' : q.rich ? '좋은 상자다. 넷 중 하나를 가져가자.' : '안에 든 유물 중 하나를 가져가자.';
+  const title = q.kind === 'level' ? `레벨 ${run.p.lvl}!` : q.kind === 'kit' ? `출발 보급 ${q.k}/${q.n}` : q.vein ? '바위 속 상자' : q.rich ? '잠긴 상자' : '보물 상자';
+  const sub = q.kind === 'level' ? '유물을 하나 고르자.' : q.kind === 'kit' ? '조합이 챙겨 준 보급품이다. 하나 고르자.'
+    : q.rich ? '좋은 상자다. 넷 중 하나를 가져가자.' : '안에 든 유물 중 하나를 가져가자.';
   const open = () => showChoice({
     title, sub, run, opts: run.offers(q.rich ? 4 : 3), onPick,
     onReroll: () => { run.rerolls--; open(); },
@@ -468,7 +469,9 @@ function onTileClick(x, y) {
 }
 
 // a mimic still posing as a chest, or someone to talk to, does not count as a threat
-const visibleEnemies = () => run.enemies.filter(e => e.hp > 0 && run.isVisible(e.x, e.y) && e.state !== 'hide' && e.state !== 'npc').length;
+// (nor a beetle under the water, nor a shadow cat still melted into the dark)
+const visibleEnemies = () => run.enemies.filter(e => e.hp > 0 && run.isVisible(e.x, e.y) && !['hide', 'npc', 'lurk'].includes(e.state) &&
+  !(e.d.shade && cheb(e, run.p) > e.d.shade)).length;
 
 function walkTo(x, y) {
   const m = run.map, p = run.p;
