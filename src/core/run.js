@@ -1343,8 +1343,12 @@ export class Run {
       else if (q.type === 'gold') this.addGold(q.amount, q.raw);
       else if (q.type === 'chest') {
         this.meta.stats.chests = (this.meta.stats.chests || 0) + 1;
-        this.queue.push({ kind: 'chest', rich: !!q.rich, vein: !!q.vein });
-        this.log('보물 상자를 열었다!', 'good');
+        // 낮잠 방: taken while the whole heap still sleeps, its chest holds more (one of four)
+        const heap = q.den ? this.enemies.filter(e => e.den && e.hp > 0) : [];
+        const sneak = heap.length > 0 && heap.every(e => e.state === 'sleep');
+        this.queue.push({ kind: 'chest', rich: !!q.rich || sneak, vein: !!q.vein, sneak });
+        this.log(sneak ? '아무도 깨지 않았다. 살금살금 상자를 열었다!' : '보물 상자를 열었다!', 'good');
+        if (sneak) this.discover('den_sneak');
         if (q.guarded) this.wakeStatues(x, y);
       } else if (q.type === 'bossChest') {
         // the stage's prize: the gold comes out in a heap, every relic you carry grows a level (and

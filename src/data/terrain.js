@@ -104,6 +104,7 @@ export const DISCOVERIES = [
   { id: 'grump_brawl', combo: '심술 포자 + 녀석들', result: '심술 난 녀석들끼리 물고 뜯는다', hint: '빨간 버섯 포자를 마신 녀석은 옆에 있는 녀석을 문대. 몰려 있을 때 터뜨려 봐.' },
   { id: 'big_prize',   combo: '기세등등한 녀석 + 공격', result: '쓰러뜨리면 별사탕을 떨군다', hint: '싸움에서 이기고 부푼 녀석을 쓰러뜨리면 별사탕을 떨군대.' },
   { id: 'well_evo',    combo: '소원 우물 + 유물',  result: '떠오른 유물이 가방 속 유물과 만나 진화한다', hint: '소원 우물에 유물을 던졌더니 떠오른 게 바로 진화했대.' },
+  { id: 'den_sneak',   combo: '살금살금 + 낮잠 방', result: '다 자는 동안 연 상자는 넷 중 하나를 고른다', hint: '낮잠 방 녀석들이 다 자는 동안 상자를 열면 더 좋은 게 들어 있대. 졸음 꽃가루를 뿌려 두면 쉽대.' },
 ];
 
 // Things enemies mutter when you overhear them unseen

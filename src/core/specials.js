@@ -199,7 +199,7 @@ function well(map, rooms, free, out) {
 function den(map, r, out, ctx) {
   const tiles = floorTiles(map, r).filter(t => map.ter[idx(t.x, t.y)] !== T.WATER);
   const c = tiles.reduce((a, t) => (cheb(t, mid(r)) < cheb(a, mid(r)) ? t : a), tiles[0]);
-  out.pickups.push({ x: c.x, y: c.y, type: 'chest' });
+  out.pickups.push({ x: c.x, y: c.y, type: 'chest', den: true });
   map.den = { x: c.x, y: c.y };
   const rest = shuffle(tiles.filter(t => t !== c));
   // a smaller heap on the first stages, where a fresh worker meets it
