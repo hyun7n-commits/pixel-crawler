@@ -539,6 +539,10 @@ function wallTile(z, zi, mask, v) {
       fill(mix(z.wallFace, '#ffffff', 0.15), s1 + 1, topH + 1, 4, 1); fill(mix(z.wallFace, '#ffffff', 0.15), 0, topH + 6, s2, 1);
       fill(z.wallDark, 0, TILE - 3, TILE, 1);
       fill(z.wallLine, 0, TILE - 2, TILE, 2);
+      // icicles hang from the snow's lip, one or two a tile
+      if (z.style === 'snow') for (const [x, len] of [[(v * 5 + 2) % 14 + 1, 3 + (v % 2)], [(v * 5 + 9) % 14 + 1, 2]].slice(0, v === 2 ? 1 : 2)) {
+        fill('#dff4ff', x, topH + 1, 1, len); fill('#a8cfe6', x, topH + 1 + len, 1, 1); fill('#a8cfe6', x + 1, topH + 1, 1, 1);
+      }
     }
   }
   // dark edges along every side that faces open ground
