@@ -548,18 +548,22 @@ export function buildTextures(scene) {
     if (!tx.exists(`t_drop_${grade.id}`)) tx.addCanvas(`t_drop_${grade.id}`, dropCanvas(grade, false));
     if (!tx.exists(`t_chip_${grade.id}`)) tx.addCanvas(`t_chip_${grade.id}`, dropCanvas(grade, true));
   }
+  // the scene can be built again (a trip picked up after a visit home); what exists stays
+  const add = (key, make) => { if (!tx.exists(key)) tx.addCanvas(key, make()); };
   for (let v = 0; v < 3; v++) {
-    tx.addCanvas(`t_brush${v}`, tallGrass(v));
-    tx.addCanvas(`t_grass${v}`, flatGrass(v));
+    add(`t_brush${v}`, () => tallGrass(v));
+    add(`t_grass${v}`, () => flatGrass(v));
   }
   GROUNDS.forEach((z, zi) => {
-    for (let v = 0; v < FLOOR_VARIANTS; v++) tx.addCanvas(`z${zi}_floor${v}`, floorTile(z, zi, v));
+    for (let v = 0; v < FLOOR_VARIANTS; v++) add(`z${zi}_floor${v}`, () => floorTile(z, zi, v));
   });
-  tx.addCanvas('t_lamp', spriteCanvas(LAMP));
-  tx.addCanvas('glow', glowCanvas());
-  tx.addCanvas('crystalShell', crystalCanvas());
-  const px = document.createElement('canvas');
-  px.width = 1; px.height = 1;
-  const g = px.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 1, 1);
-  tx.addCanvas('px', px);
+  add('t_lamp', () => spriteCanvas(LAMP));
+  add('glow', glowCanvas);
+  add('crystalShell', crystalCanvas);
+  add('px', () => {
+    const px = document.createElement('canvas');
+    px.width = 1; px.height = 1;
+    const g = px.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 1, 1);
+    return px;
+  });
 }

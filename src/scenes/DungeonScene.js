@@ -6,6 +6,7 @@
 import { setEmote, drawEmote } from './emotes.js';
 import { TILE, buildTextures, wallKey, waterKey, shadeKey, floorKey, oreFrame, dropKey, chipKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
 import { CHARACTERS } from '../data/characters.js';
+import { PETS } from '../data/pets.js';
 import { ITEMS } from '../data/items.js';
 import { T, TERRAIN, GASES, GAS_KEYS } from '../data/terrain.js';
 import { idx, inMap, lineOfSight, WALL, STAIRS, DOOR, ORE, UPSTAIRS, GRAVE, LOCKED, HIVE, WEED } from '../core/dungeon.js';
@@ -18,10 +19,11 @@ import { faceKey } from '../data/faces.js';
 import { tierOf } from '../data/relics.js';
 import { baseZoom } from './zoom.js';
 import { wait, fissionMs, evolveMs, FISSION_LEAD, FISSION_STEP, EVOLVE_FLASH, GROW_MS } from '../ui/beat.js';
+import { pace } from '../ui/speed.js';
 
 const D = { tiles: 0, ter: 1, fire: 2, gas: 3, telegraph: 4, pickups: 5, enemies: 6, player: 7, overlay: 8, fx: 9, bubble: 10, text: 11 };
 // what a pickup looks like on the floor (items use their own sprite)
-const PICKUP_TEX = { gold: 'gold', chest: 'chest', lockedChest: 'lockedChest', key: 'key', cageKey: 'cageKey', necklace: 'necklace', candy: 'candy', crystal: 'pedestal' };
+const PICKUP_TEX = { gold: 'gold', chest: 'chest', lockedChest: 'lockedChest', bossChest: 'bossChest', key: 'key', cageKey: 'cageKey', necklace: 'necklace', candy: 'candy', crystal: 'pedestal' };
 // critters on the wing, who never wade
 const FLIERS = new Set(['bat', 'vampLord', 'bee', 'ghostNpc']);
 const center = v => v * TILE + TILE / 2;
@@ -216,6 +218,8 @@ export class DungeonScene extends Phaser.Scene {
     Object.values(this.pickupSprites || {}).forEach(s => this.dropPickup(s));
     this.bubbles.forEach(b => b.destroy());
     this.playerSprite?.destroy();
+    this.petSprite?.destroy();
+    this.petSprite = null;
     (this.lamps || []).forEach(l => { l.lamp.destroy(); l.glow.destroy(); });
     this.lamps = [];
     this.light = null;
@@ -249,6 +253,8 @@ export class DungeonScene extends Phaser.Scene {
     this.buildLamps();
     this.heroKey = CHARACTERS[run.charId].sprite;
     this.playerSprite = this.makeActor(this.heroKey, run.p.x, run.p.y).setDepth(D.player);
+    // the pet trots along a step behind (data/pets.js)
+    if (run.pet) { this.petSprite = this.makeActor(PETS[run.pet].sprite, run.p.x, run.p.y).setDepth(D.player - 0.05); this.petSprite.x -= 10; }
     this.cameras.main.startFollow(this.playerSprite, true, 0.25, 0.25, 0, TILE / 2);
     this.cameras.main.centerOn(center(run.p.x), foot(run.p.y) - TILE / 2);
     this.sync(true);
@@ -260,7 +266,7 @@ export class DungeonScene extends Phaser.Scene {
   arrive(d) {
     const ps = this.playerSprite;
     if (!d.dir || !ps) { this.buildFloor(); this.popOut(); this.iris(true, 420); return; }
-    this.busyUntil = performance.now() + 1100;
+    this.busyUntil = performance.now() + 1100 / pace();
     this.diving = true;
     const hx = center(d.from.x), hy = foot(d.from.y), k = texScale(ps);
     this.tweens.killTweensOf(ps);
@@ -284,7 +290,7 @@ export class DungeonScene extends Phaser.Scene {
   popOut() {
     const ps = this.playerSprite;
     if (!ps) return;
-    this.busyUntil = Math.max(this.busyUntil || 0, performance.now() + 450);
+    this.busyUntil = Math.max(this.busyUntil || 0, performance.now() + 450 / pace());
     ps.sqx = 0.6; ps.sqy = 0.2; ps.hop = -4;
     this.tweens.add({ targets: ps, sqx: 1, sqy: 1, duration: 260, ease: 'Back.out' });
     this.tweens.add({ targets: ps, hop: 9, duration: 170, ease: 'Quad.out', onComplete: () => this.tweens.add({ targets: ps, hop: 0, duration: 150, ease: 'Quad.in' }) });
@@ -297,6 +303,7 @@ export class DungeonScene extends Phaser.Scene {
     if (!el) { done?.(); return; }
     const cam = this.cameras.main, box = el.parentElement.getBoundingClientRect(), R = Math.hypot(box.width, box.height);
     const t0 = performance.now();
+    ms /= pace();
     el.hidden = false;
     const tick = () => {
       const f = Math.min(1, (performance.now() - t0) / ms), ps = this.playerSprite;
@@ -516,6 +523,11 @@ export class DungeonScene extends Phaser.Scene {
       if (!s) {
         const tex = q.type === 'gold' && q.ore != null ? dropKey(q.ore) : PICKUP_TEX[q.type] || ITEMS[q.type].sprite;
         s = this.add.image(q.x * TILE, q.y * TILE, tex).setOrigin(0).setDepth(D.pickups).setData('baseY', q.y * TILE + 14);
+        if (q.type === 'bossChest') {
+          // the boss's chest sits in a warm glow that breathes
+          s.extra = this.add.image(q.x * TILE + TILE / 2, q.y * TILE + TILE / 2, 'glow').setTint(0xf4cf4f).setAlpha(0.55).setDepth(D.pickups - 0.1).setScale(1.4);
+          this.tweens.add({ targets: s.extra, alpha: 0.25, scale: 1.1, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+        }
         if (q.type === 'crystal') {
           // the relic floats shut inside a crystal above its stand
           s.extra = this.add.container(q.x * TILE, q.y * TILE - 2, [
@@ -645,6 +657,15 @@ export class DungeonScene extends Phaser.Scene {
         if (this.time.now > (this.playerSprite.soakAt || 0)) { this.playerSprite.soakAt = this.time.now + 2600; this.face('sparkle', 900); }
         break;
       case 'gold': this.float(d.x, d.y, `+${d.n}G`, '#f4cf4f', 300); break;
+      case 'peck': if (this.petSprite) this.fx.gold.explode(8, this.petSprite.x, this.petSprite.y - 2); break;
+      case 'drizzle': if (this.petSprite) this.fx.splash.explode(8, this.petSprite.x, this.petSprite.y); break;
+      case 'feel': d.at.forEach(t => this.fx.spark.explode(6, center(t.x), center(t.y))); break;
+      case 'bossChest': // the lid flies open and the stage's prize spills out
+        this.fx.gold.explode(30, center(d.x), center(d.y) - 4);
+        this.fx.spark.explode(20, center(d.x), center(d.y) - 6);
+        this.float(d.x, d.y - 0.4, `+${d.gold}G`, '#f4cf4f', 150, 14);
+        this.face('sparkle', 1600);
+        break;
       case 'pickup':
         this.fx[d.type === 'gold' ? 'gold' : 'spark'].explode(d.type === 'chest' ? 20 : 6, center(d.x), center(d.y));
         if (d.type === 'chest') this.face('sparkle', 900);
@@ -1072,9 +1093,10 @@ export class DungeonScene extends Phaser.Scene {
 
   // Like time.delayedCall, but on the page's clock, so it stays in step with the DOM cards (ui/beat.js)
   // even when frames drop. Skipped if the run has ended by then.
+  // At 2x or 3x it comes that much sooner (ui/speed.js), except during a celebration.
   later(ms, fn) {
     const run = this.run;
-    setTimeout(() => { if (this.run === run && run && !run.over) fn(); }, ms);
+    setTimeout(() => { if (this.run === run && run && !run.over) fn(); }, ms / pace());
   }
 
   // One relic growing in a star candy's burst: its icon pops up over your head with its new level.
@@ -1284,11 +1306,22 @@ export class DungeonScene extends Phaser.Scene {
     });
   }
 
+  // the pet keeps a little behind you, bobbing (the flying ones higher up)
+  followPet(ps, p, time) {
+    const pt = this.petSprite;
+    if (!pt) return;
+    const back = p.face < 0 ? 1 : -1, fly = this.run.pet === 'butterfly' || this.run.pet === 'cloud';
+    const tx = ps.x + back * 10, ty = ps.y - (fly ? 7 + 2 * Math.sin(time / 260) : 0) + 1;
+    pt.x += (tx - pt.x) * 0.12;
+    pt.y += (ty - pt.y) * 0.2;
+    pt.setFlipX(p.face < 0);
+    pt.setAlpha(ps.alpha);
+    pt.setDepth(pt.y > ps.y ? D.player + 0.05 : D.player - 0.05);
+  }
+
   // a heartbeat of stillness so a heavy hit lands
   hitStop(ms) {
-    this.tweens.timeScale = 0.05;
-    clearTimeout(this.hitStopTimer);
-    this.hitStopTimer = setTimeout(() => { this.tweens.timeScale = 1; }, ms);
+    this.stopUntil = performance.now() + ms / pace();
   }
 
   // How far a sound carries (a swing at the big ore, snoring): a ring that grows out to that distance.
@@ -1301,6 +1334,10 @@ export class DungeonScene extends Phaser.Scene {
   // ---------- per-frame drawing ----------
   update(time) {
     const run = this.run, g = this.overlay;
+    // the game speed (배속), or the moment's stillness after a heavy hit
+    const k = pace();
+    this.tweens.timeScale = performance.now() < (this.stopUntil || 0) ? 0.05 : k;
+    this.time.timeScale = k;
     g.clear(); this.teleGfx.clear(); this.puffGfx.clear(); this.pathGfx.clear(); this.gasGfx.clear(); this.fireGfx.clear(); this.shadowGfx.clear();
     // down a burrow, the old field stays on screen while the rules already hold the new one
     if (!run || !this.playerSprite || this.diving) return;
@@ -1534,7 +1571,8 @@ export class DungeonScene extends Phaser.Scene {
     else if (time > ps.nextLook) { ps.lookAt = time; ps.nextLook = time + 4000 + Math.random() * 4000; }
     const look = time - (ps.lookAt || -1e9);
     this.pose(ps, p, (p.face < 0) !== (look > 0 && look < 520), time);
-    ps.setAlpha(p.shade > 0 || p.blend ? 0.55 : 1); // hidden in the shadows after a kill (그림자 걸음), or the chameleon's colours
+    ps.setAlpha(p.shade > 0 || p.blend ? 0.55 : 1);
+    this.followPet(ps, p, time); // hidden in the shadows after a kill (그림자 걸음), or the chameleon's colours
     // holding a legend, you give off a few embers now and then; a myth, a purple shimmer
     if (time > (this.auraAt || 0)) {
       this.auraAt = time + 650;

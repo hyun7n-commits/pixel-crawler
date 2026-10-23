@@ -6,6 +6,7 @@
 import { $, el, button, icon } from './dom.js';
 import { CHARACTERS } from '../data/characters.js';
 import { UPGRADES, PACK_COST } from '../data/upgrades.js';
+import { PETS } from '../data/pets.js';
 import { isOpen, RELIC_GATES } from '../data/unlocks.js';
 import { RELICS, RECIPES, recipeKey, tierOf, DISCOVERY_GOLD } from '../data/relics.js';
 import { freshMeta, saveMeta } from '../core/save.js';
@@ -19,21 +20,24 @@ import { FRIENDS, friendSpot, cleared, loopsOpen } from '../data/stages.js';
 import { DARES, daresOpen, daresOn, dareGold, DARE_GOLD } from '../data/dares.js';
 import { DECOR, hasDecor } from '../data/home.js';
 import { decorCanvas } from '../scenes/home-art.js';
+import { savedRun } from '../core/suspend.js';
 
 export function renderPanel(id, box, ctx) {
   PANELS[id](box, ctx);
 }
 
 // The bits of the village screen that are not the map: the purse, sound, and the way out.
-export function renderVillageHud(meta) {
+// `saved`: a trip saved halfway (core/suspend.js savedRun), which the button picks up instead
+export function renderVillageHud(meta, saved = savedRun()) {
   const purse = $('vPurse');
   purse.innerHTML = '';
   purse.append(icon('gold', 20), el('span', null, `${meta.gold}G`));
-  $('vGo').textContent = `${josa(CHARACTERS[meta.sel].name, '으로', '로')} 들판에 출발`;
+  $('vGo').textContent = saved ? `이어서 탐험 · ${saved.label}` : `${josa(CHARACTERS[meta.sel].name, '으로', '로')} 들판에 출발`;
 }
 
 const startButton = (meta, onStart) => {
-  const b = button('btn primary enter', `${josa(CHARACTERS[meta.sel].name, '으로', '로')} 들판으로 출발`, onStart);
+  const saved = savedRun();
+  const b = button('btn primary enter', saved ? `이어서 탐험 · ${saved.label}` : `${josa(CHARACTERS[meta.sel].name, '으로', '로')} 들판으로 출발`, onStart);
   if (!meta.pack) return b;
   // what you packed at the shop goes out with you
   const wrap = el('div', 'go-wrap'), note = el('span', 'packed-note');
@@ -112,6 +116,7 @@ function shop(box, { meta, changed }) {
     row.append(main, b);
     list.append(row);
   }
+  pets(list, meta, buy, changed);
   // the relic shelf and packing a relic come once the meadow's boss has fallen (data/unlocks.js)
   if (!isOpen(meta, 'shelf')) { box.append(list); return; }
   list.append(el('h3', null, '들판에 새 유물 추가'));
@@ -145,6 +150,23 @@ function shop(box, { meta, changed }) {
   list.append(grid);
   if (meta.pack) list.append(el('p', 'row-sub', `${RELICS[meta.pack].name} 챙김. 다시 누르면 내려놓고 골드를 돌려받는다.`));
   box.append(list);
+}
+
+// 펫 (data/pets.js): buy one, then pick which one comes along (tap again to leave it home)
+function pets(list, meta, buy, changed) {
+  list.append(el('h3', null, '펫'));
+  list.append(el('p', 'row-sub', '데려가면 뒤를 졸졸 따라다니며 조금씩 돕는다. 적은 펫을 건드리지 않는다. 한 번에 한 마리.'));
+  for (const [id, pt] of Object.entries(PETS)) {
+    const have = meta.pets?.[id], on = meta.pet === id;
+    const row = el('div', 'row' + (on ? ' owned' : '')), main = el('div', 'row-main');
+    main.append(el('span', 'row-name', `${pt.name}<small>${pt.kind}</small>`), el('span', 'row-sub', pt.note));
+    const b = have
+      ? button('btn' + (on ? ' primary' : ''), on ? '데려감' : '데려가기', () => { meta.pet = on ? null : id; changed(); })
+      : button('btn gold', `${pt.cost}G`, () => buy(pt.cost, () => { meta.pets = { ...meta.pets, [id]: true }; meta.pet = id; }));
+    if (!have) b.disabled = meta.gold < pt.cost;
+    row.append(icon(pt.sprite, 32), main, b);
+    list.append(row);
+  }
 }
 
 // ---------- 내 집: 집 꾸미기 (data/home.js) ----------

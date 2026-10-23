@@ -228,7 +228,8 @@ export function onRunEvent(type, d) {
     case 'sneak': play('sneak'); break;
     case 'phit': play('hurt'); break;
     case 'kill': play('kill'); break;
-    case 'pickup': if (d.type !== 'candy') play(d.type === 'chest' ? 'chest' : 'gold'); break;
+    case 'pickup': if (d.type !== 'candy') play(d.type === 'chest' || d.type === 'bossChest' ? 'chest' : 'gold'); break;
+    case 'bossChest': play('jackpot'); break;
     case 'boom': case 'gasboom': play('boom'); break;
     case 'alert': play('alert'); break;
     case 'snore': play('snore'); break;

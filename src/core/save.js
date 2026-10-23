@@ -27,6 +27,8 @@ export function freshMeta() {
     dares: { on: {}, won: {} },  // the rival's dares: switched on, and the furthest stage won with each (data/dares.js)
     home: [],               // 집 꾸미기 pieces put up round your house (data/home.js)
     bookGifts: 0,           // the smith's recipe-book gifts already taken (data/balance.js bookGift)
+    pets: {},               // pets bought at the shop, and the one that comes along (data/pets.js)
+    pet: null,
   };
 }
 
@@ -56,6 +58,7 @@ export function loadMeta() {
         home: Array.isArray(m.home) ? m.home : [],
         clears: { ...m.clears },
         dares: { on: { ...m.dares?.on }, won: { ...m.dares?.won } },
+        pets: { ...m.pets },
       };
     }
   } catch (e) { /* storage blocked or corrupt: start fresh */ }

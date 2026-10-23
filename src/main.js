@@ -7,7 +7,7 @@ import { StoryScene } from './scenes/StoryScene.js';
 import { playStory } from './ui/story.js';
 import { Run, isBossFloor, BOMB_RANGE } from './core/run.js';
 import { loadMeta, saveMeta } from './core/save.js';
-import { suspend, resume, clearSuspended } from './core/suspend.js';
+import { suspend, resume, clearSuspended, savedRun } from './core/suspend.js';
 import { pathTo, idx, isBump, isStairs } from './core/dungeon.js';
 import { ENEMIES, ZONES } from './data/enemies.js';
 import { cleared } from './data/stages.js';
@@ -19,6 +19,7 @@ import { showChoice, showSummary, showTalk, closeTalk, closeModal, modalOpen } f
 import { showStages } from './ui/stages.js';
 import { showEvolve } from './ui/evo.js';
 import { showsLeft } from './ui/beat.js';
+import { speed, pace, nextSpeed } from './ui/speed.js';
 import { bossCard } from './ui/bosscard.js';
 import { FOLK } from './data/village.js';
 import { DECOR } from './data/home.js';
@@ -138,6 +139,9 @@ function afterRunStory() {
 // Heading out: first the stage select (ui/stages.js), then the trip it picked
 function chooseStage() {
   if (run) return;
+  // a trip saved halfway is picked up where it was left
+  const left = savedRun() && resume(meta);
+  if (left) { startRun(left); return; }
   sfx.play('talk');
   showVillageTip('');
   showStages({ meta, onGo: () => { saveMeta(meta); startRun(); } });
@@ -428,6 +432,7 @@ document.addEventListener('keydown', ev => {
     return;
   }
   if (k === 'm') { toggleSound(); return; }
+  if (k === 'f') { nextSpeed(); showSpeed(); return; }
   const item = { 1: 'potion', 3: 'map' }[k];
   if (item && canAct()) { clearPath(); setAim(false); run.useItem(item); }
 });
@@ -482,8 +487,9 @@ function walkTo(x, y) {
     (tx, ty) => isStairs(m.tiles[idx(tx, ty)]));
 }
 
-// auto-walk one step at a time so enemies get their turns in between
-setInterval(() => {
+// auto-walk one step at a time so enemies get their turns in between (faster at 2x and 3x)
+function walkTick() {
+  setTimeout(walkTick, 120 / pace());
   if (!canAct()) return;
   if (chase) {
     const e = chase;
@@ -495,12 +501,20 @@ setInterval(() => {
   if (!path.length) return;
   const [nx, ny] = path.shift();
   if (run.enemyAt(nx, ny) || !run.step(nx - run.p.x, ny - run.p.y)) clearPath();
-}, 120);
+}
+walkTick();
 
 // asleep or knocked out: the turns pass by themselves
-setInterval(() => {
+function dozeTick() {
+  setTimeout(dozeTick, 380 / pace());
   if (run && !run.over && !modalOpen() && run.queue.length === 0 && (run.p.sleep || run.p.stun)) run.passTurn();
-}, 380);
+}
+dozeTick();
+
+// 배속 1x → 2x → 3x
+function showSpeed() { $('speedBtn').textContent = `배속 ${speed()}x`; }
+$('speedBtn').addEventListener('click', () => { nextSpeed(); showSpeed(); });
+showSpeed();
 
 // sound: all on → effects only (no music) → all off, remembered between visits
 function showSoundState() {
@@ -528,15 +542,31 @@ document.addEventListener('gesturestart', ev => ev.preventDefault());
 $('waitBtn').addEventListener('click', restOnce);
 $('bagClose').addEventListener('click', () => setBag(false));
 $('shade').addEventListener('click', () => setBag(false));
-let quitArmed = 0;
+// 나가기: save the trip and go home (pick it up later from the village), or give it up for good
 $('quitBtn').addEventListener('click', () => {
   if (!run || run.over || modalOpen()) return;
-  const b = $('quitBtn');
-  if (Date.now() - quitArmed < 3000) { b.textContent = '포기하기'; run.cause = '스스로 돌아왔다'; run.finish(false); return; }
-  quitArmed = Date.now();
-  b.textContent = '한 번 더 누르면 포기';
-  setTimeout(() => { b.textContent = '포기하기'; }, 3000);
+  clearPath();
+  setAim(false);
+  showChoice({
+    title: '탐험을 멈출까?', sub: '탐험은 저절로 저장된다. 언제 꺼도 이 순간부터 이어서 할 수 있다.', run,
+    opts: [
+      { kind: 'ok', id: 'save', name: '저장하고 마을로', desc: '지금 이대로 두고 마을에 간다. 마을의 이어서 탐험 버튼으로 돌아온다.' },
+      { kind: 'ok', id: 'quit', name: '탐험 포기', desc: '여기서 끝내고 돌아간다. 지금까지 주운 골드는 가져간다.' },
+      { kind: 'ok', id: 'stay', name: '계속하기', desc: '들판으로 돌아간다.' },
+    ],
+    onPick: o => {
+      if (o.id === 'save') saveAndLeave();
+      if (o.id === 'quit') { run.cause = '스스로 돌아왔다'; run.finish(false); }
+    },
+  });
 });
+function saveAndLeave() {
+  putAway();
+  scene.detach();
+  run = null;
+  showVillage();
+  showVillageTip('탐험을 저장했다. 이어서 탐험을 누르면 그 자리로 돌아간다.', true);
+}
 
 // ---------- boot ----------
 // The canvas has one pixel per screen pixel (sharp on phones), shown at the stage's CSS size.

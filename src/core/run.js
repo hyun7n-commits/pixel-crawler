@@ -5,6 +5,7 @@
 import * as B from '../data/balance.js';
 import { RELICS, RECIPES, MAX_LEVEL, MAX_SLOTS, DISCOVERY_GOLD, tierOf, maxLevelOf, recipeKey, recipesWith, fusedId, isFused, fusedParts, relicName } from '../data/relics.js';
 import { CHARACTERS } from '../data/characters.js';
+import { PETS, peckGold } from '../data/pets.js';
 import { ENEMIES, ZONES } from '../data/enemies.js';
 import { ITEMS } from '../data/items.js';
 import { ORES } from '../data/ores.js';
@@ -67,6 +68,8 @@ export class Run {
     if (!CHARACTERS[this.friend]) this.friend = null;
     this.cageFloor = this.friend ? f0 + rint(1, 2) : 0;
     this.rescued = [];
+    // the pet that comes along (data/pets.js)
+    this.pet = meta.pet && meta.pets?.[meta.pet] && PETS[meta.pet] ? meta.pet : null;
     this.stall = [];
     this.request = isOpen(meta, 'request') ? pickRequest(meta, stage) : null;   // the guild's request of the day (data/requests.js)
     this.startStats = JSON.parse(JSON.stringify(meta.stats));
@@ -135,7 +138,7 @@ export class Run {
 
   // ---------- derived stats ----------
   stat() {
-    const L = this.levels(), ch = this.char, up = this.meta.up;
+    const L = this.levels(), ch = this.char, up = this.meta.up, pet = PETS[this.pet] || {};
     const lv = id => L[id] || 0, on = id => lv(id) > 0;
     // `f(id, base, per)`: nothing without the relic, else base + per × level
     const f = (id, base, per) => (on(id) ? base + per * lv(id) : 0);
@@ -149,7 +152,7 @@ export class Run {
         f('ironheart', 10, 5) + f('pillow', 16, 4) + f('giantfist', 12, 4) + 10 * lv('guardian') + (on('bloodking') ? 20 : 0) +
         (this.p.lvl - 1) * B.HP_PER_LEVEL + (this.p.honey || 0),
       goldMult: (1 + 0.4 * lv('coin') + f('goldbolt', 0.75, 0.25) + 0.25 * lv('goldstorm') + (on('minecrown') ? 0.5 : 0) + 0.1 * up.greed +
-        f('luckycharm', 1, 0.25) + f('goldfang', 0.8, 0.2) + 0.25 * lv('fortune') + (on('dawnstar') ? 0.5 : 0)) * this.goldBonus,
+        f('luckycharm', 1, 0.25) + f('goldfang', 0.8, 0.2) + 0.25 * lv('fortune') + (on('dawnstar') ? 0.5 : 0) + (pet.greed || 0)) * this.goldBonus,
       // never more than 60%: something always gets through
       dodge: Math.min(0.6, (ch.dodge || 0) + (wet ? 0.25 : 0) + 0.08 * lv('cloak') + f('shadow', 0.15, 0.05) + 0.05 * lv('phantom') +
         f('luckycharm', 0.2, 0.05) + f('spikecloak', 0.2, 0.05) + 0.05 * lv('fortune') + (on('dawnstar') ? 0.1 : 0)),
@@ -157,7 +160,7 @@ export class Run {
       sneak: best(1.5 + 0.25 * lv('boots'), f('shadow', 2.25, 0.25), f('dagger', 2.5, 0.25), f('owleye', 2, 0.25)) +
         0.5 * lv('phantom') + 0.5 * lv('nightowl') + (on('eclipse') ? 2 : 0) + (on('dawnstar') ? 1 : 0) + (ch.sneak || 0),
       sight: Math.min(B.SIGHT + 6, B.SIGHT + lv('lantern') + f('dreamlamp', 1, 1) + f('owleye', 1, 1) + f('headlamp', 1, 1) + f('sunlamp', 1, 1) + lv('nightowl')) - (this.dare('dark') ? B.DARE_DARK : 0) -
-        (this.zone.style === 'marsh' ? B.MARSH_DARK : 0) + Math.min(B.FLY_MAX, this.flies || 0) + (ch.sight || 0),
+        (this.zone.style === 'marsh' ? B.MARSH_DARK : 0) + Math.min(B.FLY_MAX, this.flies || 0) + (ch.sight || 0) + (pet.sight || 0),
       oreMult: best(1 + 0.5 * lv('pick'), f('goldrush', 1.5, 0.5), f('headlamp', 1.5, 0.5)),
       // extra chance a swing finds a better grade
       oreRise: best(0.05 * lv('pick'), f('goldrush', 0.1, 0.05), f('headlamp', 0.1, 0.05)) + (on('minecrown') ? 0.15 : 0),
@@ -874,6 +877,12 @@ export class Run {
         this.queue.push({ kind: 'chest', rich: !!q.rich, vein: !!q.vein });
         this.log('보물 상자를 열었다!', 'good');
         if (q.guarded) this.wakeStatues(x, y);
+      } else if (q.type === 'bossChest') {
+        // the stage's prize: the gold comes out in a heap and the trip is won (finish adds it)
+        this.meta.stats.chests = (this.meta.stats.chests || 0) + 1;
+        this.victory = true;
+        this.emit('bossChest', { x, y, gold: Math.round(B.stageBonus(this.stage) * this.goldBonus) });
+        this.log('대장의 보물 상자를 열었다!', 'good');
       } else if (q.type === 'lockedChest') {
         map.keyHeld = false;
         this.queue.push({ kind: 'chest', rich: true });
@@ -1033,8 +1042,11 @@ export class Run {
     if (e.d.boss) {
       if (!stats.bosses.includes(e.type)) stats.bosses.push(e.type);
       this.log(`${josa(e.d.name, '을', '를')} 쓰러뜨렸다!`, 'good');
-      if (this.floor >= this.bossFloor) this.victory = true;
-      else {
+      // the stage's last boss leaves a big chest; the trip is won when you open it
+      if (this.floor >= this.bossFloor) {
+        this.pickups.push({ x: e.x, y: e.y, type: 'bossChest' });
+        this.log('대장이 커다란 보물 상자를 남겼다! 열면 탐험 성공이다.', 'good');
+      } else {
         this.map.tiles[idx(e.x, e.y)] = STAIRS;
         this.map.ter[idx(e.x, e.y)] = T.NONE;
         this.map.down = { x: e.x, y: e.y };
@@ -1253,6 +1265,7 @@ export class Run {
       L.pillow && [4, 3, 2][L.pillow - 1]].filter(Boolean), Infinity);
     if (regen < Infinity && this.turn % regen === 0) this.heal(1);
     if (this.char.breath && this.turn % this.char.breath === 0) this.breathe();
+    if (this.pet) this.petTick();
 
     // doors shut the moment nobody stands in them, so a chaser right behind you loses sight of you
     // as you step through (the Shattered Pixel Dungeon door ambush)
@@ -1274,6 +1287,30 @@ export class Run {
     this.magnetize();
     this.respawnTick();
     this.afterTurn();
+  }
+
+  // the pet's little help, once a turn
+  petTick() {
+    const pet = PETS[this.pet], p = this.p;
+    if (pet.peck && this.turn % pet.peck === 0) {
+      this.emit('peck', { x: p.x, y: p.y });
+      this.addGold(peckGold(this.floor));
+    }
+    if (pet.drizzle && this.turn % pet.drizzle === 0 && p.hp < this.stat().maxHp) {
+      this.emit('drizzle', { x: p.x, y: p.y });
+      this.heal(1);
+    }
+    if (pet.feel) {
+      const m = this.map, list = [];
+      for (let y = p.y - pet.feel; y <= p.y + pet.feel; y++) for (let x = p.x - pet.feel; x <= p.x + pet.feel; x++) {
+        if (inMap(x, y) && m.hidden[idx(x, y)]) { m.hidden[idx(x, y)] = 0; list.push(idx(x, y)); }
+      }
+      if (list.length) {
+        this.emit('tiles', { list, soft: true });
+        this.emit('feel', { x: p.x, y: p.y, at: list.map(i => ({ x: i % m.w, y: (i / m.w) | 0 })) });
+        this.log(`${pet.name}의 더듬이가 쫑긋! 숨은 함정을 찾았다.`, 'good');
+      }
+    }
   }
 
   // 아기 용: a puff of fire at the nearest critter within two tiles that you can see
