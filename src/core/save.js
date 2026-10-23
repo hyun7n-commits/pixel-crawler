@@ -22,6 +22,7 @@ export function freshMeta() {
     lastRun: null,          // how the last run went, for the village gossip
     story: {},              // picture-book scenes already shown: intro, ratking, skelking, ending (ui/story.js)
     pack: null,             // a basic relic paid for in the shop to take on the next run (data/upgrades.js PACK_COST)
+    forge: null,            // an evolved relic (or a legend) the smith makes for the next run (FORGE_COST)
     clears: {},             // stage -> the highest 회차 it has been beaten at (data/stages.js)
     stage: 0, loop: 1,      // what the stage select has picked for the next trip
     dares: { on: {}, won: {} },  // the rival's dares: switched on, and the furthest stage won with each (data/dares.js)

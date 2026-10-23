@@ -13,7 +13,7 @@ export function bossCard(e) {
   const pic = el('div', 'bc-pic');
   const crown = icon('crown', 40);
   crown.classList.add('bc-crown');
-  pic.append(icon(e.d.sprite, 104), crown);
+  pic.append(icon(e.d.sprite, 96), crown);
   const text = el('div', 'bc-text');
   text.append(el('small', null, '보스 등장'), el('b', null, e.d.name));
   if (e.d.intro) text.append(el('p', null, `“${e.d.intro}”`));

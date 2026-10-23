@@ -5,7 +5,7 @@
 
 import { $, el, button, icon } from './dom.js';
 import { CHARACTERS } from '../data/characters.js';
-import { UPGRADES, PACK_COST } from '../data/upgrades.js';
+import { UPGRADES, PACK_COST, FORGE_COST, FORGE_LEGEND_LOOP, forgeable, forgeStock } from '../data/upgrades.js';
 import { PETS } from '../data/pets.js';
 import { isOpen, RELIC_GATES } from '../data/unlocks.js';
 import { RELICS, RECIPES, recipeKey, tierOf, DISCOVERY_GOLD } from '../data/relics.js';
@@ -32,17 +32,17 @@ export function renderPanel(id, box, ctx) {
 export function renderVillageHud(meta, saved = savedRun()) {
   const purse = $('vPurse');
   purse.innerHTML = '';
-  purse.append(icon('gold', 20), el('span', null, `${meta.gold}G`));
+  purse.append(icon('gold', 16), el('span', null, `${meta.gold}G`));
   $('vGo').textContent = saved ? `이어서 탐험 · ${saved.label}` : `${josa(CHARACTERS[meta.sel].name, '으로', '로')} 들판에 출발`;
 }
 
 const startButton = (meta, onStart) => {
   const saved = savedRun();
   const b = button('btn primary enter', saved ? `이어서 탐험 · ${saved.label}` : `${josa(CHARACTERS[meta.sel].name, '으로', '로')} 들판으로 출발`, onStart);
-  if (!meta.pack) return b;
-  // what you packed at the shop goes out with you
+  if (!meta.pack && !meta.forge) return b;
+  // what you packed at the shop, and what the smith made to order, go out with you
   const wrap = el('div', 'go-wrap'), note = el('span', 'packed-note');
-  note.append(icon(meta.pack, 20), el('span', null, `${RELICS[meta.pack].name} 챙김`));
+  for (const id of [meta.forge, meta.pack].filter(Boolean)) note.append(icon(id, 16), el('span', null, `${RELICS[id].name} 챙김`));
   wrap.append(note, b);
   return wrap;
 };
@@ -72,7 +72,7 @@ function chars(box, { meta, onStart, changed, setMeta, onStory }) {
     const c = CHARACTERS[id], owned = meta.chars[id];
     if (!owned) {
       const spot = friendSpot(id), card = el('div', 'char locked');
-      const top = el('div', 'char-top'), sp = icon(c.sprite, 40);
+      const top = el('div', 'char-top'), sp = icon(c.sprite, 48);
       sp.classList.add('char-spr');
       top.append(sp, el('span', 'char-name', '???'));
       card.append(top, el('div', 'cond', isOpen(meta, 'cage') ? `${ZONES[spot.stage].name} ${spot.loop}회차 어딘가에 갇혀 있다` : '아직 아무도 본 적이 없다'));
@@ -82,7 +82,7 @@ function chars(box, { meta, onStart, changed, setMeta, onStory }) {
     const cls = 'char' + (meta.sel === id ? ' sel' : '') + (owned ? '' : ' locked');
     const card = owned ? button(cls, null, () => { meta.sel = id; changed(); }) : el('div', cls);
     const top = el('div', 'char-top');
-    const sp = icon(c.sprite, 40);
+    const sp = icon(c.sprite, 48);
     sp.classList.add('char-spr');
     top.append(sp, el('span', 'char-name', `${c.name}${c.kind ? `<small>${c.kind}</small>` : ''}`));
     card.append(top);
@@ -221,8 +221,9 @@ function rumor(box, { meta }) {
   box.append(book);
 }
 
-// ---------- 두더지 대장장이: the recipe book and the ore book ----------
+// ---------- 두더지 대장장이: made to order, the recipe book and the ore book ----------
 function books(box, { meta, changed }) {
+  forge(box, meta, changed);
   // every recipe, found ones in full, the rest as a shadow of what they make
   const book = el('div', 'shop');
   const found = RECIPES.filter(rc => meta.recipes[recipeKey(rc)]).length;
@@ -252,6 +253,8 @@ function books(box, { meta, changed }) {
       if (got) line.append(pic(rc.a), el('span', 'rc-op', '+'), pic(rc.b), el('span', 'rc-op', '→'), pic(rc.id));
       else line.append(el('b', null, '?'), el('span', 'rc-op', '+'), el('b', null, '?'), el('span', 'rc-op', '→'), pic(rc.id, true));
       cell.append(line, el('span', 'rc-name', got ? RELICS[rc.id].name : `처음 만들면 +${DISCOVERY_GOLD[tier]}G`));
+      // a legend or myth found: its own move, in a line (the same one its evolve card shows)
+      if (got && RELICS[rc.id].sig) cell.append(el('span', 'rc-sig', RELICS[rc.id].sig));
       cell.title = got ? `${RELICS[rc.a].name} + ${RELICS[rc.b].name} → ${RELICS[rc.id].name}: ${RELICS[rc.id].desc(1)}` : '아직 아무도 모르는 조합';
       grid.append(cell);
     }
@@ -272,6 +275,34 @@ function books(box, { meta, changed }) {
   }
   ores.append(row);
   box.append(ores);
+}
+
+// 주문 제작: an evolved relic you have made before (from the second 회차 a legend too), forged for the
+// next run. Paid now; tap it again to call it off and get the gold back, or tap another to swap.
+function forge(box, meta, changed) {
+  const list = el('div', 'shop'), ids = forgeStock(meta), known = forgeable(meta).length, cost = id => FORGE_COST[tierOf(id)];
+  list.append(el('h3', null, '주문 제작'));
+  list.append(el('p', 'row-sub', ids.length
+    ? `만들 줄 아는 ${known}개 가운데 오늘 만들 수 있는 것. 들판에 다녀올 때마다 바뀐다. 다음 판에 Lv1로 들고 나간다. 한 판에 하나.${loopsOpen(meta) >= FORGE_LEGEND_LOOP ? ' 전설도 만들 수 있다.' : ` ${FORGE_LEGEND_LOOP}회차가 열리면 전설도 만들어 준다.`}`
+    : '아직 만들 줄 아는 게 없다. 들판에서 유물을 진화시켜 조합을 찾아 오자.'));
+  const grid = el('div', 'pack-grid forge-grid');
+  for (const id of ids) {
+    const on = meta.forge === id, back = meta.forge ? cost(meta.forge) : 0;
+    const b = button(`pack t${tierOf(id)}${on ? ' on' : ''}`, null, () => {
+      meta.gold += back;                       // the one ordered before is called off (money back)
+      meta.forge = on ? null : id;
+      if (!on) meta.gold -= cost(id);
+      changed();
+    });
+    b.append(icon(id, 32), el('span', null, RELICS[id].name), el('span', 'forge-price', on ? '주문함' : `${cost(id)}G`));
+    b.title = RELICS[id].desc(1);
+    b.disabled = !on && meta.gold + back < cost(id);
+    grid.append(b);
+  }
+  if (ids.length) list.append(grid);
+  // what the order does (a phone has no hover), and how to call it off
+  if (meta.forge) list.append(el('p', 'row-sub', `${josa(RELICS[meta.forge].name, '을', '를')} 주문했다. ${RELICS[meta.forge].desc(1)}. 다시 누르면 취소하고 골드를 돌려받는다.`));
+  box.append(list);
 }
 
 // ---------- 구조대원: the records ----------
@@ -330,7 +361,7 @@ function rival(box, { meta, changed }) {
     if (i >= open) return;
     const lit = !!meta.dares.on[d.id], won = meta.dares.won[d.id] || 0;
     const row = el('div', 'row dare' + (lit ? ' on' : '')), main = el('div', 'row-main');
-    row.append(icon(d.icon, 24));
+    row.append(icon(d.icon, 32));
     main.append(el('span', 'row-name', `${d.name}${won ? ` <small>${ZONES[won - 1].name}까지 돌파</small>` : ''}`), el('span', 'row-sub', `${d.desc} · 골드 +${Math.round(DARE_GOLD * 100)}%`));
     row.append(main, button('btn' + (lit ? ' gold' : ''), lit ? '거는 중' : '걸기', () => { meta.dares.on[d.id] = !lit; changed(); }));
     list.append(row);

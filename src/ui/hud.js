@@ -176,7 +176,7 @@ export class Hud {
     // 마법사's wand: its sparks, full and spent
     if (run.char.wand) {
       const b = button('item wand', null, this.onWand);
-      b.append(relicIcon('bolt'), el('span', null, `마법 지팡이 ${'●'.repeat(p.charges)}${'○'.repeat(WAND_CHARGES - p.charges)}`), el('kbd', null, '키 X'));
+      b.append(icon('wand'), el('span', null, `마법 지팡이 ${'●'.repeat(p.charges)}${'○'.repeat(WAND_CHARGES - p.charges)}`), el('kbd', null, '키 X'));
       b.title = `멀리(2~4칸) 있는 적을 누르면 마법 화살을 쏜다. ${WAND_RECHARGE}턴마다 한 발씩 다시 찬다.`;
       b.disabled = !p.charges;
       items.append(b);
@@ -204,7 +204,7 @@ export class Hud {
     add('', 'rest', '쉬기', this.onWait);
     if (run.char.wand) {
       const b = button('mb', null, this.onWand);
-      b.append(relicIcon('bolt'), el('span', null, `지팡이 ${p.charges}`));
+      b.append(icon('wand'), el('span', null, `지팡이 ${p.charges}`));
       b.disabled = !p.charges;
       bar.append(b);
     }

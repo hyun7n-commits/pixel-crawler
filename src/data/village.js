@@ -111,10 +111,10 @@ export const FOLK = {
   },
   smith: {
     name: '두더지 대장장이', sprite: 'mole', panel: 'books', when: m => m.stats.evos >= 1 || m.stats.maxFloor >= 5,
-    tip: '찾아낸 합성 조합과 반짝돌을 적어 둔다',
+    tip: '찾아낸 합성 조합을 적어 두고, 만들어 본 진화 유물을 주문받아 만든다',
     arrive: '대장간을 차렸다. 찾은 조합은 내가 다 적어 두지!',
     hint: '요즘 두더지 하나가 마을을 기웃거려. 유물을 합쳐 보거나 깊은숲까지 가 보면 이사 올지도?',
-    lines: [m => (bookGiftsDue(RECIPES.filter(rc => m.recipes[recipeKey(rc)]).length, m.bookGifts) > 0 ? '도감이 꽤 찼군! 선물이 있다.' : '새 조합 찾았나?'), '반짝돌 냄새가 나는군.', '뚝딱뚝딱.'],
+    lines: [m => (bookGiftsDue(RECIPES.filter(rc => m.recipes[recipeKey(rc)]).length, m.bookGifts) > 0 ? '도감이 꽤 찼군! 선물이 있다.' : m.forge ? '주문한 건 다 만들어 놨다. 들고 가!' : '새 조합 찾았나?'), '반짝돌 냄새가 나는군.', '뚝딱뚝딱. 주문도 받는다.'],
   },
   rescue: {
     name: '구조대원', sprite: 'rescuer', panel: 'records', when: m => deaths(m) >= 2, stroll: 1100,

@@ -5,7 +5,7 @@
 /* global Phaser */
 import { setEmote, drawEmote } from './emotes.js';
 import { pixEllipse, pixDisc, pixLine, pixDiamond, pixArrow } from './pix.js';
-import { TILE, buildTextures, wallKey, waterKey, chasmKey, seaKey, bridgeKey, GRASS_PAL, shadeKey, floorKey, oreFrame, dropKey, chipKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
+import { TILE, buildTextures, wallKey, waterKey, chasmKey, seaKey, bridgeKey, GRASS_PAL, shadeKey, floorKey, oreFrame, dropKey, chipKey, pebbleKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
 import { CHARACTERS } from '../data/characters.js';
 import { PETS } from '../data/pets.js';
 import { ITEMS } from '../data/items.js';
@@ -566,7 +566,7 @@ export class DungeonScene extends Phaser.Scene {
       }
       if (t === ORE) {
         const ore = map.ores.find(o => o.cells.some(c => idx(c.x, c.y) === i));
-        const [key, frame] = ore ? oreFrame(this, ore, x, y) : ['t_ore_copper'];
+        const [key, frame] = ore?.pebble ? [pebbleKey(ore.tier)] : ore ? oreFrame(this, ore, x, y) : ['t_ore_copper'];
         this.oreImgs[i] = add(key, D.ter);
         if (frame) this.oreImgs[i].setFrame(frame);
       }
@@ -760,8 +760,8 @@ export class DungeonScene extends Phaser.Scene {
         if (q.type === 'crystal') {
           // the relic floats shut inside a crystal above its stand
           s.extra = this.add.container(q.x * TILE, q.y * TILE - 2, [
-            this.add.image(4, 1, q.relic).setOrigin(0),
-            this.add.image(2, -2, 'crystalShell').setOrigin(0),
+            this.add.image(0, -2, q.relic).setOrigin(0),
+            this.add.image(-3, -4, 'crystalShell').setOrigin(0),
           ]).setDepth(D.pickups + 0.1);
           this.tweens.add({ targets: s.extra, y: q.y * TILE - 4, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
         } else this.tweens.add({ targets: s, y: q.y * TILE - 2, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.inOut', delay: (q.x * 97) % 600 });
@@ -1378,6 +1378,40 @@ export class DungeonScene extends Phaser.Scene {
         this.float(d.x, d.y, '막음', '#8fb8ff');
         break;
       }
+      // ---------- v0.25: the legends' and myths' own moves ----------
+      case 'erupt': {
+        // 화산 망치: the ground round what you hit glows and fire leaps up out of it
+        const g = this.add.graphics().setDepth(D.fx);
+        g.fillStyle(0xf08c3a, 0.45);
+        for (const t of d.tiles) g.fillRect(t.x * TILE + 1, t.y * TILE + 1, TILE - 2, TILE - 2);
+        this.tweens.add({ targets: g, alpha: 0, duration: 380, onComplete: () => g.destroy() });
+        for (const t of d.tiles) this.fx.fire.explode(5, center(t.x), foot(t.y) - 4);
+        this.noiseRing(d.x, d.y, 1, 0xf08c3a);
+        break;
+      }
+      case 'fade': this.fx.magic.explode(18, center(d.x), center(d.y)); break; // 달그림자: you melt into the dark
+      case 'unfade': this.fx.magic.explode(6, center(d.x), center(d.y)); break;
+      case 'sprout': this.fx.leaf.explode(16, center(d.x), center(d.y)); this.fx.berry.explode(8, center(d.x), center(d.y)); break;
+      case 'petrify': this.fx.crystal.explode(18, center(d.x), center(d.y)); this.fx.spark.explode(10, center(d.x), center(d.y)); break;
+      case 'ward': this.float(d.x, d.y, '무적', '#f4cf4f', 60); this.fx.gold.explode(6, center(d.x), center(d.y) - 6); break;
+      case 'revive': {
+        // a relic's life: a golden blast that throws back whoever stood close
+        const x = center(d.x), y = center(d.y);
+        this.fx.gold.explode(30, x, y); this.fx.spark.explode(20, x, y);
+        const ring = this.add.circle(x, y, TILE).setStrokeStyle(2, 0xf4cf4f, 1).setDepth(D.fx).setScale(0.2);
+        this.tweens.add({ targets: ring, scale: 2.2, alpha: 0, duration: 520, ease: 'Quad.out', onComplete: () => ring.destroy() });
+        this.face('sparkle', 1200);
+        break;
+      }
+      case 'goldburst': for (const t of d.spots) this.fx.gold.explode(12, center(t.x), center(t.y)); this.float(d.x, d.y - 0.3, '와르르!', '#f4cf4f', 60); break;
+      case 'bloodrage': this.noiseRing(d.x, d.y, 0, 0xd9454a); break; // 붉은 달: a red pulse round you as the blow lands
+      case 'dawn': {
+        // 새벽별: a warm light spreads out from you over the whole field
+        const x = center(d.x), y = center(d.y);
+        const glow = this.add.circle(x, y, TILE * 8, 0xfff1a8, 0.35).setDepth(D.fx).setScale(0.1).setBlendMode(Phaser.BlendModes.ADD);
+        this.tweens.add({ targets: glow, scale: 2.5, alpha: 0, duration: 1100, ease: 'Quad.out', onComplete: () => glow.destroy() });
+        break;
+      }
       // ---------- v0.23 ----------
       case 'brink': this.float(d.x, d.y, '아찔!', '#c8d8ff', 0, 9); this.fx.dust.explode(4, center(d.x), d.y * TILE + 3); break;
       case 'fall': this.face('shock', 900); break;
@@ -1751,7 +1785,7 @@ export class DungeonScene extends Phaser.Scene {
     if (d.rose) {
       for (const c of cells) {
         const im = this.oreImgs[idx(c.x, c.y)];
-        if (im?.active) im.setTexture(...oreFrame(this, { cells, tier: d.tier }, c.x, c.y));
+        if (im?.active) im.setTexture(...(d.pebble ? [pebbleKey(d.tier)] : oreFrame(this, { cells, tier: d.tier }, c.x, c.y)));
       }
       this.fx.spark.explode(24, cx, cy);
       const ring = this.add.circle(cx, cy, TILE * 0.9).setStrokeStyle(2, tint, 1).setDepth(D.fx).setScale(0.2);
@@ -1980,13 +2014,13 @@ export class DungeonScene extends Phaser.Scene {
       const corner = full ? null : ore.cells.find(c => ore.cells.filter(o => cheb(o, c) === 1 && (o.x === c.x || o.y === c.y)).length === 2);
       const cx0 = (full ? bx : corner.x) * TILE, cy0 = (full ? by : corner.y) * TILE, sx = full ? bw : 1, sy = full ? bh : 1;
       g.fillStyle(0x1b1424, 0.9);
-      const cracks = [[8, 2, 6, 7], [6, 7, 9, 11], [3, 9, 6, 7], [9, 11, 12, 13], [10, 4, 12, 8]];
+      const cracks = ore.pebble ? [[8, 7, 6, 10], [6, 10, 9, 12]] : [[8, 2, 6, 7], [6, 7, 9, 11], [3, 9, 6, 7], [9, 11, 12, 13], [10, 4, 12, 8]];
       for (let k = 0; k < ore.hits; k++) pixLine(g, cx0 + cracks[k][0] * sx, cy0 + cracks[k][1] * sy, cx0 + cracks[k][2] * sx, cy0 + cracks[k][3] * sy);
       // the pips: how many swings it has taken, over the middle of the rock
-      const px0 = bx * TILE + (bw * TILE) / 2 - 6.5;
-      for (let k = 0; k < ORE_HITS; k++) {
+      const pips = ore.pebble ? 2 : ORE_HITS, px0 = bx * TILE + (bw * TILE) / 2 - (pips * 3 - 1) / 2;
+      for (let k = 0; k < pips; k++) {
         g.fillStyle(k < ore.hits ? 0xf4cf4f : 0x2c2536, 1);
-        g.fillRect(Math.round(px0) + k * 3, by * TILE - 3, 2, 2);
+        g.fillRect(Math.round(px0) + k * 3, by * TILE + (ore.pebble ? 3 : -3), 2, 2);
       }
       // a glint now and then, so it catches your eye from across the room (a big vein glitters more)
       const c = ore.cells[Math.floor(Math.random() * ore.cells.length)];
@@ -2090,13 +2124,15 @@ export class DungeonScene extends Phaser.Scene {
     else if (time > ps.nextLook) { ps.lookAt = time; ps.nextLook = time + 4000 + Math.random() * 4000; }
     const look = time - (ps.lookAt || -1e9);
     this.pose(ps, p, (p.face < 0) !== (look > 0 && look < 520), time);
-    ps.setAlpha(p.shade > 0 || p.blend ? 0.55 : 1);
+    ps.setAlpha(p.vanish > 0 ? 0.3 : p.shade > 0 || p.blend ? 0.55 : 1);
     this.followPet(ps, p, time); // hidden in the shadows after a kill (그림자 걸음), or the chameleon's colours
     // holding a legend, you give off a few embers now and then; a myth, a purple shimmer
     if (time > (this.auraAt || 0)) {
       this.auraAt = time + 650;
       const top = Math.max(0, ...Object.keys(p.relics).map(tierOf));
       if (top >= 2) this.fx[top >= 3 ? 'magic' : 'ember'].explode(top >= 3 ? 3 : 2, ps.x + (Math.random() - 0.5) * 12, ps.y - 4 - Math.random() * 10);
+      // 불사의 심장's ward: a golden shimmer while nothing can hurt you
+      if (p.invuln > 0) this.fx.gold.explode(4, ps.x + (Math.random() - 0.5) * 12, ps.y - 4 - Math.random() * 10);
     }
     this.drawStatus(g, ps, p, ps.y - TILE - ps.hop, p.face < 0 ? -1 : 1, time);
     // nothing after you for a while: you hum to yourself, or do your own little thing (see pose)
@@ -2294,11 +2330,13 @@ export class DungeonScene extends Phaser.Scene {
       g.fillStyle(0x6fc3ff, 1);
       g.fillRect(dx, ty + 1 + bob, 2, 3); g.fillRect(dx + (dir < 0 ? 1 : 0), ty + bob, 1, 1);
     }
-    if (who.stun > 0) {
-      g.fillStyle(0xf4cf4f, 1);
+    // stars round the head: stunned, or still dizzy from it (a blow now is a surprise attack)
+    if (who.stun > 0 || who.dazed) {
+      // little four-point stars going round above the health bar
       for (let k = 0; k < 3; k++) {
-        const a = time / 180 + k * 2.1;
-        g.fillRect(Math.round(s.x + Math.cos(a) * 6) - 1, Math.round(top - 1 + Math.sin(a) * 1.5), 2, 2);
+        const a = time / 220 + k * 2.1, x = Math.round(s.x + Math.cos(a) * 6), y = Math.round(top - 7 + Math.sin(a) * 1.5);
+        g.fillStyle(0xf4cf4f, 1); g.fillRect(x - 1, y, 3, 1); g.fillRect(x, y - 1, 1, 3);
+        g.fillStyle(0xffffff, 1); g.fillRect(x, y, 1, 1);
       }
     }
     if (who.burn > 0) this.drawFlame(g, s.x - dir * 2, s.y - (s.hop || 0) - 2, 0.7, time, who.id || 7);
