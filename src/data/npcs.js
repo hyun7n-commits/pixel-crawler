@@ -17,6 +17,8 @@ export const STALL = {
 // `greet` opens the talk sheet; it is also said over their head the first time you come near,
 // unless a shorter `call` is given for that
 export const NPC_TEXT = {
+  // a friend locked in a cage (Run.openCage): `call` when you come near, `locked` without the key
+  cage: { call: '여기야! 꺼내 줘! 열쇠는 우두머리가 갖고 있어!', locked: '열쇠! 저 왕관 쓴 녀석이 물고 있어!', free: '살았다! 고마워. 마을에서 보자!' },
   ghost: {
     greet: '삐약… 일꾼님…',
     ask: '흐윽… 내 리본을 커다란 들쥐가 물어 갔어. 이 구역 어딘가에 있을 거야. 찾아 주면 내 보물을 나눠 줄게.',

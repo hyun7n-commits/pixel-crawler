@@ -10,7 +10,7 @@
 // carried home by the guild. Beat the boss at the end of a zone and you get that zone's license;
 // all three, and there is a big prize. (The prize is a house of your own.)
 
-import { HOME_ZI } from './textures.js';
+import { HOME_ZI, ART } from './textures.js';
 
 const HOME = { id: 'home', w: 5, h: 4, roof: '#f4cf4f', sign: 'heart', chimney: true };
 const GUILD = { id: 'guild', w: 5, h: 4, roof: '#3f6fb3', sign: 'flag', chimney: true };
@@ -98,7 +98,7 @@ const intro = [
       k.sky('night');
       k.ground(HOME_ZI, 2, NIGHT);
       k.hedge(HOME_ZI, L, R, 1, NIGHT);
-      const rock = k.keep(k.add.image(4.6 * 16 + 8, 3 * 16 + 16, 't_ore_gold').setOrigin(0.5, 1).setDepth(4.03).setScale(1.5));
+      const rock = k.keep(k.add.image(4.6 * 16 + 8, 3 * 16 + 16, 't_ore_gold').setOrigin(0.5, 1).setDepth(4.03).setScale(1.5 * ART));
       const hero = k.actor('adv', 3, 3, { face: 'grit' });
       k.breathe(hero);
       return { rock, hero };
@@ -108,7 +108,7 @@ const intro = [
         text: '반짝 바위는 밤에만 반짝인다. 깨면 반짝돌이 쏟아진다.',
         at: (k, c) => {
           for (let i = 0; i < 3; i++) k.time.delayedCall(i * 380, () => { k.tweens.add({ targets: c.hero, x: c.hero.x + 4, duration: 70, yoyo: true }); k.sparkle(4.6, 3, 6); });
-          k.time.delayedCall(1200, () => { k.tweens.add({ targets: c.rock, alpha: 0, scale: 2, duration: 220 }); k.coins(4.6, 2.6, 7); k.sparkle(4.6, 3, 30); k.face(c.hero, 'sparkle'); k.hop(c.hero, 2); });
+          k.time.delayedCall(1200, () => { k.tweens.add({ targets: c.rock, alpha: 0, scale: 2 * ART, duration: 220 }); k.coins(4.6, 2.6, 7); k.sparkle(4.6, 3, 30); k.face(c.hero, 'sparkle'); k.hop(c.hero, 2); });
         },
       },
       {

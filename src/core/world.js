@@ -34,8 +34,10 @@ export function onEnter(run, who, x, y) {
     run.emit('steam', { x, y });
     if (who === 'player') { run.log('웅덩이에 뛰어들어 불을 껐다.', 'good'); run.discover('water_fire'); }
   }
-  // tall grass is flattened by whoever walks into it, like in Shattered Pixel Dungeon
+  // tall grass is flattened by whoever walks into it, like in Shattered Pixel Dungeon (판다 munches it first)
+  if (ter === T.BRUSH && who === 'player' && run.char.graze) run.heal(run.char.graze);
   if (ter === T.BRUSH) trample(run, who, x, y);
+  if (ter === T.BERRY && who === 'player') eatBerries(run, x, y);
   if (who === 'player' && isTrap(ter)) springTrap(run, x, y);
   if (who === 'player' && ter === T.RING) warp(run, x, y);
 }
@@ -50,6 +52,16 @@ function warp(run, x, y) {
   run.trail = [{ x: to.x, y: to.y }];
   run.emit('warp', { from: { x, y }, to: { x: to.x, y: to.y } });
   if (!run.told.ring) { run.told.ring = true; run.log('요정 고리에 들어갔더니 다른 고리로 뿅 하고 나왔다!', 'good'); }
+}
+
+// 산딸기 덤불: walking in, you pick the berries and eat them; what is left is an ordinary bush
+function eatBerries(run, x, y) {
+  const i = idx(x, y);
+  run.map.ter[i] = T.BRUSH;
+  run.emit('tiles', { list: [i], soft: true });
+  run.emit('berry', { x, y });
+  run.heal(B.berryHeal(run.floor));
+  run.log('산딸기를 따 먹었다. 새콤달콤하다.', 'good');
 }
 
 function trample(run, who, x, y) {
@@ -138,7 +150,7 @@ export function openGrave(run, x, y) {
     run.pickups.push({ x, y, type: 'gold', amount: B.graveGold(run.floor) });
     run.log('흙 속에서 골드가 나왔다.', 'good');
   } else if (roll >= 0.7 && roll < 0.9) {
-    const type = pick(['potion', 'bomb']);
+    const type = run.dare?.('nopotion') ? 'bomb' : pick(['potion', 'bomb']);
     run.pickups.push({ x, y, type });
     run.log(`흙 속에서 ${josa(ITEMS[type].name, '이', '가')} 나왔다.`, 'good');
   } else if (roll >= 0.9) run.log('도토리 껍질뿐이다.');
@@ -271,7 +283,7 @@ export function gasExplode(run, sx, sy) {
 }
 
 // ---------- explosions ----------
-export function explosion(run, x, y, r, { dmg, cause, selfMult = 0.5, burn = 0 }) {
+export function explosion(run, x, y, r, { dmg, cause, selfMult = 0.5, burn = 0, own = false }) {
   const map = run.map, changed = [];
   let broke = false;
   run.emit('boom', { x, y, r });
@@ -279,7 +291,8 @@ export function explosion(run, x, y, r, { dmg, cause, selfMult = 0.5, burn = 0 }
     const tx = x + i, ty = y + j;
     if (!inMap(tx, ty)) continue;
     const w = whoAt(run, tx, ty);
-    if (w === 'player') run.hurtPlayer(Math.max(1, Math.round(dmg * selfMult)), cause, 'bomb');
+    // 펭귄 knows how to stand next to its own bombs
+    if (w === 'player') { if (!(own && run.char.bombs)) run.hurtPlayer(Math.max(1, Math.round(dmg * selfMult)), cause, 'bomb'); }
     else if (w) { run.hurt(w, dmg, 'fire'); if (burn && w.hp > 0) setBurn(run, w, burn); }
     const t = map.tiles[idx(tx, ty)];
     if (t === GRAVE) { openGrave(run, tx, ty); continue; }

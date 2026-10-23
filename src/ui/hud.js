@@ -2,7 +2,7 @@
 // On a phone the same panel is a bag sheet, with a slim status bar on top and a toolbar below.
 
 import { $, el, button, icon } from './dom.js';
-import { RELICS, MAX_SLOTS, MAX_LEVEL, tierOf, maxLevelOf, isFused, fusedParts, relicName, recipesWith, recipeKey } from '../data/relics.js';
+import { RELICS, MAX_LEVEL, tierOf, maxLevelOf, isFused, fusedParts, relicName, recipesWith, recipeKey } from '../data/relics.js';
 import { recipeFor, relicIcon } from './recipe.js';
 
 const TIER_CLASS = ['', ' evo', ' legend', ' myth'];
@@ -10,8 +10,7 @@ const TIER_NAME = ['', ' (진화)', ' (전설)', ' (신화)'];
 const relicDesc = (id, l) => (isFused(id) ? fusedParts(id).map(p => RELICS[p].desc(maxLevelOf(p))).join(' / ') : RELICS[id].desc(l));
 import { ITEMS } from '../data/items.js';
 import { isOpen } from '../data/unlocks.js';
-import { LAST_FLOOR, xpToLevel } from '../data/balance.js';
-import { zoneOf, isBossFloor } from '../core/run.js';
+import { xpToLevel } from '../data/balance.js';
 import { playerStatus } from './tip.js';
 import { wait, fissionMs, FISSION_LEAD, FISSION_STEP, GROW_MS } from './beat.js';
 
@@ -20,12 +19,15 @@ const shownItems = run => Object.entries(ITEMS).filter(([id]) => isOpen(run.meta
 
 // What the quest folk asked of you and have not had back yet.
 function questLines(run) {
-  const { ghost, smith } = run.quests, out = [], q = run.request;
+  const { ghost, smith } = run.quests, out = [], q = run.request, at = f => run.floorName(f);
   if (q) out.push(q.done ? `조합 의뢰 완료! ${q.text} (+${q.pay}G)` : `조합 의뢰: ${q.text} (${q.got}/${q.n}) · 일당 ${q.pay}G`);
-  if (ghost.state === 'asked') out.push(`울보 아기새의 부탁: 리본 도둑 들쥐를 잡자 (${ghost.floor}구역)`);
-  if (ghost.state === 'found') out.push(`울보 아기새에게 리본을 돌려주자 (${ghost.floor}구역)`);
+  if (ghost.state === 'asked') out.push(`울보 아기새의 부탁: 리본 도둑 들쥐를 잡자 (${at(ghost.floor)})`);
+  if (ghost.state === 'found') out.push(`울보 아기새에게 리본을 돌려주자 (${at(ghost.floor)})`);
   if (smith.state === 'asked') {
-    out.push(smith.chunk === null ? `대장장이의 부탁: ${smith.floor}구역 반짝 바위를 끝까지 캐자` : `대장장이에게 반짝돌 덩어리를 가져가자 (${smith.floor}구역)`);
+    out.push(smith.chunk === null ? `대장장이의 부탁: ${at(smith.floor)} 반짝 바위를 끝까지 캐자` : `대장장이에게 반짝돌 덩어리를 가져가자 (${at(smith.floor)})`);
+  }
+  if (run.has?.has('cage') && !run.rescued.length) {
+    out.push(run.map.cageKey ? '우리 열쇠를 찾았다! 갇힌 친구에게 가자' : '이 들판 어딘가에 누가 갇혀 있다. 열쇠는 우두머리가 물고 있다');
   }
   return out;
 }
@@ -97,8 +99,11 @@ export class Hud {
 
   update(run) {
     const s = run.stat(), p = run.p;
-    const star = run.danger ? ` ★${run.danger}` : '';
-    $('floorLabel').innerHTML = `${run.floor}구역<small>${isBossFloor(run.floor) ? '보스' : zoneOf(run.floor).name} · ${LAST_FLOOR}구역까지${star}</small>`;
+    // the zone, how far into the trip (the last field is its boss), the 회차 and the dares taken
+    const boss = run.floor === run.bossFloor, local = run.floor - run.startFloor + 1;
+    const where = boss ? '대장' : `${local}/${run.bossFloor - run.startFloor}`;
+    const extra = `${run.loop}회차${run.dares.length ? ` · 내기 ${run.dares.length}` : ''}`;
+    $('floorLabel').innerHTML = `${run.zone.name} ${where}<small>${extra}</small>`;
     $('goldNow').textContent = `${run.gold}G`;
     $('hpText').textContent = `${Math.max(0, p.hp)} / ${s.maxHp}`;
     $('hpbar').firstElementChild.style.width = `${(Math.max(0, p.hp) / s.maxHp) * 100}%`;
@@ -111,12 +116,13 @@ export class Hud {
     $('xpbar').firstElementChild.style.width = `${(p.xp / xpToLevel(p.lvl)) * 100}%`;
     const st = playerStatus(p);
     if (run.map?.keyHeld) st.push('열쇠');
+    if (run.map?.cageKey) st.push('우리 열쇠');
     $('pstatus').innerHTML = '';
     for (const t of st) $('pstatus').append(el('span', 'chip', t));
     $('quests').innerHTML = '';
     for (const t of questLines(run)) $('quests').append(el('div', 'quest', t));
 
-    $('mFloor').innerHTML = `${run.floor}구역<small>${isBossFloor(run.floor) ? '보스' : zoneOf(run.floor).name}${run.danger ? ` ★${run.danger}` : ''}</small>`;
+    $('mFloor').innerHTML = `${run.zone.name} ${where}<small>${extra}</small>`;
     $('mGold').textContent = `${run.gold}G`;
     $('mHpText').textContent = `${Math.max(0, p.hp)} / ${s.maxHp}`;
     $('mHp').firstElementChild.style.width = $('hpbar').firstElementChild.style.width;
@@ -129,10 +135,10 @@ export class Hud {
     this.renderBar(run);
 
     const ids = Object.keys(p.relics);
-    $('slotText').textContent = `${ids.length}/${MAX_SLOTS}`;
+    $('slotText').textContent = `${ids.length}/${run.slots}`;
     const box = $('relics');
     box.innerHTML = '';
-    for (let i = 0; i < MAX_SLOTS; i++) {
+    for (let i = 0; i < run.slots; i++) {
       const id = ids[i];
       if (!id) { const b = button('relic empty'); b.disabled = true; box.append(b); continue; }
       // a relic at its top level says MAX in gold: fully grown, the way basic ones must be to evolve
@@ -189,7 +195,7 @@ export class Hud {
       const aim = id === 'bomb' && this.aiming;
       add(aim ? 'aiming' : '', d.sprite, aim ? '던질 곳' : `${d.name.replace('체력 ', '')} ${p.items[id]}`, () => this.onUseItem(id), !p.items[id]);
     }
-    add('', 'bag', `가방 ${Object.keys(p.relics).length}/${MAX_SLOTS}`, this.onBag);
+    add('', 'bag', `가방 ${Object.keys(p.relics).length}/${run.slots}`, this.onBag);
   }
 }
 

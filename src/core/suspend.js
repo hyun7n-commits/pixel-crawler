@@ -51,8 +51,17 @@ export function suspend(run) {
   try {
     const o = {};
     for (const [k, v] of Object.entries(run)) if (!LEAVE_OUT.has(k) && !k.startsWith('_')) o[k] = enc(v, k);
-    localStorage.setItem(KEY, JSON.stringify({ format: FORMAT, nextId: Run.nextId, run: o }));
+    // `label`: where it was left, for the village's 이어서 탐험 button
+    localStorage.setItem(KEY, JSON.stringify({ format: FORMAT, nextId: Run.nextId, label: run.floorName(), charId: run.charId, run: o }));
   } catch (e) { /* storage full or blocked: this run just won't come back */ }
+}
+
+// a run is waiting to be picked up: where it was left and who went, or null
+export function savedRun() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+    return saved && saved.format === FORMAT && CHARACTERS[saved.charId] ? { label: saved.label, charId: saved.charId } : null;
+  } catch (e) { return null; }
 }
 
 export function clearSuspended() {

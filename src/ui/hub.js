@@ -6,32 +6,38 @@
 import { $, el, button, icon } from './dom.js';
 import { CHARACTERS } from '../data/characters.js';
 import { UPGRADES, PACK_COST } from '../data/upgrades.js';
+import { PETS } from '../data/pets.js';
 import { isOpen, RELIC_GATES } from '../data/unlocks.js';
 import { RELICS, RECIPES, recipeKey, tierOf, DISCOVERY_GOLD } from '../data/relics.js';
 import { freshMeta, saveMeta } from '../core/save.js';
 import { josa } from '../core/util.js';
 import { DISCOVERIES } from '../data/terrain.js';
 import { ORES } from '../data/ores.js';
-import { ENEMIES } from '../data/enemies.js';
+import { ENEMIES, ZONES } from '../data/enemies.js';
 import { FOLK, HOUSES, gossip } from '../data/village.js';
-import { LAST_FLOOR, STEP_MAX, stepsOpen, stepFoe, stepGold, BOOK_GIFT_EVERY, bookGift, bookGiftsDue } from '../data/balance.js';
+import { BOOK_GIFT_EVERY, bookGift, bookGiftsDue } from '../data/balance.js';
+import { FRIENDS, friendSpot, cleared, loopsOpen } from '../data/stages.js';
+import { DARES, daresOpen, daresOn, dareGold, DARE_GOLD } from '../data/dares.js';
 import { DECOR, hasDecor } from '../data/home.js';
 import { decorCanvas } from '../scenes/home-art.js';
+import { savedRun } from '../core/suspend.js';
 
 export function renderPanel(id, box, ctx) {
   PANELS[id](box, ctx);
 }
 
 // The bits of the village screen that are not the map: the purse, sound, and the way out.
-export function renderVillageHud(meta) {
+// `saved`: a trip saved halfway (core/suspend.js savedRun), which the button picks up instead
+export function renderVillageHud(meta, saved = savedRun()) {
   const purse = $('vPurse');
   purse.innerHTML = '';
   purse.append(icon('gold', 20), el('span', null, `${meta.gold}G`));
-  $('vGo').textContent = `${josa(CHARACTERS[meta.sel].name, '으로', '로')} 들판에 출발`;
+  $('vGo').textContent = saved ? `이어서 탐험 · ${saved.label}` : `${josa(CHARACTERS[meta.sel].name, '으로', '로')} 들판에 출발`;
 }
 
 const startButton = (meta, onStart) => {
-  const b = button('btn primary enter', `${josa(CHARACTERS[meta.sel].name, '으로', '로')} 들판으로 출발`, onStart);
+  const saved = savedRun();
+  const b = button('btn primary enter', saved ? `이어서 탐험 · ${saved.label}` : `${josa(CHARACTERS[meta.sel].name, '으로', '로')} 들판으로 출발`, onStart);
   if (!meta.pack) return b;
   // what you packed at the shop goes out with you
   const wrap = el('div', 'go-wrap'), note = el('span', 'packed-note');
@@ -40,31 +46,13 @@ const startButton = (meta, onStart) => {
   return wrap;
 };
 
-// 탐험 단계 (data/balance.js): after the first win, how rowdy the fields are this time
-function stepRow(meta, changed) {
-  const open = stepsOpen(meta), cur = Math.min(meta.step || 0, open);
-  const row = el('div', 'steps'), main = el('div', 'row-main');
-  const stars = el('span', 'step-stars');
-  for (let i = 1; i <= STEP_MAX; i++) stars.append(el('i', i <= cur ? 'on' : i <= open ? 'open' : ''));
-  const name = el('span', 'row-name', `탐험 단계 ${cur ? `★${cur}` : '보통'}`);
-  name.append(stars);
-  main.append(name, el('span', 'row-sub', cur
-    ? `들판의 적 체력과 공격 +${Math.round((stepFoe(cur) - 1) * 100)}%, 얻는 골드 +${Math.round((stepGold(cur) - 1) * 100)}%`
-    : `이길 때마다 한 단계씩 열린다 (지금 ★${open}까지)`));
-  const set = s => { meta.step = s; changed(); };
-  const down = button('btn', '−', () => set(cur - 1)), up = button('btn', '+', () => set(cur + 1));
-  down.disabled = cur <= 0; up.disabled = cur >= open;
-  row.append(main, down, up);
-  return row;
-}
-
-// the three 탐험 licenses (one per zone boss), greyed out until earned; see scenes/storyboards.js
-const LICENSES = [['ratking', '초원', '#6fbf4e'], ['skelking', '깊은숲', '#2f7a46'], ['lord', '돌산', '#8a7aa8']];
+// the five 탐험 licenses (one per stage), greyed out until earned; see scenes/storyboards.js
+const LICENSE_COLORS = ['#6fbf4e', '#2f7a46', '#5fb3a1', '#a39a86', '#8a7aa8'];
 function licenses(meta) {
   const row = el('div', 'licenses');
   row.append(el('span', 'lic-title', '탐험 자격증'));
-  for (const [boss, name, color] of LICENSES) {
-    const got = meta.stats.bosses.includes(boss);
+  for (const [s, z] of ZONES.entries()) {
+    const got = cleared(meta, s) > 0, name = z.name, color = LICENSE_COLORS[s];
     const b = el('span', 'lic' + (got ? ' got' : ''), `<i style="--c:${color}">★</i>${name}`);
     b.title = got ? `${name} 탐험 자격증` : `${name} 끝의 대장을 잡으면 받는다`;
     row.append(b);
@@ -73,13 +61,23 @@ function licenses(meta) {
 }
 
 // ---------- 조합장: heroes ----------
+// The worker and the friends in the order they are found (data/stages.js); a friend not rescued yet
+// is a dark shape with nothing about them but where they are said to be locked up.
 function chars(box, { meta, onStart, changed, setMeta, onStory }) {
-  const buy = (cost, apply) => { meta.gold -= cost; apply(); changed(); };
   box.append(licenses(meta));
-  if (stepsOpen(meta) > 0) box.append(stepRow(meta, changed));
   const grid = el('div', 'chars');
-  for (const [id, c] of Object.entries(CHARACTERS)) {
-    const owned = meta.chars[id];
+  const order = ['adv', ...[0, 1, 2, 3].flatMap(l => FRIENDS.map(row => row[l]))].filter(id => CHARACTERS[id]);
+  for (const id of order) {
+    const c = CHARACTERS[id], owned = meta.chars[id];
+    if (!owned) {
+      const spot = friendSpot(id), card = el('div', 'char locked');
+      const top = el('div', 'char-top'), sp = icon(c.sprite, 40);
+      sp.classList.add('char-spr');
+      top.append(sp, el('span', 'char-name', '???'));
+      card.append(top, el('div', 'cond', isOpen(meta, 'cage') ? `${ZONES[spot.stage].name} ${spot.loop}회차 어딘가에 갇혀 있다` : '아직 아무도 본 적이 없다'));
+      grid.append(card);
+      continue;
+    }
     const cls = 'char' + (meta.sel === id ? ' sel' : '') + (owned ? '' : ' locked');
     const card = owned ? button(cls, null, () => { meta.sel = id; changed(); }) : el('div', cls);
     const top = el('div', 'char-top');
@@ -89,17 +87,6 @@ function chars(box, { meta, onStart, changed, setMeta, onStory }) {
     card.append(top);
     const startRelic = Object.entries(c.start).map(([r, l]) => `${RELICS[r].name} Lv${l}`).join(', ');
     card.append(el('div', 'char-stats', `체력 ${c.hp} · 공격 ${c.atk}${c.def ? ` · 방어 ${c.def}` : ''}<br>시작 유물: ${startRelic}<br>${c.note}`));
-    if (!owned) {
-      const v = Math.min(c.cond.goal, c.cond.val(meta)), met = v >= c.cond.goal;
-      card.append(el('div', 'cond', `해금 조건: ${c.cond.text} (${v}/${c.cond.goal})`));
-      const bar = el('div', 'bar'), fill = el('i');
-      fill.style.width = `${(v / c.cond.goal) * 100}%`;
-      bar.append(fill);
-      card.append(bar);
-      const b = button('btn gold', `${c.cost}G로 데려오기`, () => buy(c.cost, () => { meta.chars[id] = true; meta.sel = id; }));
-      b.disabled = !met || meta.gold < c.cost;
-      card.append(b);
-    }
     grid.append(card);
   }
   box.append(grid, startButton(meta, onStart));
@@ -129,6 +116,7 @@ function shop(box, { meta, changed }) {
     row.append(main, b);
     list.append(row);
   }
+  pets(list, meta, buy, changed);
   // the relic shelf and packing a relic come once the meadow's boss has fallen (data/unlocks.js)
   if (!isOpen(meta, 'shelf')) { box.append(list); return; }
   list.append(el('h3', null, '들판에 새 유물 추가'));
@@ -162,6 +150,23 @@ function shop(box, { meta, changed }) {
   list.append(grid);
   if (meta.pack) list.append(el('p', 'row-sub', `${RELICS[meta.pack].name} 챙김. 다시 누르면 내려놓고 골드를 돌려받는다.`));
   box.append(list);
+}
+
+// 펫 (data/pets.js): buy one, then pick which one comes along (tap again to leave it home)
+function pets(list, meta, buy, changed) {
+  list.append(el('h3', null, '펫'));
+  list.append(el('p', 'row-sub', '데려가면 뒤를 졸졸 따라다니며 조금씩 돕는다. 적은 펫을 건드리지 않는다. 한 번에 한 마리.'));
+  for (const [id, pt] of Object.entries(PETS)) {
+    const have = meta.pets?.[id], on = meta.pet === id;
+    const row = el('div', 'row' + (on ? ' owned' : '')), main = el('div', 'row-main');
+    main.append(el('span', 'row-name', `${pt.name}<small>${pt.kind}</small>`), el('span', 'row-sub', pt.note));
+    const b = have
+      ? button('btn' + (on ? ' primary' : ''), on ? '데려감' : '데려가기', () => { meta.pet = on ? null : id; changed(); })
+      : button('btn gold', `${pt.cost}G`, () => buy(pt.cost, () => { meta.pets = { ...meta.pets, [id]: true }; meta.pet = id; }));
+    if (!have) b.disabled = meta.gold < pt.cost;
+    row.append(icon(pt.sprite, 40), main, b);
+    list.append(row);
+  }
 }
 
 // ---------- 내 집: 집 꾸미기 (data/home.js) ----------
@@ -271,7 +276,8 @@ function books(box, { meta, changed }) {
 // ---------- 구조대원: the records ----------
 function records(box, { meta }) {
   const st = meta.stats, g = el('div', 'stats');
-  for (const [v, l] of [[st.runs, '도전 횟수'], [st.runs - st.wins, '구조된 횟수'], [st.wins, '정복 횟수'], [`${st.maxFloor || 0}구역`, '최고 도달 구역'],
+  const friends = FRIENDS.flat().filter(id => meta.chars[id]).length;
+  for (const [v, l] of [[st.runs, '도전 횟수'], [st.runs - st.wins, '구조된 횟수'], [st.wins, '스테이지 돌파'], [`${loopsOpen(meta)}회차`, '열린 회차'], [`${friends}/${FRIENDS.flat().length}`, '구한 친구'],
     [st.kills, '쓰러뜨린 적'], [st.evos, '유물 진화'], [st.bosses.length, '쓰러뜨린 보스 종류'], [st.bestGold, '한 판 최고 골드']]) {
     const s = el('div', 'stat');
     s.append(el('b', null, String(v)), el('span', null, l));
@@ -307,22 +313,26 @@ function critterBook(box, meta) {
   box.append(wrap);
 }
 
-// ---------- 라이벌: always one zone ahead of you, until you clear the fields ----------
-function rival(box, { meta }) {
-  const mine = meta.stats.maxFloor || 0, won = meta.stats.wins > 0;
-  const theirs = won ? LAST_FLOOR : Math.min(LAST_FLOOR, mine + 1);
-  box.append(el('p', 'say', won
-    ? '들판을 정복했다고? 흥... 나, 나도 거의 다 왔거든.'
-    : `나는 벌써 ${theirs}구역까지 가 봤다. 너는 ${mine}구역이지? 흥.`));
-  const race = el('div', 'race');
-  for (const [who, v, cls] of [['나', mine, 'me'], ['라이벌', won ? LAST_FLOOR - 1 : theirs, 'them']]) {
-    const row = el('div', 'race-row ' + cls), bar = el('div', 'bar'), fill = el('i');
-    fill.style.width = `${(v / LAST_FLOOR) * 100}%`;
-    bar.append(fill);
-    row.append(el('span', null, who), bar, el('b', null, `${v}구역`));
-    race.append(row);
-  }
-  box.append(race);
+// ---------- 라이벌: the dares (data/dares.js) ----------
+// One card per dare open so far: what it does, a switch, and the furthest stage won with it on.
+// Every dare taken adds DARE_GOLD to the gold of the trip.
+function rival(box, { meta, changed }) {
+  const open = daresOpen(meta), on = daresOn(meta);
+  box.append(el('p', 'say', on.length
+    ? `흥, 내기 ${on.length}개라고? 골드는 ×${dareGold(on.length).toFixed(1)}로 받겠네. 어디 해 봐.`
+    : '나랑 내기할래? 하나 걸 때마다 골드를 더 받는다. 겁나면 말고.'));
+  const list = el('div', 'shop dares');
+  DARES.forEach((d, i) => {
+    if (i >= open) return;
+    const lit = !!meta.dares.on[d.id], won = meta.dares.won[d.id] || 0;
+    const row = el('div', 'row dare' + (lit ? ' on' : '')), main = el('div', 'row-main');
+    row.append(icon(d.icon, 24));
+    main.append(el('span', 'row-name', `${d.name}${won ? ` <small>${ZONES[won - 1].name}까지 돌파</small>` : ''}`), el('span', 'row-sub', `${d.desc} · 골드 +${Math.round(DARE_GOLD * 100)}%`));
+    row.append(main, button('btn' + (lit ? ' gold' : ''), lit ? '거는 중' : '걸기', () => { meta.dares.on[d.id] = !lit; changed(); }));
+    list.append(row);
+  });
+  if (open < DARES.length) list.append(el('p', 'book-note', '대장을 더 쓰러뜨리면 라이벌이 새 내기를 걸어 온다.'));
+  box.append(list);
 }
 
 const PANELS = { chars, shop, rumor, books, records, rival, home };

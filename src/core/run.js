@@ -5,6 +5,7 @@
 import * as B from '../data/balance.js';
 import { RELICS, RECIPES, MAX_LEVEL, MAX_SLOTS, DISCOVERY_GOLD, tierOf, maxLevelOf, recipeKey, recipesWith, fusedId, isFused, fusedParts, relicName } from '../data/relics.js';
 import { CHARACTERS } from '../data/characters.js';
+import { PETS, peckGold } from '../data/pets.js';
 import { ENEMIES, ZONES } from '../data/enemies.js';
 import { ITEMS } from '../data/items.js';
 import { ORES } from '../data/ores.js';
@@ -19,6 +20,8 @@ import { placeSpecials, SET_PIECES } from './specials.js';
 import { NPC_TEXT, PEDDLER_FLOORS, STALL } from '../data/npcs.js';
 import { REQUESTS, pickRequest } from '../data/requests.js';
 import { isOpen, openNew, RELIC_GATES } from '../data/unlocks.js';
+import { caged, cleared, stageOpen, loopsOpen, loopFoe, loopGold, FRIENDS } from '../data/stages.js';
+import { daresOn, daresOpen, dareGold } from '../data/dares.js';
 import { enemyAct, rouse, awaken, angerSwarm } from './ai.js';
 import { onEnter, explosion, envTick, waterBody, ignite, addGas, spotTraps, revealTraps, openGrave, setBurn, springTrap } from './world.js';
 
@@ -27,16 +30,22 @@ export const isBossFloor = floor => floor % B.FLOORS_PER_ZONE === 0;
 export const BOMB_RANGE = 5;
 
 export class Run {
-  constructor(meta, charId) {
+  // `stage`: which zone this trip goes into (0-based, data/stages.js); `loop`: the 회차
+  constructor(meta, charId, { stage = 0, loop = 1 } = {}) {
     this.meta = meta;
     this.charId = charId;
     this.char = CHARACTERS[charId];
-    this.floor = 1;
+    this.stage = stage;
+    this.loop = loop;
+    this.startFloor = stage * B.FLOORS_PER_ZONE + 1;
+    this.bossFloor = this.startFloor + B.FLOORS_PER_ZONE - 1;
+    this.floor = this.startFloor;
+    this.dares = daresOn(meta);
     this.turn = 0;
     this.gold = 0;
     this.kills = 0;
     this.rerolls = meta.up.reroll;
-    this.queue = [];        // pending choices: { kind: 'level' | 'chest' | 'talk', ... }
+    this.queue = [];        // pending choices: { kind: 'level' | 'kit' | 'chest' | 'talk', ... }
     this.over = false;
     this.victory = false;
     this.cause = '';        // what knocked you out, for the summary
@@ -47,21 +56,30 @@ export class Run {
     this.floors = {};       // floors you left, kept as they were so you can go back for what you missed
     this.trail = [];        // your last steps on this floor; hunting enemies follow them
     // the two quest folk and the floor each one lives on
+    const f0 = this.startFloor;
     this.quests = {
-      ghost: { floor: rint(1, 2), state: 'idle' },              // idle -> asked -> found -> done
-      smith: { floor: rint(4, 5), state: 'idle', chunk: null },  // chunk: grade of the big ore you broke there
+      ghost: { floor: f0 + rint(0, 1), state: 'idle' },              // idle -> asked -> found -> done
+      smith: { floor: f0 + rint(1, 2), state: 'idle', chunk: null },  // chunk: grade of the big ore you broke there
       peddler: { met: false },
     };
+    // a friend still locked up in this stage at this 회차 waits in a cage on the second or third field,
+    // its key carried by a crowned 우두머리 (data/stages.js)
+    this.friend = isOpen(meta, 'cage') ? caged(meta, stage, loop) : null;
+    if (!CHARACTERS[this.friend]) this.friend = null;
+    this.cageFloor = this.friend ? f0 + rint(1, 2) : 0;
+    this.rescued = [];
+    // the pet that comes along (data/pets.js)
+    this.pet = meta.pet && meta.pets?.[meta.pet] && PETS[meta.pet] ? meta.pet : null;
     this.stall = [];
-    this.request = isOpen(meta, 'request') ? pickRequest(meta) : null;   // the guild's request of the day (data/requests.js)
-    this.danger = Math.max(0, Math.min(meta.step || 0, B.stepsOpen(meta)));   // 탐험 단계 (meta.step)
+    this.request = isOpen(meta, 'request') ? pickRequest(meta, stage) : null;   // the guild's request of the day (data/requests.js)
     this.startStats = JSON.parse(JSON.stringify(meta.stats));
     this.listeners = [];
     this.p = {
       x: 0, y: 0, hp: 0, lvl: 1, xp: 0, face: 1,
       burn: 0, sleep: 0, stun: 0, wokeAt: -1,
       relics: { ...this.char.start },
-      items: { potion: meta.up.pot, bomb: isOpen(meta, 'bomb') ? 1 : 0, map: 0 },
+      // 햄스터's cheek pouch packs more potions; 펭귄 sets off with a bag of bombs
+      items: { potion: this.dare('nopotion') ? 0 : meta.up.pot + (this.char.pouch || 0), bomb: this.char.bombs || (isOpen(meta, 'bomb') ? 1 : 0), map: 0 },
     };
     // the relic packed in town for this run (paid for already)
     if (meta.pack && RELICS[meta.pack] && !tierOf(meta.pack)) {
@@ -70,15 +88,35 @@ export class Run {
       this.packed = id;
       meta.pack = null;
     }
+    // 출발 보급 (balance.js stageKit): the level now, the relic picks when the trip starts
+    const kit = B.stageKit(stage);
+    this.p.lvl = kit.lvl;
+    this.kit = kit.picks;
+    this.p.kitAtk = kit.atk;
+    this.p.kitHp = kit.hp;
     this.p.hp = this.stat().maxHp;
     meta.stats.runs++;
-    meta.stats.maxFloor = Math.max(meta.stats.maxFloor, 1);
+    meta.stats.maxFloor = Math.max(meta.stats.maxFloor, this.floor);
   }
+
+  // how many relics you can carry (가벼운 가방 takes two away)
+  get slots() { return MAX_SLOTS - (this.dare('light') ? B.DARE_SLOTS : 0); }
+
+  // is this rival's dare on for the trip (data/dares.js)
+  dare(id) { return this.dares.includes(id); }
+  // gold from everything picked up: the 회차 and the dares taken pay more
+  get goldBonus() { return loopGold(this.loop) * dareGold(this.dares.length); }
 
   // ---------- events ----------
   on(fn) { this.listeners.push(fn); }
   emit(type, data = {}) {
     for (const fn of this.listeners) fn(type, data);
+    // 소문 빠른 들판: a critter that spots you shouts, and the others round it come looking
+    if (type === 'alert' && data.enemy.state === 'hunt' && this.dare('swarm') && !this.calling) {
+      this.calling = true;
+      this.noise(data.enemy.x, data.enemy.y, B.DARE_CALL);
+      this.calling = false;
+    }
     if (this.request && !this.request.done) this.trackRequest(type, data);
   }
 
@@ -100,33 +138,38 @@ export class Run {
 
   // ---------- derived stats ----------
   stat() {
-    const L = this.levels(), ch = this.char, up = this.meta.up;
+    const L = this.levels(), ch = this.char, up = this.meta.up, pet = PETS[this.pet] || {};
     const lv = id => L[id] || 0, on = id => lv(id) > 0;
     // `f(id, base, per)`: nothing without the relic, else base + per × level
     const f = (id, base, per) => (on(id) ? base + per * lv(id) : 0);
     const best = (...xs) => Math.max(...xs);
+    const wet = ch.swim && this.inWater();
     return {
-      atk: ch.atk + up.atk + 2 * lv('blade') + f('flamesword', 4, 2) + 2 * lv('volcano') + (on('minecrown') ? 5 : 0) +
+      atk: ch.atk + up.atk + (this.p.kitAtk || 0) + (wet ? 3 : 0) + 2 * lv('blade') + f('flamesword', 4, 2) + 2 * lv('volcano') + (on('minecrown') ? 5 : 0) +
         f('bloodblade', 3, 1) + f('whirl', 4, 1) + f('dagger', 2, 1) + lv('giantfist') + 2 * lv('bloodmoon') + lv('stormlord') + lv('whirlwind') + (on('godhammer') ? 5 : 0),
       def: ch.def + lv('shield') + f('fortress', 2, 1) + lv('undying') + lv('ironheart') + f('embermail', 1, 1) + lv('guardian'),
-      maxHp: ch.hp + up.hp * B.UP_HP + 8 * lv('heart') + f('bloodcrown', 15, 5) + 10 * lv('lifetree') + (on('eternity') ? 30 : 0) +
+      maxHp: ch.hp + up.hp * B.UP_HP + (this.p.kitHp || 0) + 8 * lv('heart') + f('bloodcrown', 15, 5) + 10 * lv('lifetree') + (on('eternity') ? 30 : 0) +
         f('ironheart', 10, 5) + f('pillow', 16, 4) + f('giantfist', 12, 4) + 10 * lv('guardian') + (on('bloodking') ? 20 : 0) +
         (this.p.lvl - 1) * B.HP_PER_LEVEL + (this.p.honey || 0),
       goldMult: (1 + 0.4 * lv('coin') + f('goldbolt', 0.75, 0.25) + 0.25 * lv('goldstorm') + (on('minecrown') ? 0.5 : 0) + 0.1 * up.greed +
-        f('luckycharm', 1, 0.25) + f('goldfang', 0.8, 0.2) + 0.25 * lv('fortune') + (on('dawnstar') ? 0.5 : 0)) * B.stepGold(this.danger || 0),
+        f('luckycharm', 1, 0.25) + f('goldfang', 0.8, 0.2) + 0.25 * lv('fortune') + (on('dawnstar') ? 0.5 : 0) + (pet.greed || 0)) * this.goldBonus,
       // never more than 60%: something always gets through
-      dodge: Math.min(0.6, (ch.dodge || 0) + 0.08 * lv('cloak') + f('shadow', 0.15, 0.05) + 0.05 * lv('phantom') +
+      dodge: Math.min(0.6, (ch.dodge || 0) + (wet ? 0.25 : 0) + 0.08 * lv('cloak') + f('shadow', 0.15, 0.05) + 0.05 * lv('phantom') +
         f('luckycharm', 0.2, 0.05) + f('spikecloak', 0.2, 0.05) + 0.05 * lv('fortune') + (on('dawnstar') ? 0.1 : 0)),
       // damage multiplier on a surprise attack: the best of the sneaky relics, plus what legends add on top
       sneak: best(1.5 + 0.25 * lv('boots'), f('shadow', 2.25, 0.25), f('dagger', 2.5, 0.25), f('owleye', 2, 0.25)) +
         0.5 * lv('phantom') + 0.5 * lv('nightowl') + (on('eclipse') ? 2 : 0) + (on('dawnstar') ? 1 : 0) + (ch.sneak || 0),
-      sight: Math.min(B.SIGHT + 6, B.SIGHT + lv('lantern') + f('dreamlamp', 1, 1) + f('owleye', 1, 1) + f('headlamp', 1, 1) + f('sunlamp', 1, 1) + lv('nightowl')),
+      sight: Math.min(B.SIGHT + 6, B.SIGHT + lv('lantern') + f('dreamlamp', 1, 1) + f('owleye', 1, 1) + f('headlamp', 1, 1) + f('sunlamp', 1, 1) + lv('nightowl')) - (this.dare('dark') ? B.DARE_DARK : 0) -
+        (this.zone.style === 'marsh' ? B.MARSH_DARK : 0) + Math.min(B.FLY_MAX, this.flies || 0) + (ch.sight || 0) + (pet.sight || 0),
       oreMult: best(1 + 0.5 * lv('pick'), f('goldrush', 1.5, 0.5), f('headlamp', 1.5, 0.5)),
       // extra chance a swing finds a better grade
       oreRise: best(0.05 * lv('pick'), f('goldrush', 0.1, 0.05), f('headlamp', 0.1, 0.05)) + (on('minecrown') ? 0.15 : 0),
-      magnet: on('goldrush') ? 1 + lv('goldrush') : on('magnet') ? lv('magnet') + 1 : 0,
+      magnet: Math.max(on('goldrush') ? 1 + lv('goldrush') : on('magnet') ? lv('magnet') + 1 : 0, ch.pouch ? 2 : 0),
     };
   }
+  // standing in a puddle (개구리)
+  inWater() { return !!this.map && this.map.ter[idx(this.p.x, this.p.y)] === T.WATER; }
+
   // Every relic in effect and its level: the ones in your slots, and what fused relics, legends and
   // myths hold inside them (always at full strength).
   levels() {
@@ -168,7 +211,7 @@ export class Run {
   // true if this enemy will hit you on its next turn (shown as a claw mark on your tile)
   willHit(e) {
     return e.hp > 0 && e.state === 'hunt' && this.touching(e, this.p) && !e.aim && !e.slam && !e.stun &&
-      !e.stoneT && !e.backoff && !e.charge && !(e.d.slow && !e.skip);
+      !e.stoneT && !e.backoff && !e.charge && !e.diving && !e.lick && !(e.d.slow && !e.skip);
   }
   get zone() { return zoneOf(this.floor); }
 
@@ -176,10 +219,14 @@ export class Run {
   start() {
     this.arrival = { dir: 0 };
     this.genFloor();
-    this.log(`${josa(this.char.name, '으로', '로')} 들판에 나왔다. 깃발 꽂힌 땅굴을 찾아 앞으로 가자.`, 'good');
+    this.log(`${josa(this.char.name, '으로', '로')} ${this.zone.name}에 나왔다. 깃발 꽂힌 땅굴을 찾아 앞으로 가자.`, 'good');
     if (this.request) this.log(`오늘의 조합 의뢰: ${this.request.text} (일당 ${this.request.pay}G)`, 'quest');
     if (this.packed) this.log(`챙겨 온 ${RELICS[this.packed].name} Lv${this.p.relics[this.packed]}`, 'good');
-    this.emit('banner', { text: `1구역 · ${this.zone.name}` });
+    if (this.kit) {
+      for (let k = 1; k <= this.kit; k++) this.queue.push({ kind: 'kit', k, n: this.kit });
+      this.log(`조합이 출발 보급을 챙겨 줬다. 유물 ${this.kit}개를 고른다.`, 'good');
+    }
+    this.emit('banner', { text: this.floorName() });
     this.afterTurn();
   }
 
@@ -201,16 +248,29 @@ export class Run {
   enterFloor() {
     this.telegraph = [];
     this.puffs = [];
+    this.rocks = [];
+    this.p.held = null;
     this.trail = [{ x: this.p.x, y: this.p.y }];
     this.bandageUsed = 0;
+    this.stunk = false;
     this.refreshDoors();
-    computeFOV(this.map, this.p.x, this.p.y, this.stat().sight);
+    if (this.char.sniff) this.sniff();
+    computeFOV(this.map, this.p.x, this.p.y, this.stat().sight, this.lights());
     // 반딧불 모자: every sparkle boulder on the field glows through the dark from the moment you arrive
     if (this.lv('headlamp')) for (const o of this.map.ores) for (const c of o.cells) this.map.explored[idx(c.x, c.y)] = 1;
     // `dir`: 1 down a burrow to the next field, -1 back, 0 the first field; `from`: the hole you went into
     this.emit('floor', this.arrival || {});
     this.arrival = null;
     this.spotVeins();
+  }
+
+  // 여우: chests, keys and what else lies about show on the map, and the hidden traps with them
+  sniff() {
+    const m = this.map;
+    let n = 0;
+    for (const q of this.pickups) if (q.type !== 'gold' && !m.explored[idx(q.x, q.y)]) { m.explored[idx(q.x, q.y)] = 1; n++; }
+    n += revealTraps(this);
+    if (n && !(this.sniffed ||= new Set()).has(this.floor)) { this.sniffed.add(this.floor); this.log('킁킁, 이 들판 어디에 뭐가 있는지 냄새로 알겠다.', 'good'); }
   }
 
   // A big vein (three tiles or more) catches your eye the first time it comes into view.
@@ -236,19 +296,22 @@ export class Run {
     }
     map.tiles[idx(far.cx, far.cy)] = STAIRS;
     map.down = { x: far.cx, y: far.cy };
-    if (this.floor > 1) { map.tiles[idx(start.cx, start.cy)] = UPSTAIRS; map.up = { x: start.cx, y: start.cy }; }
+    if (this.floor > this.startFloor) { map.tiles[idx(start.cx, start.cy)] = UPSTAIRS; map.up = { x: start.cx, y: start.cy }; }
     const zi = Math.floor((this.floor - 1) / B.FLOORS_PER_ZONE);
     const stairs = { x: far.cx, y: far.cy };
-    const deco = decorate(map, rooms, { start: this.p, stairs, floor: this.floor });
+    const deco = decorate(map, rooms, { start: this.p, stairs, floor: this.floor, style: this.zone.style });
     this.has = deco.has;
     const sp = placeSpecials(map, rooms, deco, {
       floor: this.floor, start: this.p, stairs, open: id => this.open(id),
       relicOffers: n => this.offers(n).filter(o => o.kind === 'relic').map(o => o.id),
+      cage: this.floor === this.cageFloor && caged(this.meta, this.stage, this.loop) ? 'cage' : null,
+      chief: () => pick(this.zone.enemies.filter(t => !ENEMIES[t].pack) || this.zone.enemies) || this.zone.enemies[0],
     });
+    if (sp.cage) this.has.add('cage');
     // 온천: up in the hills, a flooded room's pool may be warm (map.spring: its tiles); set pieces
     // have taken their rooms by now, so a flooded room is still flooded
     const flood = rooms.findIndex((r, i) => deco.themes[i] === 'flood');
-    if (flood >= 0 && this.open('spring') && Math.random() < B.SPRING_CHANCE[Math.min(2, zi)]) {
+    if (flood >= 0 && this.open('spring') && Math.random() < B.SPRING_CHANCE[zi]) {
       const r = rooms[flood];
       map.spring = [];
       for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (map.ter[idx(x, y)] === T.WATER) map.spring.push(idx(x, y));
@@ -295,18 +358,24 @@ export class Run {
     for (let i = 0, n = rint(2, 4); i < n; i++) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'gold', amount: (zi + 1) * rint(3, 7) }));
     place(s => this.addChest(s.x, s.y));
     if (this.floor === 1) place(s => this.addChest(s.x, s.y));
-    if (Math.random() < B.POTION_CHANCE) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'potion' }));
+    if (!this.dare('nopotion') && Math.random() < B.POTION_CHANCE) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'potion' }));
     if (this.open('bomb') && Math.random() < 0.5) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'bomb' }));
     if (this.open('map') && Math.random() < 0.3) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'map' }));
 
     this.pickups.push(...sp.pickups);
-    for (const o of sp.enemies) this.spawnEnemy(o.type, o.x, o.y, ENEMIES[o.type].swarm ? B.enemyScale(this.floor) : B.gimmickScale(this.floor)).state = o.state;
+    for (const o of sp.enemies) {
+      const e = this.spawnEnemy(o.type, o.x, o.y, ENEMIES[o.type].swarm || o.chief ? B.enemyScale(this.floor) : B.gimmickScale(this.floor));
+      e.state = o.state;
+      if (o.chief) this.crown(e);
+      if (o.type === 'cage') e.friend = this.friend;
+    }
+    this.zoneFeatures(rooms, open);
     // the quest folk, on their floors
     const q = this.quests;
     if (this.floor === q.ghost.floor && this.open('ghost')) place(s => { this.spawnEnemy('ghost', s.x, s.y).state = 'npc'; });
     // the shopkeeper's stall, the floor before each boss: what's for sale, priced for the zone
     this.stall = [];
-    if (PEDDLER_FLOORS.includes(this.floor) && this.open('stall')) {
+    if (this.floor === this.bossFloor - 1 && this.open('stall')) {
       this.stall = Object.entries(STALL).map(([what, it]) => ({ what, price: it.price * (zi + 1), sold: false }));
       place(s => { this.spawnEnemy('peddler', s.x, s.y).state = 'npc'; });
     }
@@ -320,6 +389,51 @@ export class Run {
     }
   }
 
+  // What each new zone adds to a field: the marsh's diving beetles slip under the water and fireflies
+  // drift over it; the cave's rooms get stalactites overhead.
+  zoneFeatures(rooms, open) {
+    const map = this.map, style = this.zone.style;
+    const far = (x, y, d) => cheb({ x, y }, this.p) > d && !(map.down && map.down.x === x && map.down.y === y);
+    const roomFloor = r => {
+      const out = [];
+      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (map.tiles[idx(x, y)] === FLOOR) out.push({ x, y });
+      return out;
+    };
+    for (const e of this.enemies) if (e.d.lurk) this.sink(e);
+    if (style === 'marsh') {
+      const spots = shuffle(open.slice(1).flatMap(roomFloor)).filter(t => far(t.x, t.y, 3) && !this.enemyAt(t.x, t.y));
+      map.flies = [];
+      for (const t of spots) {
+        if (map.flies.length >= rint(...B.FLIES_PER_FLOOR)) break;
+        if (map.flies.some(f => cheb(f, t) < 6)) continue;
+        map.flies.push({ x: t.x, y: t.y });
+      }
+    }
+    if (style === 'cave') {
+      map.drips = [];
+      for (const r of open.slice(1)) {
+        if (r.w * r.h < 12) continue;
+        const spots = shuffle(roomFloor(r)).filter(t => far(t.x, t.y, 3) && map.ter[idx(t.x, t.y)] !== T.WATER &&
+          !DIRS8.some(([dx, dy]) => map.tiles[idx(t.x + dx, t.y + dy)] === DOOR));
+        for (const t of spots.slice(0, rint(...B.DRIPS_PER_ROOM))) map.drips.push(t);
+      }
+    }
+  }
+
+  // 물방개: under the water somewhere away from where you come in, bubbles showing (state 'lurk')
+  sink(e) {
+    const map = this.map, pools = [];
+    for (let i = 0; i < map.tiles.length; i++) {
+      if (map.ter[i] !== T.WATER || map.tiles[i] !== FLOOR) continue;
+      const x = i % map.w, y = (i / map.w) | 0;
+      if (cheb({ x, y }, this.p) > 4 && !this.enemyAt(x, y)) pools.push({ x, y });
+    }
+    const t = pick(pools);
+    if (!t) return;
+    e.x = t.x; e.y = t.y;
+    e.state = 'lurk';
+  }
+
   // A chest, or from floor 2 on now and then a mimic pretending to be one.
   addChest(x, y) {
     if (this.floor >= 2 && this.open('mimic') && Math.random() < B.MIMIC_CHANCE) {
@@ -329,11 +443,22 @@ export class Run {
   }
 
   genBossFloor() {
-    const spots = carveArena(this.map);
+    const type = this.zone.boss, layout = pick(ENEMIES[type].arenas || ['pillars']);
+    const spots = carveArena(this.map, layout), map = this.map;
     this.p.x = spots.start.x; this.p.y = spots.start.y;
-    this.map.up = { ...spots.start }; // the way back opens once the boss is down
-    decorateArena(this.map, spots.room, (x, y) => cheb({ x, y }, spots.start) <= 1 || cheb({ x, y }, spots.boss) <= 1);
-    const type = this.zone.boss;
+    map.up = { ...spots.start }; // the way back opens once the boss is down
+    const near = (x, y) => cheb({ x, y }, spots.start) <= 1 || cheb({ x, y }, spots.boss) <= 1;
+    decorateArena(map, spots.room, near, layout);
+    // the cave's arena has stalactites overhead; the marsh's has fireflies over the pond
+    const r = spots.room, open = [];
+    for (let y = r.y + 1; y < r.y + r.h - 1; y++) for (let x = r.x + 1; x < r.x + r.w - 1; x++) {
+      if (map.tiles[idx(x, y)] === FLOOR && !near(x, y) && cheb({ x, y }, spots.start) > 3) open.push({ x, y });
+    }
+    if (this.zone.style === 'cave') map.drips = shuffle(open.filter(t => map.ter[idx(t.x, t.y)] !== T.WATER)).slice(0, 6);
+    if (this.zone.style === 'marsh') {
+      map.flies = [];
+      for (const t of shuffle(open)) if (map.flies.length < 3 && !map.flies.some(o => cheb(o, t) < 5)) map.flies.push(t);
+    }
     const b = this.spawnEnemy(type, spots.boss.x, spots.boss.y, B.bossScale(this.floor));
     b.state = 'hunt';
     this.boss = b;
@@ -342,10 +467,14 @@ export class Run {
   }
 
   spawnEnemy(type, x, y, scale = 1) {
-    const d = ENEMIES[type], k = d.npc ? 1 : B.stepFoe(this.danger || 0);
+    const d = ENEMIES[type];
+    // the 회차 and the rival's dares make every critter tougher (not the folk you talk to)
+    const k = d.npc ? 1 : loopFoe(this.loop) * (this.dare('fierce') ? B.DARE_FOE : 1);
+    const kb = d.boss && this.dare('boss') ? [B.DARE_BOSS_HP, B.DARE_BOSS_ATK] : [1, 1];
+    const hp = Math.round(d.hp * scale * k * kb[0]);
     const e = {
       id: Run.nextId++, type, d, x, y,
-      hp: Math.round(d.hp * scale * k), maxHp: Math.round(d.hp * scale * k), atk: Math.round(d.atk * (1 + (scale - 1) * B.ATK_SHARE) * k),
+      hp, maxHp: hp, atk: Math.round(d.atk * (1 + (scale - 1) * B.ATK_SHARE) * k * kb[1]),
       def: d.def || 0, aim: false, aimAt: null, skip: false, slam: false, timer: 0, face: -1,
       state: d.boss ? 'hunt' : Math.random() < 0.65 ? 'sleep' : 'wander',
       wake: 0, doze: 0, last: null, target: null, searchT: 0,
@@ -354,6 +483,19 @@ export class Run {
     this.enemies.push(e);
     this.emit('spawn', { enemy: e });
     return e;
+  }
+
+  // 우두머리: a critter of the field grown big, with a crown and the key to a friend's cage
+  crown(e) {
+    e.chief = true;
+    e.hp = e.maxHp = Math.round(e.maxHp * B.CHIEF_HP);
+    e.atk = Math.round(e.atk * B.CHIEF_ATK);
+    e.xp = (e.d.xp || 1) * 4;
+  }
+
+  // the banner and HUD name of a floor: the zone and how deep into this trip, or its boss
+  floorName(floor = this.floor) {
+    return floor === this.bossFloor ? `${zoneOf(floor).name} · 대장` : `${zoneOf(floor).name} ${B.localOf(floor)}`;
   }
 
   // dir = 1 down, -1 up. Floors you have been on come back exactly as you left them.
@@ -378,8 +520,8 @@ export class Run {
       const fb = this.lv('firebomb'), bombs = fb ? (fb < 3 ? 1 : 2) : this.lv('bombbag') ? 1 : 0;
       if (bombs) { this.p.items.bomb += bombs; this.log('폭탄 가방에서 폭탄을 꺼냈다.', 'good'); }
     }
-    this.emit('banner', { text: isBossFloor(this.floor) ? `${this.floor}구역 · 보스` : `${this.floor}구역 · ${this.zone.name}` });
-    this.log(dir > 0 ? `${this.floor}구역에 왔다.` : `${this.floor}구역으로 돌아왔다.`);
+    this.emit('banner', { text: this.floorName() });
+    this.log(dir > 0 ? `${this.floorName()}에 왔다.` : `${this.floorName()}으로 돌아왔다.`);
     this.afterTurn();
   }
 
@@ -391,6 +533,18 @@ export class Run {
       if (spot) { e.x = spot.x; e.y = spot.y; }
     }
     this.p.x = x; this.p.y = y;
+  }
+
+  // Reeled in by a frog's tongue: you land beside it, on whatever is there (a trap goes off).
+  pullPlayer(x, y) {
+    const p = this.p, from = { x: p.x, y: p.y };
+    p.x = x; p.y = y;
+    this.trail.push({ x, y });
+    if (this.trail.length > 40) this.trail.shift();
+    this.emit('pull', { from, to: { x, y } });
+    onEnter(this, 'player', x, y);
+    this.pickupAt(x, y);
+    this.catchFly(x, y);
   }
 
   // ---------- player actions (return true if a turn was spent) ----------
@@ -409,6 +563,7 @@ export class Run {
     const p = this.p, map = this.map, nx = p.x + dx, ny = p.y + dy;
     if (!inMap(nx, ny)) return false;
     if (dx) p.face = Math.sign(dx);
+    p.blend = p.tucked = false;
     const e = this.enemyAt(nx, ny);
     if (e && e.d.npc) { this.talk(e); return true; }
     if (e && e.state === 'hide') {
@@ -418,8 +573,11 @@ export class Run {
       return true;
     }
     if (e) {
+      // 염소: two or more steps the same way and then into them
+      const ram = this.char.ram && p.dash?.n >= 2 && p.dash.dx === dx && p.dash.dy === dy;
+      p.dash = null;
       this.emit('attack', { from: { x: p.x, y: p.y }, to: { x: nx, y: ny }, who: 'player' });
-      this.playerAttack(e);
+      this.playerAttack(e, ram);
       this.endTurn();
       return true;
     }
@@ -430,14 +588,25 @@ export class Run {
     if (map.tiles[i] === HIVE) return this.takeHoney(nx, ny);
     if (map.tiles[i] === WEED) return this.pullWeed(nx, ny);
     if (!this.passable(nx, ny)) return false;
+    // 가재 집게: held fast, you can hit back but not walk off; trying shakes you loose and takes the turn
+    if (p.held && this.enemies.some(o => o.id === p.held && o.hp > 0 && this.touching(o, p))) {
+      this.emit('struggle', { x: p.x, y: p.y, dx, dy });
+      this.log('집게를 뿌리치느라 한 턴이 갔다.', 'warn');
+      this.endTurn();
+      return true;
+    }
     p.x = nx; p.y = ny;
+    p.dash = p.dash?.dx === dx && p.dash.dy === dy ? { dx, dy, n: p.dash.n + 1 } : { dx, dy, n: 1 };
     this.trail.push({ x: nx, y: ny });
     if (this.trail.length > 40) this.trail.shift();
     this.emit('move', { x: nx, y: ny, ter: map.ter[i] });
     onEnter(this, 'player', nx, ny);
     this.pickupAt(nx, ny);
+    this.catchFly(nx, ny);
     if (map.tiles[i] === STAIRS) { this.changeFloor(1); return true; }
     if (map.tiles[i] === UPSTAIRS) { this.changeFloor(-1); return true; }
+    // 토끼: every few steps one is a hop, over before anyone else can move
+    if (this.char.hop && (p.hops = (p.hops || 0) + 1) % this.char.hop === 0) { this.quick = true; this.emit('hop', { x: nx, y: ny, dx, dy }); }
     this.endTurn();
     return true;
   }
@@ -446,6 +615,9 @@ export class Run {
     if (!this.canAct()) return false;
     // 꿀잠 베개: a proper rest, as long as nobody is in sight
     const L = this.levels(), p = this.p;
+    p.dash = null;
+    if (this.char.shell) { if (!p.tucked) this.emit('shell', { x: p.x, y: p.y }); p.shell = p.tucked = true; }
+    if (this.char.blend && !p.blend) { p.blend = true; this.emit('blend', { x: p.x, y: p.y }); }
     if (L.pillow && p.hp < this.stat().maxHp && !this.enemies.some(e => e.hp > 0 && !e.d.npc && !this.calm(e) && e.state !== 'hide' && e.state !== 'stone' && this.isVisible(e.x, e.y))) {
       this.heal(1 + L.pillow);
       this.emit('snooze', { x: p.x, y: p.y });
@@ -528,6 +700,7 @@ export class Run {
   // ---------- quest folk ----------
   // Talking takes no turn. What they say goes up as a sheet (queue kind 'talk').
   talk(e) {
+    if (e.type === 'cage') { this.openCage(e); return; }
     const q = this.quests[e.type], text = NPC_TEXT[e.type];
     const sheet = (body, opts, extra = {}) => this.queue.push({ kind: 'talk', who: e.type, text: body, opts, ...extra });
     const ok = () => [{ kind: 'ok', name: text.ok[0], desc: text.ok[1] }];
@@ -566,6 +739,22 @@ export class Run {
     this.emit('turn');
   }
 
+  // 우리: the 우두머리's key opens it, and the friend inside runs home to the village for good
+  openCage(e) {
+    const text = NPC_TEXT.cage;
+    if (!this.map.cageKey) { this.say(e, text.locked); this.log('우리 열쇠는 왕관 쓴 우두머리가 물고 있다.'); return; }
+    const id = e.friend;
+    this.map.cageKey = false;
+    this.meta.chars[id] = true;
+    this.rescued.push(id);
+    e.hp = 0;
+    this.enemies = this.enemies.filter(o => o !== e);
+    this.emit('rescue', { x: e.x, y: e.y, hero: id, sprite: CHARACTERS[id].sprite, text: text.free });
+    const c = CHARACTERS[id];
+    this.log(`우리를 열었다! ${c.kind} ${josa(c.name, '이', '가')} 마을로 달려갔다. 이제 함께 탐험할 수 있다.`, 'good');
+    this.endTurn();
+  }
+
   // Relics the blacksmith can hammer up a level (asked when the sheet opens, so two picks in a row stay right).
   smithOffers() {
     const rl = this.p.relics;
@@ -582,7 +771,7 @@ export class Run {
   mineOre(ore, at = ore) {
     const map = this.map, p = this.p, s = this.stat(), big = B.ORE_SIZE_MULT[ore.size - 1];
     ore.hits++;
-    const k = ore.hits - 1, last = ore.hits >= B.ORE_HITS, top = ORES.length - 1;
+    const k = ore.hits - 1, last = ore.hits >= B.ORE_HITS - (this.char.dig || 0), top = ORES.length - 1;
     if (ore.hits === 1) this.meetOre(ore.tier);
     const nugget = !last && Math.random() < B.ORE_NUGGET[k];
     const above = Math.max(0, ore.tier - Math.floor((this.floor - 1) / B.FLOORS_PER_ZONE));
@@ -594,7 +783,7 @@ export class Run {
     let gold;
     // the pickaxe and the coin relics add up on sparkle rocks rather than multiply: a gold build pays
     // well without one lucky run buying out the whole village
-    const oreCut = s.goldMult + (s.oreMult - 1) * B.stepGold(this.danger || 0);
+    const oreCut = s.goldMult + (s.oreMult - 1) * this.goldBonus;
     if (!last) gold = Math.round(B.oreGold(this.floor) * g.mult * B.ORE_SWING[k] * oreCut * big * (nugget ? B.ORE_NUGGET_MULT : 1));
     this.emit('mine', { x: at.x, y: at.y, cells: ore.cells, size: ore.size, from: { x: p.x, y: p.y }, hits: ore.hits, r, last, tier: ore.tier, rose, nugget });
     if (ore.vent) addGas(this, ore.vent.x, ore.vent.y, 'mine', B.ORE_GAS);
@@ -638,6 +827,7 @@ export class Run {
     if (!this.canAct() || !this.p.items[id] || id === 'bomb') return false;
     const p = this.p;
     p.items[id]--;
+    p.blend = false;
     if (id === 'potion') {
       this.heal(Math.round(this.stat().maxHp * B.POTION_HEAL));
       this.log('체력 물약을 마셨다.', 'good');
@@ -664,11 +854,12 @@ export class Run {
     if (!this.canAct() || !this.p.items.bomb || !this.canThrowAt(x, y)) return false;
     const p = this.p;
     p.items.bomb--;
+    p.blend = false;
     if (x !== p.x) p.face = Math.sign(x - p.x);
     this.emit('throw', { from: { x: p.x, y: p.y }, to: { x, y } });
     const bag = this.lv('bombbag'), fb = this.lv('firebomb');
     const mult = fb ? 1.25 + 0.25 * fb : 1 + 0.25 * Math.max(0, bag - 1);
-    explosion(this, x, y, 1, { dmg: Math.round(B.bombDamage(this.floor) * mult), cause: '내가 던진 폭탄에 휘말렸다', burn: fb ? 3 : 0 });
+    explosion(this, x, y, 1, { dmg: Math.round(B.bombDamage(this.floor) * mult), cause: '내가 던진 폭탄에 휘말렸다', burn: fb ? 3 : 0, own: true });
     this.endTurn();
     return true;
   }
@@ -686,10 +877,19 @@ export class Run {
         this.queue.push({ kind: 'chest', rich: !!q.rich, vein: !!q.vein });
         this.log('보물 상자를 열었다!', 'good');
         if (q.guarded) this.wakeStatues(x, y);
+      } else if (q.type === 'bossChest') {
+        // the stage's prize: the gold comes out in a heap and the trip is won (finish adds it)
+        this.meta.stats.chests = (this.meta.stats.chests || 0) + 1;
+        this.victory = true;
+        this.emit('bossChest', { x, y, gold: Math.round(B.stageBonus(this.stage) * this.goldBonus) });
+        this.log('대장의 보물 상자를 열었다!', 'good');
       } else if (q.type === 'lockedChest') {
         map.keyHeld = false;
         this.queue.push({ kind: 'chest', rich: true });
         this.log('열쇠로 잠긴 상자를 열었다!', 'good');
+      } else if (q.type === 'cageKey') {
+        map.cageKey = true;
+        this.log('우리 열쇠를 주웠다! 갇힌 친구에게 가자.', 'good');
       } else if (q.type === 'key') {
         map.keyHeld = true;
         this.log('작은 열쇠를 주웠다. 이 구역의 잠긴 곳을 연다.', 'good');
@@ -705,7 +905,7 @@ export class Run {
   // A relic from a crystal vault: the other crystals of that vault shatter.
   takeCrystal(q) {
     const rl = this.p.relics, id = q.relic;
-    const fits = rl[id] ? rl[id] < maxLevelOf(id) : Object.keys(rl).length < MAX_SLOTS;
+    const fits = rl[id] ? rl[id] < maxLevelOf(id) : Object.keys(rl).length < this.slots;
     if (fits) this.gainRelic(id);
     else { this.addGold(40); this.log('유물을 더 담을 수 없어서 유리 종 속 유물을 골드로 바꿨다.'); }
     for (const o of this.pickups.filter(o => o.type === 'crystal' && o.vault === q.vault)) {
@@ -725,9 +925,10 @@ export class Run {
   // An enemy that is not after you (asleep, strolling, searching, or a calm one) takes a surprise attack.
   unaware(e) { return ['sleep', 'wander', 'search'].includes(e.state) || this.calm(e); }
 
-  playerAttack(e) {
+  playerAttack(e, ram = false) {
     const s = this.stat(), L = this.levels(), p = this.p;
-    const base = s.atk + rnd(2);
+    const base = (s.atk + rnd(2)) * (ram ? 2 : 1);
+    if (ram) this.emit('ram', { x: e.x, y: e.y, from: { x: p.x, y: p.y } });
     // 그림자 걸음: right after a kill you are still in the shadows, so the next blow is a surprise too
     const shade = p.shade > 0 && !this.unaware(e);
     if (this.unaware(e) || shade) {
@@ -738,6 +939,10 @@ export class Run {
       // 암살 단검: a surprise kill is over before anyone can react; they all lose this turn
       if (e.hp <= 0 && L.dagger) { this.quick = true; this.emit('quick', { x: p.x, y: p.y }); }
     } else this.strike(e, base, 'normal');
+    // 곰: whoever is still standing goes back a tile
+    if (this.char.shove && e.hp > 0 && !e.d.boss && !e.d.npc) this.knock(e, 2 + Math.floor(this.floor / 4));
+    // 수정 고슴도치: a blow on its spines pricks back
+    if (e.d.spiky) { this.emit('prick', { x: p.x, y: p.y, from: { x: e.x, y: e.y } }); this.hurtPlayer(e.d.spiky, `${e.d.name}의 가시에 찔렸다`, 'thorns'); }
     // the swing carries on into everyone else standing next to you
     const share = L.quake || L.whirlwind ? 1 : L.whirl ? 0.6 + 0.1 * L.whirl : 0.3 * (L.sweep || 0);
     if (share) {
@@ -794,6 +999,7 @@ export class Run {
     if (e.hp <= 0 || e.d.npc) return;
     if (e.stoneT > 0) dmg = 1; // a gargoyle gone to stone barely feels it
     e.hp -= dmg;
+    e.hitAt = this.turn;
     this.emit('hit', { enemy: e, x: e.x, y: e.y, dmg, kind });
     if (e.hp <= 0) this.onKill(e);
     else {
@@ -836,8 +1042,11 @@ export class Run {
     if (e.d.boss) {
       if (!stats.bosses.includes(e.type)) stats.bosses.push(e.type);
       this.log(`${josa(e.d.name, '을', '를')} 쓰러뜨렸다!`, 'good');
-      if (this.floor >= B.LAST_FLOOR) this.victory = true;
-      else {
+      // the stage's last boss leaves a big chest; the trip is won when you open it
+      if (this.floor >= this.bossFloor) {
+        this.pickups.push({ x: e.x, y: e.y, type: 'bossChest' });
+        this.log('대장이 커다란 보물 상자를 남겼다! 열면 탐험 성공이다.', 'good');
+      } else {
         this.map.tiles[idx(e.x, e.y)] = STAIRS;
         this.map.ter[idx(e.x, e.y)] = T.NONE;
         this.map.down = { x: e.x, y: e.y };
@@ -850,6 +1059,9 @@ export class Run {
       }
       this.addGold(30 * (this.floor / 3));
       this.dropNear(e.x, e.y, { type: 'candy', n: B.candySteps(this.floor) + B.CANDY_BOSS });
+    } else if (e.chief) {
+      this.dropNear(e.x, e.y, { type: 'cageKey' });
+      this.log(`${josa(this.chiefName(e), '이', '가')} 쓰러지며 우리 열쇠를 떨궜다!`, 'good');
     } else if (e.d.treasure) {
       this.pickups.push({ x: e.x, y: e.y, type: 'chest' }, { x: e.x, y: e.y, type: 'gold', amount: B.turtleGold(this.floor) });
       if (this.open('candy')) this.dropNear(e.x, e.y, { type: 'candy' });
@@ -868,6 +1080,8 @@ export class Run {
     if (heal) this.heal(heal);
     this.gainXp(e.xp ?? e.d.xp);
   }
+
+  chiefName(e) { return `우두머리 ${e.d.name}`; }
 
   // A poison mushroom that falls swells up, and bursts after your next move: everyone next to it then
   // takes a hit, monsters too. The tiles around it glow, so one step away keeps you out of it.
@@ -888,6 +1102,24 @@ export class Run {
     }
   }
 
+  // Stones about to come down (the boar chief's crash, a cave's stalactites shaken loose): their tiles
+  // show red, you get one move to step off, then whoever stands there is hit, critters twice as hard.
+  dropRock(x, y, dmg, cause) {
+    if (!passable(this.map, x, y) || this.rocks.some(r => r.x === x && r.y === y)) return;
+    this.rocks.push({ x, y, dmg, cause, due: this.turn + (this.enemyPhase ? 1 : 2) });
+  }
+  dropRocks() {
+    const due = this.rocks.filter(r => r.due <= this.turn);
+    if (!due.length) return;
+    this.rocks = this.rocks.filter(r => r.due > this.turn);
+    for (const r of due) {
+      this.emit('rockfall', { x: r.x, y: r.y });
+      const e = this.enemyAt(r.x, r.y);
+      if (e && !e.d.npc) this.hurt(e, r.dmg * 2, 'rock');
+      if (this.p.x === r.x && this.p.y === r.y) this.hurtPlayer(r.dmg, r.cause, 'rock');
+    }
+  }
+
   damagePlayer(raw, src, kind = 'melee') {
     const s = this.stat(), L = this.levels(), p = this.p;
     if (s.dodge && Math.random() < s.dodge) {
@@ -901,11 +1133,13 @@ export class Run {
     if (this.char.block && Math.random() < this.char.block) { this.emit('block', { x: p.x, y: p.y, from: { x: src.x, y: src.y } }); return false; }
     const roll = raw * (B.HIT_ROLL[0] + Math.random() * (B.HIT_ROLL[1] - B.HIT_ROLL[0]));
     let dmg = Math.max(1, Math.round(roll) + rnd(2) - s.def);
+    // 거북이: tucked in the shell, a blow lands at half strength
+    if (p.shell) { dmg = Math.max(1, Math.ceil(dmg / 2)); this.emit('shellhit', { x: p.x, y: p.y }); }
     // 강철 심장: with a third of your health or less, blows glance off at half strength
     if (L.ironheart && p.hp <= s.maxHp / 3) { dmg = Math.max(1, Math.ceil(dmg / 2)); this.emit('iron', { x: p.x, y: p.y }); }
     this.hurtPlayer(dmg, `${src.d.name}에게 당했다`, kind);
     if (src && (kind === 'melee' || kind === 'charge')) {
-      const thorn = (L.fortress ? 4 + 2 * L.fortress : 2 * (L.thorns || 0)) + (L.spikecloak ? 4 + 2 * L.spikecloak : 0);
+      const thorn = (L.fortress ? 4 + 2 * L.fortress : 2 * (L.thorns || 0)) + (L.spikecloak ? 4 + 2 * L.spikecloak : 0) + (this.char.thorns || 0);
       if (thorn) this.hurt(src, thorn, 'thorns');
       if (L.embermail && src.hp > 0) { this.hurt(src, 3 + L.embermail, 'fire'); if (src.hp > 0) setBurn(this, src, 3); }
       if (src.type === 'lord' && src.hp > 0) src.hp = Math.min(src.maxHp, src.hp + dmg);
@@ -923,18 +1157,27 @@ export class Run {
     if (p.sleep) { p.sleep = 0; p.wokeAt = this.turn; this.log('아파서 잠이 확 깼다!', 'warn'); }
     this.emit('phit', { x: p.x, y: p.y, dmg, kind });
     const L = this.levels(), maxHp = this.stat().maxHp;
-    const lives = (L.eternity ? 2 : L.undying ? 1 : 0) + (L.bloodking ? 1 : 0), band = L.herbal ? 6 + 4 * L.herbal : 6 * (L.bandage || 0);
-    if (p.hp <= 0 && (this.revives || 0) < lives) {
+    const relicLives = (L.eternity ? 2 : L.undying ? 1 : 0) + (L.bloodking ? 1 : 0), band = L.herbal ? 6 + 4 * L.herbal : 6 * (L.bandage || 0);
+    if (p.hp <= 0 && (this.revives || 0) < relicLives + (this.char.lives || 0)) {
       this.revives = (this.revives || 0) + 1;
       p.hp = 0;
       this.heal(Math.round(maxHp / 2));
-      const heart = this.revives <= (L.eternity ? 2 : L.undying ? 1 : 0) ? RELICS[L.eternity ? 'eternity' : 'undying'].name : RELICS.bloodking.name;
+      // the relics' lives go first; the cat's own spare one is last
+      const heart = this.revives > relicLives ? '아홉 목숨' : this.revives <= (L.eternity ? 2 : L.undying ? 1 : 0) ? RELICS[L.eternity ? 'eternity' : 'undying'].name : RELICS.bloodking.name;
       this.log(`${heart}의 힘으로 쓰러졌다가 다시 일어났다.`, 'evo');
       this.emit('banner', { text: `${heart}!` });
     } else if (p.hp > 0 && band && this.bandageUsed < (L.herbal ? 2 : 1) && p.hp < maxHp / 3) {
       this.bandageUsed++;
       this.heal(band);
       this.log('비상 붕대를 감았다.', 'good');
+    }
+    // 스컹크: badly hurt, a smell so bad that everyone close reels (once a field)
+    if (this.char.stink && !this.stunk && p.hp > 0 && p.hp < maxHp / 3) {
+      this.stunk = true;
+      const list = this.enemies.filter(e => e.hp > 0 && !e.d.npc && cheb(e, p) <= 2);
+      for (const e of list) e.stun = Math.max(e.stun || 0, e.d.boss ? 1 : 2);
+      this.emit('stink', { x: p.x, y: p.y, list });
+      this.log(list.length ? '뿌웅… 지독한 냄새에 주변 적들이 어질어질하다!' : '뿌웅… 아무도 없는 데서 냄새만 퍼졌다.', 'good');
     }
   }
 
@@ -967,6 +1210,14 @@ export class Run {
   noise(x, y, r) {
     let woke = 0;
     const heard = [];
+    // in the cave, a loud enough noise shakes the stalactites above it loose
+    const drips = this.map.drips?.filter(d => cheb(d, { x, y }) <= Math.min(r, B.DRIP_SHAKE)) || [];
+    if (drips.length) {
+      this.map.drips = this.map.drips.filter(d => !drips.includes(d));
+      for (const d of drips) this.dropRock(d.x, d.y, B.rockDmg(this.floor), '떨어진 종유석에 맞았다');
+      this.emit('rumble', { x, y });
+      if (!this.told.drip) { this.told.drip = true; this.log('우르르… 천장의 종유석이 흔들린다! 붉은 칸에서 비키자.', 'warn'); }
+    }
     for (const e of this.enemies) {
       if (e.hp <= 0 || e.d.screams || cheb(e, { x, y }) > r) continue;
       const before = e.state;
@@ -1013,22 +1264,65 @@ export class Run {
     const regen = Math.min(...[L.lifetree && (L.lifetree < 2 ? 2 : 1), L.herbal && [3, 2, 2][L.herbal - 1], L.moss && [6, 4, 2][L.moss - 1],
       L.pillow && [4, 3, 2][L.pillow - 1]].filter(Boolean), Infinity);
     if (regen < Infinity && this.turn % regen === 0) this.heal(1);
+    if (this.char.breath && this.turn % this.char.breath === 0) this.breathe();
+    if (this.pet) this.petTick();
 
     // doors shut the moment nobody stands in them, so a chaser right behind you loses sight of you
     // as you step through (the Shattered Pixel Dungeon door ambush)
     this.refreshDoors();
     this.burstPuffs();
+    this.dropRocks();
     if (p.hp <= 0) { this.afterTurn(); return; }
     const dm = distMap(this.map, p.x, p.y);
+    p.held = null;
+    this.enemyPhase = true;
     if (!quick) for (const e of this.enemies.slice()) {
       if (e.hp > 0 && p.hp > 0) enemyAct(this, e, dm);
     }
+    this.enemyPhase = false;
+    p.shell = false;
     if (p.hp > 0) envTick(this);
     this.enemies = this.enemies.filter(e => e.hp > 0);
     if (p.hp > 0) { this.chatter(); spotTraps(this); }
     this.magnetize();
     this.respawnTick();
     this.afterTurn();
+  }
+
+  // the pet's little help, once a turn
+  petTick() {
+    const pet = PETS[this.pet], p = this.p;
+    if (pet.peck && this.turn % pet.peck === 0) {
+      this.emit('peck', { x: p.x, y: p.y });
+      this.addGold(peckGold(this.floor));
+    }
+    if (pet.drizzle && this.turn % pet.drizzle === 0 && p.hp < this.stat().maxHp) {
+      this.emit('drizzle', { x: p.x, y: p.y });
+      this.heal(1);
+    }
+    if (pet.feel) {
+      const m = this.map, list = [];
+      for (let y = p.y - pet.feel; y <= p.y + pet.feel; y++) for (let x = p.x - pet.feel; x <= p.x + pet.feel; x++) {
+        if (inMap(x, y) && m.hidden[idx(x, y)]) { m.hidden[idx(x, y)] = 0; list.push(idx(x, y)); }
+      }
+      if (list.length) {
+        this.emit('tiles', { list, soft: true });
+        this.emit('feel', { x: p.x, y: p.y, at: list.map(i => ({ x: i % m.w, y: (i / m.w) | 0 })) });
+        this.log(`${pet.name}의 더듬이가 쫑긋! 숨은 함정을 찾았다.`, 'good');
+      }
+    }
+  }
+
+  // 아기 용: a puff of fire at the nearest critter within two tiles that you can see
+  breathe() {
+    const p = this.p;
+    const e = this.enemies.filter(o => o.hp > 0 && !o.d.npc && !this.calm(o) && cheb(o, p) <= 2 && this.isVisible(o.x, o.y) &&
+      !['hide', 'stone', 'lurk'].includes(o.state) && !o.diving).sort((a, b) => cheb(a, p) - cheb(b, p))[0];
+    if (!e) return;
+    if (e.x !== p.x) p.face = Math.sign(e.x - p.x);
+    this.emit('breath', { from: { x: p.x, y: p.y }, to: { x: e.x, y: e.y } });
+    this.hurt(e, 3 + Math.floor(this.floor / 3), 'fire');
+    if (e.hp > 0) setBurn(this, e, 3);
   }
 
   // the magnet relics pull in gold you can see
@@ -1165,7 +1459,7 @@ export class Run {
 
   afterTurn() {
     this.refreshDoors();
-    computeFOV(this.map, this.p.x, this.p.y, this.stat().sight);
+    computeFOV(this.map, this.p.x, this.p.y, this.stat().sight, this.lights());
     this.meetCritters();
     if (this.p.hp <= 0) { this.p.hp = 0; this.finish(false); return; }
     if (this.victory) { this.finish(true); return; }
@@ -1173,11 +1467,25 @@ export class Run {
     this.spotVeins();
   }
 
+  // what glows on this field: the marsh's fireflies not caught yet
+  lights() { return (this.map.flies || []).map(f => ({ x: f.x, y: f.y, r: B.FLY_LIGHT })); }
+
+  // 반딧불 늪: walk into a firefly swarm and it goes in a jar; each jar gives a tile of sight for the trip
+  catchFly(x, y) {
+    const f = this.map.flies?.find(o => o.x === x && o.y === y);
+    if (!f) return;
+    this.map.flies.splice(this.map.flies.indexOf(f), 1);
+    this.flies = (this.flies || 0) + 1;
+    this.emit('fly', { x, y, n: this.flies });
+    this.log(this.flies <= B.FLY_MAX ? '반딧불이를 병에 담았다. 조금 더 멀리 보인다.' : '반딧불이를 병에 담았다. 병이 꽉 찼다.', 'good');
+  }
+
   // the critter book (구조대원) fills in each kind the first time you see one
   meetCritters() {
     const book = this.meta.critters ||= {};
     for (const e of this.enemies) {
-      if (e.hp <= 0 || e.d.npc || e.type in book || !this.isVisible(e.x, e.y)) continue;
+      if (e.hp <= 0 || e.d.npc || e.type in book || !this.isVisible(e.x, e.y) || e.state === 'lurk' || e.diving) continue;
+      if (e.d.shade && cheb(e, this.p) > e.d.shade) continue;
       book[e.type] = 0;
       (this.newCritters ||= []).push(e.type);
     }
@@ -1212,6 +1520,43 @@ export class Run {
         }
         this.log('버섯 왕이 커다란 버섯 망치를 들어 올렸다. 붉은 칸에서 벗어나야 한다!', 'warn');
         return true;
+      }
+    }
+    // 개굴 대왕: dives, then a turn later bursts up out of the ripples beside you and comes down on the
+    // ring around it; at half health it croaks once and two frogs come
+    if (e.type === 'toadking') {
+      if (e.dive) {
+        e.dive = null; e.diving = false;
+        const hit = this.telegraph.some(t => t.x === p.x && t.y === p.y);
+        this.emit('splash', { enemy: e, tiles: this.telegraph, hit });
+        if (hit) { this.hurtPlayer(Math.round(e.atk * 1.6), '개굴 대왕에게 깔렸다', 'slam'); this.log('개굴 대왕이 튀어나와 덮쳤다!', 'warn'); }
+        else this.log('첨벙! 덮치기를 피했다!', 'good');
+        this.telegraph = [];
+        return true;
+      }
+      if (!e.rage && e.hp <= e.maxHp / 2) {
+        e.rage = true;
+        let n = 0;
+        for (const [dx, dy] of shuffle(DIRS8.slice())) {
+          if (n < 2 && this.canEnemyEnter(e.x + dx, e.y + dy)) { this.spawnEnemy('frog', e.x + dx, e.y + dy, B.enemyScale(this.floor)).state = 'hunt'; n++; }
+        }
+        this.emit('rage', { enemy: e });
+        this.log('개굴 대왕이 개굴개굴 울었다! 개구리들이 몰려온다!', 'warn');
+        return true;
+      }
+      if (e.timer % 4 === 0) {
+        const near = DIRS8.map(([dx, dy]) => ({ x: p.x + dx, y: p.y + dy })).filter(t => this.canEnemyEnter(t.x, t.y));
+        const wet = near.filter(t => this.map.ter[idx(t.x, t.y)] === T.WATER);
+        const to = pick(wet.length ? wet : near);
+        if (to) {
+          this.emit('dive', { enemy: e, from: { x: e.x, y: e.y }, to });
+          e.x = to.x; e.y = to.y;
+          e.dive = to; e.diving = true; e.aim = false; e.lick = null;
+          this.refreshDoors();
+          this.telegraph = DIRS8.map(([dx, dy]) => ({ x: to.x + dx, y: to.y + dy })).filter(t => passable(this.map, t.x, t.y));
+          this.log('개굴 대왕이 물속으로 첨벙 뛰어들었다! 물결 둘레에서 벗어나자!', 'warn');
+          return true;
+        }
       }
     }
     if (e.type === 'ratking' && e.timer % 5 === 0) {
@@ -1254,6 +1599,19 @@ export class Run {
     return false;
   }
 
+  // 멧돼지 대장 crashed into the rock: stones come loose over the ground around you (one always right
+  // over you, so you have to move), more of them once it is badly hurt
+  quake(e) {
+    const p = this.p, spots = [];
+    for (let y = p.y - 2; y <= p.y + 2; y++) for (let x = p.x - 2; x <= p.x + 2; x++) {
+      if (passable(this.map, x, y) && !(x === e.x && y === e.y) && !(x === p.x && y === p.y)) spots.push({ x, y });
+    }
+    const n = e.hp <= e.maxHp / 2 ? 6 : 4;
+    for (const t of [{ x: p.x, y: p.y }, ...shuffle(spots).slice(0, n - 1)]) this.dropRock(t.x, t.y, B.rockDmg(this.floor), '떨어진 돌에 맞았다');
+    this.emit('quake', { x: e.x, y: e.y });
+    this.log('쿠웅! 멧돼지 대장이 바위에 박았다! 돌이 떨어진다!', 'warn');
+  }
+
   // ---------- relic choices ----------
   // a shop relic once bought; a basic one once its unlock has come (data/unlocks.js)
   relicAvailable(id) {
@@ -1264,7 +1622,7 @@ export class Run {
 
   offers(n = 3) {
     n += (this.char.choices || 3) - 3;
-    const rl = this.p.relics, full = Object.keys(rl).length >= MAX_SLOTS, known = this.meta.recipes, have = this.levels();
+    const rl = this.p.relics, full = Object.keys(rl).length >= this.slots, known = this.meta.recipes, have = this.levels();
     const pool = Object.keys(RELICS).filter(id => {
       if (rl[id]) return rl[id] < maxLevelOf(id);
       if (tierOf(id) > 0 || full) return false;
@@ -1323,9 +1681,11 @@ export class Run {
 
   // Called by the UI after the player picks one of `offers()`.
   choose(o) {
-    this.queue.shift();
+    const q = this.queue.shift();
     if (o.kind === 'heal') this.heal(Math.round(this.stat().maxHp * 0.5));
     else if (o.kind === 'gold') this.addGold(o.amount || 25);
+    // 출발 보급 packs a relic two levels' worth
+    else if (o.kind === 'relic' && q?.kind === 'kit') { this.gainRelic(o.id); if (this.p.relics[o.id] < maxLevelOf(o.id)) this.gainRelic(o.id); }
     else if (o.kind === 'relic') this.gainRelic(o.id);
     else if (o.kind === 'fuse') this.fuse(o.a, o.b);
     else if (o.kind === 'buy') this.buy(o.what);
@@ -1419,24 +1779,26 @@ export class Run {
     if (this.over) return;
     this.over = true;
     this.queue = [];
-    const stats = this.meta.stats;
-    let stepOpened = 0;
+    const meta = this.meta, stats = meta.stats;
+    const news = { stage: null, loop: 0, dares: 0 };
     if (won) {
       stats.wins++;
-      this.gold += B.VICTORY_BONUS;
-      // winning at the top step opens the next one
-      const before = B.stepsOpen(this.meta);
-      stats.topStep = Math.max(B.topStep(this.meta), this.danger || 0);
-      if (B.stepsOpen(this.meta) > before) stepOpened = B.stepsOpen(this.meta);
+      this.bonus = Math.round(B.stageBonus(this.stage) * this.goldBonus);
+      this.gold += this.bonus;
+      // the first win of this stage at this 회차 opens the next stage, and the last one the next 회차
+      const loopsBefore = loopsOpen(meta), daresBefore = daresOpen(meta);
+      this.firstClear = cleared(meta, this.stage) < this.loop;
+      meta.clears = { ...meta.clears, [this.stage]: Math.max(cleared(meta, this.stage), this.loop) };
+      if (this.firstClear && this.stage + 1 < FRIENDS.length && stageOpen(meta, this.stage + 1, this.loop)) news.stage = this.stage + 1;
+      if (loopsOpen(meta) > loopsBefore) news.loop = loopsOpen(meta);
+      if (daresOpen(meta) > daresBefore) news.dares = daresOpen(meta);
     }
-    this.meta.gold += this.gold;
+    // the rival keeps count: the furthest stage you have won with each dare on
+    for (const id of this.dares) if (won) meta.dares.won[id] = Math.max(meta.dares.won[id] || 0, this.stage + 1);
+    meta.gold += this.gold;
     stats.bestGold = Math.max(stats.bestGold, this.gold);
-    const before = { stats: this.startStats };
-    const newlyUnlockable = Object.entries(CHARACTERS)
-      .filter(([id, c]) => c.cond && !this.meta.chars[id] && c.cond.val(this.meta) >= c.cond.goal && c.cond.val(before) < c.cond.goal)
-      .map(([, c]) => c.name);
-    const opened = openNew(this.meta);
-    this.emit('end', { won, newlyUnlockable, stepOpened, opened });
+    const opened = openNew(meta);
+    this.emit('end', { won, rescued: this.rescued, news, opened });
   }
 }
 Run.nextId = 1;

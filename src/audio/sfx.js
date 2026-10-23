@@ -228,7 +228,8 @@ export function onRunEvent(type, d) {
     case 'sneak': play('sneak'); break;
     case 'phit': play('hurt'); break;
     case 'kill': play('kill'); break;
-    case 'pickup': if (d.type !== 'candy') play(d.type === 'chest' ? 'chest' : 'gold'); break;
+    case 'pickup': if (d.type !== 'candy') play(d.type === 'chest' || d.type === 'bossChest' ? 'chest' : 'gold'); break;
+    case 'bossChest': play('jackpot'); break;
     case 'boom': case 'gasboom': play('boom'); break;
     case 'alert': play('alert'); break;
     case 'snore': play('snore'); break;
@@ -260,6 +261,24 @@ export function onRunEvent(type, d) {
     case 'warp': play('warp'); break;
     case 'swarm': play('buzz'); break;
     case 'smoke': play('puff'); play('snore'); break;
+    case 'bang': play('mine', d.n + 1); if (d.last) play('levelup'); break;
+    // the marsh and the cave (v0.21)
+    case 'aimTongue': play('alert'); break;
+    case 'tongue': play(d.hit ? 'pluck' : 'dodge'); break;
+    case 'surface': case 'dive': case 'splash': play('splash'); break;
+    case 'grab': play('hit'); break;
+    case 'prick': play('hit'); break;
+    // the friends' own moves
+    case 'hop': play('step'); break;
+    case 'shell': case 'blend': play('swap'); break;
+    case 'shellhit': play('dodge'); break;
+    case 'ram': play('hit'); play('sneak'); break;
+    case 'breath': play('puff'); break;
+    case 'stink': play('puff'); play('pop'); break;
+    case 'rockfall': play('mine', 1); break;
+    case 'rumble': case 'quake': play('boom'); break;
+    case 'fly': play('rise', 0); break;
+    case 'berry': play('honey'); break;
     default: break;
   }
 }

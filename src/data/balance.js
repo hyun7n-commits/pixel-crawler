@@ -3,8 +3,12 @@
 export const MAP_W = 44;
 export const MAP_H = 32;
 export const SIGHT = 7;            // view radius in tiles
-export const LAST_FLOOR = 9;
-export const FLOORS_PER_ZONE = 3;
+// A trip is one stage (data/stages.js): FLOORS_PER_ZONE fields of one zone, the last its boss. Floors
+// are numbered across all five stages (stage 2 starts at floor 5), so a floor says which zone it is in.
+export const FLOORS_PER_ZONE = 4;
+export const LAST_FLOOR = 20;
+export const stageOf = floor => Math.floor((floor - 1) / FLOORS_PER_ZONE);
+export const localOf = floor => ((floor - 1) % FLOORS_PER_ZONE) + 1;   // 1..FLOORS_PER_ZONE; the last is the boss
 
 // v0.15: level-ups come quicker, so relics grow and evolve within a run (BALL x PIT pace)
 export const xpToLevel = lvl => 3 + lvl;
@@ -23,25 +27,50 @@ export const HP_PER_LEVEL = 1;     // a level up heals nothing (v0.20): health o
 // v0.15: the Shattered Pixel Dungeon way. Fewer monsters than v0.14, but each one hits hard
 // (enemies.js), so walking in and trading blows with two at once loses;
 // doorways, surprise hits, bombs and backing off are what win.
-export const enemiesPerFloor = floor => 5 + floor;
-// stat multiplier for enemies: grows within a zone and a lot per zone, because relics, candies and
-// evolutions make you much stronger as you go (v0.19). Attack grows by ATK_SHARE of it, health in full.
-export const enemyScale = floor => 1 + 0.18 * ((floor - 1) % 3) + 0.55 * Math.floor((floor - 1) / 3);
+export const enemiesPerFloor = floor => 5 + localOf(floor) + stageOf(floor);
+// stat multiplier for enemies: grows field by field within a trip (and with STAGE_UP from stage to
+// stage, none for now: each zone's critters are tougher to begin with, and the 회차 adds the rest).
+// Attack grows by ATK_SHARE of it, health in full.
+export const STAGE_UP = +(globalThis.process?.env?.STAGE_UP ?? 0);
+// 출발 보급: a deeper stage is entered as a seasoned explorer, the guild sees to that. You start at a
+// higher level, a little stronger and sturdier, and pick some relics (two levels each) before the
+// first step. Tuned with the bot (relicsim) so each stage is about as hard as the first, fresh.
+const ENV = globalThis.process?.env || {};
+export const stageKit = stage => ({
+  lvl: 1 + 2 * stage, picks: Math.round(+(ENV.KIT ?? 1.5) * stage),
+  atk: Math.round(+(ENV.KIT_ATK ?? 1.5) * stage), hp: Math.round(+(ENV.KIT_HP ?? 6) * stage),
+});
+export const enemyScale = floor => 1 + 0.15 * (localOf(floor) - 1) + STAGE_UP * stageOf(floor);
 export const ATK_SHARE = 1.6;
 export const POTION_CHANCE = 0.35;  // a potion lying somewhere on a floor (scarce: healing is precious)
-export const bossScale = floor => 1 + 0.5 * (floor / 3 - 1);
+export const bossScale = floor => 1 + STAGE_UP * stageOf(floor);
+// 우두머리: the crowned mid-boss that carries a caged friend's key (data/stages.js): this many times a
+// critter of its kind on that field, in health and in attack
+export const CHIEF_HP = 3, CHIEF_ATK = 1.4;
+
+// v0.21 zones. The marsh is darker (MARSH_DARK tiles of sight) but its fireflies light FLY_LIGHT tiles
+// around them, and each one caught in a jar gives a tile of sight back for the trip (FLY_MAX at most).
+export const MARSH_DARK = 2, FLY_LIGHT = 2, FLY_MAX = 2, FLIES_PER_FLOOR = [3, 5];
+// The cave: stalactites over the rooms (DRIPS_PER_ROOM), shaken loose by a noise within DRIP_SHAKE tiles.
+// A falling stone (theirs, or the boar chief's) hits for rockDmg, critters twice as hard.
+export const DRIPS_PER_ROOM = [0, 1], DRIP_SHAKE = 5;
+export const rockDmg = floor => 4 + Math.floor(floor / 2);
+
+// field terrain (v0.21): a berry bush heals a little; lone bushes and boulders stand in bigger rooms
+export const BERRY_CHANCE = 0.55;
+export const berryHeal = floor => 4 + Math.floor(floor / 3);
+export const PROPS_PER_ROOM = [0, 2];
 
 export const GOLD_DROP_CHANCE = 0.4;
-export const VICTORY_BONUS = 200;
+// beating a stage's boss pays this much on top (times the 회차's and the dares' gold)
+export const stageBonus = stage => 80 + 40 * stage;
 
-// 탐험 단계: after the first win the fields get rowdier, one step per win, up to STEP_MAX. Picked at
-// the guild (ui/hub.js). Each step makes every critter tougher and pays more gold.
-export const STEP_MAX = 5;
-export const stepFoe = s => 1 + 0.15 * s;   // critters' health and attack
-export const stepGold = s => 1 + 0.2 * s;   // gold you pick up
-// the highest step won so far (-1 before the first win; saves from before steps count a win as step 0)
-export const topStep = m => m.stats.topStep ?? (m.stats.wins > 0 ? 0 : -1);
-export const stepsOpen = m => Math.min(STEP_MAX, topStep(m) + 1);
+// 라이벌의 내기 (data/dares.js): what each dare does
+export const DARE_FOE = 1.4;            // 사나운 들판: critters' health and attack
+export const DARE_DARK = 3;             // 작은 등불: tiles less sight
+export const DARE_CALL = 8;             // 소문 빠른 들판: how far a critter that spots you is heard
+export const DARE_BOSS_HP = 1.5, DARE_BOSS_ATK = 1.25;   // 화난 대장
+export const DARE_SLOTS = 2;            // 가벼운 가방: relic slots fewer
 
 export const POTION_HEAL = 0.6;
 
@@ -120,16 +149,16 @@ export const HIVE_CHANCE = 0.35;       // the honey stump, a little rarer
 export const honeyHp = floor => 3 + Math.floor((floor - 1) / FLOORS_PER_ZONE);
 export const BEE_HOME = 6;
 // 요정 고리: the chance a field has a pair of fairy rings, by zone (most in the deep forest)
-export const RING_CHANCE = [0.2, 0.7, 0.3];
+export const RING_CHANCE = [0.2, 0.7, 0.3, 0.3, 0.25];
 // 온천: the chance a flooded room's pool is a hot spring, by zone (most up the rocky hills); anyone
 // standing in it gets SPRING_HEAL back every other turn, critters too
-export const SPRING_CHANCE = [0, 0.25, 0.7];
+export const SPRING_CHANCE = [0, 0.25, 0.2, 0.7, 0.4];
 export const SPRING_HEAL = 1;
 export const HIVE_SMOKE = 2;
 // 풀뽑기 밭: the chance a field has a weed patch, by zone (most out on the meadow); each weed pulled
 // pays a little, one or two are screaming roots that run off yelling (heard SCREAM_RANGE away) for
 // ROOT_TURNS turns before they dig back in, and the last weed of the patch hides a star candy
-export const WEED_CHANCE = [0.65, 0.35, 0.15];
+export const WEED_CHANCE = [0.65, 0.35, 0.3, 0.15, 0.1];
 export const weedGold = floor => (1 + Math.floor((floor - 1) / FLOORS_PER_ZONE)) * (2 + Math.floor(Math.random() * 2));
 export const SCREAM_RANGE = 7;
 // the smith's gift for every BOOK_GIFT_EVERY recipes in the book: the k-th one (from 1) is bookGift(k) gold

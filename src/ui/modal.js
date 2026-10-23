@@ -6,7 +6,8 @@ import { recipeFor } from './recipe.js';
 import { josa } from '../core/util.js';
 import { DISCOVERIES } from '../data/terrain.js';
 import { STALL } from '../data/npcs.js';
-import { ENEMIES } from '../data/enemies.js';
+import { ENEMIES, ZONES } from '../data/enemies.js';
+import { CHARACTERS } from '../data/characters.js';
 
 // the level a relic grows to, MAX when that is its top (as the bag shows it)
 const lvTo = (id, n) => (n >= maxLevelOf(id) ? 'MAX' : `Lv${n}`);
@@ -23,7 +24,7 @@ export function closeModal() {
 }
 
 // `onX`: the sheet gets a ✕ in its top right corner that stays put while the sheet scrolls
-function openSheet(build, onX) {
+export function openSheet(build, onX) {
   const m = $('modal');
   m.innerHTML = '';
   const sh = el('div', 'sheet');
@@ -137,20 +138,27 @@ export function closeTalk() {
   return true;
 }
 
-export function showSummary({ won, run, newlyUnlockable, stepOpened, opened = [], onClose }) {
+export function showSummary({ won, run, rescued = [], news = {}, opened = [], onClose }) {
   openSheet(sh => {
-    sh.append(el('h2', null, won ? '들판 끝까지 탐험했다!' : '쓰러졌다'));
+    const zone = run.zone.name, boss = run.boss?.d?.name || ENEMIES[run.zone.boss].name;
+    sh.append(el('h2', null, won ? `${zone} ${run.loop}회차 돌파!` : '쓰러졌다'));
     if (!won && run.cause) sh.append(el('p', 'cause', `마지막 순간: ${run.cause}`));
     sh.append(el('p', null, won
-      ? '박쥐 대왕을 쓰러뜨렸다. 보너스 골드 200을 받았다.'
+      ? `${josa(boss, '을', '를')} 쓰러뜨렸다. 돌파 보너스 ${run.bonus || 0}G를 받았다.`
       : '모은 골드는 그대로 가져간다. 마을에서 강해진 다음 다시 도전하자.'));
     const sum = el('div', 'summary');
-    for (const [v, l] of [[`${run.floor}구역`, '도달한 구역'], [run.kills, '쓰러뜨린 적'], [`Lv${run.p.lvl}`, '레벨'], [`+${run.gold}`, '가져가는 골드']]) {
+    for (const [v, l] of [[run.floorName(), '도달한 곳'], [run.kills, '쓰러뜨린 적'], [`Lv${run.p.lvl}`, '레벨'], [`+${run.gold}`, '가져가는 골드']]) {
       const s = el('div', 'stat');
       s.append(el('b', null, String(v)), el('span', null, l));
       sum.append(s);
     }
     sh.append(sum);
+    // the heroes let out of their cages this trip: they are waiting in the village
+    for (const id of rescued) {
+      const c = CHARACTERS[id], row = el('div', 'unlock-note rescued');
+      row.append(icon(c.sprite), el('span', null, `우리에서 구해 준 ${c.kind} ${josa(c.name, '이', '가')} 마을로 이사 온다. 조합장에게서 골라 함께 나갈 수 있다.`));
+      sh.append(row);
+    }
     // 새로 열림: what this trip opened up (data/unlocks.js), a line or two each time
     if (opened.length) {
       const box = el('div', 'opened');
@@ -190,10 +198,10 @@ export function showSummary({ won, run, newlyUnlockable, stepOpened, opened = []
       const names = run.found.map(id => DISCOVERIES.find(d => d.id === id)).map(d => `${d.combo} = ${d.result}`);
       sh.append(el('div', 'unlock-note', `이번에 새로 발견한 것: ${names.join(' · ')}`));
     }
-    if (newlyUnlockable.length) {
-      sh.append(el('div', 'unlock-note', `새 캐릭터 조건 달성: ${newlyUnlockable.join(', ')}. 마을의 조합장에게 가면 골드로 데려올 수 있다.`));
-    }
-    if (stepOpened) sh.append(el('div', 'unlock-note', `탐험 단계 ★${stepOpened} 열림! 들판이 더 사나워진 대신 골드를 더 준다. 조합장에게서 고른다.`));
+    // what this win opened: the next stage, the next 회차, a new dare from the rival
+    if (news.stage != null) sh.append(el('div', 'unlock-note req-done', `새 스테이지 열림: ${ZONES[news.stage].name}`));
+    if (news.loop) sh.append(el('div', 'unlock-note req-done', `${news.loop}회차 열림! 모든 스테이지가 더 사나워진 대신 골드를 더 준다. 새 친구들도 갇혀 있다.`));
+    if (news.dares) sh.append(el('div', 'unlock-note', '라이벌이 새 내기를 걸어 왔다. 라이벌 집에서 볼 수 있다.'));
     const foot = el('div', 'sheet-foot');
     foot.append(button('btn primary', '마을로 돌아가기', () => { closeModal(); onClose(); }));
     sh.append(foot);

@@ -31,6 +31,7 @@ export function createMap() {
     doors: [],
     vents: [],
     lights: [],                   // miners' lamps hung on wall faces: { x, y } of the wall tile
+    props: {},                    // walls standing alone in a room (a bush, a stump, a boulder): tile index -> 1
     ores: [],                     // the floor's big ores: { x, y, hits, tier, vent }
     up: null, down: null,         // where the stairs are, for arriving from above or below
   };
@@ -46,7 +47,7 @@ export const passable = (map, x, y) => {
 export const opaque = (map, x, y) => {
   if (!inMap(x, y)) return true;
   const i = idx(x, y), t = map.tiles[i];
-  return t === WALL || t === LOCKED || (t === DOOR && !map.open[i]) || map.ter[i] === T.BRUSH;
+  return t === WALL || t === LOCKED || (t === DOOR && !map.open[i]) || map.ter[i] === T.BRUSH || map.ter[i] === T.BERRY;
 };
 export const isBorder = (x, y) => x <= 0 || y <= 0 || x >= W - 1 || y >= H - 1;
 
@@ -274,18 +275,43 @@ function passage(boxes, from, to, dug) {
   return path;
 }
 
-// One large arena for boss floors, with four pillars for cover.
-export function carveArena(map) {
-  const rw = 17, rh = 13, x0 = (W - rw) >> 1, y0 = 2;
+// Boss floors: one large arena. Its shape depends on the boss (data/enemies.js `arenas`), so each fight
+// plays differently:
+//   pillars - four pillars for cover          grove  - lone bushes scattered all over, to dodge round
+//   ring    - a block in the middle to run round (a loop, the Shattered Pixel Dungeon way)
+//   pond    - a wide pond in the middle with a rim of ground (the toad king's)
+//   lanes   - two long walls making three lanes (a charger rams down them)
+//   cavern  - ragged walls bitten into the edges, a couple of rocks in the middle
+// Single wall tiles are props (drawn as a bush, a stump, a boulder... by zone).
+export function carveArena(map, layout = 'pillars') {
+  const rw = layout === 'ring' || layout === 'lanes' ? 19 : 17, rh = 13, x0 = (W - rw) >> 1, y0 = 2;
   fillRect(map, x0, y0, rw, rh, 0);
-  for (const [i, j] of [[x0 + 4, y0 + 4], [x0 + rw - 5, y0 + 4], [x0 + 4, y0 + rh - 5], [x0 + rw - 5, y0 + rh - 5]]) {
-    map.tiles[idx(i, j)] = WALL;
+  const room = { x: x0, y: y0, w: rw, h: rh, cx: x0 + (rw >> 1), cy: y0 + (rh >> 1) };
+  const start = { x: room.cx, y: y0 + rh - 2 }, boss = { x: room.cx, y: y0 + 2 };
+  const wall = (x, y, prop = true) => { map.tiles[idx(x, y)] = WALL; if (prop) map.props[idx(x, y)] = 1; };
+  const { cx, cy } = room;
+  if (layout === 'pillars') {
+    for (const [i, j] of [[x0 + 4, y0 + 4], [x0 + rw - 5, y0 + 4], [x0 + 4, y0 + rh - 5], [x0 + rw - 5, y0 + rh - 5]]) wall(i, j);
+  } else if (layout === 'grove') {
+    for (const [i, j] of [[-5, -3], [5, -3], [-2, -1], [2, 0], [-6, 1], [6, 2], [-3, 3], [3, 3], [0, -3]]) wall(cx + i, cy + j);
+  } else if (layout === 'ring') {
+    for (let j = -1; j <= 1; j++) for (let i = -2; i <= 2; i++) wall(cx + i, cy + j, false);
+  } else if (layout === 'pond') {
+    for (let j = -2; j <= 2; j++) for (let i = -5; i <= 5; i++) {
+      if (Math.abs(i) + Math.abs(j) * 2 <= 7) map.ter[idx(cx + i, cy + j)] = T.WATER;
+    }
+    wall(cx - 7, cy); wall(cx + 7, cy);
+  } else if (layout === 'lanes') {
+    for (let i = -5; i <= 5; i++) { wall(cx + i, cy - 2, false); wall(cx + i, cy + 2, false); }
+    for (const i of [-8, 8]) for (const j of [-2, 2]) wall(cx + i, cy + j);
+  } else if (layout === 'cavern') {
+    // bites out of the edges
+    for (const [i, j, w, h] of [[0, 0, 3, 2], [rw - 3, 0, 3, 3], [0, rh - 3, 2, 3], [rw - 2, rh - 2, 2, 2], [0, 5, 1, 3], [rw - 1, 6, 1, 2], [6, 0, 2, 1]]) {
+      for (let y = y0 + j; y < y0 + j + h; y++) for (let x = x0 + i; x < x0 + i + w; x++) map.tiles[idx(x, y)] = WALL;
+    }
+    wall(cx - 4, cy + 1); wall(cx + 3, cy - 1); wall(cx + 5, cy + 2);
   }
-  return {
-    room: { x: x0, y: y0, w: rw, h: rh, cx: x0 + (rw >> 1), cy: y0 + (rh >> 1) },
-    start: { x: x0 + (rw >> 1), y: y0 + rh - 2 },
-    boss: { x: x0 + (rw >> 1), y: y0 + 2 },
-  };
+  return { room, start, boss };
 }
 
 function fillRect(map, x0, y0, w, h, room) {
@@ -362,13 +388,24 @@ export function lineOfSight(map, x0, y0, x1, y1) {
   return true;
 }
 
-export function computeFOV(map, px, py, sight = SIGHT) {
+// `lights`: { x, y, r } glowing things (the marsh's fireflies); what they light is seen from farther
+// away, as long as nothing stands between you and it
+export function computeFOV(map, px, py, sight = SIGHT, lights = []) {
   map.visible.fill(0);
+  const see = (x, y) => { map.visible[idx(x, y)] = 1; map.explored[idx(x, y)] = 1; };
   for (let y = py - sight; y <= py + sight; y++) {
     for (let x = px - sight; x <= px + sight; x++) {
       if (!inMap(x, y)) continue;
       if ((x - px) ** 2 + (y - py) ** 2 > sight * sight + 2) continue;
-      if (lineOfSight(map, px, py, x, y)) { map.visible[idx(x, y)] = 1; map.explored[idx(x, y)] = 1; }
+      if (lineOfSight(map, px, py, x, y)) see(x, y);
+    }
+  }
+  for (const l of lights) {
+    if (Math.max(Math.abs(l.x - px), Math.abs(l.y - py)) > LIGHT_REACH) continue;
+    for (let y = l.y - l.r; y <= l.y + l.r; y++) for (let x = l.x - l.r; x <= l.x + l.r; x++) {
+      if (!inMap(x, y) || map.visible[idx(x, y)] || (x - l.x) ** 2 + (y - l.y) ** 2 > l.r * l.r + 1) continue;
+      if (lineOfSight(map, px, py, x, y)) see(x, y);
     }
   }
 }
+const LIGHT_REACH = 12;

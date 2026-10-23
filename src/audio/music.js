@@ -1,5 +1,5 @@
 // Background music, made on the fly like the sound effects: a short looping tune for each place
-// (the village, the meadow, the deep forest, the rocky mountain, a boss), a melody over a bass line
+// (the village, the meadow, the deep forest, the marsh, the rocky mountain, the cave, a boss), a melody over a bass line
 // and a soft beat, played quietly under everything. `setMusic(name)` fades over to another tune;
 // the sound button mutes it with the rest (it plays through the effects' output).
 //
@@ -29,6 +29,20 @@ const TUNES = {
     melody: 'A4 - - C5 E5 - - - | D5 - C5 - B4 - - - | A4 - - C5 E5 - G5 - | F5 - E5 - D5 - - - | E5 - - G5 A5 - - - | G5 - E5 - D5 - C5 - | B4 - - D5 C5 - B4 - | A4 - - - - - . .',
     bass:   'A2 - - . E3 - - . | G2 - - . E2 - - . | A2 - - . E3 - - . | D3 - - . A2 - - . | C3 - - . G2 - - . | C3 - - . G2 - - . | E2 - - . B2 - - . | A2 - - . A2 - - .',
     drums:  'k . . . . . h . | . . h . . . h . | k . . . . . h . | . . h . . . h . | k . . . . . h . | . . h . . . h . | k . . . . . h . | . . h . . . . .',
+  },
+  // the firefly marsh: D dorian, slow and swaying, like frogs answering each other
+  marsh: {
+    bpm: 88, lead: 'triangle', vol: 1,
+    melody: 'D5 - F5 - . A5 G5 - | F5 - E5 - D5 - - - | C5 - E5 - G5 - F5 E5 | D5 - - - . . A4 - | D5 - F5 - A5 - C6 - | A5 - G5 - F5 - E5 - | F5 - D5 - E5 - C5 - | D5 - - - - - . .',
+    bass:   'D3 - . A2 D3 - . A2 | C3 - . G2 C3 - . G2 | C3 - . G2 C3 - . E3 | D3 - . A2 D3 - . . | D3 - . A2 D3 - . A2 | F2 - . C3 F2 - . C3 | A2 - . E3 C3 - . G2 | D3 - . A2 D3 - . .',
+    drums:  'k . . h . k h . | k . . h . . h . | k . . h . k h . | k . . h . . h . | k . . h . k h . | k . . h . . h . | k . . h . k h . | k . . h . . . .',
+  },
+  // the bat cave: E minor, slow, ringing in the dark
+  cave: {
+    bpm: 84, lead: 'sine', vol: 1.1,
+    melody: 'E5 - - B4 E5 - G5 - | F#5 - - - D5 - - - | E5 - - B4 E5 - A5 - | G5 - F#5 - E5 - - - | C6 - - B5 A5 - G5 - | F#5 - - A5 G5 - E5 - | D#5 - - F#5 B4 - - - | E5 - - - - - . .',
+    bass:   'E2 - - - B2 - - - | D2 - - - A2 - - - | C2 - - - G2 - - - | B1 - - - F#2 - - - | A1 - - - E2 - - - | D2 - - - A2 - - - | B1 - - - F#2 - - - | E2 - - - B1 - . .',
+    drums:  'k . . . . . h . | . . . . s . . . | k . . . . . h . | . . . . s . . . | k . . . . . h . | . . . . s . . . | k . . . . . h . | . . . . s . . .',
   },
   // the rocky mountain: D dorian, striding
   rock: {
