@@ -1241,6 +1241,18 @@ export class Run {
   // does, and fights back only when cornered
   chili(e) {
     if (!e) return;
+    // 눈사람 (and a head rolled off one): too hot to hold together, it sweats, slumps and melts away
+    // into a puddle, head and all
+    if (e.type === 'snowman' || e.type === 'snowhead') {
+      const seen = this.isVisible(e.x, e.y);
+      e.melted = true;
+      this.emit('melt', { enemy: e, x: e.x, y: e.y });
+      if (seen) this.log(`${josa(e.d.name, '이', '가')} 매운 고추에 땀을 뻘뻘 흘리더니 주르륵 녹아 버렸다!`, 'good');
+      this.hurt(e, e.hp, 'fire');
+      this.goo(e.x, e.y, T.WATER);
+      if (seen) this.discover('chili_snow');
+      return;
+    }
     e.fear = e.d.boss ? B.CHILI_BOSS : B.CHILI_TURNS;
     Object.assign(e, { state: 'flee', ran: 0, pants: 0, aim: false, wake: 0, doze: 0 });
     this.emit('chili', { enemy: e });
@@ -1836,8 +1848,8 @@ export class Run {
   // what some v0.23 critters leave when they fall
   afterlife(e) {
     const d = e.d, scale = this.foeScale, seen = this.isVisible(e.x, e.y);
-    // 눈사람: the head rolls off and keeps throwing
-    if (d.head) {
+    // 눈사람: the head rolls off and keeps throwing (not when the whole of it melted)
+    if (d.head && !e.melted) {
       const h = this.spawnEnemy('snowhead', e.x, e.y, scale);
       Object.assign(h, { state: 'hunt', last: { x: this.p.x, y: this.p.y } });
       if (seen) this.log('눈사람 머리가 데굴데굴 굴러 나왔다!', 'warn');
