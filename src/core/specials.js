@@ -189,6 +189,7 @@ function den(map, r, out, ctx) {
   const st = B.stageOf(ctx.floor), lo = st < 2 ? B.DEN_MIN - 1 : B.DEN_MIN;
   const n = Math.max(lo, Math.min(B.DEN_MAX, B.DEN_MIN + st, Math.round(tiles.length * 0.2)));
   for (const t of rest.slice(0, n)) out.enemies.push({ type: ctx.napper(), x: t.x, y: t.y, state: 'sleep', doze: rint(1, 5), den: true });
+  map.nests = rest.slice(0, n).map(t => idx(t.x, t.y));   // each one's straw bed (the scene draws them)
   for (const t of rest.slice(n, n + 3)) out.pickups.push({ x: t.x, y: t.y, type: 'gold', amount: ctx.gold() });
   const tool = ctx.tool?.(), t = rest[n + 3];
   if (tool && t) out.pickups.push({ x: t.x, y: t.y, type: tool });

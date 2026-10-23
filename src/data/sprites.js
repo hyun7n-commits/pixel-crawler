@@ -848,6 +848,25 @@ export const TER_SPR = {
     'k.kkHkkkkkkHkk.k',
     '..k.kk....kk.k..',
   ],
+  // 낮잠 방 (v0.26): a round bed of trampled straw where a critter curls up; it stays when they get up
+  nest: [
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '.....kkkkkk.....',
+    '...kkizuiizkk...',
+    '..kiuuiUUiuuik..',
+    '.kiuUUuUUUUUuik.',
+    '.kuUUUUUuUUUUuk.',
+    'kiuUuUUUUUUuUuik',
+    'kuiUUUUuUUUUUiuk',
+    '.kiuUUUUUUuUuik.',
+    '.kziuUUUUUUuizk.',
+    '..kkiuziizuikk..',
+    '....kkkkkkkk....',
+  ],
   // a weed in the patch: a leafy tuft on a mound of loose soil, there to be pulled
   weed: [
     '................',

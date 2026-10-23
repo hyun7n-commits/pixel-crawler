@@ -562,6 +562,7 @@ export class DungeonScene extends Phaser.Scene {
       if (t === DOOR) this.doorImgs[i] = add(this.doorTex(map.open[i]), D.ter);
       // a stalactite overhead (its shadow and drip mark on the ground); a firefly swarm
       if (map.drips?.some(o => o.x === x && o.y === y)) add('t_drip', D.ter);
+      if (map.nests?.includes(i)) add('t_nest', D.ter + 0.2);
       if (map.flies?.some(o => o.x === x && o.y === y)) {
         const g = add('glow', D.ter + 0.5).setOrigin(0.5).setPosition(center(x), center(y)).setBlendMode(Phaser.BlendModes.ADD);
         const f = add('t_fly', D.ter + 0.6);
