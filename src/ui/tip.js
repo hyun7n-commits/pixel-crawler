@@ -84,7 +84,9 @@ export function describeTile(run, x, y, always = false) {
       // the meadow tools at work: a chili still burning its tongue, honey holding its feet
       const hot = e.fear > 0 ? `매워서 달아나는 중 (${e.fear}턴)` : '';
       const stuck = e.stun > 0 && map.ter[i] === T.HONEY ? '꿀에 붙어 꼼짝 못 함' : '';
-      const how = [hot || stuck || dizzy || STATE[e.state] || '', fire].filter(Boolean).join(', ');
+      // 낮잠 방: one of the heap
+      const heap = e.den && e.state === 'sleep' ? '모여 자는 중. 하나가 깨면 다 같이 깬다' : '';
+      const how = [hot || stuck || dizzy || heap || STATE[e.state] || '', fire].filter(Boolean).join(', ');
       lines.push(`${e.chief ? '우두머리 ' : ''}${e.d.name} · 체력 ${e.hp}/${e.maxHp} · 공격 ${e.atk} · ${how}${e.d.tip ? ` · ${e.d.tip}` : ''}`);
     }
   }
