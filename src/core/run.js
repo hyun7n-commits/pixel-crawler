@@ -1258,6 +1258,7 @@ export class Run {
     if (e.type === 'salamander') {
       const seen = this.isVisible(e.x, e.y);
       this.emit('yum', { enemy: e });
+      e.fed = true;
       if (!e.big) this.puffUp(e, seen && `${josa(e.d.name, '이', '가')} 매운 고추를 한입에 꿀꺽했다! 너무 맛있어서 기세등등하게 부풀었다.`);
       else {
         e.hp = Math.min(e.maxHp, e.hp + Math.round(e.maxHp * 0.3));
@@ -1980,7 +1981,7 @@ export class Run {
     if (L.ironheart && p.hp <= s.maxHp / 3) { dmg = Math.max(1, Math.ceil(dmg / 2)); this.emit('iron', { x: p.x, y: p.y }); }
     // 수호 거북: tucked into the shell after a rest, a blow is a knock on the shell (a boss's, half of it)
     if (p.guard) { dmg = src?.d?.boss ? Math.max(1, Math.ceil(dmg / 2)) : 1; this.emit('shellhit', { x: p.x, y: p.y }); }
-    this.hurtPlayer(dmg, `${src.d.name}에게 당했다`, kind);
+    this.hurtPlayer(dmg, this.foeCause(src), kind);
     if (src && (kind === 'melee' || kind === 'charge')) {
       const thorn = (L.fortress ? 4 + 2 * L.fortress : 2 * (L.thorns || 0)) + (L.spikecloak ? 4 + 2 * L.spikecloak : 0) + (this.char.thorns || 0);
       if (thorn) this.hurt(src, thorn, 'thorns');
@@ -1988,6 +1989,20 @@ export class Run {
       if (src.type === 'lord' && src.hp > 0) src.hp = Math.min(src.maxHp, src.hp + dmg);
     }
     return true;
+  }
+
+  // 마지막 순간 on the summary (and the neighbours' gossip): who it was and how things stood, so a silly
+  // end reads as one ("쿨쿨 자다가 들쥐에게 당했다")
+  foeCause(e) {
+    const p = this.p, name = e.chief ? `우두머리 ${e.d.name}` : e.d.name;
+    if (p.sleep) return `쿨쿨 자다가 ${name}에게 당했다`;
+    if (e.fed) return `내가 던진 고추를 먹고 부푼 ${name}에게 당했다`;
+    if (e.lured != null && this.turn - e.lured <= 12) return `내 방울 소리를 듣고 온 ${name}에게 당했다`;
+    if (e.grump > 0) return `심술 난 ${name}에게 물렸다`;
+    if (p.sticky) return `꿀에 발이 붙은 채 ${name}에게 당했다`;
+    if (p.stun) return `어질어질한 사이에 ${name}에게 당했다`;
+    if (e.big) return `싸움에서 이기고 기세등등해진 ${name}에게 당했다`;
+    return `${name}에게 당했다`;
   }
 
   // Damage that ignores defence and dodging (fire, gas, falling rocks, your own bomb...)
