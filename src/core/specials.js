@@ -185,7 +185,9 @@ function den(map, r, out, ctx) {
   out.pickups.push({ x: c.x, y: c.y, type: 'chest' });
   map.den = { x: c.x, y: c.y };
   const rest = shuffle(tiles.filter(t => t !== c));
-  const n = Math.max(B.DEN_MIN, Math.min(B.DEN_MAX, Math.round(tiles.length * 0.2)));
+  // a smaller heap on the first stages, where a fresh worker meets it
+  const st = B.stageOf(ctx.floor), lo = st < 2 ? B.DEN_MIN - 1 : B.DEN_MIN;
+  const n = Math.max(lo, Math.min(B.DEN_MAX, B.DEN_MIN + st, Math.round(tiles.length * 0.2)));
   for (const t of rest.slice(0, n)) out.enemies.push({ type: ctx.napper(), x: t.x, y: t.y, state: 'sleep', doze: rint(1, 5), den: true });
   for (const t of rest.slice(n, n + 3)) out.pickups.push({ x: t.x, y: t.y, type: 'gold', amount: ctx.gold() });
   const tool = ctx.tool?.(), t = rest[n + 3];
