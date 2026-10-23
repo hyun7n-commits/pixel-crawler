@@ -158,6 +158,8 @@ const SOUNDS = {
   buzz() { tone(210, 0.45, { type: 'sawtooth', vol: 0.035, to: 250 }); tone(226, 0.45, { type: 'sawtooth', vol: 0.03, to: 196, delay: 0.04 }); },
   boom() { hiss(0.8, { vol: 0.65, freq: 1800, to: 70, type: 'lowpass' }); tone(70, 0.6, { vol: 0.5, to: 28 }); },
   alert() { tone(880, 0.05, { type: 'square', vol: 0.05 }); tone(1320, 0.07, { type: 'square', vol: 0.05, delay: 0.05 }); },
+  // 다툼: an indignant little squeak, twice, and a scuffle of dust
+  scuffle() { tone(700, 0.06, { type: 'square', vol: 0.05, to: 1000 }); tone(620, 0.07, { type: 'square', vol: 0.045, to: 950, delay: 0.09 }); hiss(0.16, { vol: 0.1, freq: 1400, q: 0.7, delay: 0.05 }); },
   snore() { hiss(0.55, { vol: 0.14, freq: 320, to: 160, type: 'lowpass', attack: 0.25 }); },
   zap() { tone(1400, 0.12, { type: 'sawtooth', vol: 0.06, to: 300 }); hiss(0.1, { vol: 0.15, freq: 5000, type: 'highpass' }); },
   // 마법사's wand: a soft whoosh up and a twinkle; a spark coming back is a tiny ding
@@ -242,6 +244,7 @@ export function onRunEvent(type, d) {
     case 'bossChest': play('jackpot'); break;
     case 'boom': case 'gasboom': play('boom'); break;
     case 'alert': play('alert'); break;
+    case 'brawl': play('scuffle'); break;
     case 'snore': play('snore'); break;
     case 'zap': play('zap'); break;
     case 'wand': play('wand'); break;

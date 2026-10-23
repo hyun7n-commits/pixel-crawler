@@ -744,7 +744,7 @@ export class DungeonScene extends Phaser.Scene {
       // a mark over its head when its mind changes, and only two kinds: ! it is after you, ? it is looking
       const seen = run.isVisible(e.x, e.y);
       if (seen && s.was) {
-        if (e.state === 'hunt' && !['hunt', 'flee'].includes(s.was)) this.emote(s, '!');
+        if (e.state === 'hunt' && !['hunt', 'flee'].includes(s.was) && e.foe == null) this.emote(s, '!');
         else if (e.state === 'search' && s.was !== 'search') this.emote(s, '?', 1300);
       }
       if (seen && ((e.angry && !s.wasAngry) || (e.rage && !s.wasRage))) this.emote(s, '!', 1100);
@@ -1219,6 +1219,12 @@ export class DungeonScene extends Phaser.Scene {
         this.heardMarks = d.list.map(e => ({ e, until: this.time.now + 2200 }));
         break;
       case 'say': this.say(d.who, d.text); break;
+      // 다툼: hit by another critter, it bristles at that one (💢)
+      case 'brawl': {
+        const s = this.enemySprites[d.enemy.id];
+        if (s && this.run.isVisible(d.enemy.x, d.enemy.y)) { this.emote(s, 'anger', 1400); this.tweens.add({ targets: s, hop: 6, duration: 90, yoyo: true, ease: 'Quad.out' }); }
+        break;
+      }
       case 'alert': {
         const s = this.enemySprites[d.enemy.id];
         if (s) this.tweens.add({ targets: s, hop: 5, duration: 100, yoyo: true, ease: 'Quad.out' });

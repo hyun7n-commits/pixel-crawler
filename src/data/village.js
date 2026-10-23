@@ -181,6 +181,8 @@ export function gossip(last, meta) {
   if (used && out.length < 3) out.push(TOOL_TALK[used]);
   const route = (last.routes || []).find(k => ROUTE_TALK[k]);
   if (route && out.length < 3) out.push(ROUTE_TALK[route]);
+  // 다툼: the critters you set on each other
+  if (last.brawls >= 2 && out.length < 3) out.push(`녀석들끼리 ${last.brawls}번이나 싸움 붙였다며? 투닥투닥하는 거 구경하고 싶다!`);
   // and once in a while, after the name tags start turning up, something nobody quite finishes saying
   const tags = meta.stats?.tags || 0;
   if (tags >= 3 && out.length < 3 && Math.random() < 0.35) out.push(EERIE[Math.floor(Math.random() * Math.min(EERIE.length, 1 + (tags >> 1)))]);

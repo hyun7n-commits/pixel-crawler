@@ -7,7 +7,7 @@ import { ROUTES } from '../data/routes.js';
 import { ORES } from '../data/ores.js';
 import { idx, inMap, STAIRS, DOOR, ORE, UPSTAIRS, WALL, GRAVE, LOCKED, HIVE, WEED } from '../core/dungeon.js';
 import { RELICS } from '../data/relics.js';
-import { cheb } from '../core/util.js';
+import { cheb, josa } from '../core/util.js';
 
 const CHEST = '보물 상자: 열면 유물을 하나 고른다.';
 const PICKUP = {
@@ -86,7 +86,10 @@ export function describeTile(run, x, y, always = false) {
       const stuck = e.stun > 0 && map.ter[i] === T.HONEY ? '꿀에 붙어 꼼짝 못 함' : '';
       // 낮잠 방: one of the heap
       const heap = e.den && e.state === 'sleep' ? '모여 자는 중. 하나가 깨면 다 같이 깬다' : '';
-      const how = [hot || stuck || dizzy || heap || STATE[e.state] || '', fire].filter(Boolean).join(', ');
+      // 다툼: busy with another critter, it pays you no mind
+      const foe = e.foe != null && run.enemies.find(o => o.id === e.foe && o.hp > 0);
+      const scrap = foe ? `${josa(foe.d.name, '과', '와')} 싸우는 중. 나는 안중에도 없다 (지금 치면 기습)` : '';
+      const how = [hot || stuck || scrap || dizzy || heap || STATE[e.state] || '', fire].filter(Boolean).join(', ');
       lines.push(`${e.chief ? '우두머리 ' : ''}${e.d.name} · 체력 ${e.hp}/${e.maxHp} · 공격 ${e.atk} · ${how}${e.d.tip ? ` · ${e.d.tip}` : ''}`);
     }
   }

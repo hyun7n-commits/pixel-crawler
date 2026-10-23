@@ -9,6 +9,7 @@
 //   hide   - a mimic posing as a chest · stone - a statue standing still · npc - quest folk
 //            (none of these act; a hit, or reaching for the mimic or the statue's chest, wakes them up)
 //   lurk   - a diving beetle under the water, only its bubbles showing; bites whoever comes next to it
+// and on top of any of these, `foe`: hit by another critter, it is busy paying that one back (brawl)
 
 import { lineOfSight, distMap, idx, passable, squeeze, flyable, WALL, FLOOR } from './dungeon.js';
 import { SLEEP_MIN, T } from '../data/terrain.js';
@@ -85,6 +86,7 @@ export function enemyAct(run, e, dmP) {
   if (crawl) { e.skip = !e.skip; if (e.skip) return; }
   e.timer++;
   if (e.burn > 0 && !d.boss && Math.random() < 0.5) { randomStep(run, e); return; }
+  if (e.foe != null && scrap(run, e)) return;
 
   const sees = canSee(run, e, e.state === 'hunt' ? 9 : e.state === 'wander' && behind(e, p) ? BEHIND_SIGHT : 7);
   if (sees) {
@@ -241,14 +243,17 @@ function hunt(run, e, dm) {
   if (d.ranged) {
     if (e.aim) {
       e.aim = false;
-      const stillThere = e.aimAt && e.aimAt.x === p.x && e.aimAt.y === p.y;
-      const hit = stillThere && dist <= d.ranged && lineOfSight(run.map, e.x, e.y, p.x, p.y);
-      run.emit('shot', { from: { x: e.x, y: e.y }, to: e.aimAt || { x: p.x, y: p.y }, hit, kind: d.knock ? 'snow' : null });
-      if (hit && run.damagePlayer(e.atk, e, 'ranged') && d.knock && p.hp > 0) run.shovePlayer(e);
+      const at = e.aimAt || { x: p.x, y: p.y }, stillThere = at.x === p.x && at.y === p.y;
+      // one that has stepped into the line, or onto the tile you left, takes it instead (다툼)
+      const o = inTheWay(run, e, at);
+      const hit = !o && stillThere && dist <= d.ranged && lineOfSight(run.map, e.x, e.y, p.x, p.y);
+      run.emit('shot', { from: { x: e.x, y: e.y }, to: o ? { x: o.x, y: o.y } : at, hit: hit || !!o, kind: d.knock ? 'snow' : null });
+      if (o) strayHit(run, e, o, e.atk, '맞혔다');
+      else if (hit && run.damagePlayer(e.atk, e, 'ranged') && d.knock && p.hp > 0) run.shovePlayer(e);
       else if (!hit) run.log(`${d.name}의 공격을 피했다.`, 'good');
       return;
     }
-    if (dist > 1 && dist <= d.ranged && lineOfSight(run.map, e.x, e.y, p.x, p.y) && Math.random() < 0.7) {
+    if (dist > 1 && dist <= d.ranged && lineOfSight(run.map, e.x, e.y, p.x, p.y) && !inTheWay(run, e, p) && Math.random() < 0.7) {
       e.aim = true;
       e.aimAt = { x: p.x, y: p.y };
       return;
@@ -339,16 +344,20 @@ function charge(run, e, range = e.d.charge) {
   if (e.charge) {
     const lane = e.charge;
     e.charge = null;
-    let at = { x: e.x, y: e.y }, hit = false;
+    let at = { x: e.x, y: e.y }, hit = false, rammed = null;
     for (const t of lane) {
       if (t.x === p.x && t.y === p.y) { hit = true; break; }
+      // you stepped aside and someone else was standing further down the lane: it gets the horns (다툼)
+      const o = run.enemyAt(t.x, t.y);
+      if (o && o !== e && !o.d.npc && !['hide', 'stone', 'lurk'].includes(o.state)) { rammed = o; break; }
       if (!run.canEnemyEnter(t.x, t.y)) break;
       at = t;
     }
     const from = { x: e.x, y: e.y };
     if (at.x !== e.x || at.y !== e.y) moveEnemy(run, e, at.x, at.y);
-    run.emit('charge', { enemy: e, from, to: at, hit });
+    run.emit('charge', { enemy: e, from, to: at, hit: hit || !!rammed });
     if (hit) run.damagePlayer(e.atk * 2, e, 'charge');
+    else if (rammed) strayHit(run, e, rammed, e.atk * 2, '들이받았다');
     else {
       e.stun = 2;
       run.emit('stun', { x: e.x, y: e.y });
@@ -387,8 +396,17 @@ function tongue(run, e) {
     const sx = Math.sign(p.x - e.x), sy = Math.sign(p.y - e.y);
     // where you land: the first free tile next to it along the line
     const land = { x: e.x + sx, y: e.y + sy };
-    run.emit('tongue', { enemy: e, to: { ...at }, hit, land });
+    // you got off the tile, but someone else is on it now: it is the one reeled in, and it is cross
+    const o = !hit && lineOfSight(run.map, e.x, e.y, at.x, at.y) && run.enemyAt(at.x, at.y);
+    run.emit('tongue', { enemy: e, to: { ...at }, hit: hit || !!o, land });
     e.lickT = e.timer;
+    if (o && canBrawl(run, o) && canBrawl(run, e)) {
+      const sx2 = Math.sign(o.x - e.x), sy2 = Math.sign(o.y - e.y), spot = { x: e.x + sx2, y: e.y + sy2 };
+      if ((spot.x !== o.x || spot.y !== o.y) && run.canEnemyEnter(spot.x, spot.y)) { o.x = spot.x; o.y = spot.y; run.refreshDoors(); run.emit('push', { enemy: o, from: { ...at }, to: spot }); }
+      if (run.isVisible(o.x, o.y)) run.log(`${d.name}의 혀에 ${josa(o.d.name, '이', '가')} 붙잡혀 끌려갔다!`, 'good');
+      if (brawl(run, o, e) && run.isVisible(o.x, o.y)) run.discover('brawl');
+      return true;
+    }
     if (!hit) { if (run.isVisible(e.x, e.y)) run.log(`${d.name}의 혀가 헛쳤다!`, 'good'); return true; }
     if ((land.x !== p.x || land.y !== p.y) && run.passable(land.x, land.y) && !run.enemyAt(land.x, land.y)) {
       run.pullPlayer(land.x, land.y, e);
@@ -716,7 +734,11 @@ function rollBall(run, e) {
     run.emit('ball', { enemy: e, from: { x: e.x, y: e.y }, to: end || { x: e.x, y: e.y } });
     const dmg = Math.round(e.atk * 1.5);
     if (hit === 'player') { run.damagePlayer(dmg, e, 'ranged'); run.log('쇠똥 공에 데굴데굴 치였다!', 'warn'); }
-    else if (hit) { run.hurt(hit, dmg * 2, 'bonk'); if (run.isVisible(hit.x, hit.y)) run.log(`쇠똥 공이 ${josa(hit.d.name, '을', '를')} 쳤다!`, 'good'); }
+    else if (hit) {
+      if (run.isVisible(hit.x, hit.y)) run.log(`쇠똥 공이 ${josa(hit.d.name, '을', '를')} 쳤다!`, 'good');
+      run.hurt(hit, dmg * 2, 'bonk', e);
+      if (hit.foe === e.id && run.isVisible(hit.x, hit.y)) run.discover('brawl');
+    }
     else if (run.isVisible(e.x, e.y)) run.log('쇠똥 공이 헛굴렀다.', 'good');
     return true;
   }
@@ -742,13 +764,17 @@ function dive(run, e) {
     e.swoop = null; e.aim = false; e.aimAt = null;
     e.diveT = e.timer;
     const hit = p.x === at.x && p.y === at.y;
-    // it lands beside the spot (or on it, if you got away)
-    const land = hit ? DIRS8.map(([dx, dy]) => ({ x: at.x + dx, y: at.y + dy })).filter(t => canStep(run, e, t.x, t.y))
+    // you got off the shadow, but someone else is under it now (다툼)
+    const o = !hit && run.enemyAt(at.x, at.y);
+    const victim = o && o !== e && !o.d.npc && !['hide', 'stone', 'lurk'].includes(o.state) ? o : null;
+    // it lands beside the spot (or on it, if nobody is there)
+    const land = hit || victim ? DIRS8.map(([dx, dy]) => ({ x: at.x + dx, y: at.y + dy })).filter(t => canStep(run, e, t.x, t.y))
       .sort((a, b) => cheb(a, e) - cheb(b, e))[0] : canStep(run, e, at.x, at.y) ? at : null;
     const from = { x: e.x, y: e.y };
     if (land) { e.x = land.x; e.y = land.y; run.refreshDoors(); }
-    run.emit('swoop', { enemy: e, from, to: { x: e.x, y: e.y }, at, hit });
+    run.emit('swoop', { enemy: e, from, to: { x: e.x, y: e.y }, at, hit: hit || !!victim });
     if (hit) run.damagePlayer(Math.round(e.atk * 1.5), e, 'charge');
+    else if (victim) strayHit(run, e, victim, Math.round(e.atk * 1.5), '덮쳤다');
     else if (run.isVisible(e.x, e.y)) run.log(`${josa(e.d.name, '이', '가')} 헛내리꽂았다!`, 'good');
     return true;
   }
@@ -796,4 +822,73 @@ function attackPlayer(run, e) {
   const p = run.p;
   run.emit('attack', { from: { x: e.x, y: e.y }, to: { x: p.x, y: p.y }, who: e });
   run.damagePlayer(e.atk, e, 'melee');
+}
+
+// ---------- 다툼 (v0.26) ----------
+// A critter hit by another one (a charge or a shot you stepped out of the way of, a gull diving on the
+// wrong tile, a dung ball, a frog's tongue, or one knocked into it) forgets you and goes for the one that
+// hit it, the way monsters fall out with each other in Doom; hit back, that one turns round too. They
+// scrap until one falls (it counts as yours, as any kill does in Shattered Pixel Dungeon), until a few
+// turns go by, or until you hit one of them: that one has you to deal with again. One busy scrapping
+// does not see you coming (run.unaware).
+export const BRAWL_TURNS = 10;
+const SHUT = ['hide', 'stone', 'lurk', 'dead', 'npc'];
+export function canBrawl(run, e) {
+  const d = e?.d;
+  return !!d && e.hp > 0 && !d.boss && !d.npc && !d.inert && !d.screams && !d.swarm && !d.drift && !d.mirror && !d.twist &&
+    !SHUT.includes(e.state) && !run.calm(e);
+}
+// `a` was hit by `b`: it turns on `b`. False if either is not the brawling kind.
+export function brawl(run, a, b) {
+  if (!b || a === b || !canBrawl(run, a) || !canBrawl(run, b)) return false;
+  const fresh = a.foe !== b.id;
+  Object.assign(a, { foe: b.id, foeT: BRAWL_TURNS, state: 'hunt', wake: 0, doze: 0, aim: false, aimAt: null, charge: null, lick: null, swoop: null, lane: null, backoff: 0 });
+  if (!fresh) return true;
+  run.brawls = (run.brawls || 0) + 1;
+  run.emit('brawl', { enemy: a, foe: b });
+  if (run.isVisible(a.x, a.y)) {
+    run.say(a, pick(['야!', '너지?!', '아야! 너!', '이 녀석이!', '뭐야!']));
+    run.log(`화가 난 ${josa(a.d.name, '이', '가')} ${b.d.name}에게 덤벼든다!`, 'good');
+  }
+  return true;
+}
+// a blow meant for you lands on `o` instead
+function strayHit(run, e, o, dmg, verb) {
+  if (run.isVisible(o.x, o.y)) run.log(`${josa(e.d.name, '이', '가')} 대신 ${josa(o.d.name, '을', '를')} ${verb}!`, 'good');
+  run.hurt(o, Math.max(1, dmg - (o.def || 0)), 'stray', e);
+  if (o.foe === e.id && run.isVisible(o.x, o.y)) run.discover('brawl');
+}
+// the first critter on the straight line from `e` to `to` (the tile itself included)
+function inTheWay(run, e, to) {
+  let dx = Math.abs(to.x - e.x), dy = -Math.abs(to.y - e.y), err = dx + dy, x = e.x, y = e.y;
+  const sx = e.x < to.x ? 1 : -1, sy = e.y < to.y ? 1 : -1;
+  while (!(x === to.x && y === to.y)) {
+    const e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x += sx; }
+    if (e2 <= dx) { err += dx; y += sy; }
+    const o = run.enemyAt(x, y);
+    if (o && o !== e && !o.d.npc && !['hide', 'lurk'].includes(o.state)) return o;
+  }
+  return null;
+}
+// a turn of the scrap: go for the foe, or bite it. False when the scrap is over (it gets on with its day).
+function scrap(run, e) {
+  const o = run.enemies.find(x => x.id === e.foe);
+  if (!o || o.hp <= 0 || --e.foeT < 0 || !canBrawl(run, o) || !canBrawl(run, e)) {
+    // the fight is over: it looks round from where it stands
+    Object.assign(e, { foe: null, foeT: 0, state: 'search', searchT: 0, last: { x: e.x, y: e.y } });
+    return false;
+  }
+  if (o.x !== e.x) e.face = Math.sign(o.x - e.x);
+  if (run.touching(e, o)) {
+    for (let k = e.d.drill ? 2 : 1; k > 0 && o.hp > 0; k--) {
+      run.emit('attack', { from: { x: e.x, y: e.y }, to: { x: o.x, y: o.y }, who: e });
+      run.hurt(o, Math.max(1, (e.lit ? Math.round(e.atk * 1.5) : e.atk) - (o.def || 0)), 'brawl', e);
+    }
+    return true;
+  }
+  if (e.d.still) return true;
+  const dm = distMap(run.map, o.x, o.y);
+  for (let i = e.d.fast || e.d.hops || e.lit ? 2 : 1; i > 0; i--) if (!stepToward(run, e, dm) || run.touching(e, o)) break;
+  return true;
 }

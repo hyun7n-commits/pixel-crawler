@@ -25,7 +25,7 @@ import { REQUESTS, pickRequest } from '../data/requests.js';
 import { isOpen, openNew, RELIC_GATES } from '../data/unlocks.js';
 import { caged, cleared, stageOpen, loopsOpen, loopFoe, loopGold, FRIENDS } from '../data/stages.js';
 import { daresOn, daresOpen, dareGold } from '../data/dares.js';
-import { enemyAct, rouse, awaken, angerSwarm, twist, inReach, canSee } from './ai.js';
+import { enemyAct, rouse, awaken, angerSwarm, twist, inReach, canSee, brawl } from './ai.js';
 import { onEnter, explosion, envTick, waterBody, ignite, addGas, spotTraps, revealTraps, openGrave, setBurn, springTrap } from './world.js';
 
 export const zoneOf = floor => ZONES[Math.floor((floor - 1) / B.FLOORS_PER_ZONE)];
@@ -226,6 +226,7 @@ export class Run {
   }
   // true if this enemy will hit you on its next turn (shown as a claw mark on your tile)
   willHit(e) {
+    if (e.foe != null) return false;
     if (e.hp > 0 && e.state === 'hunt' && !e.stun && inReach(this, e)) return true;
     return e.hp > 0 && e.state === 'hunt' && this.touching(e, this.p) && !e.aim && !e.slam && !e.stun && !e.d.drift && !e.d.mirror && !e.dug && !e.shellT &&
       !e.stoneT && !e.backoff && !e.charge && !e.diving && !e.lick && !(e.d.slow && !e.skip);
@@ -1148,11 +1149,13 @@ export class Run {
       if (e.hp > 0 && !e.d.boss && !['hide', 'stone', 'lurk'].includes(e.state)) {
         // where it is knocked to: over a cliff edge, or onto a trap, is a thing to remember
         const tx = e.x + Math.sign(e.x - this.p.x), ty = e.y + Math.sign(e.y - this.p.y), to = inMap(tx, ty) ? this.map.ter[idx(tx, ty)] : T.NONE;
-        this.knock(e, 2 + Math.floor(this.floor / 4));
+        const bumped = this.knock(e, 2 + Math.floor(this.floor / 4));
         if (e.x === tx && e.y === ty && this.isVisible(tx, ty)) {
           if (to === T.CHASM) this.discover('pine_cliff');
           else if (isTrap(to)) this.discover('pine_trap');
         }
+        // knocked into another one, and now that one is after it
+        if (bumped?.foe === e.id && this.isVisible(bumped.x, bumped.y)) this.discover('pine_brawl');
       }
       if (e.hp > 0 && !['hide', 'stone', 'lurk'].includes(e.state)) {
         e.stun = Math.max(e.stun || 0, 1);
@@ -1393,7 +1396,8 @@ export class Run {
   // An enemy that is not after you (asleep, strolling, searching, or a calm one) takes a surprise attack.
   // ...or still seeing stars after a stun (ai.js e.dazed), too dizzy to see a blow coming. A boss
   // shakes it off quicker: only its last dizzy turn counts.
-  unaware(e) { return ['sleep', 'wander', 'search'].includes(e.state) || this.calm(e) || this.dizzy(e); }
+  // (one busy scrapping with another critter does not see you coming either)
+  unaware(e) { return ['sleep', 'wander', 'search'].includes(e.state) || this.calm(e) || this.dizzy(e) || e.foe != null; }
   dizzy(e) { return !!e.dazed || (e.stun > 0 && !e.d.boss); }
 
   playerAttack(e, ram = false) {
@@ -1504,8 +1508,9 @@ export class Run {
     if (!this.passable(x, y) || other || (x === this.p.x && y === this.p.y)) {
       this.emit('bonk', { x: e.x, y: e.y, dx, dy });
       this.hurt(e, dmg, 'bonk');
-      if (other) this.hurt(other, dmg, 'bonk');
-      return;
+      // and the one it was knocked into blames it (다툼)
+      if (other) this.hurt(other, dmg, 'bonk', e.hp > 0 ? e : null);
+      return other;
     }
     const from = { x: e.x, y: e.y };
     e.x = x; e.y = y;
@@ -1514,7 +1519,8 @@ export class Run {
     if (isTrap(this.map.ter[idx(x, y)])) springTrap(this, x, y);
   }
 
-  hurt(e, dmg, kind) {
+  // `by`: the critter whose blow it was (ai.js brawl), when it was not yours
+  hurt(e, dmg, kind, by) {
     if (e.hp <= 0 || e.d.npc) return;
     if (e.stoneT > 0 || e.shellT > 0) dmg = 1; // a gargoyle gone to stone, a hermit crab in its shell
     if (e.state === 'dead') dmg = e.hp;         // a ladybug playing dead: one more blow and it is over
@@ -1541,10 +1547,16 @@ export class Run {
         this.emit('tuck', { enemy: e });
       }
     }
-    if (e.hp <= 0) this.onKill(e);
-    else {
+    if (e.hp <= 0) {
+      if (by && this.isVisible(e.x, e.y)) this.log(`${josa(by.d.name, '이', '가')} ${josa(e.d.name, '을', '를')} 쓰러뜨렸다!`, 'good');
+      this.onKill(e);
+    } else {
+      // 다툼: a blow of yours (not the fire, the spores or a falling stone) turns a scrapper back to you
+      if (e.foe != null && !by && !['fire', 'bones', 'rock', 'slam'].includes(kind)) Object.assign(e, { foe: null, foeT: 0, state: 'hunt', last: { x: this.p.x, y: this.p.y } });
+      // another critter's blow: it goes for that one, not for you
+      if (by && brawl(this, e, by)) { /* busy */ }
       // bees singed by fire are in its smoke too (world.js smokeHive): dozy, not angry
-      if (!(kind === 'fire' && e.d.swarm)) rouse(this, e, 'hit');
+      else if (!(kind === 'fire' && e.d.swarm)) rouse(this, e, 'hit');
       if (e.d.splits && e.hp >= 4) this.split(e);
       // caught: a goblin hit while it carries your gold lets go of the pouch, and runs off empty-handed
       if (e.loot) {
