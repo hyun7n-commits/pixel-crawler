@@ -42,7 +42,9 @@ export const STAGE_UP = +(globalThis.process?.env?.STAGE_UP ?? 0);
 // with the stage's 출발 보급 finds each of them about as hard as the meadow (FOE_UP env: a test override).
 // v0.25: the legends' moves made the later stages' kit hands stronger, so those critters went up a little
 // (160 bot runs a stage, a fresh worker wins about one in five everywhere)
-const FOE_UP = (globalThis.process?.env?.FOE_UP || '0,-0.12,0,0.08,0.09,0.42,0.46,0.6,0.18,0.66').split(',').map(Number);
+// v0.26: 다툼 made the rock mountain (boar charges, fox fire, dung balls all going astray into each other)
+// and a little the deep forest (spider shots) easier, so their critters went up a touch (320 runs a stage)
+const FOE_UP = (globalThis.process?.env?.FOE_UP || '0,-0.08,0,0.08,0.16,0.42,0.46,0.6,0.18,0.66').split(',').map(Number);
 export const foeUp = s => FOE_UP[Math.min(s, FOE_UP.length - 1)] + 0.1 * Math.max(0, s - (FOE_UP.length - 1));
 // 출발 보급: a deeper stage is entered as a seasoned explorer, the guild sees to that. You start at a
 // higher level, a little stronger and sturdier, and pick some relics (two levels each) before the
@@ -188,6 +190,8 @@ export const SWELL_HP = 0.5, SWELL_ATK = 0.25;
 // 심술 버섯 (v0.26): how often a field has some (one or two), and how many turns a whiff of the spores
 // keeps a critter cross
 export const GRUMP_CHANCE = 0.45, GRUMP_TURNS = 5, SNEEZE_NOISE = 5;
+// 소원 우물 (v0.26): the chance a field has one, once it has opened
+export const WELL_CHANCE = 0.22;
 // the honey stump: its honey pot adds max HP for the run; its bees (normal zone strength, not a
 // gimmick's) give up once you are farther than BEE_HOME from it; a fire within HIVE_SMOKE smokes them to sleep
 export const honeyHp = floor => 3 + Math.floor(gs(stageOf(floor)));
