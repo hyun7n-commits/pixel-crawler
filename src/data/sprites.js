@@ -1,6 +1,8 @@
 // Pixel art as text. Each letter is a palette colour, '.' is transparent.
-// Characters, enemies and things on the floor are 16x16 (one tile).
-// Relic icons are 8x8 and only show in the side panel and choice cards.
+// Characters, enemies, things on the floor and the relic icons are 16x16 (one tile); the relic and
+// toolbar icons are drawn and shaded in data/icons.js.
+import { ICONS } from './icons.js';
+
 export const PAL = {
   k: '#1b1424', x: '#2c2536',
   w: '#f4f0e8', W: '#c9c2b6',
@@ -710,75 +712,9 @@ export const SPR = {
     '..kYYk....kCCk..',
     '...kk......kk...',
   ],
-  crown: ['........', 'y..y..y.', 'yy.yy.yy', 'yyyyyyyy', 'yryyyry.', 'yyyyyyyy', '........', '........'],
-  blade: ['.......l', '......lw', '.....lw.', '....lw..', '.n.lw...', '..nn....', '.nNn....', 'n.......'],
-  ring: ['...rr...', '..roor..', '...oo...', '..yooy..', '.y....y.', '.y....y.', '..yyyy..', '........'],
-  shield: ['.bbbbbb.', 'bBBBBBBb', 'bBBwwBBb', 'bBBwwBBb', 'bBBBBBBb', '.bBBBBb.', '..bBBb..', '...bb...'],
-  fang: ['........', '.wwwwww.', 'wwwwwwww', '.w.ww.w.', '.w.ww.w.', '..r..r..', '..r.....', '........'],
-  coin: ['..yyyy..', '.yyyyyy.', 'yyoyyoyy', 'yyoyyoyy', 'yyoyyoyy', 'yyoyyoyy', '.yyyyyy.', '..yyyy..'],
-  thorns: ['..d..d..', '.dlddld.', 'dlllllld', 'dllllll.', 'dlllllld', '.dlllld.', 'd.dddd.d', '...d....'],
-  heart: ['........', '.rr..rr.', 'rrrrrrrr', 'rrwrrrrr', 'rrrrrrrr', '.rrrrrr.', '..rrrr..', '...rr...'],
-  bolt: ['....yy..', '...yy...', '..yy....', '.yyyyyy.', '....yy..', '...yy...', '..yy....', '.y......'],
-  moss: ['........', '..g..g..', '.gGggGg.', 'gGgggGgg', 'gggGgggg', '.gggGgg.', '..gggg..', '........'],
-  flamesword: ['.......o', '......oy', '.....oy.', '....oy..', '.r.oy...', '..rr....', '.rNr....', 'r.......'],
-  fortress: ['d.bbbb.d', 'bBBBBBBb', 'bBBllBBb', 'dBBllBBd', 'bBBBBBBb', '.bBBBBb.', 'd.bBBb.d', '...bb...'],
-  bloodcrown: ['........', 'r..r..r.', 'rr.rr.rr', 'rrrrrrrr', 'rmrrrmrr', 'rrrrrrrr', '........', '........'],
-  goldbolt: ['....oo..', '...oy...', '..oy....', '.oyyyyo.', '....yo..', '...yo...', '..oo....', '.o......'],
-  boots: ['........', '..NNN...', '..NnN...', '..NnN...', '..NnNN..', '.NnnnnN.', '.NNNNNNN', '........'],
-  lantern: ['...dd...', '..d..d..', '.dddddd.', '.dyyyyd.', '.dyoyyd.', '.dyyyyd.', '.dddddd.', '........'],
-  hammer: ['.LLLLLL.', '.LllllL.', '.LLLLLL.', '...n....', '...n....', '...n....', '...N....', '........'],
-  pick: ['..yyyy..', '.y.n..y.', 'y..n...y', '...n....', '...n....', '...n....', '...N....', '........'],
-  cloak: ['..kwwk..', '.kccCck.', '.kcCCck.', 'kccCCcck', 'kcCCCCck', 'kcCcCCck', 'kCCcCcCk', '.kkkkkk.'],
-  mint: ['........', '...ww...', 'g.wgww.g', 'ggwwgwgg', 'g.wwgw.g', '...ww...', '........', '........'],
-  sweep: ['..wwww..', '.w....w.', 'w......w', '.......w', '..l...w.', '.ll.ww..', 'lll.....', '........'],
-  bombbag: ['...y....', '...k....', '..nNNn..', '.nnnnnn.', '.nNnnNn.', '.nnnnnn.', '..nnnn..', '........'],
-  magnet: ['.ll..ll.', '.rr..rr.', '.rr..rr.', '.rr..rr.', '.rrrrrr.', '..rrrr..', '........', '........'],
-  bandage: ['........', '.wwwwww.', 'wwwrrwww', 'wwrrrrww', 'wwwrrwww', '.wwwwww.', '........', '........'],
-  shadow: ['........', '..PPP...', '..PpP...', '..PpP...', '..PpPP..', '.PpppPP.', '.PPPPPPP', '........'],
-  quake: ['.oooooo.', '.oyyyyo.', '.oooooo.', '...n....', '.y.n.y..', 'y..n..y.', '...N....', '........'],
-  goldrush: ['..oooo..', '.o.n..o.', 'o..n...o', '...n....', '...n.yy.', '...nyyyy', '...N.yy.', '........'],
-  volcano: ['.RRRRRR.', '.RooyoR.', '.RRRRRR.', '..rNr...', '.o.N.o..', 'o..N..o.', '...N....', '........'],
-  undying: ['.d....d.', '.rr..rr.', 'rrrrrrrr', 'rrwryrrr', 'rrryrrrr', '.rrrrrr.', 'd.rrrr.d', '...rr...'],
-  goldstorm: ['..yyyy..', '.yoooyy.', 'yy....yy', '...yy...', '..yyyy..', '.oyoo...', '..oy....', '.o......'],
-  dreamlamp: ['.w.pp...', 'w.p..p..', '.pppppp.', '.pyyyyp.', '.pyqyyp.', '.pyyyyp.', '.pppppp.', '........'],
-  firebomb: ['..oy....', '...o....', '..kRRk..', '.kRrrRk.', '.kRrrRk.', '.kRRRRk.', '..kkkk..', '........'],
-  herbal: ['...gg...', '..gGg...', '..nNNn..', '.nnwnnn.', '.nwwwnn.', '.nnwnnn.', '..nnnn..', '........'],
-  phantom: ['..ccc...', '.cc.....', '.c..PP..', '.cc.PpP.', '..ccPpP.', '...PpppP', '..PPPPPP', '........'],
-  meteor: ['o.......', '.oy.....', '..oy....', '...oLL..', '...LlLL.', '...LLdL.', '....LL..', '........'],
-  lifetree: ['..gGg...', '.gGrGg..', 'gGgggGg.', '.gGgrg..', '..gnG...', '...n....', '..nNn...', '........'],
-  minecrown: ['........', 'y.cy.cy.', 'yy.yy.yy', 'yyyyyyyy', 'yryycyry', 'yyyyyyyy', 'YYYYYYYY', '........'],
-  eternity: ['w......w', 'ww.rr.ww', 'wrrrrrrw', '.rryrrr.', '.rrrrrr.', '..rrrr..', '...rr...', '........'],
-  eclipse: ['..yyyy..', '.ykkkky.', 'ykkkkkky', 'ykkpkkky', 'ykkkkkky', 'ykkkkkky', '.ykkkky.', '..yyyy..'],
-  // v0.15 relics
-  bloodblade: ['.......R', '......Rr', '.....Rr.', '....Rr..', '.n.Rr...', '..nn....', '.nNn..r.', 'n.....r.'],
-  ironheart: ['........', '.LL..LL.', 'LllLLllL', 'LlwllllL', 'LllrrllL', '.LllllL.', '..LllL..', '...LL...'],
-  owleye: ['.n....n.', '.nnnnnn.', 'nwwnnwwn', 'nwknnkwn', 'nwwnnwwn', '.nnyynn.', '..nnnn..', '........'],
-  luckycharm: ['.gg..gg.', 'gvgg.gvg', 'gggg.ggg', '.ggYYgg.', '.ggYYgg.', 'gggg.ggg', 'gvgg.gvg', '.gg..Ng.'],
-  thunder: ['.LLLLLL.', '.LlyllL.', '.LLyLLL.', '...ny...', '..yn....', '...n....', '...N....', '........'],
-  whirl: ['..cccc..', '.c....c.', 'c...l..c', 'c..lw..c', '.clw..c.', 'nnw.cc..', 'Nn......', '........'],
-  pillow: ['.....bb.', '......b.', '.....bb.', '.wwwwww.', 'wqwwwwqw', 'wwwwwwww', '.WWWWWW.', '........'],
-  spikecloak: ['d.kwwk.d', '.kccCck.', 'dkcCCckd', 'kccCCcck', 'kcCCCCck', 'dcCcCCcd', 'kCCcCcCk', 'd.kkkk.d'],
-  goldfang: ['........', '.yyyyyy.', 'yyyyyyyy', '.y.yy.y.', '.y.yy.y.', '..o..o..', '..o.....', '........'],
-  headlamp: ['...uuu..', '..uuuuu.', '.uuzzuu.', '.uuzzuuy', 'uuuuuuuy', 'UUUUUUU.', '........', '........'],
-  embermail: ['.LL..LL.', 'LlLLLLlL', 'LlloolLL', '.LlyolL.', '.LloylL.', '.LllllL.', '..LLLL..', '........'],
-  dagger: ['......l.', '.....lw.', '....lw..', '...lw...', '.PPw....', '..P.....', '.Pp.....', 'P.......'],
-  sunlamp: ['y..y..y.', '.y.y.y..', '..yyy...', 'yyyoyyy.', '..yyy...', '.y.y.y..', 'y..y..y.', '........'],
-  giantfist: ['........', '.ssssss.', 'sSsSsSss', 'ssssssss', 'sssssssS', '.ssssss.', '..SSSS..', '........'],
-  bloodmoon: ['..rrrr..', '.rrrmrr.', 'rrmrrrrr', 'rrrrrrmr', 'rrrmrrrr', 'rmrrrrrr', '.rrrrmr.', '..rrrr..'],
-  stormlord: ['.dddddd.', 'dLLLLLLd', '.yLLLLy.', '..yn.y..', '.y.n..y.', '...n....', '...N....', '........'],
-  guardian: ['........', '..GGGG..', '.GgGGgG.', 'GgGggGgG', 'GGgGGgGG', 'sGGGGGGs', '.s....s.', '........'],
-  fortune: ['...y....', '..yzy...', 'yyyzyyy.', '.yzzzy..', '..yzy...', '.yy.yy..', 'y.....y.', '........'],
-  nightowl: ['.P....P.', '.PPPPPP.', 'PyyPPyyP', 'PykPPkyP', 'PyyPPyyP', '.PPooPP.', '..PPPP..', '........'],
-  whirlwind: ['..oooo..', '.o....o.', 'o...y..o', 'o..yw..o', '.oyw..o.', 'nnw.oo..', 'Nn......', '........'],
-  godhammer: ['yYYYYYYy', 'YzyyyyzY', 'yYYYYYYy', '..cyc...', '.c.y.c..', '...y....', '...Y....', '........'],
-  bloodking: ['........', 'r..r..r.', 'ry.ry.ry', 'rrrrrrrr', 'ryrrryrr', 'RRRRRRRR', '........', '........'],
-  dawnstar: ['...w....', '...c....', '..wcw...', 'wccwccw.', '..wcw...', '...c....', '...w....', '........'],
-  heal: ['........', '...gg...', '...gg...', '.gggggg.', '.gggggg.', '...gg...', '...gg...', '........'],
-  // phone toolbar
-  rest: ['.nnnnnn.', '..kwwk..', '..kyyk..', '...ky...', '...kk...', '..kyyk..', '.nnnnnn.', '........'],
-  bag: ['..nnnn..', '.n....n.', '.nNNNNn.', 'nnnnnnnn', 'nnnyynnn', 'nnnnnnnn', 'NNNNNNNN', '........'],
-  look: ['.kkkk...', 'kcwcck..', 'kwccck..', 'kccccK..', '.kkkkNn.', '....nNn.', '.....nNn', '......nk'],
 };
+
+Object.assign(SPR, ICONS);
 
 // the field peddler is the shopkeeper; only the 32px look (sprites32.js) gives them a pack
 SPR.peddler = SPR.shopkeep;

@@ -32,7 +32,7 @@ export function renderPanel(id, box, ctx) {
 export function renderVillageHud(meta, saved = savedRun()) {
   const purse = $('vPurse');
   purse.innerHTML = '';
-  purse.append(icon('gold', 20), el('span', null, `${meta.gold}G`));
+  purse.append(icon('gold', 16), el('span', null, `${meta.gold}G`));
   $('vGo').textContent = saved ? `이어서 탐험 · ${saved.label}` : `${josa(CHARACTERS[meta.sel].name, '으로', '로')} 들판에 출발`;
 }
 
@@ -42,7 +42,7 @@ const startButton = (meta, onStart) => {
   if (!meta.pack) return b;
   // what you packed at the shop goes out with you
   const wrap = el('div', 'go-wrap'), note = el('span', 'packed-note');
-  note.append(icon(meta.pack, 20), el('span', null, `${RELICS[meta.pack].name} 챙김`));
+  note.append(icon(meta.pack, 16), el('span', null, `${RELICS[meta.pack].name} 챙김`));
   wrap.append(note, b);
   return wrap;
 };
@@ -72,7 +72,7 @@ function chars(box, { meta, onStart, changed, setMeta, onStory }) {
     const c = CHARACTERS[id], owned = meta.chars[id];
     if (!owned) {
       const spot = friendSpot(id), card = el('div', 'char locked');
-      const top = el('div', 'char-top'), sp = icon(c.sprite, 40);
+      const top = el('div', 'char-top'), sp = icon(c.sprite, 48);
       sp.classList.add('char-spr');
       top.append(sp, el('span', 'char-name', '???'));
       card.append(top, el('div', 'cond', isOpen(meta, 'cage') ? `${ZONES[spot.stage].name} ${spot.loop}회차 어딘가에 갇혀 있다` : '아직 아무도 본 적이 없다'));
@@ -82,7 +82,7 @@ function chars(box, { meta, onStart, changed, setMeta, onStory }) {
     const cls = 'char' + (meta.sel === id ? ' sel' : '') + (owned ? '' : ' locked');
     const card = owned ? button(cls, null, () => { meta.sel = id; changed(); }) : el('div', cls);
     const top = el('div', 'char-top');
-    const sp = icon(c.sprite, 40);
+    const sp = icon(c.sprite, 48);
     sp.classList.add('char-spr');
     top.append(sp, el('span', 'char-name', `${c.name}${c.kind ? `<small>${c.kind}</small>` : ''}`));
     card.append(top);
@@ -330,7 +330,7 @@ function rival(box, { meta, changed }) {
     if (i >= open) return;
     const lit = !!meta.dares.on[d.id], won = meta.dares.won[d.id] || 0;
     const row = el('div', 'row dare' + (lit ? ' on' : '')), main = el('div', 'row-main');
-    row.append(icon(d.icon, 24));
+    row.append(icon(d.icon, 32));
     main.append(el('span', 'row-name', `${d.name}${won ? ` <small>${ZONES[won - 1].name}까지 돌파</small>` : ''}`), el('span', 'row-sub', `${d.desc} · 골드 +${Math.round(DARE_GOLD * 100)}%`));
     row.append(main, button('btn' + (lit ? ' gold' : ''), lit ? '거는 중' : '걸기', () => { meta.dares.on[d.id] = !lit; changed(); }));
     list.append(row);

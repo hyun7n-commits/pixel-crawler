@@ -619,23 +619,28 @@ function glowCanvas() {
   return c;
 }
 
-// The glass cloche a secret-garden relic sits under (drawn over the relic, so it looks shut inside).
-const CRYSTAL = [
-  '.....oo.....', '.....oo.....', '...oooooo...', '..o.h....o..', '.o.h......o.', '.o.h......o.', 'o.h........o',
-  'o.h........o', 'o..........o', 'o.........so', 'o........sso', 'o.......ss.o', 'oooooooooooo', '.oooooooooo.',
-];
+// The glass bubble a secret-garden relic floats in, on a little brass stand (drawn over the relic, so it
+// looks shut inside): a faint fill, a bright rim, light caught on the upper left, a cool shade lower right.
 function crystalCanvas() {
-  const c = document.createElement('canvas'), w = CRYSTAL[0].length, h = CRYSTAL.length;
-  c.width = w; c.height = h;
+  const W = 22, H = 23, cx = 11, cy = 10, R = 10;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
   const g = c.getContext('2d');
-  CRYSTAL.forEach((row, j) => {
-    const a = row.indexOf('o'), b = row.lastIndexOf('o');
-    g.fillStyle = 'rgba(150,220,255,0.26)'; g.fillRect(a, j, b - a + 1, 1);
-    for (let i = 0; i < w; i++) {
-      const col = { o: 'rgba(200,244,255,0.95)', h: 'rgba(255,255,255,0.8)', s: 'rgba(80,170,220,0.6)' }[row[i]];
-      if (col) { g.fillStyle = col; g.fillRect(i, j, 1, 1); }
-    }
-  });
+  const dot = (x, y, col) => { g.fillStyle = col; g.fillRect(x, y, 1, 1); };
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const dx = x + 0.5 - cx, dy = y + 0.5 - cy, d = Math.hypot(dx, dy), a = Math.atan2(dy, dx) * 180 / Math.PI;
+    if (d > R) continue;
+    dot(x, y, 'rgba(150,220,255,0.16)');
+    if (d > R - 1) dot(x, y, 'rgba(205,246,255,0.92)');
+    else if (d > R - 2.4 && a > -160 && a < -110) dot(x, y, 'rgba(255,255,255,0.85)');
+    else if (d > R - 2 && a > 20 && a < 75) dot(x, y, 'rgba(70,160,215,0.55)');
+  }
+  // a glint, and the stand
+  dot(6, 4, 'rgba(255,255,255,0.95)'); dot(5, 5, 'rgba(255,255,255,0.7)');
+  g.fillStyle = '#1b1424'; g.fillRect(6, 19, 10, 4);
+  g.fillStyle = '#c99a2b'; g.fillRect(7, 19, 8, 3);
+  g.fillStyle = '#f4cf4f'; g.fillRect(7, 19, 8, 1);
+  g.fillStyle = '#7d6127'; g.fillRect(7, 21, 8, 1);
   return c;
 }
 

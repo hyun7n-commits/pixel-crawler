@@ -121,12 +121,12 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .evocard.t2 { --c: #f08c3a; } .evocard.t3 { --c: #c48cff; } .evocard.tf { --c: #6fe0e0; }
 .evo-row { position: relative; width: 200px; height: 88px; }
 .evo-row > span { position: absolute; left: 50%; top: 50%; display: flex; gap: 2px; transform: translate(-50%, -50%); }
-.evo-row canvas { width: 52px; height: 52px; filter: drop-shadow(2px 2px 0 #000); }
+.evo-row canvas { width: 48px; height: 48px; filter: drop-shadow(2px 2px 0 #000); }
 .evo-a { animation: evo-a var(--ms) ease-in forwards; }
 .evo-b { animation: evo-b var(--ms) ease-in forwards; }
 .evo-r { opacity: 0; animation: evo-r var(--ms) linear forwards; }
-.evo-r canvas { width: 72px; height: 72px; }
-.evocard.tf .evo-r canvas { width: 40px; height: 40px; }
+.evo-r canvas { width: 64px; height: 64px; }
+.evocard.tf .evo-r canvas { width: 32px; height: 32px; }
 .evo-flash { width: 30px; height: 30px; border-radius: 0; background: #fff; opacity: 0; animation: evo-flash var(--ms) linear forwards; }
 .evo-rays { display: none; width: 180px; height: 180px; border-radius: 0; opacity: 0; background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--c) 55%, transparent) 0 12deg, transparent 12deg 30deg); -webkit-mask: radial-gradient(circle, #000 25%, transparent 70%); mask: radial-gradient(circle, #000 25%, transparent 70%); animation: evo-rays var(--ms) linear forwards; }
 .evo-name { font-family: var(--font-display); font-size: 30px; color: var(--c); text-shadow: 3px 3px 0 #000; white-space: nowrap; opacity: 0; animation: evo-name var(--ms) ease-out forwards; }
@@ -155,8 +155,11 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #xpbar > i { background: var(--xp); transition: width .15s; }
 .sec-title { font-family: var(--font-body); font-size: 12px; letter-spacing: 0.08em; color: var(--muted); text-transform: uppercase; display: flex; justify-content: space-between; }
 .relics { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
-.relic { aspect-ratio: 1; background: #0f0e15; border: 1px solid var(--line); border-radius: 0; position: relative; display: grid; place-items: center; padding: 0; }
-.relic canvas { width: 70%; height: 70%; }
+.relic { aspect-ratio: 1; background: #0f0e15; border: 1px solid var(--line); border-radius: 0; position: relative; display: grid; place-items: center; padding: 0; container-type: inline-size; }
+/* icons stay whole multiples of their 16 pixels: 1x, 2x or 3x, whichever fits the slot */
+.relic canvas { width: 16px; height: 16px; }
+@container (min-width: 36px) { .relic canvas { width: 32px; height: 32px; } .relic .fused-icon { width: 32px; height: 32px; } .relic .fused-icon canvas { width: 16px; height: 16px; } }
+@container (min-width: 52px) { .relic canvas { width: 48px; height: 48px; } .relic .fused-icon { width: 48px; height: 48px; } .relic .fused-icon canvas { width: 24px; height: 24px; } }
 .relic .lv { position: absolute; right: 2px; bottom: 0; font-family: var(--font-tiny); font-size: 10px; font-weight: 700; color: var(--fg); text-shadow: 1px 1px 0 #000; }
 .relic.evo { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
 .relic.legend { border-color: #f08c3a; box-shadow: inset 0 0 0 1px #f08c3a; }
@@ -166,12 +169,12 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .relic.maxed .lv { color: var(--gold); font-family: var(--font-tiny); font-size: 10px; letter-spacing: -.3px; }
 @keyframes ding { 0% { transform: scale(1); } 35% { transform: scale(1.15); border-color: var(--gold); } 100% { transform: scale(1); } }
 /* a fused relic: its two halves overlapping, the second a little lower */
-.fused-icon { position: relative; width: 80%; height: 80%; display: block; }
-.relic .fused-icon canvas { position: absolute; width: 62%; height: 62%; }
+.fused-icon { position: relative; width: 16px; height: 16px; display: block; }
+.relic .fused-icon canvas { position: absolute; width: 8px; height: 8px; }
 .relic .fused-icon canvas:first-child { left: 0; top: 0; }
 .relic .fused-icon canvas + canvas { right: 0; bottom: 0; }
 .fuse-pic { display: inline-flex; align-items: center; gap: 2px; }
-.fuse-pic canvas { width: 26px; height: 26px; }
+.fuse-pic canvas { width: 32px; height: 32px; }
 .relic.empty { opacity: .35; cursor: default; }
 .relic[aria-pressed="true"] { outline: 2px solid var(--accent); }
 #relicInfo { font-family: var(--font-body); font-size: 12px; line-height: 1.5; color: var(--muted); min-height: 38px; }
@@ -180,7 +183,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .recipe { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .rc-part { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; padding: 3px 4px 2px; border-radius: 0; background: #0f0e15; border: 1px solid var(--line); opacity: .55; }
 .rc-part.have { opacity: 1; border-color: #4a4466; }
-.recipe .rc-part canvas { width: 22px; height: 22px; }
+.recipe .rc-part canvas { width: 32px; height: 32px; }
 .rc-result { opacity: 1; border-color: var(--gold); min-width: 30px; min-height: 34px; justify-content: center; }
 .rc-result b { font-weight: 400; font-family: var(--font-display); font-size: 15px; color: var(--gold); }
 .recipe.legend .rc-result { border-color: #f08c3a; }
@@ -200,21 +203,21 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .recipe-cell.t3 { border-color: #5c3488; }
 .recipe-cell.unknown { opacity: .7; }
 .recipe-cell .rc-line { display: flex; align-items: center; gap: 4px; }
-.recipe-cell canvas { width: 24px; height: 24px; }
-.recipe-cell b { width: 24px; text-align: center; color: var(--muted); }
+.recipe-cell canvas { width: 32px; height: 32px; }
+.recipe-cell b { width: 32px; text-align: center; color: var(--muted); }
 .recipe-cell .rc-name { font-family: var(--font-body); font-size: 12px; color: var(--muted); }
 .recipe-cell:not(.unknown) .rc-name { color: var(--text, #eee); }
 .book-tier { font-family: var(--font-body); font-size: 12px; color: var(--muted); margin: 6px 0 4px; }
 .book-tier.t2 { color: #f08c3a; }
 .book-tier.t3 { color: #c48cff; }
 .new-recipes { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.new-recipes canvas { width: 28px; height: 28px; }
-.new-recipes .crit-pic, .new-recipes .crit-pic canvas:first-child { width: 28px; height: 28px; }
-.new-recipes .crit-pic canvas + canvas { width: 14px; height: 14px; left: 7px; top: -7px; }
+.new-recipes canvas { width: 32px; height: 32px; }
+.new-recipes .crit-pic, .new-recipes .crit-pic canvas:first-child { width: 32px; height: 32px; }
+.new-recipes .crit-pic canvas + canvas { width: 16px; height: 16px; left: 8px; top: -8px; }
 @keyframes pipblink { 50% { opacity: .25; } }
 .items { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .item { display: flex; flex-direction: column; align-items: center; gap: 2px; background: #0f0e15; border: 1px solid var(--line); border-radius: 0; padding: 6px 2px; font-family: var(--font-body); font-size: 12px; }
-.item canvas { width: 26px; height: 26px; }
+.item canvas { width: 32px; height: 32px; }
 .item:disabled { opacity: .35; cursor: default; }
 .item.aiming { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); color: var(--gold); }
 .item kbd { font-family: var(--font-tiny); font-size: 10px; color: var(--muted); }
@@ -245,6 +248,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .choice .tag.new { background: var(--accent); color: var(--accent-ink); }
 .rc-count { font-family: var(--font-body); font-size: 12px; color: var(--muted); margin-top: 4px; }
 .choice.ready { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
+/* an evolved, legend or myth relic's card wears its tier's colour, like its slot in the bag */
+.choice.t1 { border-color: #8a7330; } .choice.t2 { border-color: #a0602a; } .choice.t3 { border-color: #7a52a8; }
 .choice .tag.ready { background: var(--gold); color: #1b1424; }
 .choice .ds { font-family: var(--font-body); font-size: 12px; color: var(--fg); line-height: 1.4; }
 .choice .recipe { justify-content: center; }
@@ -262,7 +267,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .row.unknown .row-name { color: var(--muted); letter-spacing: .1em; }
 .ore-book { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
 .ore-cell { background: var(--panel); border: 1px solid var(--line); border-radius: 0; padding: 10px 6px; display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; }
-.ore-cell canvas { width: 40px; height: 40px; }
+.ore-cell canvas { width: 48px; height: 48px; }
 .ore-cell canvas.shadow, .recipe-cell canvas.shadow { filter: brightness(0) invert(.6) opacity(.5); }
 .ore-cell b { font-weight: 400; font-family: var(--font-display); font-size: 15px; }
 .ore-cell span { font-family: var(--font-body); font-size: 12px; color: var(--muted); min-height: 1em; }
@@ -272,9 +277,9 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .book-gift.ready { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
 .book-gift.ready .row-name { color: var(--gold); }
 .critter-book .ore-cell { cursor: pointer; }
-.crit-pic { position: relative; display: block; width: 40px; height: 40px; }
-.crit-pic canvas:first-child { width: 40px; height: 40px; }
-.crit-pic canvas + canvas { position: absolute; width: 20px; height: 20px; left: 10px; top: -9px; }
+.crit-pic { position: relative; display: block; width: 48px; height: 48px; }
+.crit-pic canvas:first-child { width: 48px; height: 48px; }
+.crit-pic canvas + canvas { position: absolute; width: 24px; height: 24px; left: 12px; top: -11px; }
 .critter-book .ore-cell.boss { border-color: #8a6d2a; }
 .critter-book .ore-cell.picked { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
 .sheet p.book-note { position: sticky; bottom: -18px; font-family: var(--font-body); font-size: 12px; color: var(--fg); background: var(--panel); border-top: 1px solid var(--line); margin: 10px -2px -2px; padding: 10px 4px 14px; min-height: 2.8em; line-height: 1.45; }
@@ -385,12 +390,13 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #quests:empty { display: none; }
 #quests .quest { margin: 6px 0 0; padding: 6px 9px; border-left: 3px solid var(--gold, #f4cf4f); background: rgba(244, 207, 79, 0.07); border-radius: 0; font-family: var(--font-body); font-size: 12px; line-height: 1.45; }
 .talk-head { display: flex; align-items: center; gap: 12px; }
-.talk-head h2 { margin: 0; }
+.talk-head h2 { margin: 0; word-break: keep-all; }
+@media (max-width: 420px) { .talk-head h2 { font-size: 26px; } }
 .talk-head canvas { image-rendering: pixelated; }
 .talk-text { line-height: 1.6; }
 /* grow-two card: the two relics stacked, each a little smaller */
 .twin-pic { flex-direction: column; gap: 4px; width: 48px; }
-.choice .twin-pic canvas { width: 30px; height: 30px; }
+.choice .twin-pic canvas { width: 32px; height: 32px; }
 
 /* ---------- Village (v0.17) ----------
    The run's HUD steps aside and a light overlay sits on the map: where you are and your gold on top,

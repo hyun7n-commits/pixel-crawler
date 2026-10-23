@@ -50,7 +50,7 @@ export function showChoice({ title, sub, run, opts, onPick, onReroll, who }) {
     } else sh.append(el('h2', null, title), el('p', null, sub));
     if (opts.some(o => o.kind === 'buy')) {
       const purse = el('p', 'stall-purse');
-      purse.append(icon('gold', 18), el('span', null, `가진 골드 ${run.gold}G`));
+      purse.append(icon('gold', 16), el('span', null, `가진 골드 ${run.gold}G`));
       sh.append(purse);
     }
     const wrap = el('div', 'choices');
@@ -61,6 +61,7 @@ export function showChoice({ title, sub, run, opts, onPick, onReroll, who }) {
       if (o.kind === 'relic') {
         const r = RELICS[o.id], cur = run.p.relics[o.id] || 0, evo = run.evolvesWith(o.id);
         b.append(icon(o.id));
+        if (tierOf(o.id)) b.classList.add('t' + tierOf(o.id));
         // a card that completes a recipe you know glows, and says what it turns into
         if (evo) b.classList.add('ready');
         info.append(

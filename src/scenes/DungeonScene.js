@@ -760,8 +760,8 @@ export class DungeonScene extends Phaser.Scene {
         if (q.type === 'crystal') {
           // the relic floats shut inside a crystal above its stand
           s.extra = this.add.container(q.x * TILE, q.y * TILE - 2, [
-            this.add.image(4, 1, q.relic).setOrigin(0),
-            this.add.image(2, -2, 'crystalShell').setOrigin(0),
+            this.add.image(0, -2, q.relic).setOrigin(0),
+            this.add.image(-3, -4, 'crystalShell').setOrigin(0),
           ]).setDepth(D.pickups + 0.1);
           this.tweens.add({ targets: s.extra, y: q.y * TILE - 4, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
         } else this.tweens.add({ targets: s, y: q.y * TILE - 2, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.inOut', delay: (q.x * 97) % 600 });
