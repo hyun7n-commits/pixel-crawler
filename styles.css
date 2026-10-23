@@ -33,6 +33,8 @@ body {
   font-synthesis: none; -webkit-font-smoothing: none;
   margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 12px;
   overflow: hidden;
+  /* Korean wraps between words, not mid-word ("돌려 / 받는다"); a word too long for its box still breaks */
+  word-break: keep-all; overflow-wrap: break-word;
 }
 button { font: inherit; color: inherit; cursor: pointer; }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -237,7 +239,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ---------- Modal ---------- */
 #modal { position: fixed; inset: 0; background: rgba(6,5,10,.78); display: grid; place-items: center; padding: 16px; z-index: 20; }
-.sheet { background: var(--panel); border: 2px solid #4a4466; box-shadow: 0 0 0 2px #0a0910; border-radius: 0; width: min(640px, 100%); max-height: 100%; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.sheet { background: var(--panel); border: 2px solid #4a4466; box-shadow: 0 0 0 2px #0a0910, inset 2px 2px 0 #2b2739, inset -2px -2px 0 #15131c; border-radius: 0; width: min(640px, 100%); max-height: 100%; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
 .sheet h2 { font-weight: 400; font-family: var(--font-display); font-size: 30px; margin: 0; color: var(--gold); text-wrap: balance; }
 .sheet p { margin: 0; color: var(--muted); line-height: 1.5; }
 .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -496,7 +498,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .pack { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 4px; background: #0f0e15; border: 2px solid var(--line); border-radius: 0; color: var(--fg); font-family: var(--font-body); font-size: 12px; word-break: keep-all; cursor: pointer; }
 .pack:disabled { opacity: .45; cursor: not-allowed; }
 .pack.on { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
-.pack.t2 { border-color: #7a4a2a; } .pack.t2.on { border-color: #f08c3a; box-shadow: inset 0 0 0 1px #f08c3a; }
+.pack.t1 { border-color: #8a7330; } .pack.t2 { border-color: #a0602a; } .pack.t2.on { border-color: #f08c3a; box-shadow: inset 0 0 0 1px #f08c3a; }
 .forge-price { color: var(--gold); font-weight: 700; font-size: 11px; }
 .go-wrap { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
 .packed-note { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--gold); font-weight: 700; font-family: var(--font-body); font-size: 12px; }
