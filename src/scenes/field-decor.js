@@ -17,14 +17,14 @@ const C = {
   w: '#e9e4d6', W: '#bdb7a6', y: '#e8c44c', Y: '#b8932c', q: '#e391a8', Q: '#b8667f', b: '#86a9e0', B: '#5b7cb8',
   r: '#d0594f', R: '#963a36', o: '#e39a52', O: '#b06a2c', n: '#8a6a44', N: '#5e4630', u: '#c4a878',
   l: '#a5a596', L: '#7f7f72', d: '#55574c', c: '#8fd8f0', C: '#3d8fb3', p: '#b58ae0', P: '#7a4fb0',
-  t: '#6fe0c8', T: '#2f8a7a', m: '#9aa860', M: '#6f7d3a',
+  t: '#6fe0c8', T: '#2f8a7a', m: '#9aa860', M: '#6f7d3a', k: '#8c4f40', K: '#5f3a30',
 };
 
 // the village is walked by day: the same little pictures in brighter colours
 const DAY = {
   ...C, w: '#ffffff', W: '#dcd6c8', y: '#ffd84a', Y: '#d9a72c', q: '#ff9bbb', Q: '#e0708f', b: '#8fb8ff', B: '#5d86d8',
   r: '#f0504a', R: '#b83a3a', o: '#ffa04a', O: '#c8701e', n: '#a0703f', N: '#6b4a2a', u: '#ecd09a',
-  l: '#cfcfc4', L: '#a4a498', d: '#7a7c70',
+  l: '#cfcfc4', L: '#a4a498', d: '#7a7c70', k: '#b0604a', K: '#7a4434',
 };
 
 // little pictures, one character per pixel ('.' is empty). 'g', 'G' and 'v' are the zone's own greens.
@@ -52,7 +52,8 @@ const STAMPS = {
   cattail: ['n..', 'n.n', 'g.n', 'ggg', '.g.'],
   puddle: ['.CCC.', 'CcCCC', '.CCC.'],
   pale: ['.ww.', 'wWWw', '.uu.'],
-  edel: ['.w.w.', 'wwyww', '.w.w.', '..g..'],
+  edel: ['.W.W.', 'WwywW', '.W.W.', '..g..'],
+  edel2: ['.W.', 'WyW', '.g.'],
   lichen: ['m.M', '.m.', 'M.m'],
   rubble: ['..l.', '.lLd', 'lLd.', '.d..'],
   crystal: ['.c.', 'cC.', 'CC.'],
@@ -74,8 +75,8 @@ const STAMPS = {
   ember: ['.o.', 'oRo', '.R.'],
   obsid: ['.d.', 'ddP', '.P.'],
   ash: ['l.L', '.L.', 'L.l'],
-  tag: ['n...', '.www', '.wRw', '.www'],
-  brick: ['rR.', 'RRd'],
+  tag: ['n....', '.uuuu', '.uNNu', '.uuuu'],
+  brick: ['kK.', 'KKd'],
   ivy: ['g.g', 'vgv', '.g.', 'g..'],
   bone: ['w..w', '.WW.', 'w..w'],
 };
@@ -85,7 +86,7 @@ const SCATTER = {
   meadow: ['daisy', 'daisy', 'daisy2', 'pink', 'pink', 'butter', 'butter', 'blue', 'clover', 'clover', 'tuft', 'tuft', 'puff', 'pebble', 'shroom'],
   forest: ['fern', 'fern', 'shrooms', 'brown', 'brown', 'shroom', 'leaves', 'leaves', 'leaf', 'acorn', 'twig', 'moss', 'tuft', 'clover'],
   marsh: ['reed', 'reed', 'cattail', 'cattail', 'puddle', 'moss', 'moss', 'pale', 'pale', 'tuft', 'clover', 'blue'],
-  rock: ['pebble', 'pebbles', 'pebbles', 'rubble', 'tuft', 'tuft', 'edel', 'edel', 'lichen', 'lichen', 'blue', 'moss'],
+  rock: ['pebble', 'pebbles', 'pebbles', 'rubble', 'tuft', 'tuft', 'edel', 'edel2', 'lichen', 'lichen', 'blue', 'moss'],
   cave: ['crystal', 'crystalP', 'glow', 'glow', 'glow2', 'rubble', 'pebbles', 'lichen', 'puddle', 'moss'],
   sea: ['shell', 'shell', 'star', 'kelp', 'kelp', 'driftwood', 'pebble', 'pebbles', 'tuft', 'puddle'],
   garden: ['bigpetal', 'bigpetalY', 'bigpetal', 'sprout', 'sprout', 'pollen', 'pollen', 'clover', 'daisy', 'leaf', 'tuft'],
@@ -172,13 +173,13 @@ const PATCH = {
   meadow: ['daisy', 'pink', 'butter', 'blue', 'daisy', 'pink', 'butter', 'clover', 'tuft'],
   forest: ['fern', 'shroom', 'brown', 'leaves', 'shrooms', 'fern', 'moss'],
   marsh: ['reed', 'cattail', 'reed', 'pale', 'tuft', 'moss'],
-  rock: ['edel', 'tuft', 'edel', 'pebbles', 'lichen', 'blue'],
+  rock: ['tuft', 'edel', 'tuft', 'pebbles', 'lichen', 'edel2', 'blue', 'moss'],
   cave: ['glow', 'glow2', 'crystal', 'glow', 'lichen', 'crystalP'],
   sea: ['shell', 'kelp', 'star', 'kelp', 'pebbles', 'tuft'],
   garden: ['bigpetal', 'bigpetalY', 'sprout', 'daisy', 'pink', 'butter', 'clover'],
   snow: ['snowlump', 'firtwig', 'icicle', 'snowlump', 'pebbles'],
   volcano: ['ember', 'obsid', 'ash', 'ember', 'pebbles'],
-  ruins: ['ivy', 'moss', 'brick', 'tuft', 'tag'],
+  ruins: ['ivy', 'moss', 'ivy', 'tuft', 'brick', 'moss'],
 };
 function patchCanvas(z, zi, v) {
   const [c, g] = canvas(TILE, TILE), r = rng(zi * 2741 + v * 6007 + 41), list = PATCH[z.style];
