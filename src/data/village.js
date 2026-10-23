@@ -146,6 +146,19 @@ const EERIE = [
   '들판 친구들 말이야, 가끔 우리랑 똑같이 웃지 않아?',
 ];
 
+const TOOL_TALK = {
+  pinecone: '솔방울로 딱 맞혔다며? 다람쥐들이 그거 자기네 거라고 투덜대더라.',
+  dandelion: '민들레 홀씨 타고 날아갔다며? 위에서 보면 들판이 어떻게 생겼어?',
+  honeyjar: '꿀 병을 통째로 던졌다며? 아깝다… 다음엔 한 숟갈만 남겨 와.',
+  sleepy: '졸음 꽃가루를 뿌렸다며? 그 동네 녀석들 아직도 하품한대.',
+  chili: '고추를 먹였다며? 그 녀석 아직도 혀가 얼얼하대. 조금 불쌍해.',
+  bell: '어제 저녁에 딸랑딸랑 소리 들리던데, 그거 네 방울이었어?',
+};
+const ROUTE_TALK = {
+  chief: '왕관 쓴 녀석 있는 굴로 일부러 들어갔다며? 간도 크다!',
+  rest: '표지판 보고 쉬어 가는 굴로 갔구나. 잘했어, 쉬는 것도 일이야.',
+};
+
 export function gossip(last, meta) {
   if (!last) return ['아직 아무 일도 없었어. 얼른 들판에 다녀와!'];
   const out = [];
@@ -162,6 +175,11 @@ export function gossip(last, meta) {
   else if (last.honey && out.length < 3) out.push('벌집 꿀 먹었다며? 벌한테 쏘인 데는 괜찮아? 꿀 냄새 난다.');
   else if (last.screams && out.length < 3) out.push('어제 들판에서 꺄아아 소리 들렸는데, 너였어? 비명 뿌리 뽑았구나.');
   else if (last.weeds && out.length < 3) out.push(`풀뽑기도 했다며? ${last.weeds}포기나! 일꾼 다 됐네.`);
+  // the meadow tools you used and the burrows you took (v0.26): the one you used most gets a word
+  const used = Object.entries(last.tools || {}).sort((a, b) => b[1] - a[1])[0]?.[0];
+  if (used && out.length < 3) out.push(TOOL_TALK[used]);
+  const route = (last.routes || []).find(k => ROUTE_TALK[k]);
+  if (route && out.length < 3) out.push(ROUTE_TALK[route]);
   // and once in a while, after the name tags start turning up, something nobody quite finishes saying
   const tags = meta.stats?.tags || 0;
   if (tags >= 3 && out.length < 3 && Math.random() < 0.35) out.push(EERIE[Math.floor(Math.random() * Math.min(EERIE.length, 1 + (tags >> 1)))]);

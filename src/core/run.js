@@ -488,7 +488,7 @@ export class Run {
   takeBurrow(x, y) {
     const m = this.map, r = m.routes?.find(o => o.x === x && o.y === y);
     m.down = { x, y };
-    if (r && !this.floors[this.floor + 1]) this.route = r.kind;
+    if (r && !this.floors[this.floor + 1]) { this.route = r.kind; (this.routesTaken ||= []).push(r.kind); }
   }
 
   routeBonus(kind, place) {
@@ -1079,7 +1079,7 @@ export class Run {
     const p = this.p;
     p.items[id]--;
     p.blend = false;
-    if (id === 'dandelion') this.blowAway();
+    if (id === 'dandelion') { this.blowAway(); (this.toolUse ||= {}).dandelion = (this.toolUse.dandelion || 0) + 1; }
     if (id === 'potion') {
       this.heal(Math.round(this.stat().maxHp * B.POTION_HEAL));
       this.log('체력 물약을 마셨다.', 'good');
@@ -1114,6 +1114,7 @@ export class Run {
     if (!this.canAct() || !ITEMS[id]?.throw || !p.items[id] || !this.canThrowAt(x, y, id)) return false;
     p.items[id]--;
     p.blend = false;
+    (this.toolUse ||= {})[id] = (this.toolUse[id] || 0) + 1;   // for the village gossip
     if (x !== p.x) p.face = Math.sign(x - p.x);
     this.emit('throw', { from: { x: p.x, y: p.y }, to: { x, y }, sprite: ITEMS[id].sprite });
     if (id === 'pinecone') this.pinecone(x, y);
