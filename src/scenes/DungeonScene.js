@@ -20,7 +20,7 @@ import { cheb } from '../core/util.js';
 import { faceKey } from '../data/faces.js';
 import { tierOf } from '../data/relics.js';
 import { baseZoom } from './zoom.js';
-import { wait, fissionMs, evolveMs, FISSION_LEAD, FISSION_STEP, EVOLVE_FLASH, GROW_MS } from '../ui/beat.js';
+import { wait, fissionMs, evolveMs, FISSION_LEAD, FISSION_STEP, EVOLVE_FLASH, GROW_MS, WELL_MS } from '../ui/beat.js';
 import { pace } from '../ui/speed.js';
 import { LANDMARKS, landmarkSpot, stoneHead } from './landmarks.js';
 import { patchNoise, scatterKey, patchKey, PATCH_VARIANTS, footKey, sideKey, bloomKey, fieldTreeKey, fieldTreeCount, moteKeys, TREE_ODDS, SCATTER_VARIANTS, FOOT_VARIANTS, SIDE_VARIANTS, BLOOM_VARIANTS, FOOT_UP } from './field-decor.js';
@@ -258,6 +258,7 @@ export class DungeonScene extends Phaser.Scene {
 
   clearFloor() {
     (this.tileImgs || []).forEach(list => list && list.forEach(i => i.destroy()));
+    this.wellImg = null;
     Object.values(this.enemySprites || {}).forEach(s => { s.crown?.destroy(); s.cage?.destroy(); s.destroy(); });
     Object.values(this.pickupSprites || {}).forEach(s => this.dropPickup(s));
     this.bubbles.forEach(b => b.destroy());
@@ -564,6 +565,8 @@ export class DungeonScene extends Phaser.Scene {
       // a stalactite overhead (its shadow and drip mark on the ground); a firefly swarm
       if (map.drips?.some(o => o.x === x && o.y === y)) add('t_drip', D.ter);
       if (map.nests?.includes(i)) add('t_nest', D.ter + 0.2);
+      // 소원 우물: the little stone well (dry once its one wish is used)
+      if (map.well && map.well.x === x && map.well.y === y) this.wellImg = add(map.well.dry ? 't_wellDry' : 't_well', D.ter + 0.3);
       if (map.flies?.some(o => o.x === x && o.y === y)) {
         const g = add('glow', D.ter + 0.5).setOrigin(0.5).setPosition(center(x), center(y)).setBlendMode(Phaser.BlendModes.ADD);
         const f = add('t_fly', D.ter + 0.6);
@@ -1409,6 +1412,24 @@ export class DungeonScene extends Phaser.Scene {
           this.face('sparkle', ms + 300);
           this.fx.spark.explode(26, center(this.run.p.x), center(this.run.p.y));
           d.steps.forEach((st, k) => this.later(FISSION_LEAD + k * FISSION_STEP, () => this.growPop(st, k)));
+        });
+        break;
+      }
+      case 'well': {
+        // 퐁당: the old relic drops in with a splash, the well runs dry, and the new one bobs up out of
+        // it; an evolve it sets off waits until it is up (ui/beat.js)
+        const wx = center(d.x), wy = center(d.y), drop = 260;
+        this.later(wait(d, WELL_MS), () => {
+          const old = this.add.image(wx, wy - 18, d.from).setDepth(D.text);
+          this.tweens.add({ targets: old, y: wy, scale: 0.4, duration: drop, ease: 'Quad.in', onComplete: () => {
+            old.destroy();
+            this.fx.splash.explode(14, wx, wy);
+            this.wellImg?.setTexture('t_wellDry');
+            const up = this.add.image(wx, wy, d.to).setDepth(D.text).setScale(0.3);
+            this.tweens.add({ targets: up, y: wy - 22, scale: 1.6, duration: 380, ease: 'Back.out' });
+            this.tweens.add({ targets: up, alpha: 0, delay: WELL_MS - drop, duration: 260, onComplete: () => up.destroy() });
+            this.fx.spark.explode(10, wx, wy - 14);
+          } });
         });
         break;
       }

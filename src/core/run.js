@@ -13,7 +13,7 @@ import { T, DISCOVERIES, GOSSIP, SLEEP_TALK, FLOOR_HINTS, SLEEP_MIN, isTrap, isP
 import { rnd, rint, pick, shuffle, cheb, josa, DIRS8 } from './util.js';
 import {
   createMap, carveRooms, carveArena, idx, inMap, passable, squeeze, distMap, lineOfSight, computeFOV,
-  FLOOR, STAIRS, ORE, UPSTAIRS, GRAVE, LOCKED, DOOR, HIVE, WEED,
+  FLOOR, STAIRS, ORE, UPSTAIRS, GRAVE, LOCKED, DOOR, HIVE, WEED, WELL,
 } from './dungeon.js';
 import { decorate, decorateArena, placeTraps, placeGrumps } from './decorate.js';
 import { placeSpecials, SET_PIECES } from './specials.js';
@@ -373,6 +373,7 @@ export class Run {
     }
     // v0.23: drops and a bridge by the sea, fallen floors in the ruins, ice and lava pools
     const taken = new Set([...sp.pickups, ...sp.enemies].map(o => idx(o.x, o.y)));
+    if (map.well) taken.add(idx(map.well.x, map.well.y));
     if (this.zone.wet) fillPools(map, this.zone.wet, this.p, taken);
     if (this.zone.chasm) {
       const inR = (r, t) => t.x >= r.x && t.y >= r.y && t.x < r.x + r.w && t.y < r.y + r.h;
@@ -384,6 +385,12 @@ export class Run {
     const open = rooms.filter((r, i) => !SET_PIECES.has(deco.themes[i]));
     if (placeTraps(map, open, { start: this.p, stairs }, this.floor, this.open('traps'))) this.has.add('trap');
     if (this.open('grump') && Math.random() < B.GRUMP_CHANCE && placeGrumps(map, open, { start: this.p, stairs })) this.has.add('grump');
+    // 소원 우물: if a pool or a drop took its tile after all, it is not there
+    if (map.well && (map.tiles[idx(map.well.x, map.well.y)] !== WELL || map.ter[idx(map.well.x, map.well.y)] !== T.NONE)) {
+      map.tiles[idx(map.well.x, map.well.y)] = FLOOR;
+      delete map.well;
+    }
+    if (map.well) this.has.add('well');
     for (const o of map.ores) o.tier = Math.min(ORES.length - 1, Math.floor(B.gs(zi)) + (Math.random() < B.ORE_START_BONUS ? 1 : 0));
 
     // a free spot in a room other than the start; returns the spot and its room
@@ -815,6 +822,7 @@ export class Run {
     if (map.tiles[i] === LOCKED) return this.unlock(nx, ny);
     if (map.tiles[i] === HIVE) return this.takeHoney(nx, ny);
     if (map.tiles[i] === WEED) return this.pullWeed(nx, ny);
+    if (map.tiles[i] === WELL) return this.atWell();
     // 낭떠러지: the first step stops at the edge; walking on over it is a jump down to the next field
     if (map.ter[i] === T.CHASM) {
       if (p.brink?.x === nx && p.brink.y === ny) { p.brink = null; this.fallAt = { x: nx, y: ny }; return this.leap(false); }
@@ -1385,6 +1393,45 @@ export class Run {
       this.emit('shatter', { x: o.x, y: o.y });
     }
     this.log('나머지 유리 종은 와장창 깨졌다.');
+  }
+
+  // 소원 우물 (v0.26, Shattered Pixel Dungeon's well of transmutation): walk up to it and you may
+  // throw one relic in (a basic or an evolved one); another of the same kind comes up at the same
+  // level. Or leave it be and come back later. It works once, then it is just a dry well.
+  // Like talking, it takes no turn.
+  atWell() {
+    const w = this.map.well;
+    if (!w || w.dry) { this.log('바닥이 드러난 마른 우물이다. 소원은 한 번뿐이었다.'); return false; }
+    if (!this.wellOffers().length) { this.log('소원 우물이다. 던져 넣을 유물이 없다.'); return false; }
+    if (!this.told.well) { this.told.well = true; this.log('소원 우물이다. 유물을 하나 던져 넣으면 다른 유물로 바뀌어 떠오른다고 한다.', 'good'); }
+    this.queue.push({ kind: 'well' });
+    this.emit('turn');
+    return true;
+  }
+  wellOffers() {
+    return Object.keys(this.p.relics).filter(id => !isFused(id) && tierOf(id) < 2).map(id => ({ kind: 'swap', id }));
+  }
+  // what comes up: one of the same kind you don't have, the basic ones among those you could be
+  // offered. One whose recipe partner you carry is likelier (nothing on screen says which), so a wish
+  // tends to set something off; whatever it completes evolves at once.
+  transmute(id) {
+    const rl = this.p.relics, lv = rl[id], tier = tierOf(id), w = this.map.well;
+    const pool = Object.keys(RELICS).filter(k => k !== id && !rl[k] && tierOf(k) === tier && (tier > 0 || this.relicAvailable(k)));
+    if (!pool.length || !w) { this.log('퐁당. 아무 일도 일어나지 않았다.'); return; }
+    const wt = pool.map(k => (recipesWith(k).some(rc => rl[rc.a === k ? rc.b : rc.a] && rc.a !== id && rc.b !== id) ? 3 : 1));
+    let r = Math.random() * wt.reduce((a, b) => a + b, 0), to = pool[0];
+    for (let i = 0; i < pool.length; i++) if ((r -= wt[i]) < 0) { to = pool[i]; break; }
+    // the new one takes the old one's place in the bag
+    this.withMaxHpDelta(() => { this.p.relics = Object.fromEntries(Object.entries(rl).map(([k, v]) => (k === id ? [to, Math.min(lv, maxLevelOf(to))] : [k, v]))); });
+    w.dry = true;
+    this.meta.stats.wells = (this.meta.stats.wells || 0) + 1;
+    this.emit('well', { x: w.x, y: w.y, from: id, to });
+    const n = this.p.relics[to];
+    this.log(`퐁당! ${josa(RELICS[id].name, '을', '를')} 던져 넣자 ${josa(`${RELICS[to].name} Lv${n}`, '이', '가')} 떠올랐다!`, 'evo');
+    const evos = this.meta.stats.evos;
+    this.checkRecipes();
+    if (this.meta.stats.evos > evos) this.discover('well_evo');
+    this.emit('relics');
   }
 
   // Taking the chest a statue guards wakes every statue in that room.
@@ -2595,6 +2642,7 @@ export class Run {
     else if (o.kind === 'relic' && q?.kind === 'kit') { this.gainRelic(o.id); if (this.p.relics[o.id] < maxLevelOf(o.id)) this.gainRelic(o.id); }
     else if (o.kind === 'relic') this.gainRelic(o.id);
     else if (o.kind === 'fuse') this.fuse(o.a, o.b);
+    else if (o.kind === 'swap') this.transmute(o.id);
     else if (o.kind === 'buy') this.buy(o.what);
     else if (o.kind === 'twin') { for (const id of [o.a, o.b]) if (this.p.relics[id] && this.p.relics[id] < maxLevelOf(id)) this.gainRelic(id); }
     else if (o.act === 'home') { this.finish(true); return; }

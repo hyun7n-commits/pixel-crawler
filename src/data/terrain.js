@@ -103,6 +103,7 @@ export const DISCOVERIES = [
   { id: 'pine_brawl',  combo: '솔방울 + 두 녀석',   result: '부딪힌 녀석이 밀고 온 녀석과 싸운다', hint: '솔방울로 한 녀석을 다른 녀석한테 밀어붙이면 둘이 싸운대.' },
   { id: 'grump_brawl', combo: '심술 포자 + 녀석들', result: '심술 난 녀석들끼리 물고 뜯는다', hint: '빨간 버섯 포자를 마신 녀석은 옆에 있는 녀석을 문대. 몰려 있을 때 터뜨려 봐.' },
   { id: 'big_prize',   combo: '기세등등한 녀석 + 공격', result: '쓰러뜨리면 별사탕을 떨군다', hint: '싸움에서 이기고 부푼 녀석을 쓰러뜨리면 별사탕을 떨군대.' },
+  { id: 'well_evo',    combo: '소원 우물 + 유물',  result: '떠오른 유물이 가방 속 유물과 만나 진화한다', hint: '소원 우물에 유물을 던졌더니 떠오른 게 바로 진화했대.' },
 ];
 
 // Things enemies mutter when you overhear them unseen
@@ -144,6 +145,7 @@ export const FLOOR_HINTS = [
   { has: 'garden', text: '저쪽 풀숲은 키가 커서 안이 하나도 안 보여.' },
   { has: 'trap',   text: '이 구역 땅 어딘가에 함정이 숨어 있대. 발밑 조심해.' },
   { has: 'grump',  text: '빨간 버섯 근처에선 녀석들이 서로 물어뜯는대. 포자 때문이래.' },
+  { has: 'well',   text: '이 들판 어딘가에 소원 우물이 있대. 뭘 빠뜨리면 딴 걸로 바꿔 준대.' },
   { has: 'vault',  text: '잠긴 비밀 정원이 있대. 열쇠는 다른 방에 있다던데.' },
   { has: 'locked', text: '잠긴 상자가 하나 있대. 열쇠만 찾으면 좋은 게 들었대.' },
   { has: 'grave',  text: '다람쥐 도토리 창고가 있대. 파헤치면 청설모가 화낸대.' },

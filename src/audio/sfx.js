@@ -250,6 +250,7 @@ export function onRunEvent(type, d) {
     case 'grump': play('scuffle'); break;
     case 'sneeze': play('sneeze'); break;
     case 'puffUp': play('puff'); play('rise', 0); break;
+    case 'well': play('splash'); play('rise', 1); break;
     case 'snore': play('snore'); break;
     case 'zap': play('zap'); break;
     case 'wand': play('wand'); break;

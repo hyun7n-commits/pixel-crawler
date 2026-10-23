@@ -381,6 +381,14 @@ function nextChoice() {
     });
     return;
   }
+  // 소원 우물: one relic in, another out, or leave it for later
+  if (q.kind === 'well') {
+    showChoice({
+      title: '소원 우물', sub: '유물을 하나 던져 넣으면 같은 레벨의 다른 유물로 바뀌어 떠오른다. 무엇이 될지는 모른다. 한 번뿐이다.', run, onPick,
+      opts: [...run.wellOffers(), { kind: 'ok', act: 'leave', icon: 'well', name: '그냥 둔다', desc: '우물은 그대로 있다. 나중에 다시 와도 된다.' }],
+    });
+    return;
+  }
   if (q.kind === 'talk') {
     const npc = ENEMIES[q.who];
     showChoice({ title: npc.name, sub: q.text, run, who: npc.sprite, opts: q.smithPick ? run.smithOffers() : q.opts, onPick });

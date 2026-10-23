@@ -21,11 +21,12 @@
 //            half as many from the wanderers).
 // Floors without a vault sometimes have a locked chest instead, with its key elsewhere.
 // Some floors (most in the deep forest) also get a pair of fairy rings in two far-apart rooms:
-// step into one and you pop out of the other (world.js warp).
+// step into one and you pop out of the other (world.js warp). And now and then a 소원 우물 (v0.26,
+// Shattered Pixel Dungeon's well of transmutation): throw a relic in and another comes up (Run.transmute).
 // Nothing here touches the run directly: placeSpecials returns what to add.
 
 import { T } from '../data/terrain.js';
-import { idx, FLOOR, DOOR, GRAVE, LOCKED, HIVE, WEED, distMap } from './dungeon.js';
+import { idx, FLOOR, DOOR, GRAVE, LOCKED, HIVE, WEED, WELL, distMap } from './dungeon.js';
 import { pick, shuffle, rint, DIRS8 } from './util.js';
 import * as B from '../data/balance.js';
 
@@ -175,7 +176,23 @@ export function placeSpecials(map, rooms, deco, ctx) {
     made++;
   }
   if (open('rings') && Math.random() < B.RING_CHANCE[zone]) rings(map, rooms, ids());
+  if (open('well') && Math.random() < B.WELL_CHANCE) well(map, rooms, ids(), out);
   return out;
+}
+
+// 소원 우물: a little well you walk up to, in a room off the set pieces: open ground all round it (so it
+// never cuts a way off, like the honey stump), not by a door, a ring or a pickup
+function well(map, rooms, free, out) {
+  const taken = new Set(out.pickups.map(q => idx(q.x, q.y)));
+  const spots = free.flatMap(i => {
+    const doors = doorsOf(map, rooms[i]);
+    return floorTiles(map, rooms[i]).filter(t => map.ter[idx(t.x, t.y)] === T.NONE && !taken.has(idx(t.x, t.y)) && !doors.some(d => cheb(t, d.in) <= 1) &&
+      DIRS8.every(([dx, dy]) => map.tiles[idx(t.x + dx, t.y + dy)] === FLOOR) && !(map.rings || []).some(o => cheb(o, t) <= 2));
+  });
+  if (!spots.length) return;
+  const t = pick(spots);
+  map.tiles[idx(t.x, t.y)] = WELL;
+  map.well = { x: t.x, y: t.y };
 }
 
 // 낮잠 방: the chest in the middle, the nappers all round it, the gold (and a meadow tool) among them

@@ -1,7 +1,7 @@
 // Map generation, path distances, line of sight and field of view.
 // Tiles: 0 = wall, 1 = floor, 2 = stairs down, 3 = door, 4 = big ore (blocks walking, not sight), 5 = stairs up,
 // 6 = grave (blocks walking, not sight), 7 = locked door (blocks both until opened with the floor's key),
-// 8 = the honey stump (blocks walking, not sight).
+// 8 = the honey stump (blocks walking, not sight), 9 = a weed, 10 = the wishing well (blocks walking, not sight).
 // Like Shattered Pixel Dungeon, rooms are walled boxes packed side by side, joined by doors in
 // their shared walls (see carveRooms). A door hides the room until someone stands in it.
 // Floor features (brush, water...) live in map.ter, see data/terrain.js.
@@ -10,9 +10,9 @@ import { MAP_W as W, MAP_H as H, SIGHT } from '../data/balance.js';
 import { T, isGap } from '../data/terrain.js';
 import { rint, pick, DIRS8 } from './util.js';
 
-export const WALL = 0, FLOOR = 1, STAIRS = 2, DOOR = 3, ORE = 4, UPSTAIRS = 5, GRAVE = 6, LOCKED = 7, HIVE = 8, WEED = 9;
-// tiles you bump into to use: mine, dig, unlock, take the honey
-export const isBump = t => t === ORE || t === GRAVE || t === LOCKED || t === HIVE || t === WEED;
+export const WALL = 0, FLOOR = 1, STAIRS = 2, DOOR = 3, ORE = 4, UPSTAIRS = 5, GRAVE = 6, LOCKED = 7, HIVE = 8, WEED = 9, WELL = 10;
+// tiles you bump into to use: mine, dig, unlock, take the honey, pull, make a wish
+export const isBump = t => t === ORE || t === GRAVE || t === LOCKED || t === HIVE || t === WEED || t === WELL;
 export const isStairs = t => t === STAIRS || t === UPSTAIRS;
 
 export function createMap() {

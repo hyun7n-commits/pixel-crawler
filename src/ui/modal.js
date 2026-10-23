@@ -71,6 +71,13 @@ export function showChoice({ title, sub, run, opts, onPick, onReroll, who }) {
         );
         const rc = recipeFor(run, o.id, o.id);
         if (rc) info.append(rc);
+      } else if (o.kind === 'swap') {
+        // 소원 우물: this one goes in, and something else of its kind comes up at its level
+        const lv = run.p.relics[o.id] || 1;
+        b.append(icon(o.id));
+        if (tierOf(o.id)) b.classList.add('t' + tierOf(o.id));
+        info.append(el('span', 'nm', RELICS[o.id].name), el('span', 'tag', `Lv${lv} 던져 넣기`),
+          el('span', 'ds', `${tierOf(o.id) ? '다른 진화 유물' : '다른 유물'} Lv${lv}로 바뀌어 떠오른다`));
       } else if (o.kind === 'fuse') {
         // two full relics squeezed into one slot: both icons melt into one
         const pic = el('span', 'fuse-pic');
