@@ -222,12 +222,18 @@ function floorTile(z, zi, variant) {
   const [c, g] = canvas(), r = noise(variant * 17 + 3 + zi * 101);
   const px = (col, list) => { g.fillStyle = col; list.forEach(([x, y]) => g.fillRect(x, y, 1, 1)); };
   g.fillStyle = z.floor; g.fillRect(0, 0, TILE, TILE);
-  for (let k = 0; k < 4 + (variant % 3); k++) {
+  const stony = z.style === 'rock' || z.style === 'cave';
+  for (let k = 0; k < (stony ? 7 : 6) + (variant % 3); k++) {
     const x = 1 + Math.floor(r() * 14), y = 1 + Math.floor(r() * 14);
-    if (z.style === 'rock' || z.style === 'cave') px(r() < 0.6 ? z.floorDark : z.floorLight, r() < 0.4 ? [[x, y], [x + 1, y]] : [[x, y]]);
+    if (stony) px(r() < 0.6 ? z.floorDark : z.floorLight, r() < 0.4 ? [[x, y], [x + 1, y]] : [[x, y]]);
     else { px(z.floorDark, [[x, y], [x, y - 1]]); px(z.floorDark, [[x + 2, y], [x + 2, y - 1], [x + 1, y + 1]]); } // a blade or two
   }
-  for (let k = 0; k < 5; k++) px(z.floorLight, [[Math.floor(r() * TILE), Math.floor(r() * TILE)]]);
+  // a few lighter blades in front, so the ground has some depth to it
+  if (!stony) for (let k = 0; k < 4; k++) {
+    const x = 1 + Math.floor(r() * 14), y = 2 + Math.floor(r() * 13);
+    px(z.floorLight, [[x, y], [x + (k % 2 ? 1 : -1), y - 1]]);
+  }
+  for (let k = 0; k < 6; k++) px(z.floorLight, [[Math.floor(r() * TILE), Math.floor(r() * TILE)]]);
   DETAILS[z.style][variant]?.(px, z);
   return c;
 }

@@ -213,7 +213,7 @@ function hunt(run, e, dm) {
   if (run.touching(e, p)) {
     run.emit('attack', { from: { x: e.x, y: e.y }, to: { x: p.x, y: p.y }, who: e });
     const landed = run.damagePlayer(e.atk, e, 'melee');
-    if (d.thief && landed && run.gold > 0) steal(run, e);
+    if (d.thief && landed && run.gold > 0) steal(run, e, dm);
     // 가재: a pinch that holds on (not every turn: it lets go to snap again)
     if (d.grab && landed && p.hp > 0 && e.timer - (e.grabT ?? -9) >= 3) {
       e.grabT = e.timer;
@@ -254,13 +254,16 @@ function followTrail(run, e, dm) {
   return true;
 }
 
-// The goblin's grab: a handful of your gold, then it runs. It's slowed by the weight, so you can catch it.
-function steal(run, e) {
+// The goblin's grab: a handful of your gold, and it is off at once. The weight soon wears it out (see
+// flee), so a few tiles of chasing catch it up; one hit and it drops the gold (run.hurt).
+function steal(run, e, dm) {
   const n = Math.min(run.gold, 5 + 3 * run.floor + rint(0, 5));
   run.gold -= n;
   e.loot = n;
   e.state = 'flee';
+  e.ran = 0; e.pants = 0;
   run.emit('steal', { enemy: e, n, from: { x: run.p.x, y: run.p.y } });
+  if (fleeStep(run, e, dm)) e.ran++;
 }
 
 // Backs away from you a step or two, like a bat after a bite.
@@ -389,13 +392,8 @@ function blink(run, e) {
   return true;
 }
 
-function flee(run, e, dm, sees) {
-  // weighed down by your gold: a goblin stumbles every third turn, and gets away once out of sight
-  if (e.loot) {
-    if (!sees && dm[idx(e.x, e.y)] >= 6) { run.escape(e); return; }
-    if (e.timer % 3 === 0) return;
-  }
-  // walk downhill on the safety map: out through a door and away, never into a corner
+// One step downhill on the safety map: out through a door and away, never into a corner.
+function fleeStep(run, e, dm) {
   const safe = safetyMap(dm);
   let best = null, bs = safe[idx(e.x, e.y)];
   for (const [dx, dy] of shuffle(DIRS8.slice())) {
@@ -403,7 +401,26 @@ function flee(run, e, dm, sees) {
     if (!canStep(run, e, nx, ny)) continue;
     if (safe[idx(nx, ny)] < bs) { bs = safe[idx(nx, ny)]; best = [nx, ny]; }
   }
-  if (best) { moveEnemy(run, e, ...best); }
+  if (best) moveEnemy(run, e, ...best);
+  return !!best;
+}
+
+// how far a goblin carrying your gold runs before it has to stop and catch its breath: three tiles
+// the first time, then two
+const PANT_AFTER = [3, 2];
+
+function flee(run, e, dm, sees) {
+  // weighed down by your gold: it gets away once out of sight, but it tires, and while it pants for a
+  // turn you catch up
+  if (e.loot) {
+    if (!sees && dm[idx(e.x, e.y)] >= 6) { run.escape(e); return; }
+    if ((e.ran || 0) >= PANT_AFTER[Math.min(e.pants || 0, PANT_AFTER.length - 1)]) {
+      e.ran = 0; e.pants = (e.pants || 0) + 1;
+      run.emit('pant', { enemy: e });
+      return;
+    }
+  }
+  if (fleeStep(run, e, dm)) { if (e.loot) e.ran = (e.ran || 0) + 1; }
   else if (run.touching(e, run.p)) {
     run.emit('attack', { from: { x: e.x, y: e.y }, to: { x: run.p.x, y: run.p.y }, who: e });
     run.damagePlayer(e.atk, e, 'melee');

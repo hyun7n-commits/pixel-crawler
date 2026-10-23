@@ -243,6 +243,7 @@ export function onRunEvent(type, d) {
     case 'grow': play('grow', d.max, wait(d, GROW_MS) / 1000); break;
     case 'steal': play('gold'); play('dodge'); break;
     case 'escape': play('puff'); break;
+    case 'dropLoot': play('gold'); break;
     case 'bones': play('kill'); play('hit'); break;
     case 'split': play('splash'); break;
     case 'aimCharge': play('alert'); break;

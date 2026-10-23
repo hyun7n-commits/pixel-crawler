@@ -57,6 +57,31 @@ export const HOUSES = [
   { id: 'rival', x: 30, y: 18, w: 5, h: 4, roof: '#7a4bb0', sign: 'star', chimney: true },
 ];
 export const doorOf = h => ({ x: h.x + Math.floor(h.w / 2), y: h.y + h.h });
+
+// Odds and ends round the village (scenes/village-props.js), each a tile you walk round: barrels and
+// crates by the shop, a woodpile at the smithy, the guild's notice board, the rival's straw dummy,
+// a well, haystacks and a cart out west, beehives east, vegetable rows and a scarecrow down south.
+export const PROP_NAMES = {
+  barrel: '나무통', crate: '나무 상자', hay: '건초 더미', well: '우물', pumpkin: '호박', mushroom: '빨간 버섯',
+  logs: '장작더미', board: '조합 게시판', dummy: '짚 인형', hive: '꿀벌 통', rock: '이끼 낀 돌', veg: '텃밭',
+  scarecrow: '허수아비', cart: '호박 수레',
+};
+export const PROPS = [
+  { x: 19, y: 2, kind: 'board' }, { x: 25, y: 2, kind: 'barrel' },
+  { x: 8, y: 6, kind: 'barrel' }, { x: 14, y: 4, kind: 'crate' },
+  { x: 36, y: 5, kind: 'logs' }, { x: 30, y: 5, kind: 'barrel' },
+  { x: 15, y: 18, kind: 'mushroom' }, { x: 18, y: 21, kind: 'hay' }, { x: 26, y: 22, kind: 'crate' },
+  { x: 36, y: 19, kind: 'dummy' }, { x: 29, y: 19, kind: 'barrel' },
+  { x: 3, y: 14, kind: 'well' }, { x: 2, y: 19, kind: 'hay' }, { x: 5, y: 21, kind: 'cart' },
+  { x: 2, y: 11, kind: 'pumpkin' }, { x: 2, y: 12, kind: 'pumpkin' },
+  { x: 42, y: 11, kind: 'hive' }, { x: 43, y: 12, kind: 'hive' }, { x: 41, y: 20, kind: 'logs' },
+  { x: 42, y: 19, kind: 'hay' }, { x: 40, y: 22, kind: 'rock' },
+  { x: 13, y: 10, kind: 'mushroom' }, { x: 30, y: 13, kind: 'rock' },
+  { x: 9, y: 26, kind: 'veg' }, { x: 10, y: 26, kind: 'veg' }, { x: 9, y: 27, kind: 'veg' }, { x: 10, y: 27, kind: 'veg' },
+  { x: 11, y: 26, kind: 'scarecrow' },
+  { x: 22, y: 28, kind: 'barrel' }, { x: 23, y: 28, kind: 'crate' }, { x: 26, y: 29, kind: 'logs' },
+  { x: 10, y: 2, kind: 'rock' }, { x: 30, y: 2, kind: 'mushroom' }, { x: 34, y: 3, kind: 'hay' },
+];
 // Your own house (the story's dream, scenes/storyboards.js): an empty lot until the guild's big prize
 // for all three licenses, the first win; then a yellow-roofed house with a heart over the door.
 export const HOME = { id: 'home', x: 31, y: 25, w: 5, h: 4, roof: '#f4cf4f', sign: 'heart', chimney: true };

@@ -188,9 +188,9 @@ function crownClumps(tall, r) {
   return out.sort((a, b) => a[1] - b[1]);
 }
 
-export function treeCanvas(v) {
-  const kind = TREE_KINDS[v];
-  let s = v * 977 + 13;
+// `kind` can be another palette (the fields' night trees, field-decor.js); `seed` varies the crown
+export function treeCanvas(v, kind = TREE_KINDS[v], seed = v) {
+  let s = seed * 977 + 13;
   const r = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
   const clumps = crownClumps(kind.tall, r);
   const W = 32, crownH = kind.tall ? 34 : 28, H = crownH + 9;
