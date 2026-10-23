@@ -147,6 +147,8 @@ const SOUNDS = {
   warp() { chime([1047, 1319, 1568, 2093], 0.035, 0.09); hiss(0.18, { vol: 0.05, freq: 4000, to: 8000, type: 'highpass' }); },
   // the honey stump: a sweet glug, the swarm's angry buzz
   honey() { chime([784, 1047, 1319], 0.06, 0.12); },
+  // 방울: a little brass bell, two strikes
+  bell() { chime([1568, 2349], 0.05, 0.16, 0.12); chime([1568, 2349], 0.05, 0.16, 0.1, 0.22); },
   // 풀뽑기: a soft pop of roots coming loose; the screaming root's squeal, wobbling up and down
   pluck() { hiss(0.12, { vol: 0.12, freq: 1200, to: 500, q: 0.8 }); tone(520, 0.08, { type: 'triangle', vol: 0.1, to: 900, delay: 0.03 }); },
   scream(k = 1) {
@@ -291,6 +293,14 @@ export function onRunEvent(type, d) {
     case 'rumble': case 'quake': play('boom'); break;
     case 'fly': play('rise', 0); break;
     case 'berry': play('honey'); break;
+    // the meadow tools (v0.26)
+    case 'pine': play(d.hit ? 'hit' : 'pop'); break;
+    case 'honeyPour': play('splash'); play('honey'); break;
+    case 'doze': play('puff'); play('snore'); break;
+    case 'chili': play('puff'); play('scream', 0.5); break;
+    case 'ring': play('bell'); break;
+    case 'bellDone': play('pop'); break;
+    case 'blow': play('puff'); play('rise', 0); break;
     default: break;
   }
 }

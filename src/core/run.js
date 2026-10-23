@@ -1167,7 +1167,7 @@ export class Run {
       && !['hide', 'stone', 'lurk'].includes(e.state));
     for (const e of stuck) e.stun = Math.max(e.stun || 0, e.d.boss ? 1 : 2);
     if (cheb(this.p, { x, y }) <= 1) this.p.sticky = 1;
-    this.emit('splash', { x, y, list: stuck });
+    this.emit('honeyPour', { x, y, list: stuck });
     this.log(stuck.length ? `꿀 병이 깨지며 꿀이 쏟아졌다! ${stuck.length > 1 ? `${stuck.length}마리가` : josa(stuck[0].d.name, '이', '가')} 꿀에 붙어 버둥거린다.` : '꿀 병이 깨지며 꿀이 쏟아졌다! 끈적끈적.', 'good');
   }
 
