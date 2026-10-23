@@ -2438,6 +2438,15 @@ export class DungeonScene extends Phaser.Scene {
       }
     }
     if (who.burn > 0) this.drawFlame(g, s.x - dir * 2, s.y - (s.hop || 0) - 2, 0.7, time, who.id || 7);
+    // 기세등등: now and then a glint of the star candy it carries (a dot, a little cross, a dot)
+    if (who.big && who.d) {
+      const t = ((time + (who.id || 0) * 377) % 1400) / 1400;
+      if (t < 0.36) {
+        const x = Math.round(s.x - dir * 4), y = Math.round(top + 6);
+        if (t > 0.08 && t < 0.26) { g.fillStyle(0xf29bb2, 1); g.fillRect(x - 2, y, 5, 1); g.fillRect(x, y - 2, 1, 5); }
+        g.fillStyle(0xfff3b0, 1); g.fillRect(x, y, 1, 1);
+      }
+    }
     if (who !== this.run.p) return;
     // a bead of sweat when something is about to hit you or has just noticed you
     if (this.clawed || time < (s.sweatUntil || 0)) {
