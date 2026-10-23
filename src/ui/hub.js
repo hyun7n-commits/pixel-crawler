@@ -187,7 +187,7 @@ function home(box, { meta, changed, onDecor }) {
     });
     b.disabled = have || meta.gold < d.cost;
     const pic = decorCanvas(d.id), k = Math.min(44 / pic.width, 36 / pic.height);
-    pic.className = 'pix decor-ic';
+    pic.className = 'art decor-ic';
     pic.style.width = `${Math.round(pic.width * k)}px`;
     pic.style.height = `${Math.round(pic.height * k)}px`;
     const frame = el('span', 'decor-frame');
