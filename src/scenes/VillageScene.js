@@ -1,7 +1,11 @@
 // The village between runs, drawn with the meadow's tiles. You walk around it like in a run (tap a
-// spot, or the arrow keys) and bump into people to talk to them; the signpost on the east side leads
-// out to the fields. What each villager offers is DOM (ui/hub.js), opened through `hooks.onTalk`.
-// Each time you come home a few shiny bits lie hidden in the grass for whoever wanders off the path.
+// spot, or the arrow keys) and bump into people to talk to them; the burrow on the east side of the
+// plaza leads out to the fields. What each villager offers is DOM (ui/hub.js), opened through
+// `hooks.onTalk`. Each time you come home a few shiny bits lie hidden in the grass for whoever wanders
+// off the path.
+// The village grows (data/village.js): the parts of the map not open yet are woods, and whatever has
+// opened or gone up since you last looked plays out when you come back (`playGrowth`): the camera goes
+// over, the woods there sink away, the new thing pops up, a banner says what it is. A tap skips it.
 
 /* global Phaser */
 import { pixEllipse } from './pix.js';
@@ -10,18 +14,24 @@ import { chimneyAt } from './village-houses.js';
 import { houseCanvas, pathKey, lampPostCanvas, lotCanvas, treeKey, shrubCanvas, sunRaysCanvas, glintCanvas } from './village-art.js';
 import { baseZoom } from './zoom.js';
 import { faceKey } from '../data/faces.js';
-import { VILLAGE_MAP, HOUSES, FOLK, doorOf, HERO_LINES, HOME, ownsHome, PROPS, PROP_NAMES, BIG_TREE } from '../data/village.js';
+import {
+  VILLAGE_MAP, HOUSES, BUILDINGS, FOLK, doorOf, HERO_LINES, HOME, ownsHome, PROPS, PROP_NAMES, WALK, propCells, BIG_TREE,
+  villageState, regionOpen, shownIn, BUILD, LEVELS, guildLevel, shopLevel, COBBLE_P, FLOWERS_P, cottageName, GROWN,
+} from '../data/village.js';
+import { REGION, REGIONS } from '../data/village-map.js';
+import { josa } from '../core/util.js';
 import { bigTreeCanvas } from './landmarks.js';
 import { CHARACTERS } from '../data/characters.js';
 import { VILLAGE_GROUND } from '../data/enemies.js';
-import { DECOR, hasDecor, LETTERS } from '../data/home.js';
+import { DECOR, hasDecor, LETTERS, houseLevel } from '../data/home.js';
 import { decorCanvas, pupCanvas } from './home-art.js';
 import { setEmote, drawEmote } from './emotes.js';
 import { patchNoise, scatterKey, patchKey, footKey, bloomKey, moteKeys, SCATTER_VARIANTS, PATCH_VARIANTS, FOOT_VARIANTS, BLOOM_VARIANTS, FOOT_UP } from './field-decor.js';
 import { propCanvas, critterCanvas } from './village-props.js';
+import { growthPropCanvas, stringCanvas, GROWTH_PROPS, STRING_PAD, SAILS_AT, SAIL_FRAMES } from './village-growth-art.js';
 
 const MW = VILLAGE_MAP[0].length, MH = VILLAGE_MAP.length;
-const TOP = 2 * TILE;
+const TOP = 3 * TILE;
 const D = { tiles: 0, deco: 1, house: 2, actors: 3, fx: 4, bubble: 5 };
 const center = v => v * TILE + TILE / 2;
 const foot = v => v * TILE + TILE;
@@ -32,13 +42,27 @@ const hash = (x, y) => {
 };
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 const STEP_MS = 140;
-const PAD = { x: 6, y: 8 };       // bushes drawn around the map
+const PAD = { x: 6, y: 8 };       // woods drawn around the map
 const grassy = ch => ch === '.' || ch === '*';
-// where you walk in: beside the signpost coming back from the fields, otherwise in front of the guild
+// where you walk in: beside the burrow coming back from the fields, otherwise in front of the guild
 const EXIT = (() => { const y = VILLAGE_MAP.findIndex(r => r.includes('>')); return { x: VILLAGE_MAP[y].indexOf('>'), y }; })();
 const GUILD = doorOf(HOUSES.find(h => h.id === 'guild'));
-// where the puppy curls up: on the grass beside your door
-const PUP = { x: HOME.x - 1, y: HOME.y + HOME.h };
+// the middle of the plaza, where the heroes who stay home hang about
+const PLAZA = { x: 30, y: 23 };
+// where the puppy curls up: on the grass at the front corner of your house, by the dog house
+const PUP = { x: HOME.x + HOME.w, y: HOME.y + HOME.h };
+const MAYPOLE = PROPS.find(p => p.kind === 'maypole');
+// the clears at which the guild and the shop grow (village.js guildLevel, shopLevel)
+const LEVEL_P = [0, 10, 20];
+// what a cell is in a state of the village (`open`: its open cells): woods where the village has not
+// reached yet; the flower beds are plain grass until they are planted
+const chIn = (open, st, x, y) => {
+  if (x < 0 || y < 0 || x >= MW || y >= MH || !open[y * MW + x]) return '#';
+  const c = VILLAGE_MAP[y][x];
+  return c === '*' && st.P < FLOWERS_P ? '.' : c;
+};
+// the turns of the growth show: the clears in order, then the friends' cottages, then the folk moving in
+const turnRank = k => (/^p\d+$/.test(k) ? +k.slice(1) : /^f\d$/.test(k) ? 100 + +k[1] : 200);
 
 export class VillageScene extends Phaser.Scene {
   constructor(hooks) {
@@ -58,6 +82,16 @@ export class VillageScene extends Phaser.Scene {
       emitting: false, lifespan: 1600, speedY: { min: -14, max: -8 }, speedX: { min: -2, max: 5 },
       scale: { start: 2, end: 3.5 }, alpha: { start: 0.45, end: 0 }, tint: 0xd8d4e0,
     }).setDepth(D.fx);
+    // leaves and twigs flying when the woods draw back
+    this.leaves = this.add.particles(0, 0, 'px', {
+      emitting: false, lifespan: { min: 450, max: 900 }, speed: { min: 25, max: 70 }, angle: { min: 200, max: 340 },
+      scale: { start: 2, end: 0.6 }, gravityY: 110, tint: [0x5aad58, 0x3a8448, 0x7cc45a, 0xacdc86, 0x8a5634],
+    }).setDepth(D.fx);
+    // fireworks over the village once it is all grown
+    this.burst = this.add.particles(0, 0, 'px', {
+      emitting: false, lifespan: { min: 700, max: 1100 }, speed: { min: 28, max: 62 }, scale: { start: 1.6, end: 0.3 },
+      gravityY: 26, alpha: { start: 1, end: 0 },
+    }).setDepth(D.bubble - 0.5);
     this.shadows = this.add.graphics().setDepth(D.actors - 0.5);
     this.marks = this.add.graphics().setDepth(D.fx + 0.5);
     this.objs = [];
@@ -72,12 +106,13 @@ export class VillageScene extends Phaser.Scene {
       const dragged = this.drag?.on;
       this.drag = null;
       if (dragged || Math.hypot(ptr.upX - ptr.downX, ptr.upY - ptr.downY) > 12 * this.dpr) return;
+      if (this.showing) { this.skipShow(); return; }
       const t = tileOf(ptr);
       this.tap(t.x, t.y);
     });
     this.input.on('pointermove', ptr => {
       const d = this.drag;
-      if (d && ptr.isDown) {
+      if (d && ptr.isDown && !this.showing) {
         if (!d.on && Math.hypot(ptr.x - d.x, ptr.y - d.y) > 12 * this.dpr) { d.on = true; cam0.stopFollow(); }
         if (d.on) { cam0.setScroll(d.sx - (ptr.x - d.x) / cam0.zoom, d.sy - (ptr.y - d.y) / cam0.zoom); return; }
       }
@@ -87,60 +122,100 @@ export class VillageScene extends Phaser.Scene {
     });
     this.input.on('gameout', () => this.hooks.onHover?.(''));
     this.scale.on('resize', () => this.fitZoom());
-    this.events.on('wake', (sys, d) => this.enter(d));
+    // back out of your own door the village is as you left it; anything else builds it afresh
+    this.events.on('wake', (sys, d) => (d?.from === 'home' && d.meta === this.meta && this.ps ? this.outOfHome() : this.enter(d)));
     this.fitZoom();
     this.enter(data);
   }
 
   get dpr() { return this.game.registry.get('dpr') || 1; }
 
-  // the same zoom as in the fields; when the screen is bigger than the village (a tall phone), the
-  // village sits in the middle of the woods instead of in a corner
+  // the same zoom as in the fields; the view keeps to the part of the village that has opened (and a
+  // strip of woods round it), so a small village feels small; when the screen is bigger than that (a
+  // tall phone), it sits in the middle of the woods instead of in a corner
   fitZoom() {
     const z = baseZoom(this, TILE), cam = this.cameras.main;
     if (!z) return;
     cam.setZoom(z);
-    const W = MW * TILE, H = MH * TILE, vw = cam.width / z, vh = cam.height / z;
-    // a little room over the top row, where the guild's clock tower pokes up past the hedge
-    const bw = Math.max(W, vw), bh = Math.max(H + TOP, vh);
-    cam.setBounds((W - bw) / 2, (H - TOP - bh) / 2, bw, bh);
+    const b = this.openBox || { x0: 0, y0: 0, x1: MW - 1, y1: MH - 1 };
+    const x0 = (b.x0 - 3) * TILE, x1 = (b.x1 + 4) * TILE, y0 = (b.y0 - 2) * TILE - TOP, y1 = (b.y1 + 3) * TILE;
+    const vw = cam.width / z, vh = cam.height / z, bw = Math.max(x1 - x0, vw), bh = Math.max(y1 - y0, vh);
+    cam.setBounds((x0 + x1 - bw) / 2, (y0 + y1 - bh) / 2, bw, bh);
   }
 
   // ---------- building the place ----------
-  // `meta`: the save; `from`: 'run' when coming back from the fields (you walk in by the signpost)
+  // `meta`: the save; `from`: 'run' when coming back from the fields (you walk in by the burrow),
+  // 'home' when coming out of your house
   enter({ meta, from }) {
     this.meta = meta;
     this.clear();
+    // how far the village has grown, and what has opened or gone up since you last looked (nothing to
+    // compare with the first time on a save)
+    const st = this.st = villageState(meta), last = meta.village.last;
+    this.growth = last ? { was: { P: last.P, arr: new Set(last.arr) } } : null;
+    const was = this.growth?.was;
+    this.hooks.onSeen?.(st);
+    this.open = this.openIn(st);
+    this.wasOpen = was ? this.openIn(was) : null;
+    let bx0 = MW, by0 = MH, bx1 = 0, by1 = 0;
+    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+      if (!this.open[y * MW + x]) continue;
+      bx0 = Math.min(bx0, x); bx1 = Math.max(bx1, x); by0 = Math.min(by0, y); by1 = Math.max(by1, y);
+    }
+    this.openBox = { x0: bx0, y0: by0, x1: bx1, y1: by1 };
     this.fitZoom();
     this.blocked = new Uint8Array(MW * MH);
-    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if ('#~LT'.includes(this.ch(x, y))) this.blocked[y * MW + x] = 1;
-    // the hedge goes on past the edge, so a tall phone screen shows bushes around the village, not a void
+    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if ('#~T'.includes(this.ch(x, y))) this.blocked[y * MW + x] = 1;
+    // the ground, baked into one picture (the woods go on past the edge, so a tall phone screen shows
+    // trees round the village, not a void); what changed since last time gets its old look laid over it
+    this.ground = [];
     for (let y = -PAD.y; y < MH + PAD.y; y++) for (let x = -PAD.x; x < MW + PAD.x; x++) this.drawTile(x, y);
     this.plantTrees();
-    this.plantBigTree();
+    this.bake(this.ground, 'village_ground', { x0: -PAD.x, y0: -PAD.y, x1: MW + PAD.x - 1, y1: MH + PAD.y - 1 }, D.tiles);
+    this.ground = null;
+    if (was) this.overlayOld();
+    if (shownIn(BIG_TREE, st)) { this.plantBigTree(); this.hold(BIG_TREE, [this.bigTree]); }
+    else this.bigTree = null;
     this.sunOnPond();
     this.placeProps();
-    // a house someone is just moving into still has its boards up until they arrive
+    // the folk's houses, up once they have moved in; the guild's tent and the peddler's cart grow into
+    // proper buildings as the village does
     for (const h of HOUSES) {
-      const f = FOLK[h.id], lived = f.when(meta), moving = lived && f.arrive && !meta.village.seen[h.id];
-      h.img = this.keep(this.add.image(h.x * TILE, (h.y + h.h) * TILE, this.houseKey(h, lived && !moving)).setOrigin(0, 1).setDepth(D.actors + (h.y + h.h - 1) / 100));
-      this.shrubs(h);
-      for (let y = h.y; y < h.y + h.h; y++) for (let x = h.x; x < h.x + h.w; x++) this.blocked[y * MW + x] = 1;
+      const f = FOLK[h.id], lived = f.when(meta);
       h.lived = lived;
+      h.img = null;
+      if (!lived) continue;
+      const lvl = this.levelOf(h, st.P), old = was?.arr.has(h.id) ? this.levelOf(h, was.P) : lvl;
+      h.img = this.keep(this.add.image((h.x + h.w / 2) * TILE, (h.y + h.h) * TILE, this.houseKey(h, true, old)).setOrigin(0.5, 1).setDepth(D.actors + (h.y + h.h - 1) / 100));
+      if (old !== lvl) this.swap(`p${LEVEL_P[lvl]}`, h.img, this.houseKey(h, true, lvl));
+      for (let y = h.y; y < h.y + h.h; y++) for (let x = h.x; x < h.x + h.w; x++) this.blocked[y * MW + x] = 1;
+      this.hold({ x: h.x, y: h.y, cond: h.id }, [h.img, ...this.shrubs(h)]);
     }
-    // your own house, or the roped-off lot where it will stand
-    const home = ownsHome(meta);
+    // what the village has put up as it grew: the bakery, the inn, the friends' cottages...
+    for (const b of BUILDINGS) {
+      if (!shownIn(b, st)) continue;
+      b.img = this.keep(this.add.image((b.x + b.w / 2) * TILE, (b.y + b.h) * TILE, this.houseKey(b, true)).setOrigin(0.5, 1).setDepth(D.actors + (b.y + b.h - 1) / 100));
+      for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) this.blocked[y * MW + x] = 1;
+      this.buildings.push(b);
+      this.hold(b, [b.img, ...(b.id === 'windmill' ? [this.placeSails(b)] : [])]);
+    }
+    // your own house, or the roped-off lot where it will stand (the first time you come back with a
+    // win, the house goes up on it)
+    const home = ownsHome(meta), hadHome = !was || was.arr.has('carpenter');
     if (!this.textures.exists('village_lot')) this.textures.addCanvas('village_lot', lotCanvas(HOME.w, HOME.h));
-    this.keep(this.add.image(HOME.x * TILE, (HOME.y + HOME.h) * TILE, home ? this.houseKey(HOME, true) : 'village_lot').setOrigin(0, 1).setDepth(D.actors + (HOME.y + HOME.h - 1) / 100));
+    const homeKey = this.houseKey(HOME, true, houseLevel(meta));
+    this.homeImg = this.keep(this.add.image((HOME.x + HOME.w / 2) * TILE, (HOME.y + HOME.h) * TILE, home && hadHome ? homeKey : 'village_lot').setOrigin(0.5, 1).setDepth(D.actors + (HOME.y + HOME.h - 1) / 100));
+    if (home && !hadHome) this.swap('p1', this.homeImg, homeKey);
     for (let y = HOME.y; y < HOME.y + HOME.h; y++) for (let x = HOME.x; x < HOME.x + HOME.w; x++) this.blocked[y * MW + x] = 1;
-    // what you have put round it (data/home.js); bumping the house in front of its door opens that list
+    // bumping the house in front of its door takes you inside
     this.homeDoor = home ? { ...doorOf(HOME), home: true } : null;
     if (this.homeDoor) this.homeDoor.y--;
     this.decor = {};
     this.pup = null;
     this.placeDecor();
     // a letter in the mailbox now and then, when you come home from the fields
-    this.mailbox = { x: 34, y: 29, mailbox: true };
+    const box = DECOR.find(d => d.id === 'mailbox').at[0];
+    this.mailbox = { x: box[0], y: box[1], mailbox: true };
     const senders = LETTERS.filter(l => FOLK[l.from].when(meta) && (!l.if || l.if(meta)));
     this.mail = from === 'run' && hasDecor(meta, 'mailbox') && senders.length && Math.random() < 0.6
       ? senders[Math.floor(Math.random() * senders.length)] : null;
@@ -156,9 +231,14 @@ export class VillageScene extends Phaser.Scene {
       const one = { id: h.id, f, x: at.x, y: at.y, s, house: h, greeted: false, next: 0, dir: [0, 1] };
       this.folk.push(one);
       if (f.arrive && !meta.village.seen[h.id]) { arrivals.push(one); s.setAlpha(0); }
+      // nobody stands at the door of a house that has not come up yet
+      if (h.img.held) this.holdAt(h.img.held, [s], 'fade');
     }
-    const start = from === 'run' ? { x: EXIT.x - 1, y: EXIT.y } : { x: GUILD.x, y: GUILD.y + 2 };
+    const start = from === 'run' ? { x: EXIT.x - 1, y: EXIT.y } : from === 'home' ? doorOf(HOME) : { x: GUILD.x, y: GUILD.y + 2 };
     this.p = { x: start.x, y: start.y, id: meta.sel };
+    // the festival (P40): the heroes at home dance round the maypole; the first time, they run over
+    // to it when it opens
+    this.fest = st.P >= GROWN && (!was || was.P >= GROWN);
     this.heroes = [];
     this.placeHeroes();
     this.ps = this.actor(CHARACTERS[meta.sel].sprite, start.x, start.y);
@@ -169,7 +249,301 @@ export class VillageScene extends Phaser.Scene {
     this.cameras.main.centerOn(center(start.x), foot(start.y) - TILE / 2);
     this.hideFinds(2 + Math.floor(Math.random() * 2));
     this.placeLife();
-    if (arrivals.length) this.welcome(arrivals);
+    this.festival();
+    this.playGrowth(arrivals);
+  }
+
+  // ---------- growing ----------
+  // the cells open in a state of the village
+  openIn(st) {
+    const o = new Uint8Array(MW * MH);
+    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (regionOpen(REGION[y][x], st)) o[y * MW + x] = 1;
+    return o;
+  }
+  // a cell that has opened since you last looked
+  isNew(x, y) {
+    return !!this.wasOpen && x >= 0 && y >= 0 && x < MW && y < MH && !!this.open[y * MW + x] && !this.wasOpen[y * MW + x];
+  }
+  // One turn of the show: the old look that melts away (`over`), what comes up (`things`), what gets a
+  // new picture (`swaps`), what goes (`gone`), what starts (`after`), who moves in (`folk`).
+  turn(key) {
+    let s = this.steps.get(key);
+    if (!s) this.steps.set(key, s = { key, over: [], things: [], swaps: [], gone: [], after: [] });
+    return s;
+  }
+  // which turn something new comes up in (null: it was here already): the clear that put it up, the
+  // part of the village that opened round it, or whoever moved in
+  trig(o) {
+    const g = this.growth;
+    if (!g || shownIn(o, g.was)) return null;
+    if (o.p != null && o.p > g.was.P) return `p${o.p}`;
+    if (this.isNew(o.x, o.y)) return this.cellTrig(o.x, o.y);
+    return o.cond && !g.was.arr.has(o.cond) ? o.cond : null;
+  }
+  // why a cell is open now: the clear that opened its part of the village, or who moved in
+  cellTrig(x, y) {
+    const r = REGIONS[REGION[y][x]], arr = this.st.arr, was = this.growth.was.arr;
+    if (r.p != null) return `p${r.p}`;
+    if (r.cond) return r.cond;
+    return r.any.find(c => arr.has(c) && !was.has(c)) || r.any.find(c => arr.has(c));
+  }
+  // something that comes up in the show stays hidden until its turn. `how`: 'grow' up out of the
+  // ground, or 'fade' in
+  hold(o, imgs, how = 'grow') {
+    const key = this.trig(o);
+    if (key) this.holdAt(key, imgs, how);
+    return key;
+  }
+  holdAt(key, imgs, how = 'grow') {
+    imgs.forEach(i => { i.setVisible(false); i.held = key; });
+    this.turn(key).things.push({ imgs, how });
+  }
+  // something that gets a new picture in the show (the house on the lot, the guild growing)
+  swap(key, img, to) {
+    img.finalKey = to;
+    this.turn(key).swaps.push({ img, key: to });
+  }
+  // the guild's tent becomes a timber hall (P10) and a hall with a clock tower (P20); the peddler's
+  // cart a shop (P10)
+  levelOf(h, P) { return h.id === 'guild' ? guildLevel(P) : h.id === 'shop' ? shopLevel(P) : 0; }
+
+  // The old look of whatever changed since last time (the woods that stood there, the grass before
+  // the flowers, the dirt before the cobbles), one picture per turn of the show, laid over the new
+  // ground until its turn; the old trees stand on it as pictures of their own, and sink away.
+  overlayOld() {
+    const g = this.growth, now = { open: this.open, st: this.st }, changed = new Map(), opened = new Map();
+    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+      const i = y * MW + x, c = VILLAGE_MAP[y][x];
+      if (this.isNew(x, y)) opened.set(i, this.cellTrig(x, y));
+      else if (this.open[i] && c === '*' && g.was.P < FLOWERS_P && this.st.P >= FLOWERS_P) changed.set(i, `p${FLOWERS_P}`);
+      else if (this.open[i] && ':>='.includes(c) && g.was.P < COBBLE_P && this.st.P >= COBBLE_P) changed.set(i, `p${COBBLE_P}`);
+    }
+    // round a cell that opened, the hedge's edge and its shade on the grass change too
+    for (const [i, key] of opened) {
+      const x = i % MW, y = (i / MW) | 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const j = (y + dy) * MW + x + dx;
+        if (!opened.has(j) && !changed.has(j)) changed.set(j, key);
+      }
+    }
+    for (const [i, key] of opened) changed.set(i, key);
+    const byKey = new Map();
+    for (const [i, key] of changed) { if (!byKey.has(key)) byKey.set(key, []); byKey.get(key).push(i); }
+    // draw them as they were: the village swapped back to its old state for a moment
+    this.open = this.wasOpen; this.st = g.was; this.baking = true;
+    let n = 0;
+    for (const [key, cells] of byKey) {
+      this.ground = [];
+      let x0 = MW, y0 = MH, x1 = 0, y1 = 0;
+      for (const i of cells) {
+        const x = i % MW, y = (i / MW) | 0;
+        this.drawTile(x, y);
+        x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+      }
+      const img = this.bake(this.ground, `village_old${n++}`, { x0, y0: y0 - 1, x1, y1 }, D.deco + 0.9);
+      img.ground = true;
+      this.turn(key).over.push(img);
+    }
+    // the old trees: the ones on or over a cell that opened, unless they are still standing now
+    const deepNow = (x, y) => {
+      for (let dy = -2; dy <= 0; dy++) for (let dx = -1; dx <= 1; dx++) if (chIn(now.open, now.st, x + dx, y + dy) !== '#') return false;
+      return true;
+    };
+    const wants = (x, y) => {
+      if (deepNow(x, y)) return null;
+      for (let dy = -3; dy <= 1; dy++) for (let dx = -2; dx <= 2; dx++) {
+        const k = x + dx >= 0 && x + dx < MW && opened.get((y + dy) * MW + x + dx);
+        if (k) return k;
+      }
+      return null;
+    };
+    this.plantTrees((x, y) => this.ch(x, y), { wants, add: (img, key) => this.turn(key).over.push(img) });
+    this.open = now.open; this.st = now.st; this.baking = false; this.ground = null;
+  }
+
+  // where the camera goes to watch a turn
+  stepAt(s) {
+    const k = s.key;
+    if (/^p\d+$/.test(k)) { const [x, y] = BUILD[+k.slice(1) - 1].at; return { x, y }; }
+    const cot = BUILDINGS.find(b => `f${b.cot}` === k);
+    if (cot) return { x: cot.x + 1, y: cot.y + 1 };
+    const h = HOUSES.find(o => o.id === k);
+    if (h) { const d = doorOf(h); return { x: d.x, y: d.y - 2 }; }
+    return { x: this.p.x, y: this.p.y };
+  }
+
+  // The show: turn after turn, the camera going over to each; the woods there sink away, the new
+  // things come up, a banner says what it is. A tap skips to the end.
+  playGrowth(arrivals) {
+    for (const one of arrivals) this.turn(one.id).folk = one;
+    const list = [...this.steps.values()].sort((a, b) => turnRank(a.key) - turnRank(b.key));
+    if (!list.length) return;
+    for (const s of list) {
+      if (/^p\d+$/.test(s.key)) {
+        const n = +s.key.slice(1), b = BUILD[n - 1], lv = LEVELS.find(l => l.p === n);
+        s.banner = b.say || `${josa(b.name, '이', '가')} 생겼다!`;
+        if (lv) s.level = `마을이 커졌다! 이제 ${josa(lv.name, '이다', '다')}`;
+      } else if (/^f\d$/.test(s.key)) s.banner = `${josa(cottageName(this.meta, +s.key[1]), '이', '가')} 생겼다!`;
+    }
+    this.showing = list;
+    const cam = this.cameras.main, T = this.showTimers = [];
+    const at = (ms, fn) => T.push(this.time.delayedCall(ms, fn));
+    cam.stopFollow();
+    let t = 300;
+    for (const s of list) {
+      const { x, y } = this.stepAt(s);
+      at(t, () => cam.pan(center(x), center(y), 800, 'Sine.easeInOut', true));
+      t += 900;
+      if (s.over.length) { at(t, () => this.melt(s)); t += 650; }
+      at(t, () => this.pop(s));
+      t += s.things.length || s.swaps.length || s.gone.length ? 1500 : 150;
+      if (s.level) { at(t, () => this.hooks.onGrow?.(s.level, true)); t += 1800; }
+      if (s.folk) { at(t, () => this.arrive(s.folk)); t += 2300; }
+    }
+    at(t, () => this.endShow());
+  }
+
+  // the old woods sink away, the trees nearest the middle first, leaves flying; the ground fades
+  melt(s, fast) {
+    if (s.melted) return;
+    s.melted = true;
+    const c = this.stepAt(s);
+    for (const o of s.over) {
+      if (!o.active) continue;
+      if (fast) { this.dropOld(o); continue; }
+      if (o.ground) { this.tweens.add({ targets: o, alpha: 0, duration: 650, delay: 150, onComplete: () => this.dropOld(o) }); continue; }
+      const delay = Math.min(550, Math.hypot(o.x / TILE - c.x, o.y / TILE - c.y) * 45);
+      this.tweens.add({
+        targets: o, scaleY: 0, scaleX: o.scaleX * 0.6, alpha: 0.4, duration: 300, delay, ease: 'Back.in',
+        onComplete: () => { this.leaves.explode(6, o.x, o.y - 10); this.dropOld(o); },
+      });
+    }
+  }
+  dropOld(o) {
+    const key = o.ground && o.texture.key;
+    o.destroy();
+    if (key && this.textures.exists(key)) this.textures.remove(key);
+  }
+
+  // a turn's new things come up out of the ground with sparkles, the nearest first; what changes gets
+  // its new picture with a bounce; what goes, goes; a banner says what it was
+  pop(s, fast) {
+    if (s.popped) return;
+    s.popped = true;
+    const c = this.stepAt(s);
+    for (const th of s.things) for (const img of th.imgs) {
+      if (!img.active) continue;
+      img.setVisible(true);
+      img.held = null;
+      if (fast) continue;
+      const delay = Math.min(500, Math.hypot(img.x / TILE - c.x, img.y / TILE - c.y) * 30);
+      if (th.how === 'fade') {
+        const a = img.alpha;
+        img.setAlpha(0);
+        this.tweens.add({ targets: img, alpha: a, duration: 450, delay });
+        continue;
+      }
+      const sx = img.scaleX, sy = img.scaleY, b = img.getBounds();
+      img.setScale(sx * 0.4, sy * 0.05);
+      this.tweens.add({ targets: img, scaleX: sx, scaleY: sy, duration: 420, delay, ease: 'Back.out' });
+      if (b.width * b.height > 60) this.time.delayedCall(delay + 120, () => this.spark.explode(Math.min(28, 6 + Math.round(b.width * b.height / 140)), b.centerX, b.centerY));
+    }
+    for (const sw of s.swaps) {
+      if (!sw.img.active) continue;
+      sw.img.setTexture(sw.key);
+      if (fast) continue;
+      const sx = sw.img.scaleX, sy = sw.img.scaleY, b = sw.img.getBounds();
+      sw.img.setScale(sx * 1.08, sy * 0.8);
+      this.tweens.add({ targets: sw.img, scaleX: sx, scaleY: sy, duration: 480, ease: 'Back.out' });
+      this.spark.explode(30, b.centerX, b.centerY);
+      this.leaves.explode(10, b.centerX, b.bottom - 4);
+    }
+    for (const img of s.gone) {
+      if (!img.active) continue;
+      if (fast) { img.destroy(); continue; }
+      this.tweens.add({ targets: img, alpha: 0, scaleY: img.scaleY * 0.2, duration: 300, ease: 'Quad.in', onComplete: () => img.destroy() });
+    }
+    s.after.forEach(f => f(fast));
+    if (s.banner && !fast) this.hooks.onGrow?.(s.banner);
+  }
+
+  // a tap during the show: everything comes up at once, and back to you
+  skipShow() {
+    const list = this.showing;
+    if (!list) return;
+    this.showTimers.forEach(e => e.remove(false));
+    for (const s of list) {
+      this.melt(s, true);
+      this.pop(s, true);
+      if (s.folk) this.arrive(s.folk, true);
+    }
+    this.endShow(true);
+  }
+  endShow(fast) {
+    this.showing = null;
+    const cam = this.cameras.main, follow = () => cam.startFollow(this.ps, true, 0.2, 0.2, 0, TILE / 2);
+    if (fast) { cam.panEffect.reset(); follow(); return; }
+    cam.pan(this.ps.x, this.ps.y - TILE / 2, 600, 'Sine.easeInOut', true, (c, k) => { if (k === 1) follow(); });
+  }
+
+  // The last pieces, which are not things on a tile: a flag on every roof (P37), fireworks (P39), and
+  // the festival (P40), when the heroes at home run over to dance round the maypole.
+  festival() {
+    const P = this.st.P, was = this.growth?.was;
+    const fresh = n => was && was.P < n;
+    if (P >= 37) {
+      const roofs = [...HOUSES.filter(h => h.lived && h.id !== 'guild').map(h => h.img), ...this.buildings.map(b => b.img)];
+      if (ownsHome(this.meta)) roofs.push(this.homeImg);
+      roofs.forEach((img, k) => {
+        const top = this.roofTop(img.finalKey || img.texture.key), v = k % 4;
+        const flag = this.keep(this.add.image(img.x + top.dx, img.y + top.dy + 1, this.growthKey('flag', v * 2)).setOrigin(0.5, 1).setDepth(img.depth + 0.0005));
+        this.flags.push({ img: flag, v });
+        const key = img.held || (fresh(37) ? 'p37' : null);
+        if (key) this.holdAt(key, [flag]);
+      });
+    }
+    if (P >= 39) {
+      if (fresh(39)) this.turn('p39').after.push(() => { this.fireworks = true; this.nextFirework = 0; });
+      else this.fireworks = true;
+    }
+    if (P >= GROWN && fresh(GROWN)) this.turn(`p${GROWN}`).after.push(fast => { this.fest = true; this.gather(fast); });
+  }
+
+  // the highest point of a house's picture, round the middle: where its festival flag goes
+  roofTop(key) {
+    this.roofs = this.roofs || {};
+    if (this.roofs[key]) return this.roofs[key];
+    const src = this.textures.get(key).getSourceImage(), W = src.width, H = src.height;
+    let top = { x: W / 2, y: 0 };
+    const g = src.getContext?.('2d');
+    if (g) {
+      const d = g.getImageData(0, 0, W, H).data, x0 = Math.floor(W * 0.3), x1 = Math.ceil(W * 0.7);
+      find: for (let y = 0; y < H; y++) for (let x = x0; x < x1; x++) if (d[(y * W + x) * 4 + 3] > 0) { top = { x, y }; break find; }
+    }
+    return (this.roofs[key] = { dx: top.x + 0.5 - W / 2, dy: top.y - H });
+  }
+
+  // the festival starts: the heroes at home hurry over to the maypole
+  gather(fast) {
+    for (const h of this.heroes) {
+      const spot = this.freeNear(MAYPOLE, 4);
+      if (!spot) continue;
+      if (!fast) this.spark.explode(8, h.s.x, h.s.y - 6);
+      h.x = spot.x; h.y = spot.y;
+      h.s.setPosition(center(spot.x), foot(spot.y)).setDepth(D.actors + spot.y / 100);
+      if (!fast) this.spark.explode(12, h.s.x, h.s.y - 6);
+    }
+  }
+
+  // a rocket goes up somewhere in view and bursts into little stars
+  firework(view) {
+    const x = Math.round(view.x + view.width * (0.2 + Math.random() * 0.6)), y = Math.round(view.y + view.height * (0.12 + Math.random() * 0.2));
+    const tint = [0xf4cf4f, 0xf29bb2, 0x9fc2ff, 0xfff7f0, 0xa6df6e][Math.floor(Math.random() * 5)];
+    const r = this.keep(this.add.image(x, y + 56, 'px').setScale(1.3).setDepth(D.bubble - 0.5).setTint(0xfff3b0));
+    this.tweens.add({
+      targets: r, y, duration: 650, ease: 'Quad.out',
+      onComplete: () => { r.destroy(); this.burst.setParticleTint(tint); this.burst.explode(22, x, y); },
+    });
   }
 
   // One villager's (or a hero's) habit, by who they are: the guild master mulls over requests, the
@@ -218,6 +592,12 @@ export class VillageScene extends Phaser.Scene {
         break;
       case 'knight': tw({ sx: 1.1, sy: 1.07, duration: 220, yoyo: true, hold: 400, ease: 'Back.out' }); break;
       case 'vamp': tw({ hop: 4, duration: 180, yoyo: true, repeat: 3, ease: 'Sine.inOut' }); setEmote(s, '♪', time, 1200); break;
+      // the festival: a hop and a twirl round the maypole
+      case 'dance':
+        tw({ hop: 5, duration: 160, yoyo: true, repeat: 1, ease: 'Quad.out' });
+        this.time.delayedCall(330, () => s.setFlipX(!s.flipX));
+        setEmote(s, '♪', time, 1100);
+        break;
     }
   }
 
@@ -271,6 +651,30 @@ export class VillageScene extends Phaser.Scene {
     }));
   }
 
+  // the carpenter built on (ui/hub.js): the camera goes over, and the house in the village puffs up
+  // into its bigger self
+  showHomeGrow() {
+    const key = this.houseKey(HOME, true, houseLevel(this.meta)), img = this.homeImg, cam = this.cameras.main;
+    if (!img || !ownsHome(this.meta) || img.texture.key === key) return;
+    cam.stopFollow();
+    cam.pan(img.x, img.y - TILE * 2, 450, 'Sine.easeInOut');
+    this.time.delayedCall(500, () => {
+      this.spark.explode(40, img.x, img.y - img.height / 2);
+      this.tweens.add({
+        targets: img, scaleX: 1.08, scaleY: 0.9, duration: 120, yoyo: true, ease: 'Quad.out',
+        onYoyo: () => img.setTexture(key),
+        onComplete: () => img.setScale(1),
+      });
+      this.ps.expr = 'sparkle';
+      this.ps.exprUntil = this.time.now + 1400;
+      this.tweens.add({ targets: this.ps, hop: 5, duration: 120, yoyo: true, repeat: 1, ease: 'Quad.out' });
+      this.say(this.ps, '우와, 집이 커졌다!', 1500);
+    });
+    this.time.delayedCall(2000, () => cam.pan(this.ps.x, this.ps.y - TILE / 2, 450, 'Sine.easeInOut', false, (c, k) => {
+      if (k === 1) cam.startFollow(this.ps, true, 0.2, 0.2, 0, TILE / 2);
+    }));
+  }
+
   // the dog house's puppy pads about the yard; bump it and it hops
   placePup() {
     if (this.pup) return;
@@ -292,7 +696,7 @@ export class VillageScene extends Phaser.Scene {
     this.finds = [];
     for (let tries = 0; tries < 200 && this.finds.length < n; tries++) {
       const x = 1 + Math.floor(Math.random() * (MW - 2)), y = 1 + Math.floor(Math.random() * (MH - 2));
-      if (!grassy(this.ch(x, y)) || !this.walkable(x, y) || this.finds.some(f => Math.abs(f.x - x) + Math.abs(f.y - y) < 8)) continue;
+      if (!grassy(this.ch(x, y)) || !this.walkable(x, y) || this.isNew(x, y) || this.finds.some(f => Math.abs(f.x - x) + Math.abs(f.y - y) < 8)) continue;
       if (Math.abs(x - this.p.x) + Math.abs(y - this.p.y) < 6) continue;
       const img = this.keep(this.add.image(center(x), center(y) + 2, 't_chip_copper').setDepth(D.deco).setAlpha(0.85));
       this.finds.push({ x, y, img, next: 0 });
@@ -318,7 +722,7 @@ export class VillageScene extends Phaser.Scene {
   // the heroes you have but did not pick today hang about in the meadow
   placeHeroes() {
     for (const id of Object.keys(CHARACTERS).filter(c => this.meta.chars[c] && c !== this.p.id)) {
-      const spot = this.freeGrassTile();
+      const spot = (this.fest && this.freeNear(MAYPOLE, 4)) || this.freeGrassTile();
       if (!spot) break;
       this.heroes.push({ id, x: spot.x, y: spot.y, s: this.actor(CHARACTERS[id].sprite, spot.x, spot.y), next: 0 });
     }
@@ -334,9 +738,9 @@ export class VillageScene extends Phaser.Scene {
     this.placeHeroes();
   }
 
-  houseKey(h, lived) {
-    const key = `house_${h.id}_${lived ? 1 : 0}`;
-    if (!this.textures.exists(key)) this.textures.addCanvas(key, houseCanvas(h, lived));
+  houseKey(h, lived, lvl = 0) {
+    const key = `house_${h.id}_${lived ? 1 : 0}_${lvl}`;
+    if (!this.textures.exists(key)) this.textures.addCanvas(key, houseCanvas(h, lived, lvl));
     return key;
   }
 
@@ -354,17 +758,31 @@ export class VillageScene extends Phaser.Scene {
     this.rays = null;
     this.finds = [];
     this.pending = null;
+    this.props = [];
+    this.twinkles = [];
+    this.floaters = [];
+    this.flags = [];
+    this.buildings = [];
+    this.sails = this.maypole = this.fountain = this.campfire = null;
+    this.steps = new Map();
+    this.showing = null;
+    this.showTimers = [];
+    this.fireworks = this.fest = false;
+    this.cameras.main.panEffect.reset();
   }
 
   keep(o) { this.objs.push(o); return o; }
 
-  ch(x, y) { return x < 0 || y < 0 || x >= MW || y >= MH ? '#' : VILLAGE_MAP[y][x]; }
+  // what a cell is today (chIn)
+  ch(x, y) { return chIn(this.open, this.st, x, y); }
 
+  // One cell of ground. Everything that never moves is baked into one picture (bakeGround); only the
+  // water (it ripples) and what floats on it are images of their own.
   drawTile(x, y) {
     const ch = this.ch(x, y);
     const around = test => (test(x, y - 1) && N) | (test(x + 1, y) && E) | (test(x, y + 1) && S) | (test(x - 1, y) && W_) |
       (test(x + 1, y - 1) && NE) | (test(x + 1, y + 1) && SE) | (test(x - 1, y + 1) && SW) | (test(x - 1, y - 1) && NW);
-    const add = (key, depth = D.tiles) => this.keep(this.add.image(x * TILE, y * TILE, key).setOrigin(0).setDepth(depth));
+    const add = (key, depth = D.tiles, dy = 0) => this.ground.push({ key, x: x * TILE, y: y * TILE + dy, depth });
     const hedge = (nx, ny) => this.ch(nx, ny) === '#' && !this.grove(nx, ny);
     if (ch === '#' && this.grove(x, y)) { add(floorKey(HOME_ZI, hash(x, y) & 31)); return; } // grass under a lone tree (plantTrees)
     if (ch === '#') {
@@ -374,45 +792,147 @@ export class VillageScene extends Phaser.Scene {
       if (!(open & S) && hb % 100 < 30) add(bloomKey(this, VILLAGE_GROUND, HOME_ZI, (hb >> 8) % BLOOM_VARIANTS), D.tiles + 0.5);
       return;
     }
-    if (ch === '~') {
-      const img = add(waterKey(this, HOME_ZI, 0, around((nx, ny) => this.ch(nx, ny) !== '~')));
-      img.shore = around((nx, ny) => this.ch(nx, ny) !== '~');
-      this.waterImgs.push(img);
-      if (x >= 0 && y >= 0 && hash(x, y) % 9 === 0) add(`t_lily${hash(x, y) % 2}`, D.deco);
+    if ((ch === '~' || ch === '=') && this.baking) {
+      // the old look (overlayOld) is one still picture
+      add(waterKey(this, HOME_ZI, 0, around((nx, ny) => !'~='.includes(this.ch(nx, ny)))));
+      if (ch === '~' && hash(x, y) % 9 === 0) add(`t_lily${hash(x, y) % 2}`, D.deco);
+      if (ch === '=') add(this.growthKey('bridge', '~'.includes(this.ch(x, y - 1)) || '~'.includes(this.ch(x, y + 1)) ? 0 : 1), D.deco + 0.1);
       return;
     }
-    const pathy = (nx, ny) => ':>'.includes(this.ch(nx, ny));
-    if (pathy(x, y)) add(pathKey(this, around((nx, ny) => !pathy(nx, ny)) & (N | E | S | W_)));
+    if (ch === '~') {
+      const shore = around((nx, ny) => !'~='.includes(this.ch(nx, ny)));
+      const img = this.keep(this.add.image(x * TILE, y * TILE, waterKey(this, HOME_ZI, 0, shore)).setOrigin(0).setDepth(D.tiles + 0.2));
+      img.shore = shore;
+      this.waterImgs.push(img);
+      if (x >= 0 && y >= 0 && hash(x, y) % 9 === 0) this.keep(this.add.image(x * TILE, y * TILE, `t_lily${hash(x, y) % 2}`).setOrigin(0).setDepth(D.deco));
+      return;
+    }
+    if (ch === '=') {
+      // a plank bridge over the stream, the water running underneath
+      const shore = around((nx, ny) => !'~='.includes(this.ch(nx, ny)));
+      const img = this.keep(this.add.image(x * TILE, y * TILE, waterKey(this, HOME_ZI, 0, shore)).setOrigin(0).setDepth(D.tiles + 0.2));
+      img.shore = shore;
+      this.waterImgs.push(img);
+      const across = '~'.includes(this.ch(x, y - 1)) || '~'.includes(this.ch(x, y + 1)) ? 'h' : 'v';
+      this.keep(this.add.image(x * TILE, y * TILE, this.growthKey('bridge', across === 'h' ? 0 : 1)).setOrigin(0).setDepth(D.deco + 0.1));
+      return;
+    }
+    const pathy = (nx, ny) => ':>='.includes(this.ch(nx, ny));
+    if (pathy(x, y)) add(pathKey(this, around((nx, ny) => !pathy(nx, ny)) & (N | E | S | W_), this.st.P >= COBBLE_P));
     else add(ch === '*' ? `z${HOME_ZI}_floor${4 + (hash(x, y) % 3)}` : floorKey(HOME_ZI, hash(x, y) & 31)); // '*': daisies, pink flowers, buttercups
     const shade = around(hedge) & (N | E | W_ | NE | NW);
     if (shade) add(shadeKey(this, shade));
     if (grassy(ch)) this.decorate(x, y, add, hedge);
     if (ch === '>') add('t_stairs', D.deco);
-    if (ch === 'L') {
-      if (!this.textures.exists('village_post')) this.textures.addCanvas('village_post', lampPostCanvas());
-      this.keep(this.add.image(center(x), foot(y), 'village_post').setOrigin(0.5, 1).setDepth(D.actors + y / 100));
-      const glow = this.keep(this.add.image(center(x) - 1, foot(y) - 14, 'glow').setDepth(D.fx).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.6));
-      this.glows.push(glow);
+  }
+
+  // pictures drawn once into one canvas, in depth order (`box`: the tiles it covers)
+  bake(ops, key, box, depth) {
+    const W = (box.x1 - box.x0 + 1) * TILE, H = (box.y1 - box.y0 + 1) * TILE, ox = -box.x0 * TILE, oy = -box.y0 * TILE;
+    if (this.textures.exists(key)) this.textures.remove(key);
+    const tex = this.textures.createCanvas(key, W, H), g = tex.getContext();
+    g.imageSmoothingEnabled = false;
+    ops.sort((a, b) => a.depth - b.depth);
+    for (const o of ops) {
+      const f = this.textures.getFrame(o.key);
+      if (f) g.drawImage(f.source.image, f.cutX, f.cutY, f.cutWidth, f.cutHeight, o.x + ox, o.y + oy, f.cutWidth, f.cutHeight);
     }
+    tex.refresh();
+    return this.keep(this.add.image(box.x0 * TILE, box.y0 * TILE, key).setOrigin(0).setDepth(depth));
   }
 
   // Flowers, clover and pebbles in the grass (field-decor.js, in the daytime colours): thick in the
   // flower beds ('*') and in patches here and there, a band of leaves and flowers along the hedge's foot.
   decorate(x, y, add, hedge) {
     const z = VILLAGE_GROUND, zi = HOME_ZI, h = hash(x * 3 + 11, y * 5 + 7);
-    if (hedge(x, y - 1)) { add(footKey(this, z, zi, h % FOOT_VARIANTS), D.tiles + 0.5).setY(y * TILE - FOOT_UP); return; }
+    if (hedge(x, y - 1)) { add(footKey(this, z, zi, h % FOOT_VARIANTS), D.tiles + 0.5, -FOOT_UP); return; }
     if (this.ch(x, y) === '*' || patchNoise(x, y, 5) > 0.62) add(patchKey(this, z, zi, (h >> 12) % PATCH_VARIANTS), D.tiles + 0.5);
     else if ((h >> 9) % 100 < 40) add(scatterKey(this, z, zi, (h >> 12) % SCATTER_VARIANTS), D.tiles + 0.5);
   }
 
-  // The odds and ends round the village (data/village.js PROPS): each stands on its tile like a house.
+  // The odds and ends round the village (data/village.js PROPS): each stands on its tile(s) like a house,
+  // except the few hung over the paths (WALK), which you walk under. The lamps glow; strings of flags
+  // and lanterns hang from one point to another; the big tree's lights and the pond's lanterns twinkle.
+  // One that something has taken the place of since last time (the campfire, under the fountain) is
+  // still there when you arrive, and goes in the show.
   placeProps() {
     for (const pr of PROPS) {
-      const key = `village_prop_${pr.kind}`;
-      if (!this.textures.exists(key)) this.textures.addCanvas(key, propCanvas(pr.kind));
-      this.keep(this.add.image(center(pr.x), foot(pr.y), key).setOrigin(0.5, 1).setDepth(D.actors + pr.y / 100));
-      this.blocked[pr.y * MW + pr.x] = 1;
+      const now = shownIn(pr, this.st), then = !!this.growth && shownIn(pr, this.growth.was);
+      if (!now && !then) continue;
+      const imgs = [], put = img => { imgs.push(img); return this.keep(img); };
+      const cells = propCells(pr);
+      const x1 = pr.x + Math.max(...cells.map(c => c[0])), y1 = pr.y + Math.max(...cells.map(c => c[1]));
+      let how = 'grow';
+      switch (pr.kind) {
+        case 'lamp': {
+          if (!this.textures.exists('village_post')) this.textures.addCanvas('village_post', lampPostCanvas());
+          put(this.add.image(center(pr.x), foot(pr.y), 'village_post').setOrigin(0.5, 1).setDepth(D.actors + pr.y / 100));
+          this.glows.push(put(this.add.image(center(pr.x) - 1, foot(pr.y) - 14, 'glow').setDepth(D.fx).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.6)));
+          break;
+        }
+        case 'bigtree': break;   // plantBigTree
+        case 'bunting': case 'lanterns': {
+          // the flags hang between two poles of their own; the lanterns between two lamp posts
+          const span = pr.to[0] - pr.x, key = `village_${pr.kind}_${span}`;
+          if (!this.textures.exists(key)) this.textures.addCanvas(key, stringCanvas(pr.kind, span * TILE));
+          put(this.add.image(center(pr.x) - STRING_PAD, foot(pr.y) - 3, key).setOrigin(0, 1).setDepth(D.fx - 0.3));
+          how = 'fade';
+          break;
+        }
+        case 'lights': {
+          // little lights strung through the big tree's crown, each twinkling on its own
+          const c = BIG_TREE.crown;
+          for (let k = 0; k < 26; k++) {
+            const x = (c.x0 + 0.5 + Math.random() * (c.x1 - c.x0)) * TILE, y = (c.y0 + 1 + Math.random() * (c.y1 - c.y0 - 2)) * TILE;
+            this.twinkles.push(put(this.add.image(Math.round(x), Math.round(y), 'px').setScale(1.4).setDepth(D.actors + BIG_TREE.y / 100 + 0.003)
+              .setTint([0xfff3b0, 0xffd0e0, 0xc8f0ff, 0xffffff][k % 4]).setAlpha(0.3)));
+          }
+          break;
+        }
+        case 'pondlanterns': {
+          const pond = this.pondTiles || [];
+          for (let k = 0; k < Math.min(6, pond.length); k++) {
+            const t = pond[Math.floor((k + 0.5) / 6 * pond.length)];
+            const img = put(this.add.image(center(t.x), center(t.y), this.growthKey('pondlantern', k % 2)).setDepth(D.deco + 0.7));
+            const glow = put(this.add.image(img.x, img.y - 2, 'glow').setDepth(D.fx).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.45).setScale(0.7));
+            this.glows.push(glow);
+            this.floaters.push({ img, x: img.x, y: img.y, seed: k * 1.7 }, { img: glow, x: glow.x, y: glow.y - 0, seed: k * 1.7 });
+          }
+          break;
+        }
+        default: {
+          const key = GROWTH_PROPS[pr.kind] ? this.growthKey(pr.kind, pr.v || 0) : `village_prop_${pr.kind}`;
+          if (!GROWTH_PROPS[pr.kind] && !this.textures.exists(key)) this.textures.addCanvas(key, propCanvas(pr.kind));
+          // the flower beds lie flat; the arches and the fair's gate go over your head
+          const over = pr.kind === 'arch' || pr.kind === 'gate', flat = WALK.has(pr.kind) && !over;
+          const img = put(this.add.image((pr.x + x1 + 1) / 2 * TILE, foot(y1), key).setOrigin(0.5, 1).setDepth(flat ? D.deco : over ? D.fx - 0.4 : D.actors + y1 / 100));
+          if (pr.kind === 'fountain') this.fountain = img;
+          if (pr.kind === 'maypole') this.maypole = img;
+          if (pr.kind === 'balloon') this.floaters.push({ img, x: img.x, y: img.y, seed: 3, big: true });
+        }
+      }
+      if (!imgs.length) continue;
+      if (!now) { this.turn(`p${pr.until}`).gone.push(...imgs); continue; }
+      this.props.push({ pr, imgs });
+      if (!WALK.has(pr.kind)) for (const [i, j] of cells) this.blocked[(pr.y + j) * MW + pr.x + i] = 1;
+      // the flags' poles
+      if (pr.kind === 'bunting') for (const [x, y] of [[pr.x, pr.y], pr.to]) this.blocked[y * MW + x] = 1;
+      this.hold(pr, imgs, how);
     }
+  }
+
+  // a picture from scenes/village-growth-art.js, made once
+  growthKey(kind, v = 0) {
+    const key = `village_g_${kind}_${v}`;
+    if (!this.textures.exists(key)) this.textures.addCanvas(key, growthPropCanvas(kind, v));
+    return key;
+  }
+
+  // the windmill's sails turn slowly over its cap (a picture for each step, so they stay pixel-sharp)
+  placeSails(b) {
+    const [dx, dy] = SAILS_AT;
+    this.sails = this.keep(this.add.image(b.x * TILE + dx, (b.y + b.h) * TILE + dy, this.growthKey('sails', 0)).setDepth(D.actors + (b.y + b.h - 1) / 100 + 0.002));
+    return this.sails;
   }
 
   // Little lives about the place: butterflies over the grass, a duck and her ducklings on the pond,
@@ -432,6 +952,7 @@ export class VillageScene extends Phaser.Scene {
       const mk = (name, n) => ({ img: this.keep(this.add.image(center(t.x) - n * 7, center(t.y), tex(`v_${name}`, () => critterCanvas(name))).setDepth(D.deco + 0.6)), x: center(t.x) - n * 7, y: center(t.y) });
       this.ducks = [mk('duck', 0), mk('duckling', 1), mk('duckling', 2)];
       this.duckGoal = null;
+      if (this.isNew(t.x, t.y)) this.holdAt(this.cellTrig(t.x, t.y), this.ducks.map(d => d.img), 'fade');
     }
     this.birds = [];
     tex('v_bird1', () => critterCanvas('bird1'));
@@ -451,7 +972,8 @@ export class VillageScene extends Phaser.Scene {
       // a wandering heading, a bob, and wings that beat
       f.a += (Math.sin(time / 900 + f.seed * 3) * 1.6) * s;
       f.x += Math.cos(f.a) * 14 * s; f.y += Math.sin(f.a) * 10 * s + Math.sin(time / 160 + f.seed) * 0.25;
-      if (f.x < TILE || f.x > (MW - 1) * TILE || f.y < TILE * 2 || f.y > (MH - 2) * TILE) f.a += Math.PI * s * 4;
+      const b = this.openBox;
+      if (f.x < (b.x0 + 1) * TILE || f.x > b.x1 * TILE || f.y < (b.y0 + 1) * TILE || f.y > b.y1 * TILE) f.a += Math.PI * s * 4;
       f.img.setTexture(Math.floor(time / 110 + f.seed * 5) % 2 ? f.k0 : f.k1).setPosition(Math.round(f.x), Math.round(f.y));
     }
     // the duck paddles to a spot on the pond, the ducklings in a line behind her
@@ -505,20 +1027,42 @@ export class VillageScene extends Phaser.Scene {
 
   // The woods: round trees wherever the hedge is deep enough behind them to take the crown (so they
   // never hide a path), one over each little square of hedge inside the village, and the ones
-  // standing in the grass ('T'). The border trees are plain and dark; the grass ones bear fruit or blossom now and then.
-  plantTrees() {
-    const hedge = (x, y) => this.ch(x, y) === '#';
-    const tree = (px, y, v) => this.keep(this.add.image(px, foot(y), treeKey(this, v)).setOrigin(0.5, 1).setDepth(D.actors + y / 100 + 0.001));
+  // standing in the grass ('T'). The border trees are plain and dark; the grass ones bear fruit or
+  // blossom now and then. A tree with nothing but woods under it can never stand in front of anyone,
+  // so it is baked into the ground; the rest stand up like everything else. `ch`: the map to plant on
+  // (the woods as they were, for the bit that is about to melt away), `out`: where the ones that stand
+  // up go.
+  plantTrees(ch = (x, y) => this.ch(x, y), out = null) {
+    const hedge = (x, y) => ch(x, y) === '#';
+    const woods = (px, y, key) => {
+      const f = this.textures.getFrame(key), x0 = Math.floor((px - f.cutWidth / 2) / TILE), x1 = Math.floor((px + f.cutWidth / 2 - 1) / TILE);
+      const y0 = Math.floor((foot(y) - f.cutHeight) / TILE);
+      for (let j = y0; j <= y; j++) for (let i = x0; i <= x1; i++) if (!hedge(i, j)) return false;
+      return true;
+    };
+    const tree = (px, y, v) => {
+      const key = treeKey(this, v), x = Math.floor(px / TILE), stand = () => this.keep(this.add.image(px, foot(y), key).setOrigin(0.5, 1).setDepth(D.actors + y / 100 + 0.001));
+      if (out) { const k = out.wants(x, y); if (k) out.add(stand(), k); return; }
+      if (woods(px, y, key)) {
+        const f = this.textures.getFrame(key);
+        this.ground.push({ key, x: Math.round(px - f.cutWidth / 2), y: foot(y) - f.cutHeight, depth: D.tiles + 0.8 + y / 1000 });
+        return;
+      }
+      const img = stand();
+      // one on ground that has just opened comes up in the show
+      if (this.isNew(x, y)) this.holdAt(this.cellTrig(x, y), [img]);
+    };
     for (let gy = -PAD.y; gy < MH + PAD.y; gy += 2) for (let gx = -PAD.x + ((gy / 2) & 1); gx < MW + PAD.x; gx += 3) {
       const h = hash(gx + 500, gy + 500), x = gx + (h % 2), y = gy + ((h >> 3) % 2);
       let deep = true;
       for (let dy = -2; dy <= 0 && deep; dy++) for (let dx = -1; dx <= 1 && deep; dx++) if (!hedge(x + dx, y + dy)) deep = false;
       if (deep) tree(center(x), y, h % 5 < 2 ? 1 : 0);
     }
+    if (out) return;
     for (let y = 1; y < MH - 1; y++) for (let x = 1; x < MW - 1; x++) {
       // a 2x2 square of hedge on its own: one big tree over it
       if (this.grove(x, y) && this.grove(x + 1, y) && this.grove(x, y - 1) && !hedge(x, y + 1) && !hedge(x - 1, y)) tree((x + 1) * TILE, y, 1);
-      if (this.ch(x, y) === 'T') { const r = hash(x * 3 + 7, y * 5 + 1) % 10; tree(center(x), y, r < 5 ? 0 : r < 7 ? 2 : r < 9 ? 3 : 1); }
+      if (ch(x, y) === 'T') { const r = hash(x * 3 + 7, y * 5 + 1) % 10; tree(center(x), y, r < 5 ? 0 : r < 7 ? 2 : r < 9 ? 3 : 1); }
     }
   }
 
@@ -546,15 +1090,16 @@ export class VillageScene extends Phaser.Scene {
     return false;
   }
 
-  // a flowering shrub against each side of a house, where there is grass for it
+  // a flowering shrub against each side of a house, where there is grass for it (and nothing else)
   shrubs(h) {
     if (!this.textures.exists('village_shrub')) this.textures.addCanvas('village_shrub', shrubCanvas());
-    const y = h.y + h.h - 1;
+    const y = h.y + h.h - 1, out = [];
     for (const x of [h.x - 1, h.x + h.w]) {
-      if (!grassy(this.ch(x, y)) || hash(x + 3, y + 9) % 4 === 0) continue;
-      this.keep(this.add.image(center(x), foot(y), 'village_shrub').setOrigin(0.5, 1).setDepth(D.actors + y / 100));
+      if (!grassy(this.ch(x, y)) || this.blocked[y * MW + x] || hash(x + 3, y + 9) % 4 === 0 || DECOR.some(d => d.at.some(([ax, ay]) => ax === x && ay === y))) continue;
+      out.push(this.keep(this.add.image(center(x), foot(y), 'village_shrub').setOrigin(0.5, 1).setDepth(D.actors + y / 100)));
       this.blocked[y * MW + x] = 1;
     }
+    return out;
   }
 
   // sunlight falling through the trees onto the pond, and a few glints on the water
@@ -570,6 +1115,8 @@ export class VillageScene extends Phaser.Scene {
     this.rays = this.keep(this.add.image(x0 * TILE, y0 * TILE, key).setOrigin(0).setDepth(D.fx).setBlendMode(Phaser.BlendModes.ADD));
     if (!this.textures.exists('village_glint')) this.textures.addCanvas('village_glint', glintCanvas());
     for (let k = 0; k < 4; k++) this.glints.push(Object.assign(this.keep(this.add.image(0, 0, 'village_glint').setDepth(D.deco + 0.5).setAlpha(0)), { next: k * 500 }));
+    const t = pond[0];
+    if (this.isNew(t.x, t.y)) this.holdAt(this.cellTrig(t.x, t.y), [this.rays, ...this.glints], 'fade');
   }
 
   actor(tex, x, y) {
@@ -578,11 +1125,13 @@ export class VillageScene extends Phaser.Scene {
     return s;
   }
 
-  // the heroes who stay home hang about on the grass inside the loop, near the pond
-  freeGrassTile() {
+  // a free spot on the grass round the plaza, for the heroes at home, the sparrows, the butterflies
+  // (never on ground that is about to open in the show)
+  freeGrassTile() { return this.freeNear(PLAZA, 11); }
+  freeNear(c, r) {
     for (let tries = 0; tries < 80; tries++) {
-      const x = GUILD.x - 12 + Math.floor(Math.random() * 25), y = GUILD.y + 3 + Math.floor(Math.random() * 15);
-      if (grassy(this.ch(x, y)) && this.walkable(x, y)) return { x, y };
+      const x = c.x - r + Math.floor(Math.random() * (2 * r + 1)), y = c.y - r + Math.floor(Math.random() * (2 * r + 1));
+      if (grassy(this.ch(x, y)) && this.walkable(x, y) && !this.isNew(x, y)) return { x, y };
     }
     return null;
   }
@@ -593,9 +1142,23 @@ export class VillageScene extends Phaser.Scene {
   houseAt(x, y) { return HOUSES.find(h => x >= h.x && x < h.x + h.w && y >= h.y && y < h.y + h.h); }
   homeAt(x, y) { return x >= HOME.x && x < HOME.x + HOME.w && y >= HOME.y && y < HOME.y + HOME.h; }
   homeLine() {
-    return ownsHome(this.meta) ? '내 집: 탐험 자격증 셋을 따고 조합에서 받은 내 집이다! 문 앞에서 부딪히면 꾸밀 수 있다.' : '빈 집터: 언젠가 여기에 내 집을… 조합장이 말한 큰 상이 이건가?';
+    if (!ownsHome(this.meta)) return '빈 집터: 언젠가 여기에 내 집을… 조합장이 말한 큰 상이 이건가?';
+    const v = this.meta.house?.visit, who = v?.gift > 0 && CHARACTERS[v.id];
+    return who ? `내 집: ${josa(who.name, '이', '가')} 놀러 와 있다! 문 앞에서 부딪히면 들어간다.` : '내 집: 문 앞에서 부딪히면 들어간다. 안이 아늑할수록 탐험이 든든해진다.';
+  }
+  // back out of your front door (main.js leaveHome): you step out onto the doorstep
+  outOfHome() {
+    const door = doorOf(HOME), ps = this.ps;
+    this.path = [];
+    this.pending = null;
+    this.p.x = door.x; this.p.y = door.y;
+    ps.setFlipX(false).setAlpha(0).setPosition(center(door.x), foot(door.y) - 6).setDepth(D.actors + door.y / 100);
+    this.tweens.add({ targets: ps, y: foot(door.y), alpha: 1, duration: 200, ease: 'Quad.out' });
+    this.cameras.main.centerOn(center(door.x), foot(door.y) - TILE / 2);
   }
   pupAt(x, y) { return this.pup && this.pup.x === x && this.pup.y === y ? this.pup : null; }
+  buildingAt(x, y) { return this.buildings.find(b => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h); }
+  propAt(x, y) { return this.props.find(o => propCells(o.pr).some(([i, j]) => o.pr.x + i === x && o.pr.y + j === y))?.pr; }
   decorAt(x, y) { return DECOR.find(d => this.decor[d.id] && d.at.some(([ax, ay]) => ax === x && ay === y)); }
   walkable(x, y) {
     if (x < 0 || y < 0 || x >= MW || y >= MH || this.blocked[y * MW + x]) return false;
@@ -612,11 +1175,12 @@ export class VillageScene extends Phaser.Scene {
     if (d) return `${d.name}: ${d.desc}`;
     const hero = this.heroAt(x, y);
     if (hero) return `${CHARACTERS[hero.id].name}: 부딪히면 오늘은 이 친구가 나간다.`;
-    if (BIG_TREE.block.some(([bx, by]) => bx === x && by === y)) return '아주 오래된 큰 나무: 뿌리 사이에 아주 작은 문이 있다. 늘 잠겨 있다.';
+    const b = this.buildingAt(x, y);
+    if (b) return `${b.cot != null ? cottageName(this.meta, b.cot) : b.name}: ${b.tip}`;
+    if (this.bigTree && BIG_TREE.block.some(([bx, by]) => bx === x && by === y)) return '아주 오래된 큰 나무: 뿌리 사이에 아주 작은 문이 있다. 늘 잠겨 있다.';
     if (this.ch(x, y) === '>') return '들판 가는 땅굴: 쏙 들어가면 탐험을 나간다.';
-    if (this.ch(x, y) === 'L') return '반딧불 등';
     if (this.ch(x, y) === 'T') return '나무';
-    const pr = PROPS.find(o => o.x === x && o.y === y);
+    const pr = this.propAt(x, y);
     if (pr) return PROP_NAMES[pr.kind];
     return '';
   }
@@ -624,6 +1188,7 @@ export class VillageScene extends Phaser.Scene {
   // ---------- moving ----------
   // a tap: walk to the spot; on a villager or a house, walk up to them and talk; on the sign, head out
   tap(x, y) {
+    if (this.ps?.diving) return;
     const house = this.houseAt(x, y);
     const target = this.folkAt(x, y) || (house?.lived && this.folk.find(f => f.id === house.id)) || this.heroAt(x, y) ||
       this.pupAt(x, y) || (this.homeAt(x, y) && this.homeDoor);
@@ -637,6 +1202,8 @@ export class VillageScene extends Phaser.Scene {
       return;
     }
     if (d) { this.hooks.onHover?.(`${d.name}: ${d.desc}`, true); return; }
+    // a building or a thing you cannot walk into: what it is
+    if (!target && (this.buildingAt(x, y) || (this.propAt(x, y) && !this.walkable(x, y)))) { this.hooks.onHover?.(this.describe(x, y), true); return; }
     if (target) {
       const near = this.near(target);
       if (near === 0) { this.meet(target); return; }
@@ -651,7 +1218,8 @@ export class VillageScene extends Phaser.Scene {
 
   // keyboard: one step, or bump whoever is there
   step(dx, dy) {
-    if (this.time.now < this.nextStep) return;
+    if (this.showing) { this.skipShow(); return; }
+    if (this.ps?.diving || this.time.now < this.nextStep) return;
     this.nextStep = this.time.now + STEP_MS;
     const x = this.p.x + dx, y = this.p.y + dy;
     const who = this.folkAt(x, y) || this.heroAt(x, y) || this.pupAt(x, y) || (this.homeAt(x, y) && this.homeDoor) ||
@@ -678,7 +1246,7 @@ export class VillageScene extends Phaser.Scene {
       const x = i % MW, y = (i / MW) | 0;
       for (const [dx, dy] of DIRS) {
         const nx = x + dx, ny = y + dy, j = ny * MW + nx;
-        if (prev.has(j) || !this.walkable(nx, ny) || !this.canCut(x, y, dx, dy)) continue;
+        if (prev.has(j) || !this.walkable(nx, ny) || !this.canCut(x, y, dx, dy) || (j !== goal && this.ch(nx, ny) === '>')) continue;
         prev.set(j, i);
         q.push(j);
       }
@@ -739,7 +1307,14 @@ export class VillageScene extends Phaser.Scene {
   meet(who) {
     this.path = [];
     this.pending = null;
-    if (who.home) { this.hooks.onHome?.(); return; }
+    // your own door: in you go (main.js showHome, scenes/HomeScene.js)
+    if (who.home) {
+      const ps = this.ps;
+      if (ps.diving) return;
+      ps.diving = true;
+      this.tweens.add({ targets: ps, y: ps.y - 6, alpha: 0, duration: 170, ease: 'Quad.in', onComplete: () => { ps.diving = false; this.hooks.onHome?.(); } });
+      return;
+    }
     if (who.mailbox) {
       const letter = this.mail;
       this.mail = null;
@@ -784,34 +1359,20 @@ export class VillageScene extends Phaser.Scene {
     this.say(this.ps, HERO_LINES[Math.floor(Math.random() * HERO_LINES.length)]);
   }
 
-  // someone new moves in: they hop out of their door with sparkles and say hello
-  // new neighbours, one after another: the camera drifts over to their house, then back to you
-  welcome(list) {
-    const cam = this.cameras.main;
-    let t = 500;
-    for (const one of list) {
-      this.time.delayedCall(t, () => { cam.stopFollow(); cam.pan(one.s.x, one.s.y - TILE * 2, 650, 'Sine.easeInOut'); });
-      this.time.delayedCall(t + 750, () => this.arrive(one));
-      t += 2300;
-    }
-    this.time.delayedCall(t, () => cam.pan(this.ps.x, this.ps.y - TILE / 2, 500, 'Sine.easeInOut', false, (c, k) => {
-      if (k === 1) cam.startFollow(this.ps, true, 0.2, 0.2, 0, TILE / 2);
-    }));
-  }
-
-  // someone moves in: the boards come off the house, they hop out with sparkles and say hello
-  arrive(one) {
-    if (!one.s.active) return;
+  // someone moves in: they hop out of their door with sparkles and say hello
+  arrive(one, fast) {
+    if (one.arrived || !one.s.active) return;
+    one.arrived = true;
+    one.s.setAlpha(1);
+    this.hooks.onArrive?.(one.id);
+    if (fast) return;
     const h = one.house;
-    h.img.setTexture(this.houseKey(h, true));
     this.spark.explode(30, (h.x + h.w / 2) * TILE, (h.y + h.h / 2) * TILE);
-    this.tweens.add({ targets: one.s, alpha: 1, duration: 200 });
     this.tweens.add({ targets: one.s, hop: 10, duration: 180, yoyo: true, repeat: 1, ease: 'Quad.out' });
     this.spark.explode(26, one.s.x, one.s.y - 8);
     this.say(one.s, one.f.arrive || '안녕!', 2600);
     this.ps.expr = 'sparkle';
     this.ps.exprUntil = this.time.now + 1200;
-    this.hooks.onArrive?.(one.id);
   }
 
   // a speech bubble over someone's head, the same size on every screen (sizes are in CSS pixels,
@@ -901,6 +1462,7 @@ export class VillageScene extends Phaser.Scene {
       const [dx, dy] = DIRS[Math.floor(Math.random() * 4)];
       const x = h.x + dx, y = h.y + dy;
       if (!grassy(this.ch(x, y)) || !this.walkable(x, y)) continue;
+      if (this.fest && Math.max(Math.abs(x - MAYPOLE.x), Math.abs(y - MAYPOLE.y)) > 4) continue;
       h.x = x; h.y = y;
       if (dx) h.s.setFlipX(dx < 0);
       const sp = CHARACTERS[h.id].sprite;
@@ -934,8 +1496,8 @@ export class VillageScene extends Phaser.Scene {
     }
     for (const h of this.heroes) {
       if (time < (h.habitAt || 0)) continue;
-      h.habitAt = time + 6000 + Math.random() * 5000;
-      if (Math.max(Math.abs(h.x - this.p.x), Math.abs(h.y - this.p.y)) <= 7) this.habit(h.id, h.s, time);
+      h.habitAt = time + (this.fest ? 2200 + Math.random() * 2000 : 6000 + Math.random() * 5000);
+      if (Math.max(Math.abs(h.x - this.p.x), Math.abs(h.y - this.p.y)) <= 7) this.habit(this.fest ? 'dance' : h.id, h.s, time);
     }
     if (this.pup && time > (this.pup.habitAt || 0)) {
       this.pup.habitAt = time + 3500 + Math.random() * 3000;
@@ -967,12 +1529,38 @@ export class VillageScene extends Phaser.Scene {
       if (time > this.mailNext) { this.mailNext = time + 2400; setEmote(this.mailMark, '!', time, 1600); }
       drawEmote(mk, this.mailMark, center(this.mailbox.x), foot(this.mailbox.y) - 21, time);
     }
+    // a friend waiting inside with a present (a heart), or a house you have not been into yet (a '!'),
+    // over your door now and then
+    const visit = this.meta.house?.visit?.gift > 0;
+    if (this.homeDoor && (visit || !this.meta.house?.seen)) {
+      this.visitMark ||= {};
+      if (time > (this.visitNext || 0)) { this.visitNext = time + 2600; setEmote(this.visitMark, visit ? '♥' : '!', time, 1700); }
+      drawEmote(mk, this.visitMark, center(this.homeDoor.x), foot(this.homeDoor.y) - 18, time);
+    }
     // chimney smoke from the houses people live in, and the pond shimmering
     if (time > (this.nextSmoke || 0)) {
       this.nextSmoke = time + 450;
-      const puff = h => { const [cx, cy] = chimneyAt(h) || [h.w * TILE - 10, 1]; this.smoke.explode(1, h.x * TILE + cx, h.y * TILE + cy); };
-      for (const h of HOUSES) if (h.lived && h.chimney) puff(h);
-      if (ownsHome(this.meta)) puff(HOME);
+      const puff = (h, lvl) => { const at = chimneyAt(h, lvl); if (at) this.smoke.explode(1, h.x * TILE + at[0], h.y * TILE + at[1]); };
+      for (const h of HOUSES) if (h.lived && h.img?.visible) puff(h, +h.img.texture.key.split('_').pop());
+      for (const b of this.buildings) if (b.img.visible) puff(b);
+      if (ownsHome(this.meta) && this.homeImg.texture.key !== 'village_lot') puff(HOME);
+    }
+    // the windmill turns, the balloon and the pond's lanterns bob, the big tree's lights twinkle, the
+    // flags flap, the maypole's ribbons go round, and once it is all grown, now and then a firework
+    const dt = Math.min(delta || 16, 50);
+    const sf = Math.floor(time / 260) % SAIL_FRAMES;
+    if (this.sails && sf !== this.sailFrame) { this.sailFrame = sf; this.sails.setTexture(this.growthKey('sails', sf)); }
+    for (const f of this.floaters) f.img.setPosition(f.x, Math.round(f.y + Math.sin(time / (f.big ? 1400 : 650) + f.seed) * (f.big ? 3 : 1)));
+    this.twinkles.forEach((t, i) => t.setAlpha(0.3 + 0.7 * Math.max(0, Math.sin(time / 420 + i * 2.3))));
+    const fr = Math.floor(time / 380) % 2;
+    if (fr !== this.flagFrame) {
+      this.flagFrame = fr;
+      for (const f of this.flags) f.img.setTexture(this.growthKey('flag', f.v * 2 + fr));
+      this.maypole?.setTexture(this.growthKey('maypole', fr));
+    }
+    if (this.fireworks && time > (this.nextFirework || 0)) {
+      this.nextFirework = time + 2600 + Math.random() * 2800;
+      this.firework(this.cameras.main.worldView);
     }
     // the hidden bits twinkle now and then; the lamps flicker
     for (const f of this.finds) {

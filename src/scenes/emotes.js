@@ -10,6 +10,7 @@ export const EMOTES = {
   '♪': { c: 0xf29bb2, rows: ['..c..', '..cc.', '..c.c', '..c..', 'ccc..', 'ccc..'] },
   '♥': { c: 0xff6b81, rows: ['.cc.cc.', 'ccccccc', 'ccccccc', '.ccccc.', '..ccc..', '...c...'] },
   sweat: { c: 0x8fd8f0, rows: ['..c.', '.cc.', 'cccc', 'cccc', '.cc.'] }, // out of breath
+  z: { c: 0xf4f0e8, rows: ['cccc', '..c.', '.c..', 'cccc'] }, // asleep
 };
 
 export function setEmote(s, kind, now, ms = 1100) {

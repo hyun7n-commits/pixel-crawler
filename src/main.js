@@ -3,6 +3,7 @@
 /* global Phaser */
 import { DungeonScene } from './scenes/DungeonScene.js';
 import { VillageScene } from './scenes/VillageScene.js';
+import { HomeScene } from './scenes/HomeScene.js';
 import { StoryScene } from './scenes/StoryScene.js';
 import { playStory } from './ui/story.js';
 import { Run, BOMB_RANGE } from './core/run.js';
@@ -16,6 +17,7 @@ import { ITEMS } from './data/items.js';
 import { T, isTrap } from './data/terrain.js';
 import { Hud, lowHealth } from './ui/hud.js';
 import { renderPanel, renderVillageHud } from './ui/hub.js';
+import { renderHomeHud, heartLine } from './ui/homehud.js';
 import { showChoice, showSummary, showTalk, closeTalk, closeModal, modalOpen, showUpdateNews } from './ui/modal.js';
 import { sinceUpdate } from './data/unlocks.js';
 import { showStages } from './ui/stages.js';
@@ -23,8 +25,8 @@ import { showEvolve } from './ui/evo.js';
 import { showsLeft } from './ui/beat.js';
 import { speed, pace, nextSpeed } from './ui/speed.js';
 import { bossCard } from './ui/bosscard.js';
-import { FOLK } from './data/village.js';
-import { DECOR } from './data/home.js';
+import { FOLK, villageP, ownsHome } from './data/village.js';
+import { placed, rollVisitor, roomOf } from './data/home.js';
 import { CHARACTERS } from './data/characters.js';
 import { describeTile } from './ui/tip.js';
 import { $ } from './ui/dom.js';
@@ -41,6 +43,7 @@ let chase = null;   // an enemy tapped from afar: walk up to it and hit it once
 let pinned = null;  // tile whose tip stays up after a long press on a phone, or a tap while looking
 let looking = false; // 살펴보기: a tap on the map shows what is there instead of walking (L key)
 let inVillage = false;
+let inHome = false;   // inside your house (scenes/HomeScene.js); the village sleeps meanwhile
 
 const hud = new Hud({
   onUseItem: id => {
@@ -133,7 +136,8 @@ function showVillage(from) {
   const g = $('game');
   g.hidden = false;
   g.classList.add('village');
-  g.classList.remove('low', 'bag-open');
+  g.classList.remove('low', 'bag-open', 'home');
+  if (inHome) { inHome = false; game.scene.sleep('home'); }
   fitCanvas();
   game.scene.sleep('dungeon');
   // first time: start the scene; after a run: wake it up; already showing (a reset): rebuild it
@@ -227,30 +231,100 @@ function talkTo(id, line) {
       changed: () => { saveMeta(meta); redraw(); renderVillageHud(meta); village().resync(); },
       setMeta: m => { meta = m; closeModal(); showVillage(); },
       onStory: () => { closeTalk(); showStory('intro', () => showVillage()); },
+      // the carpenter's: a yard piece goes up while you watch; furniture and building on show inside
+      onDecor: d => { closeTalk(); sfx.play('buy'); village().showDecor(d); },
+      onFurniture: () => sfx.play('buy'),
+      onExtend: () => { closeTalk(); sfx.play('levelup'); hud.banner(`집이 넓어졌다! ${roomOf(meta).name}`); village().showHomeGrow(); },
+      onGoHome: ownsHome(meta) ? () => { closeTalk(); showHome(); } : null,
     }),
   });
 }
 
-// Bumping into your own house: the 집 꾸미기 list. Buying a piece closes the sheet so you can watch
-// it go up beside the house.
-function openHome() {
-  const n = (meta.home || []).length, all = n >= DECOR.length;
-  sfx.play('talk');
+// Through your own door (scenes/HomeScene.js): the village sleeps while you are in, and wakes with you
+// on the doorstep when you come out.
+const home = () => game.scene.getScene('home');
+
+function showHome() {
+  if (inHome) return;
+  inVillage = false;
+  inHome = true;
   showVillageTip('');
-  showTalk({
-    who: CHARACTERS[meta.sel].sprite, name: '내 집',
-    line: all ? '더 바랄 게 없는 내 집이다!' : n ? '조금씩 내 집 같아진다. 다음엔 뭘 놓을까?' : '조합에서 받은 내 집. 아직 휑하다… 뭐부터 놓을까?',
-    build: (box, redraw) => renderPanel('home', box, {
-      meta,
-      changed: () => { saveMeta(meta); redraw(); renderVillageHud(meta); },
-      onDecor: id => { closeTalk(); sfx.play('buy'); village().showDecor(id); },
-    }),
+  sfx.play('door');
+  $('game').classList.add('home');
+  game.scene.sleep('village');
+  const first = !meta.house.seen;
+  meta.house.seen = true;
+  saveMeta(meta);
+  game.scene.run('home', { meta, first });
+  homeHud();
+  requestAnimationFrame(() => home().fit());
+}
+
+function leaveHome() {
+  if (!inHome) return;
+  inHome = false;
+  showVillageTip('');
+  sfx.play('door');
+  $('game').classList.remove('home');
+  game.scene.sleep('home');
+  inVillage = true;
+  game.scene.run('village', { meta, from: 'home' });
+  renderVillageHud(meta);
+}
+
+// the bar over the room (ui/homehud.js), and the tray while arranging
+function homeHud() {
+  const h = home();
+  renderHomeHud(meta, {
+    editing: !!h?.editing, held: h?.held,
+    onPick: id => h.holdNew(id),
+    onAway: () => h.putAway(),
   });
 }
+function setHomeEdit(on) {
+  const h = home();
+  if (!inHome || !h) return;
+  h.setEditing(on);
+  homeHud();
+  // the tray takes room at the bottom: the room settles above it
+  requestAnimationFrame(() => h.fit());
+}
+
+const homeHooks = {
+  onExit: () => leaveHome(),
+  onStep: alt => sfx.play('step', alt),
+  onHover: (text, flash) => showVillageTip(text, flash),
+  onSound: name => sfx.play(name),
+  onChange: () => { saveMeta(meta); homeHud(); },
+  onHeld: () => homeHud(),
+  // the friend who dropped in left a little something
+  onGift: n => {
+    meta.gold += n;
+    saveMeta(meta);
+    sfx.play('nugget');
+    hud.banner(`선물 +${n}G`);
+    homeHud();
+  },
+  // the bookshelf: the trip records and the critter book
+  onBook: () => {
+    sfx.play('pluck');
+    showVillageTip('');
+    showTalk({
+      who: CHARACTERS[meta.sel].sprite, name: '책장', line: '탐험 일지랑 들판 친구 도감이 꽂혀 있다.',
+      build: box => renderPanel('records', box, { meta }),
+    });
+  },
+  // how much room the bars take, top and bottom (CSS pixels)
+  insets: () => {
+    const st = $('stage').getBoundingClientRect();
+    const top = document.querySelector('#hhud .vh-top').getBoundingClientRect(), bot = document.querySelector('#hhud .hh-bottom').getBoundingClientRect();
+    return { top: Math.max(0, top.bottom - st.top) + 4, bottom: Math.max(0, st.bottom - bot.top) + 4 };
+  },
+};
 
 const villageHooks = {
   onTalk: talkTo,
-  onHome: openHome,
+  onHome: () => showHome(),
   onPet: () => sfx.play('bark'),
   // a letter from the mailbox (data/home.js LETTERS)
   onMail: letter => {
@@ -274,6 +348,16 @@ const villageHooks = {
     hud.banner(`새 이웃! ${FOLK[id].name}`);
     sfx.play('welcome');
   },
+  // the village as you saw it this time, so the next visit can show what has grown since
+  onSeen: st => {
+    meta.village.last = { P: st.P, arr: [...st.arr] };
+    saveMeta(meta);
+  },
+  // something new in the village (a clear's piece, a friend's cottage), or the village's new name
+  onGrow: (text, big) => {
+    hud.banner(text);
+    sfx.play(big ? 'welcome' : 'buy');
+  },
   onStep: alt => sfx.play('step', alt),
   onHover: (text, flash) => showVillageTip(text, flash),
   onFind: n => {
@@ -287,12 +371,12 @@ const villageHooks = {
 // The village's tip line: who someone is when the mouse rests on them, or a short note after a tap.
 let villageTipTimer = 0;
 function showVillageTip(text, flash) {
-  if (!inVillage && text) return;
+  if (!inVillage && !inHome && text) return;
   const tip = $('tip');
   tip.textContent = text;
   tip.hidden = !text;
   clearTimeout(villageTipTimer);
-  if (flash && text) villageTipTimer = setTimeout(() => { tip.hidden = true; }, 1800);
+  if (flash && text) villageTipTimer = setTimeout(() => { tip.hidden = true; }, Math.max(1800, text.length * 55));
 }
 
 function onRunEvent(type, d) {
@@ -325,7 +409,13 @@ function onRunEvent(type, d) {
       recipes: run.newRecipes.length, who: CHARACTERS[meta.sel].name, friend: run.rescued.length ? CHARACTERS[run.rescued[0]].kind : null,
       honey: run.p.honey || 0, ring: !!run.told.ring, spring: !!run.told.spring, weeds: run.weeds || 0, screams: run.screams || 0,
       tools: run.toolUse || {}, routes: run.routesTaken || [], brawls: run.brawls || 0, found: [...(run.found || [])],
+      // a stage beaten at a 회차 for the first time: the village puts its next piece up (data/village.js BUILD)
+      grew: d.won && run.firstClear ? villageP(meta) : 0,
     };
+    // at home meanwhile: the plant grew a little, and maybe a friend dropped in (one who is still
+    // waiting with a present stays)
+    if (placed(meta).plant) meta.house.plant = (meta.house.plant || 0) + 1;
+    if (!(meta.house.visit?.gift > 0)) meta.house.visit = ownsHome(meta) ? rollVisitor(meta, villageP(meta), meta.sel) : null;
     saveMeta(meta);
     hud.update(run);
     const summary = () => showSummary({ won: d.won, run, rescued: d.rescued, news: d.news, opened: d.opened, onClose: () => { scene.detach(); run = null; afterRunStory(); } });
@@ -452,6 +542,16 @@ document.addEventListener('keydown', ev => {
     return;
   }
   const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
+  // in the house: walk, bump the furniture; while arranging, the arrows move the mark and Enter picks
+  // up or puts down; Esc puts back what is in hand, finishes arranging, or goes out
+  if (inHome) {
+    const h = home();
+    if (KEYS[k]) { ev.preventDefault(); h.step(...KEYS[k]); }
+    if ((k === 'Enter' || k === ' ') && h.editing && document.activeElement === document.body) { ev.preventDefault(); h.confirmCursor(); }
+    if (k === 'Escape') { if (h.held) h.putBack(); else if (h.editing) setHomeEdit(false); else leaveHome(); }
+    if (k === 'm') toggleSound();
+    return;
+  }
   // in the village: walk a step, or bump whoever is there; Enter heads out
   if (inVillage) {
     if (KEYS[k]) { ev.preventDefault(); village().step(...KEYS[k]); }
@@ -612,6 +712,10 @@ $('soundBtn').addEventListener('click', toggleSound);
 $('vSound').addEventListener('click', toggleSound);
 // 32px or 16px characters: the textures are built once, so switching reloads the page (the save is kept)
 $('vGo').addEventListener('click', () => chooseStage());
+// (the button lets go of the focus, so Enter and the arrows go on working the room)
+$('hEdit').addEventListener('click', () => { setHomeEdit(!home().editing); $('hEdit').blur(); });
+$('hOut').addEventListener('click', () => leaveHome());
+$('hHeart').addEventListener('click', () => showVillageTip(heartLine(meta), true));
 showSoundState();
 // browsers allow sound only after the first click or key press
 // (iPhone only counts a finger lifting or a click, so listen for those every time, not just once)
@@ -688,7 +792,7 @@ const game = new Phaser.Game({
       showVillage();
       if (news.length) showUpdateNews(news);
     });
-  }), new VillageScene(villageHooks), new StoryScene()],
+  }), new VillageScene(villageHooks), new HomeScene(homeHooks), new StoryScene()],
 });
 
 function fitCanvas() {
@@ -711,4 +815,4 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) putAw
 window.addEventListener('pagehide', putAway);
 
 // test hook for automated play-testing; harmless in normal play
-window.__game = { get run() { return run; }, get meta() { return meta; }, get scene() { return scene; }, get village() { return village(); }, startRun, setAim, showVillage, showStory, talkTo };
+window.__game = { get run() { return run; }, get meta() { return meta; }, get scene() { return scene; }, get village() { return village(); }, get home() { return home(); }, startRun, setAim, showVillage, showStory, showHome, leaveHome, setHomeEdit, talkTo };

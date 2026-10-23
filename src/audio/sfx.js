@@ -202,6 +202,15 @@ const SOUNDS = {
     }
   },
   // two relics wind up as they slide together, then the flash: a thump and a chime, brighter for legends
+  // buying something in the village: coins and a little fanfare
+  buy() { SOUNDS.gold(); chime([784, 1047, 1319], 0.06, 0.1, 0.16, 0.08); },
+  // inside the house (v0.27): the music box's tune, a plushie's squeak, the stove, the watering can, the door
+  tune() { chime([1047, 1319, 1568, 1319, 1175, 1047, 1175, 1319, 1047], 0.17, 0.09, 0.3); },
+  squeak() { tone(1500, 0.07, { type: 'square', vol: 0.05, to: 2100 }); tone(1900, 0.09, { type: 'square', vol: 0.04, to: 1400, delay: 0.08 }); },
+  sizzle() { hiss(0.5, { vol: 0.1, freq: 5200, type: 'highpass', attack: 0.05 }); tone(220, 0.12, { vol: 0.06, to: 180 }); },
+  water() { for (let k = 0; k < 4; k++) tone(1600 + k * 260, 0.05, { type: 'sine', vol: 0.06, to: 900, delay: k * 0.07 }); hiss(0.3, { vol: 0.05, freq: 3000, type: 'highpass' }); },
+  // the front door: a creak, then a soft wooden knock as it shuts
+  door() { tone(300, 0.2, { type: 'sawtooth', vol: 0.02, to: 430, attack: 0.03 }); tone(120, 0.09, { type: 'triangle', vol: 0.16, to: 80, delay: 0.2 }); hiss(0.06, { vol: 0.08, freq: 700, delay: 0.2 }); },
   evolve(tier, start, flash) {
     const b = [1, 1, 1.12, 1.26][tier || 0];
     hiss(flash, { vol: 0.12, freq: 300, to: 2600, q: 1.2, attack: flash * 0.8, delay: start });

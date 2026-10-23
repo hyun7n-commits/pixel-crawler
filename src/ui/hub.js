@@ -7,7 +7,7 @@ import { $, el, button, icon } from './dom.js';
 import { CHARACTERS } from '../data/characters.js';
 import { UPGRADES, PACK_COST, FORGE_COST, FORGE_LEGEND_LOOP, forgeable, forgeStock } from '../data/upgrades.js';
 import { PETS } from '../data/pets.js';
-import { isOpen, RELIC_GATES } from '../data/unlocks.js';
+import { isOpen, RELIC_GATES, BUILD } from '../data/unlocks.js';
 import { RELICS, RECIPES, recipeKey, tierOf, DISCOVERY_GOLD } from '../data/relics.js';
 import { freshMeta, saveMeta } from '../core/save.js';
 import { josa } from '../core/util.js';
@@ -15,12 +15,13 @@ import { DISCOVERIES } from '../data/terrain.js';
 import { ORES } from '../data/ores.js';
 import { LORE, LORE_AFTER } from '../data/lore.js';
 import { ENEMIES, ZONES } from '../data/enemies.js';
-import { FOLK, HOUSES, gossip } from '../data/village.js';
+import { FOLK, HOUSES, gossip, villageP, villageName, GROWN } from '../data/village.js';
 import { BOOK_GIFT_EVERY, bookGift, bookGiftsDue } from '../data/balance.js';
 import { FRIENDS, friendSpot, cleared, loopsOpen } from '../data/stages.js';
 import { DARES, daresOpen, daresOn, dareGold, DARE_GOLD } from '../data/dares.js';
-import { DECOR, hasDecor } from '../data/home.js';
+import { DECOR, hasDecor, HOUSE_LEVELS, houseLevel, roomOf, FURNITURE, CATALOG, bringIn, extendHouse, homePerks, COMFORT_STEP, COMFORT_MAX } from '../data/home.js';
 import { decorCanvas } from '../scenes/home-art.js';
+import { furnitureCanvas } from '../scenes/home-interior-art.js';
 import { savedRun } from '../core/suspend.js';
 
 export function renderPanel(id, box, ctx) {
@@ -30,6 +31,9 @@ export function renderPanel(id, box, ctx) {
 // The bits of the village screen that are not the map: the purse, sound, and the way out.
 // `saved`: a trip saved halfway (core/suspend.js savedRun), which the button picks up instead
 export function renderVillageHud(meta, saved = savedRun()) {
+  // the village's name as it grows, and how far it has come (one for each stage beaten each 회차)
+  const P = villageP(meta);
+  $('vPlace').innerHTML = `${villageName(P)}<small>${P < GROWN ? `${P}/${GROWN} · ` : ''}v0.${BUILD}</small>`;
   const purse = $('vPurse');
   purse.innerHTML = '';
   purse.append(icon('gold', 16), el('span', null, `${meta.gold}G`));
@@ -171,33 +175,78 @@ function pets(list, meta, buy, changed) {
   }
 }
 
-// ---------- 내 집: 집 꾸미기 (data/home.js) ----------
-// ctx.onDecor(id) runs after a piece is bought, so the village can show it going up
-function home(box, { meta, changed, onDecor }) {
+// ---------- 비버 목수: building on, furniture to order, the yard (data/home.js) ----------
+// ctx.onDecor(id): a yard piece was bought (the village shows it going up); ctx.onExtend(): the house
+// grew; ctx.onFurniture(id): a piece was made (it goes straight in where there is room); ctx.onGoHome():
+// go and see.
+let madeNote = '';
+function carpenter(box, { meta, changed, onDecor, onExtend, onFurniture, onGoHome }) {
   const list = el('div', 'shop');
+  if (madeNote) { list.append(el('p', 'say', madeNote)); madeNote = ''; }
+  // building on: the room grows round what is in it
+  const room = roomOf(meta), next = HOUSE_LEVELS[houseLevel(meta) + 1];
+  list.append(el('h3', null, '집 넓히기'));
+  const grow = el('div', 'row' + (next ? '' : ' owned')), gm = el('div', 'row-main');
+  gm.append(el('span', 'row-name', next ? `${room.name} → ${next.name}` : room.name),
+    el('span', 'row-sub', next ? `방이 ${room.w}×${room.h}칸에서 ${next.w}×${next.h}칸이 된다. 놓아 둔 가구는 그 자리 그대로.` : '더 넓힐 데가 없다. 마을에서 제일 큰 집이다!'));
+  const gb = button('btn gold', next ? `${next.cost}G` : '최대', () => {
+    meta.gold -= next.cost;
+    extendHouse(meta);
+    changed();
+    onExtend?.();
+  });
+  gb.disabled = !next || meta.gold < next.cost;
+  grow.append(gm, gb);
+  list.append(grow);
+  // furniture to order: each one makes the place cosier (♥), and a cosy house sends you off stronger
+  const { heart, hp } = homePerks(meta), have = CATALOG.filter(id => meta.house.own[id]).length;
+  list.append(el('h3', null, `가구 주문 (${have}/${CATALOG.length})`));
+  list.append(el('p', 'row-sub', `지금 내 집 ♥${heart}: 탐험을 나갈 때 최대 체력 +${hp}. ♥${COMFORT_STEP}마다 +1 (최대 +${COMFORT_MAX}). 넣어 둔 가구는 ♥에 안 든다.`));
+  for (const id of CATALOG) {
+    const f = FURNITURE[id], got = meta.house.own[id];
+    const row = el('div', 'row' + (got ? ' owned' : '')), main = el('div', 'row-main');
+    main.append(el('span', 'row-name', `${f.name} <i class="heart-n">♥${f.heart}</i>`), el('span', 'row-sub', f.desc));
+    const b = button('btn gold', got ? '있다' : `${f.cost}G`, () => {
+      meta.gold -= f.cost;
+      meta.house.own[id] = true;
+      madeNote = bringIn(meta, id) ? `${josa(f.name, '을', '를')} 집에 들여놓았어. 마음에 안 들면 꾸미기에서 옮겨.`
+        : `방이 꽉 차서 ${josa(f.name, '은', '는')} 넣어 두었어. 꾸미기에서 꺼내거나, 집을 넓혀 봐.`;
+      changed();
+      onFurniture?.(id);
+    });
+    b.disabled = got || meta.gold < f.cost;
+    row.append(frame(furnitureCanvas(id, id === 'lamp' ? 1 : 0)), main, b);
+    list.append(row);
+  }
+  if (onGoHome) list.append(button('btn', '집에 가서 보기', onGoHome));
+  // round the house, the yard
   const n = DECOR.filter(d => hasDecor(meta, d.id)).length;
-  list.append(el('h3', null, `집 꾸미기 (${n}/${DECOR.length})`));
+  list.append(el('h3', null, `마당 꾸미기 (${n}/${DECOR.length})`));
   for (const d of DECOR) {
-    const have = hasDecor(meta, d.id);
-    const row = el('div', 'row' + (have ? ' owned' : '')), main = el('div', 'row-main');
+    const owned = hasDecor(meta, d.id);
+    const row = el('div', 'row' + (owned ? ' owned' : '')), main = el('div', 'row-main');
     main.append(el('span', 'row-name', d.name), el('span', 'row-sub', d.desc));
-    const b = button('btn gold', have ? '놓았다' : `${d.cost}G`, () => {
+    const b = button('btn gold', owned ? '놓았다' : `${d.cost}G`, () => {
       meta.gold -= d.cost;
       meta.home = [...(meta.home || []), d.id];
       changed();
       onDecor?.(d.id);
     });
-    b.disabled = have || meta.gold < d.cost;
-    const pic = decorCanvas(d.id), k = Math.min(44 / pic.width, 36 / pic.height);
-    pic.className = 'pix decor-ic';
-    pic.style.width = `${Math.round(pic.width * k)}px`;
-    pic.style.height = `${Math.round(pic.height * k)}px`;
-    const frame = el('span', 'decor-frame');
-    frame.append(pic);
-    row.append(frame, main, b);
+    b.disabled = owned || meta.gold < d.cost;
+    row.append(frame(decorCanvas(d.id)), main, b);
     list.append(row);
   }
   box.append(list);
+}
+// a picture in the list's little frame, as big as fits
+function frame(pic) {
+  const k = Math.min(2, 44 / pic.width, 36 / pic.height);
+  pic.className = 'pix decor-ic';
+  pic.style.width = `${Math.round(pic.width * k)}px`;
+  pic.style.height = `${Math.round(pic.height * k)}px`;
+  const f = el('span', 'decor-frame');
+  f.append(pic);
+  return f;
 }
 
 // ---------- 수다쟁이 이웃: the last run, who might move in next, and the discovery book ----------
@@ -371,4 +420,4 @@ function rival(box, { meta, changed }) {
   box.append(list);
 }
 
-const PANELS = { chars, shop, rumor, books, records, rival, home };
+const PANELS = { chars, shop, rumor, books, records, rival, carpenter };
