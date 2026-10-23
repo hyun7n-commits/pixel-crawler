@@ -28,6 +28,8 @@ const behind = (e, p) => e.dir && (p.x - e.x) * e.dir.x + (p.y - e.y) * e.dir.y 
 export function canSee(run, e, range) {
   const p = run.p, d = cheb(e, p);
   if (d > range) return false;
+  // 카멜레온 standing still: only someone right beside it can tell it from the background
+  if (p.blend && d > 1) return false;
   return lineOfSight(run.map, e.x, e.y, p.x, p.y);
 }
 

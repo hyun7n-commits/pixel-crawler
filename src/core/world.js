@@ -34,7 +34,8 @@ export function onEnter(run, who, x, y) {
     run.emit('steam', { x, y });
     if (who === 'player') { run.log('웅덩이에 뛰어들어 불을 껐다.', 'good'); run.discover('water_fire'); }
   }
-  // tall grass is flattened by whoever walks into it, like in Shattered Pixel Dungeon
+  // tall grass is flattened by whoever walks into it, like in Shattered Pixel Dungeon (판다 munches it first)
+  if (ter === T.BRUSH && who === 'player' && run.char.graze) run.heal(run.char.graze);
   if (ter === T.BRUSH) trample(run, who, x, y);
   if (ter === T.BERRY && who === 'player') eatBerries(run, x, y);
   if (who === 'player' && isTrap(ter)) springTrap(run, x, y);
@@ -282,7 +283,7 @@ export function gasExplode(run, sx, sy) {
 }
 
 // ---------- explosions ----------
-export function explosion(run, x, y, r, { dmg, cause, selfMult = 0.5, burn = 0 }) {
+export function explosion(run, x, y, r, { dmg, cause, selfMult = 0.5, burn = 0, own = false }) {
   const map = run.map, changed = [];
   let broke = false;
   run.emit('boom', { x, y, r });
@@ -290,7 +291,8 @@ export function explosion(run, x, y, r, { dmg, cause, selfMult = 0.5, burn = 0 }
     const tx = x + i, ty = y + j;
     if (!inMap(tx, ty)) continue;
     const w = whoAt(run, tx, ty);
-    if (w === 'player') run.hurtPlayer(Math.max(1, Math.round(dmg * selfMult)), cause, 'bomb');
+    // 펭귄 knows how to stand next to its own bombs
+    if (w === 'player') { if (!(own && run.char.bombs)) run.hurtPlayer(Math.max(1, Math.round(dmg * selfMult)), cause, 'bomb'); }
     else if (w) { run.hurt(w, dmg, 'fire'); if (burn && w.hp > 0) setBurn(run, w, burn); }
     const t = map.tiles[idx(tx, ty)];
     if (t === GRAVE) { openGrave(run, tx, ty); continue; }

@@ -267,6 +267,13 @@ export function onRunEvent(type, d) {
     case 'surface': case 'dive': case 'splash': play('splash'); break;
     case 'grab': play('hit'); break;
     case 'prick': play('hit'); break;
+    // the friends' own moves
+    case 'hop': play('step'); break;
+    case 'shell': case 'blend': play('swap'); break;
+    case 'shellhit': play('dodge'); break;
+    case 'ram': play('hit'); play('sneak'); break;
+    case 'breath': play('puff'); break;
+    case 'stink': play('puff'); play('pop'); break;
     case 'rockfall': play('mine', 1); break;
     case 'rumble': case 'quake': play('boom'); break;
     case 'fly': play('rise', 0); break;

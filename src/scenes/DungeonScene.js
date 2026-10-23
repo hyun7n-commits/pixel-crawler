@@ -827,6 +827,30 @@ export class DungeonScene extends Phaser.Scene {
       }
       case 'regen': if (this.run.isVisible(d.enemy.x, d.enemy.y)) { this.float(d.enemy.x, d.enemy.y, `+${d.n}`, '#8fd36a', 0, 9); this.fx.heal.explode(4, center(d.enemy.x), center(d.enemy.y)); } break;
       case 'prick': this.float(d.x, d.y, '따끔', '#c8f6ff', 60); this.fx.crystal.explode(8, center(d.from.x), center(d.from.y)); break;
+      // the friends' own moves (v0.21)
+      case 'hop': { // 토끼: a little hop and a puff of dust where it took off
+        const ps = this.playerSprite;
+        if (ps) { ps.hop = -5; ps.sqx = -0.15; ps.sqy = 0.2; }
+        this.fx.dust.explode(8, center(d.x - d.dx), foot(d.y - d.dy) - 2);
+        break;
+      }
+      case 'shell': this.fx.dust.explode(5, center(d.x), foot(d.y) - 2); break;
+      case 'shellhit': this.float(d.x, d.y - 0.3, '단단', '#c9e7a0', 60); break;
+      case 'blend': this.fx.leaf.explode(8, center(d.x), center(d.y)); break;
+      case 'ram': this.float(d.x, d.y - 0.3, '박치기!', '#f4cf4f', 60); this.fx.spark.explode(12, center(d.x), center(d.y)); break;
+      case 'breath': {
+        const n = 5;
+        for (let k = 1; k <= n; k++) {
+          const t = k / n;
+          this.later(k * 30, () => this.fx.fire.explode(5, center(d.from.x + (d.to.x - d.from.x) * t), center(d.from.y + (d.to.y - d.from.y) * t)));
+        }
+        break;
+      }
+      case 'stink':
+        this.fx.leaf.explode(12, center(d.x), center(d.y));
+        this.fx.steam.explode(16, center(d.x), center(d.y));
+        d.list.forEach(e => this.float(e.x, e.y - 0.3, '어질', '#c9e7a0', 60));
+        break;
       case 'rockfall':
         this.fx.rock.explode(14, center(d.x), center(d.y));
         this.fx.dust.explode(14, center(d.x), center(d.y) + 3);
@@ -1510,7 +1534,7 @@ export class DungeonScene extends Phaser.Scene {
     else if (time > ps.nextLook) { ps.lookAt = time; ps.nextLook = time + 4000 + Math.random() * 4000; }
     const look = time - (ps.lookAt || -1e9);
     this.pose(ps, p, (p.face < 0) !== (look > 0 && look < 520), time);
-    ps.setAlpha(p.shade > 0 ? 0.55 : 1); // hidden in the shadows after a kill (그림자 걸음)
+    ps.setAlpha(p.shade > 0 || p.blend ? 0.55 : 1); // hidden in the shadows after a kill (그림자 걸음), or the chameleon's colours
     // holding a legend, you give off a few embers now and then; a myth, a purple shimmer
     if (time > (this.auraAt || 0)) {
       this.auraAt = time + 650;
