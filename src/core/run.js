@@ -1693,6 +1693,14 @@ export class Run {
     } else if (L.goldfang || Math.random() < B.GOLD_DROP_CHANCE) {
       this.pickups.push({ x: e.x, y: e.y, type: 'gold', amount: (Math.floor((this.floor - 1) / 3) + 1) * rint(1, 4) });
     }
+    // 기세등등 (v0.26): one that won a scrap and puffed up was worth taking on. It drops a star candy
+    // (before candies are about, a fistful of gold)
+    if (e.big && !e.d.boss) {
+      if (this.open('candy')) this.dropNear(e.x, e.y, { type: 'candy' });
+      else this.pickups.push({ x: e.x, y: e.y, type: 'gold', amount: 4 * (Math.floor((this.floor - 1) / 3) + 1) * rint(2, 4) });
+      this.log(`기세등등하던 ${josa(e.d.name, '이', '가')} ${this.open('candy') ? '별사탕을' : '골드를 잔뜩'} 떨궜다!`, 'good');
+      if (this.open('candy') && this.isVisible(e.x, e.y)) this.discover('big_prize');
+    }
     if (e.d.bones) this.swell(e);
     this.afterlife(e);
     if (L.shadow && !e.d.npc) { this.p.shade = 3; this.emit('shade', { x: this.p.x, y: this.p.y }); }

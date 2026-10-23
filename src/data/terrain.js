@@ -102,6 +102,7 @@ export const DISCOVERIES = [
   { id: 'brawl',       combo: '빗나간 공격 + 다른 녀석', result: '대신 맞은 녀석이 화가 나서 둘이 싸운다', hint: '멧돼지 돌진을 옆으로 피하면 뒤에 있던 녀석이 대신 받힌대. 그럼 둘이 싸운대.' },
   { id: 'pine_brawl',  combo: '솔방울 + 두 녀석',   result: '부딪힌 녀석이 밀고 온 녀석과 싸운다', hint: '솔방울로 한 녀석을 다른 녀석한테 밀어붙이면 둘이 싸운대.' },
   { id: 'grump_brawl', combo: '심술 포자 + 녀석들', result: '심술 난 녀석들끼리 물고 뜯는다', hint: '빨간 버섯 포자를 마신 녀석은 옆에 있는 녀석을 문대. 몰려 있을 때 터뜨려 봐.' },
+  { id: 'big_prize',   combo: '기세등등한 녀석 + 공격', result: '쓰러뜨리면 별사탕을 떨군다', hint: '싸움에서 이기고 부푼 녀석을 쓰러뜨리면 별사탕을 떨군대.' },
 ];
 
 // Things enemies mutter when you overhear them unseen
