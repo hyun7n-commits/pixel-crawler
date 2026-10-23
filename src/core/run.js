@@ -25,7 +25,7 @@ import { REQUESTS, pickRequest } from '../data/requests.js';
 import { isOpen, openNew, RELIC_GATES } from '../data/unlocks.js';
 import { caged, cleared, stageOpen, loopsOpen, loopFoe, loopGold, FRIENDS } from '../data/stages.js';
 import { daresOn, daresOpen, dareGold } from '../data/dares.js';
-import { enemyAct, rouse, awaken, angerSwarm, twist, inReach, canSee, brawl } from './ai.js';
+import { enemyAct, rouse, awaken, angerSwarm, twist, inReach, canSee, brawl, vex } from './ai.js';
 import { onEnter, explosion, envTick, waterBody, ignite, addGas, spotTraps, revealTraps, openGrave, setBurn, springTrap } from './world.js';
 
 export const zoneOf = floor => ZONES[Math.floor((floor - 1) / B.FLOORS_PER_ZONE)];
@@ -160,7 +160,7 @@ export class Run {
     const wet = ch.swim && this.inWater();
     return {
       atk: ch.atk + up.atk + (this.p.kitAtk || 0) + (wet ? 3 : 0) + 2 * lv('blade') + f('flamesword', 4, 2) + 2 * lv('volcano') + (on('minecrown') ? 5 : 0) +
-        f('bloodblade', 3, 1) + f('whirl', 4, 1) + f('dagger', 2, 1) + lv('giantfist') + 2 * lv('bloodmoon') + lv('stormlord') + lv('whirlwind') + (on('godhammer') ? 5 : 0),
+        f('bloodblade', 3, 1) + f('whirl', 4, 1) + f('dagger', 2, 1) + lv('giantfist') + 2 * lv('bloodmoon') + lv('stormlord') + lv('whirlwind') + lv('grumpclub') + (on('godhammer') ? 5 : 0),
       def: ch.def + lv('shield') + f('fortress', 2, 1) + lv('undying') + lv('ironheart') + f('embermail', 1, 1) + lv('guardian'),
       maxHp: ch.hp + up.hp * B.UP_HP + (this.p.kitHp || 0) + 8 * lv('heart') + f('bloodcrown', 15, 5) + 10 * lv('lifetree') + (on('eternity') ? 30 : 0) +
         f('ironheart', 10, 5) + f('pillow', 16, 4) + f('giantfist', 12, 4) + 10 * lv('guardian') + (on('bloodking') ? 20 : 0) +
@@ -1428,6 +1428,8 @@ export class Run {
     if (L.volcano) this.erupt(e, 3 + 2 * L.volcano);
     // 신의 망치: and a bolt comes down on it
     if (L.godhammer && e.hp > 0) this.smite(e);
+    // 심술 방망이: and it is cross with everyone round it
+    if (L.grumpclub && e.hp > 0) this.sour(e, 2 + L.grumpclub);
     // 곰: whoever is still standing goes back a tile
     if (this.char.shove && e.hp > 0 && !e.d.boss && !e.d.npc) this.knock(e, 2 + Math.floor(this.floor / 4));
     // 수정 고슴도치: a blow on its spines pricks back
@@ -1442,8 +1444,17 @@ export class Run {
         this.strike(o, Math.max(1, Math.round(base * share)), 'normal');
         // 칼바람: the ones beside you are blown a tile away (over a drop, into lava, onto a trap...)
         if (L.whirlwind && o.hp > 0 && !o.d.boss && !o.d.npc) this.knock(o, 2 + Math.floor(this.floor / 4));
+        if (L.grumpclub && o.hp > 0) this.sour(o, 2 + L.grumpclub);
       }
     }
+  }
+
+  // 심술 방망이: one clout and it is as cross as a critter in toadstool spores (ai.js vex), biting the
+  // one beside it before it bites you
+  sour(e, turns) {
+    if (!vex(this, e, turns, 'club') || this.told.grumpclub || !this.isVisible(e.x, e.y)) return;
+    this.told.grumpclub = true;
+    this.log('퍽! 심술 방망이에 맞은 녀석이 잔뜩 심술이 났다. 옆에 있는 녀석부터 문다!', 'evo');
   }
 
   // 화산 망치: fire bursts up from the ground round the one you hit, scorching and setting alight

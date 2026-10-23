@@ -6,7 +6,7 @@ import { idx, inMap, passable, isBorder, WALL, FLOOR, DOOR, GRAVE, LOCKED } from
 import { ITEMS } from '../data/items.js';
 import { DIRS8, pick, rint, shuffle, josa } from './util.js';
 import * as B from '../data/balance.js';
-import { canBrawl } from './ai.js';
+import { vex } from './ai.js';
 
 const { SNORE_NOISE } = B;
 
@@ -442,14 +442,7 @@ function creatureTick(run, who) {
         if (!run.told.sneeze) { run.told.sneeze = true; run.log('에취! 심술 포자는 나한테는 재채기만 나게 한다. 대신 소리가 크다.', 'warn'); }
       }
       run.p.sneezed = run.turn;
-    } else if (canBrawl(run, who)) {
-      if (!(who.grump > 0)) {
-        Object.assign(who, { state: 'hunt', wake: 0, doze: 0, aim: false, aimAt: null, charge: null, lick: null, swoop: null, lane: null });
-        run.emit('grump', { enemy: who });
-        if (run.isVisible(b.x, b.y)) run.say(who, pick(['으르릉…', '흥!', '건드리지 마!', '다 미워!']));
-      }
-      who.grump = B.GRUMP_TURNS;
-    }
+    } else vex(run, who, B.GRUMP_TURNS);
   }
   // asleep you snore, and anything awake nearby comes to see
   if (who === 'player' && run.p.sleep > 0) {

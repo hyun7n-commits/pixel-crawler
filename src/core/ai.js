@@ -842,7 +842,8 @@ export function canBrawl(run, e) {
 // `a` was hit by `b`: it turns on `b`. False if either is not the brawling kind.
 export function brawl(run, a, b) {
   if (!b || a === b || !canBrawl(run, a) || !canBrawl(run, b)) return false;
-  const fresh = a.foe !== b.id;
+  // one already in a scrap just turns to the newcomer (no new shout, it is the same scrap)
+  const fresh = a.foe == null || !run.enemies.some(o => o.id === a.foe && o.hp > 0);
   Object.assign(a, { foe: b.id, foeT: BRAWL_TURNS, state: 'hunt', wake: 0, doze: 0, aim: false, aimAt: null, charge: null, lick: null, swoop: null, lane: null, backoff: 0 });
   if (!fresh) return true;
   run.brawls = (run.brawls || 0) + 1;
@@ -851,6 +852,19 @@ export function brawl(run, a, b) {
     run.say(a, pick(['야!', '너지?!', '아야! 너!', '이 녀석이!', '뭐야!']));
     run.log(`화가 난 ${josa(a.d.name, '이', '가')} ${b.d.name}에게 덤벼든다!`, 'good');
   }
+  return true;
+}
+// 심술이 나다: the toadstool's spores (world.js), or a blow from 심술 방망이 (run.js). Whatever it was
+// about to do (an aim, a charge, a tongue) is forgotten. False if it is not the brawling kind.
+export function vex(run, e, turns, why = 'spores') {
+  if (!canBrawl(run, e)) return false;
+  e.grumpWhy = why;
+  if (!(e.grump > 0)) {
+    Object.assign(e, { state: 'hunt', wake: 0, doze: 0, aim: false, aimAt: null, charge: null, lick: null, swoop: null, lane: null });
+    run.emit('grump', { enemy: e });
+    if (run.isVisible(e.x, e.y)) run.say(e, pick(['으르릉…', '흥!', '건드리지 마!', '다 미워!']));
+  }
+  e.grump = Math.max(e.grump || 0, turns);
   return true;
 }
 // 심술 (v0.26): with the toadstool's spores up its nose it is cross with the whole world. It bites
@@ -866,7 +880,7 @@ function grumpTick(run, e) {
     if (o.x !== e.x) e.face = Math.sign(o.x - e.x);
     run.emit('attack', { from: { x: e.x, y: e.y }, to: { x: o.x, y: o.y }, who: e });
     run.hurt(o, Math.max(1, e.atk - (o.def || 0)), 'brawl', e);
-    if (run.isVisible(o.x, o.y)) run.discover('grump_brawl');
+    if (e.grumpWhy === 'spores' && run.isVisible(o.x, o.y)) run.discover('grump_brawl');
     return true;
   }
   if (run.touching(e, p) && p.hp > 0) { attackPlayer(run, e); return true; }

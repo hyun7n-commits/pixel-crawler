@@ -79,6 +79,8 @@ export const RELICS = {
   fortune:   { name: '행운의 여신', tier: 2, has: ['luckycharm', 'goldfang'], sig: '유물 카드가 하나 더 나온다', desc: l => `네잎 클로버와 황금 이빨의 힘, 얻는 골드 +${25 * l}%, 피하기 +${5 * l}%, 유물을 고를 때 카드가 하나 더 나온다` },
   nightowl:  { name: '밤의 눈',     tier: 2, has: ['owleye', 'dreamlamp'], sig: '벽 너머 적이 모두 보인다', desc: l => `부엉이 눈과 꿈꾸는 등불의 힘, 시야 +${l}칸, 기습 피해 ×+${0.5 * l}, 구역의 적이 벽 너머로 모두 보이고, 자는 적은 내가 옆에 가도 깨지 않는다` },
   whirlwind: { name: '칼바람',      tier: 2, has: ['whirl', 'flamesword'], sig: '옆의 적이 바람에 날아간다', desc: l => `회오리 검과 불꽃의 검의 힘, 옆의 적에게도 같은 피해, 공격력 +${l}, 옆의 적은 바람에 한 칸 날아간다` },
+  // v0.26: what it hits gets as cross as a critter in 심술 버섯 spores, and bites whoever is beside it
+  grumpclub: { name: '심술 방망이', tier: 2, has: ['giantfist', 'whirl'], sig: '맞은 녀석이 심술 나서 옆 녀석을 문다', desc: l => `거인의 주먹과 회오리 검의 힘, 공격력 +${l}, 맞은 녀석은 ${2 + l}턴 동안 심술이 나서 옆에 있는 녀석부터 문다 (대장은 빼고)` },
 
   // myths
   minecrown: { name: '반짝돌 왕관', tier: 3, has: ['goldstorm', 'volcano'], sig: '쓰러뜨린 적이 반짝 바위로 굳는다', desc: () => '황금 폭풍과 화산 망치의 힘, 공격력 +5, 얻는 골드 +50%, 더 좋은 반짝돌 확률 +15%, 쓰러뜨린 적이 작은 반짝 바위로 굳는다' },
@@ -192,6 +194,8 @@ export const RECIPES = [
   { id: 'whirlwind', a: 'whirl',      b: 'shadow' },
   { id: 'whirlwind', a: 'dagger',     b: 'whirl' },
   { id: 'whirlwind', a: 'dagger',     b: 'flamesword' },
+  { id: 'grumpclub', a: 'giantfist',  b: 'whirl' },
+  { id: 'grumpclub', a: 'quake',      b: 'giantfist' },
 
   { id: 'minecrown', a: 'goldstorm', b: 'volcano' },
   { id: 'eternity',  a: 'undying',   b: 'lifetree' },
@@ -202,6 +206,7 @@ export const RECIPES = [
   { id: 'eclipse',   a: 'nightowl',  b: 'meteor' },
   { id: 'godhammer', a: 'stormlord', b: 'whirlwind' },
   { id: 'godhammer', a: 'stormlord', b: 'volcano' },
+  { id: 'godhammer', a: 'stormlord', b: 'grumpclub' },
   { id: 'bloodking', a: 'bloodmoon', b: 'guardian' },
   { id: 'bloodking', a: 'bloodmoon', b: 'undying' },
   { id: 'dawnstar',  a: 'nightowl',  b: 'fortune' },
