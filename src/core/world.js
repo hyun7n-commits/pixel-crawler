@@ -138,7 +138,7 @@ export function openGrave(run, x, y) {
     run.pickups.push({ x, y, type: 'gold', amount: B.graveGold(run.floor) });
     run.log('흙 속에서 골드가 나왔다.', 'good');
   } else if (roll >= 0.7 && roll < 0.9) {
-    const type = pick(['potion', 'bomb']);
+    const type = run.dare?.('nopotion') ? 'bomb' : pick(['potion', 'bomb']);
     run.pickups.push({ x, y, type });
     run.log(`흙 속에서 ${josa(ITEMS[type].name, '이', '가')} 나왔다.`, 'good');
   } else if (roll >= 0.9) run.log('도토리 껍질뿐이다.');

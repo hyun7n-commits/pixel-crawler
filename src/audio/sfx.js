@@ -260,6 +260,7 @@ export function onRunEvent(type, d) {
     case 'warp': play('warp'); break;
     case 'swarm': play('buzz'); break;
     case 'smoke': play('puff'); play('snore'); break;
+    case 'bang': play('mine', d.n + 1); if (d.last) play('levelup'); break;
     default: break;
   }
 }

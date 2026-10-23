@@ -8,6 +8,8 @@
 //   traps  - a little trap puzzle between the door and a chest (see traps below).
 //   weeds  - 풀뽑기 밭: weeds in rows to pull, a little pay each. One (two in a big patch) is a screaming
 //            root that trembles now and then; pull it and it runs off yelling. The last weed hides a star candy.
+//   cage   - 우리: a friend locked in a cage at the back of a room, the crowned 우두머리 that carries
+//            its key dozing in front of it (Run.openCage). It is the floor's set piece.
 //   hive   - a honey stump in a grassy patch, its bees humming round it. Bump it for the honey pot
 //            (more max HP for the run) and every bee that is awake comes after you, until you get
 //            far enough away. Smoke from a fire next to it, or sleepy pollen, puts them to sleep first.
@@ -21,7 +23,7 @@ import { idx, FLOOR, DOOR, GRAVE, LOCKED, HIVE, WEED, distMap } from './dungeon.
 import { pick, shuffle, DIRS8 } from './util.js';
 import * as B from '../data/balance.js';
 
-export const SET_PIECES = new Set(['vault', 'grave', 'statue', 'traps', 'hive', 'weeds']);
+export const SET_PIECES = new Set(['vault', 'grave', 'statue', 'traps', 'hive', 'weeds', 'cage']);
 
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 const inRoom = (r, x, y) => x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
@@ -62,7 +64,8 @@ function spread(tiles, n, away = []) {
   return got;
 }
 
-// ctx: { floor, start, stairs, open(id) -> has that unlock come (data/unlocks.js), relicOffers(n) -> relic ids }
+// ctx: { floor, start, stairs, open(id) -> has that unlock come (data/unlocks.js), relicOffers(n) -> relic ids,
+//        cage: 'cage' when a friend waits on this floor, chief() -> the critter type its 우두머리 is }
 // deco: { has, themes } from decorate(); set pieces take over a room's theme.
 export function placeSpecials(map, rooms, deco, ctx) {
   const out = { pickups: [], enemies: [] };
@@ -120,9 +123,20 @@ export function placeSpecials(map, rooms, deco, ctx) {
     weeds: (r) => r.w >= 4 && r.h >= 3,
   };
   const make = { grave, statue, traps, hive, weeds };
-  const zone = Math.min(2, Math.floor((ctx.floor - 1) / B.FLOORS_PER_ZONE));
+  const zone = B.stageOf(ctx.floor);
   const chance = { hive: B.HIVE_CHANCE, weeds: B.WEED_CHANCE[zone] };
   let made = 0;
+  // a caged friend takes the floor's one set piece: the room farthest from where you come in that has
+  // space for the cage and its 우두머리
+  if (ctx.cage) {
+    const fits = ids().filter(i => rooms[i].w >= 3 && rooms[i].h >= 3 && rooms[i].w * rooms[i].h >= 12)
+      .sort((a, b) => cheb(mid(rooms[b]), ctx.start) - cheb(mid(rooms[a]), ctx.start));
+    if (fits.length) {
+      claim(fits[0], 'cage');
+      cage(map, rooms[fits[0]], out, ctx);
+      made++;
+    }
+  }
   // one set piece a field at most, so each one gets your full attention; the weed patch, the
   // meadow's everyday job, gets the first pick of the rooms
   for (const kind of ['weeds', ...shuffle(['grave', 'statue', 'traps', 'hive'])]) {
@@ -184,6 +198,19 @@ function grave(map, r, out) {
     if (floorTiles(map, r).every(f => dm[idx(f.x, f.y)] < 9999)) break;
     map.tiles[idx(t.x, t.y)] = FLOOR;
   }
+}
+
+function cage(map, r, out, ctx) {
+  const doors = doorsOf(map, r), tiles = floorTiles(map, r);
+  const fromDoor = t => Math.min(...doors.map(d => cheb(t, d.in)));
+  // at the back of the room, away from the doors, with a free tile beside it to stand on
+  const at = tiles.filter(t => fromDoor(t) >= 2).sort((a, b) => fromDoor(b) - fromDoor(a))[0] || tiles[tiles.length - 1];
+  out.enemies.push({ type: ctx.cage, x: at.x, y: at.y, state: 'npc' });
+  out.cage = { x: at.x, y: at.y };
+  // the 우두머리 naps between the door and the cage
+  const spot = tiles.filter(t => cheb(t, at) === 2 && fromDoor(t) >= 1).sort((a, b) => fromDoor(a) - fromDoor(b))[0]
+    || tiles.find(t => cheb(t, at) === 1);
+  if (spot) out.enemies.push({ type: ctx.chief(), x: spot.x, y: spot.y, state: 'sleep', chief: true });
 }
 
 function statue(map, r, out) {

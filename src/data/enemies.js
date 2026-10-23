@@ -16,6 +16,10 @@
 // screams: a screaming root pulled from a weed patch; it never fights, only runs off yelling (every
 //   critter nearby hears it) until it is caught or digs back in (ai.js scream)
 // npc: someone to talk to; bumping into them talks instead of attacking, and they cannot be hurt
+// cage: a friend locked in a cage (the friend's id is the enemy's `friend`, and they are drawn as
+//   themselves); the crowned 우두머리 of the field carries its key (Run.openCage)
+
+const CAGE_TIP = '우리에 누가 갇혀 있다. 열쇠는 왕관 쓴 우두머리가 물고 있다.';
 
 export const ENEMIES = {
   rat:      { name: '들쥐',   sprite: 'rat',    hp: 6,  atk: 2, xp: 1, flees: true, pack: 3, tip: '떼로 다닌다.' },
@@ -43,6 +47,7 @@ export const ENEMIES = {
               tip: '벌집 둘레를 윙윙 맴돈다. 벌집이나 벌을 건드리면 떼로 덤비지만, 멀리 달아나면 집으로 돌아간다.' },
   ghost:    { name: '울보 아기새', sprite: 'ghostNpc', hp: 1, atk: 0, xp: 0, npc: true, peaceful: true, tip: '말을 걸려면 부딪혀 보자.' },
   smith:    { name: '두더지 대장장이', sprite: 'mole', hp: 1, atk: 0, xp: 0, npc: true, peaceful: true, tip: '말을 걸려면 부딪혀 보자.' },
+  cage:     { name: '갇힌 친구', sprite: 'rogue', hp: 1, atk: 0, xp: 0, npc: true, peaceful: true, tip: CAGE_TIP },
   peddler:  { name: '상점 주인', sprite: 'peddler', hp: 1, atk: 0, xp: 0, npc: true, peaceful: true, tip: '보스 앞에 좌판을 폈다. 부딪히면 물건을 판다. 여기서 쓴 골드는 마을로 못 가져간다.' },
 
   ratking:  { name: '왕쥐',          sprite: 'rat',  hp: 45,  atk: 3, xp: 20, boss: true, intro: '찍찍! 이 들판은 내 거다!', tip: '가끔 쥐를 불러낸다.' },
@@ -68,8 +73,17 @@ export const ZONES = [
     floor: '#4f4f36', floorDark: '#42422d', floorLight: '#5e5f42',
     wallTop: '#244530', wallLight: '#346440', wallFace: '#4d3a26', wallDark: '#16301d', wallLine: '#070d08',
     water: '#26505c', waterLight: '#4e8592' },
+  // (placeholder until the marsh has its own look and critters)
+  { name: '반딧불 늪', style: 'forest', wallName: '갈대숲', enemies: ['bat', 'skel', 'spider', 'goblin'], boss: 'skelking', void: '#050706',
+    floor: '#4f4f36', floorDark: '#42422d', floorLight: '#5e5f42',
+    wallTop: '#244530', wallLight: '#346440', wallFace: '#4d3a26', wallDark: '#16301d', wallLine: '#070d08',
+    water: '#26505c', waterLight: '#4e8592' },
   { name: '돌산', style: 'rock', wallName: '바위 절벽', enemies: ['knight', 'wizard', 'garg', 'skel'], boss: 'lord', void: '#09090c',
     floor: '#6f6857', floorDark: '#5e5849', floorLight: '#807967',
     wallTop: '#5c6068', wallLight: '#767a84', wallFace: '#484b54', wallDark: '#33353d', wallLine: '#18191e',
+    water: '#2f5b75', waterLight: '#5e8ca8' },
+  { name: '박쥐 동굴', style: 'rock', wallName: '동굴 벽', enemies: ['knight', 'wizard', 'garg', 'bat'], boss: 'lord', void: '#09090c',
+    floor: '#5a5560', floorDark: '#4a4652', floorLight: '#6a6570',
+    wallTop: '#4c4a58', wallLight: '#66637a', wallFace: '#3a3846', wallDark: '#2a2834', wallLine: '#121118',
     water: '#2f5b75', waterLight: '#5e8ca8' },
 ];

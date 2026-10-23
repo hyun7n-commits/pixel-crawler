@@ -11,7 +11,7 @@ import { T, TERRAIN, GASES, GAS_KEYS } from '../data/terrain.js';
 import { idx, inMap, lineOfSight, WALL, STAIRS, DOOR, ORE, UPSTAIRS, GRAVE, LOCKED, HIVE, WEED } from '../core/dungeon.js';
 import { WAKE_AT } from '../core/ai.js';
 import { BOMB_RANGE } from '../core/run.js';
-import { ORE_HITS, HEAR_STEPS } from '../data/balance.js';
+import { ORE_HITS, HEAR_STEPS, FLOORS_PER_ZONE } from '../data/balance.js';
 import { ORES } from '../data/ores.js';
 import { cheb } from '../core/util.js';
 import { faceKey } from '../data/faces.js';
@@ -21,7 +21,7 @@ import { wait, fissionMs, evolveMs, FISSION_LEAD, FISSION_STEP, EVOLVE_FLASH, GR
 
 const D = { tiles: 0, ter: 1, fire: 2, gas: 3, telegraph: 4, pickups: 5, enemies: 6, player: 7, overlay: 8, fx: 9, bubble: 10, text: 11 };
 // what a pickup looks like on the floor (items use their own sprite)
-const PICKUP_TEX = { gold: 'gold', chest: 'chest', lockedChest: 'lockedChest', key: 'key', necklace: 'necklace', candy: 'candy', crystal: 'pedestal' };
+const PICKUP_TEX = { gold: 'gold', chest: 'chest', lockedChest: 'lockedChest', key: 'key', cageKey: 'cageKey', necklace: 'necklace', candy: 'candy', crystal: 'pedestal' };
 // critters on the wing, who never wade
 const FLIERS = new Set(['bat', 'vampLord', 'bee', 'ghostNpc']);
 const center = v => v * TILE + TILE / 2;
@@ -209,7 +209,7 @@ export class DungeonScene extends Phaser.Scene {
 
   clearFloor() {
     (this.tileImgs || []).forEach(list => list && list.forEach(i => i.destroy()));
-    Object.values(this.enemySprites || {}).forEach(s => { s.crown?.destroy(); s.destroy(); });
+    Object.values(this.enemySprites || {}).forEach(s => { s.crown?.destroy(); s.cage?.destroy(); s.destroy(); });
     Object.values(this.pickupSprites || {}).forEach(s => this.dropPickup(s));
     this.bubbles.forEach(b => b.destroy());
     this.playerSprite?.destroy();
@@ -235,7 +235,7 @@ export class DungeonScene extends Phaser.Scene {
     for (const o of [s, s.extra]) if (o) { this.tweens.killTweensOf(o); o.destroy(); }
   }
 
-  get zi() { return Math.floor((this.run.floor - 1) / 3); }
+  get zi() { return Math.floor((this.run.floor - 1) / FLOORS_PER_ZONE); }
 
   buildFloor() {
     this.clearFloor();
@@ -436,11 +436,13 @@ export class DungeonScene extends Phaser.Scene {
       alive.add(e.id);
       let s = this.enemySprites[e.id];
       if (!s) {
-        s = this.makeActor(e.state === 'hide' ? 'chest' : e.d.sprite, e.x, e.y).setDepth(D.enemies);
-        if (e.d.boss) {
+        s = this.makeActor(e.state === 'hide' ? 'chest' : e.friend ? CHARACTERS[e.friend].sprite : e.d.sprite, e.x, e.y).setDepth(D.enemies);
+        if (e.d.boss || e.chief) {
           s.setScale(1.25 * texScale(s));
           s.crown = this.add.image(0, 0, 'crown').setOrigin(0.5, 1).setDepth(D.enemies + 0.1);
         }
+        // a caged hero sits behind the bars; the cage stays put while they fidget inside
+        if (e.type === 'cage') s.cage = this.add.image(center(e.x), foot(e.y), 'cage').setOrigin(0.5, 1).setDepth(D.enemies + 0.1);
         this.enemySprites[e.id] = s;
       }
       // things that stand still (a "chest", a statue, quest folk) stay drawn once seen, like items
@@ -469,7 +471,7 @@ export class DungeonScene extends Phaser.Scene {
     this.safe = !threat;
     for (const id of Object.keys(this.enemySprites)) {
       const s = this.enemySprites[id];
-      if (!alive.has(+id) && !s.dying) { s.crown?.destroy(); s.destroy(); delete this.enemySprites[id]; }
+      if (!alive.has(+id) && !s.dying) { s.crown?.destroy(); s.cage?.destroy(); s.destroy(); delete this.enemySprites[id]; }
     }
 
     const keep = new Set();
@@ -654,6 +656,17 @@ export class DungeonScene extends Phaser.Scene {
       case 'smoke': this.fx.steam.explode(24, center(d.x), center(d.y)); this.fx.sleep.explode(10, center(d.x), center(d.y)); break;
       case 'locked': this.float(d.x, d.y, '잠김', '#b8bccb'); break;
       case 'vanish': this.fx.magic.explode(26, center(d.x), center(d.y)); this.float(d.x, d.y, '고마워!', '#c8f6ff', 0, 11); break;
+      case 'bang': {
+        // the cage rattles on its own spot; wood chips fly off the lock
+        const e = this.run.enemies.find(o => o.d.caged && o.x === d.x && o.y === d.y), s = this.enemySprites[e?.id];
+        if (s?.cage) this.tweens.add({ targets: s.cage, x: center(d.x) + (d.from.x <= d.x ? 1 : -1), duration: 50, yoyo: true, repeat: 1 });
+        this.fx.rock.explode(4 + d.n * 2, center(d.x), center(d.y) + 3);
+        this.noiseRing(d.x, d.y, 1 + d.n, 0xf4cf4f);
+        this.bump(this.playerSprite, d.from, d);
+        this.face('grit', 380);
+        break;
+      }
+      case 'rescue': this.onRescue(d); break;
       case 'reveal': {
         const s = this.enemySprites[d.enemy.id];
         if (s) {
@@ -855,6 +868,25 @@ export class DungeonScene extends Phaser.Scene {
     this.fx.spark.explode(16, cx, cy);
   }
 
+  // the lock breaks: the cage falls apart, the hero hops out with a happy face, waves, and runs off
+  // home (the sprite was taken out of the run already, so it is a stand-in here)
+  onRescue(d) {
+    const old = Object.entries(this.enemySprites).find(([, s]) => s.cage && Math.round(s.cage.x) === center(d.x) && s.cage.y === foot(d.y));
+    if (old) { old[1].cage.destroy(); old[1].destroy(); delete this.enemySprites[old[0]]; }
+    this.fx.rock.explode(14, center(d.x), center(d.y));
+    this.fx.spark.explode(18, center(d.x), center(d.y));
+    const s = this.makeActor(d.sprite, d.x, d.y).setDepth(D.enemies);
+    s.setTexture(faceKey(d.sprite, 'sparkle'));
+    this.emote(s, '♪', 1400);
+    if (d.text) this.bubble(s, d.text);
+    this.tweens.add({ targets: s, y: s.y - 6, duration: 140, yoyo: true, repeat: 2, ease: 'Quad.out' });
+    this.later(1300, () => {
+      this.fx.dust.explode(8, s.x, s.y - 4);
+      this.tweens.add({ targets: s, alpha: 0, x: s.x + (d.x < this.run.p.x ? -TILE * 2 : TILE * 2), duration: 500, ease: 'Quad.in', onComplete: () => s.destroy() });
+    });
+    this.face('sparkle', 1400);
+  }
+
   onKill(e) {
     const s = this.enemySprites[e.id];
     const fx = e.d.sprite === 'skel' ? 'spore' : e.d.sprite === 'slime' ? 'slime' : 'blood';
@@ -968,6 +1000,10 @@ export class DungeonScene extends Phaser.Scene {
     if (who !== 'player' && !this.run.isVisible(who.x, who.y)) return;
     // critters only ever say "!" or "?": those are head marks (scenes/emotes.js), not bubbles
     if (text === '!' || text === '?') { this.emote(target, text, text === '?' ? 1300 : 1100); return; }
+    this.bubble(target, text);
+  }
+
+  bubble(target, text) {
     while (this.bubbles.length >= 2) this.bubbles.shift().destroy();
     const k = (this.game.registry.get('dpr') || 1) / (this.cameras.main.zoom || 3);
     const b = this.add.text(target.x, target.y - 18, text, {
@@ -1292,9 +1328,10 @@ export class DungeonScene extends Phaser.Scene {
       if (e.state === 'search' && e.searchT > 0) flip = Math.floor(time / 450) % 2 === 0; // looking around
       this.pose(s, e, flip, time);
       s.crown?.setVisible(s.visible);
+      s.cage?.setVisible(s.visible);
       if (!s.visible) continue;
       if (s.crown) s.crown.setPosition(s.x, s.y - TILE * 1.25 + 2 - s.lift);
-      const top = s.y - TILE * (s.scaleY / texScale(s)) * (e.d.boss ? 1.25 : 1) - s.lift;
+      const top = s.y - TILE * (s.scaleY / texScale(s)) * (e.d.boss || e.chief ? 1.25 : 1) - s.lift;
       if (e.type === 'peddler' && run.stall.some(x => !x.sold)) { // a coin over the stall while there's stock
         const gy = top - 4 + Math.sin(time / 260) * 1.2;
         g.fillStyle(0x1b1424, 1); g.fillCircle(s.x, gy, 3.5);
@@ -1317,7 +1354,7 @@ export class DungeonScene extends Phaser.Scene {
       }
       if (e.state !== 'sleep' || e.hp < e.maxHp) {
         g.fillStyle(0x000000, 0.8); g.fillRect(s.x - 6, top - 3, 12, 2);
-        g.fillStyle(e.d.boss ? 0xf4cf4f : run.calm(e) ? 0x8fd36a : 0xe0525a, 1); g.fillRect(s.x - 6, top - 3, 12 * Math.max(0, e.hp) / e.maxHp, 2);
+        g.fillStyle(e.d.boss || e.chief ? 0xf4cf4f : run.calm(e) ? 0x8fd36a : 0xe0525a, 1); g.fillRect(s.x - 6, top - 3, 12 * Math.max(0, e.hp) / e.maxHp, 2);
       }
       if (e.aim && e.aimAt) {
         const a = 0.45 + 0.4 * Math.sin(time / 80);
@@ -1465,7 +1502,7 @@ export class DungeonScene extends Phaser.Scene {
     if (who.burn > 0) hop = Math.max(hop, Math.abs(Math.sin(time / 90 + id)) * 3);
     // 부들부들: little bursts of trembling when nearly beaten, wide-eyed, or running for it
     const you = who === this.run.p, asleep = who.sleep || who.state === 'sleep';
-    const low = you ? this.lowHp : who.d && !who.d.boss && who.hp <= who.maxHp * 0.25;
+    const low = you ? this.lowHp : who.d && !who.d.boss && !who.chief && who.hp <= who.maxHp * 0.25;
     const scared = who.state === 'flee' || (you && s.expr === 'shock' && time < (s.exprUntil || 0));
     if (!asleep && (scared || (low && (time + id * 613) % 1400 < 480))) jitter = (Math.floor(time / 45) % 2 ? 0.6 : -0.6);
     // a toadstool about to burst shivers; a boar about to charge paws the ground
@@ -1477,7 +1514,7 @@ export class DungeonScene extends Phaser.Scene {
     const fh = s.frame.height, cut = wet ? Math.round(fh * 0.22) : 0;
     if (cut) { s.setCrop(0, 0, s.frame.width, fh - cut); hop -= cut * TILE / fh - 1; } else if (s.isCropped) s.setCrop();
     s.wet = wet;
-    const base = (who.d?.boss ? 1.25 : 1) * (who.small ? 0.8 : 1);
+    const base = (who.d?.boss || who.chief ? 1.25 : 1) * (who.small ? 0.8 : 1);
     const k = texScale(s);
     if (!s.dying) s.setScale(base * sx * k * (s.sqx ?? 1), base * sy * k * (s.sqy ?? 1));
     s.setOrigin(0.5 + jitter / TILE, 1 + hop / TILE);

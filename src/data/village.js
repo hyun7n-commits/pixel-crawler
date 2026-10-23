@@ -81,7 +81,7 @@ export const FOLK = {
     lines: ['들었어? 들었어?', '어제 그 얘기 해 줄까?', '소문 하나 알려 줄게!'],
   },
   smith: {
-    name: '두더지 대장장이', sprite: 'mole', panel: 'books', when: m => m.stats.evos >= 1 || m.stats.maxFloor >= 4,
+    name: '두더지 대장장이', sprite: 'mole', panel: 'books', when: m => m.stats.evos >= 1 || m.stats.maxFloor >= 5,
     tip: '찾아낸 합성 조합과 반짝돌을 적어 둔다',
     arrive: '대장간을 차렸다. 찾은 조합은 내가 다 적어 두지!',
     hint: '요즘 두더지 하나가 마을을 기웃거려. 유물을 합쳐 보거나 깊은숲까지 가 보면 이사 올지도?',
@@ -111,10 +111,10 @@ export const HERO_LINES = ['오늘은 내가 갈게!', '맡겨 줘!', '나도 �
 export function gossip(last, meta) {
   if (!last) return ['아직 아무 일도 없었어. 얼른 들판에 다녀와!'];
   const out = [];
-  if (last.won) out.push(`들었어? ${josa(last.who, '이', '가')} 박쥐 대왕을 쓰러뜨렸대! 온 마을이 들썩들썩해.`);
-  if (last.won && meta.stats.wins === 1) out.push('조합장이 상으로 집을 줬다며? 집들이 때 나도 꼭 불러 줘!');
-  else if (last.cause) out.push(`${last.zone} ${last.floor}구역에서 ${last.cause}면서? 다들 걱정했어.`);
-  if (!last.won && last.floor >= meta.stats.maxFloor && last.floor > 1) out.push(`그래도 ${last.floor}구역은 지금까지 제일 멀리 간 거래!`);
+  if (last.won) out.push(`들었어? ${josa(last.who, '이', '가')} ${last.zone} 대장을 쓰러뜨렸대! 온 마을이 들썩들썩해.`);
+  if (last.won && last.stage === 4 && last.loop === 1 && meta.home?.length === 0) out.push('조합장이 상으로 집을 줬다며? 집들이 때 나도 꼭 불러 줘!');
+  else if (last.cause) out.push(`${last.zone}에서 ${last.cause}면서? 다들 걱정했어.`);
+  if (last.friend) out.push(`우리에 갇혀 있던 ${josa(last.friend, '을', '를')} 구해 왔다며? 마을이 더 북적북적해졌어.`);
   if (last.kills >= 15) out.push(`적을 ${last.kills}마리나 쓰러뜨렸다며? 대단해.`);
   if (last.recipes) out.push(`새 합성 조합을 ${last.recipes}개나 찾았다던데? 대장장이가 궁금해하더라.`);
   if (last.gold >= 150) out.push(`${last.gold}G나 벌어 왔다며? 상점 주인이 싱글벙글이야.`);

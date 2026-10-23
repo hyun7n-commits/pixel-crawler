@@ -1010,6 +1010,47 @@ export const SPR = {
 // the field peddler is the shopkeeper; only the 32px look (sprites32.js) gives them a pack
 SPR.peddler = SPR.shopkeep;
 
+// the 우두머리's cage key: a big brass key with a red ribbon tied to its bow
+SPR.cageKey = [
+  '................',
+  '................',
+  '................',
+  '..kk.kk.........',
+  '.krrkrrk........',
+  '..krrrk.........',
+  '...kkkkk........',
+  '..kyyyyyk.......',
+  '.kyykkkyykkkkkk.',
+  '.kykk.kkyyyyyyyk',
+  '.kyykkkyykkykyk.',
+  '..kyyyyyk.kykyk.',
+  '...kkkkk...k.k..',
+  '................',
+  '................',
+  '................',
+];
+
+// 우리: the wooden cage a hero is locked in, drawn over them, with a padlock to bang on (it is also
+// the unlock card's picture)
+SPR.cage = [
+  'kkkkkkkkkkkkkkkk',
+  'knnnnnnnnnnnnnnk',
+  'kNNNNNNNNNNNNNNk',
+  'kn...kn..kn...nk',
+  'kn...kn..kn...nk',
+  'kn...kn..kn...nk',
+  'kn...kn..kn...nk',
+  'kn...kn..kn...nk',
+  'kn...kn..kn...nk',
+  'kn...kkkkkk...nk',
+  'kn...kykkyk...nk',
+  'kn..kkkkkkkk..nk',
+  'kn..kyyykyyk..nk',
+  'kn..kYYYYYYk..nk',
+  'knnnkkkkkkkknnnk',
+  'kkkkkkkkkkkkkkkk',
+];
+
 // Floor features drawn on top of the floor tile (16x16, '.' shows the floor).
 export const TER_SPR = {
   // the squirrels' acorn stash: dirt mounds with an acorn poking out, and the big oak stump with its hollow

@@ -12,6 +12,7 @@ const PICKUP = {
   chest: () => CHEST,
   lockedChest: () => '잠긴 상자: 이 구역의 열쇠로 열면 유물을 넷 중 하나 고른다.',
   key: () => '작은 열쇠: 이 구역의 잠긴 문이나 상자를 연다.',
+  cageKey: () => '우리 열쇠: 우두머리가 물고 있던 열쇠. 갇힌 친구의 우리를 연다.',
   necklace: () => '아기새 리본: 울보 아기새의 것이다.',
   candy: (q, run) => `별사탕: 먹으면 가진 유물들이 한꺼번에 ${q.n || candySteps(run.floor)}번 자란다.`,
   crystal: (q, run) => {
@@ -50,7 +51,7 @@ export function describeTile(run, x, y, always = false) {
     if (e.state === 'hide') lines.push(CHEST); // a mimic looks just like one
     else if (e.state === 'stone') lines.push(`${e.d.name}: ${e.d.stoneTip}`);
     else if (e.d.npc) lines.push(`${e.d.name}: ${e.d.tip}`);
-    else lines.push(`${e.d.name} · 체력 ${e.hp}/${e.maxHp} · 공격 ${e.atk} · ${STATE[e.state] || ''}${e.d.tip ? ` · ${e.d.tip}` : ''}`);
+    else lines.push(`${e.chief ? '우두머리 ' : ''}${e.d.name} · 체력 ${e.hp}/${e.maxHp} · 공격 ${e.atk} · ${STATE[e.state] || ''}${e.d.tip ? ` · ${e.d.tip}` : ''}`);
   }
   const t = map.tiles[i];
   if (t === STAIRS) lines.push(`${TILE_INFO.stairs.name}: ${TILE_INFO.stairs.tip}`);

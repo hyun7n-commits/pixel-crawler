@@ -9,12 +9,14 @@ import { Run, isBossFloor, BOMB_RANGE } from './core/run.js';
 import { loadMeta, saveMeta } from './core/save.js';
 import { suspend, resume, clearSuspended } from './core/suspend.js';
 import { pathTo, idx, isBump, isStairs } from './core/dungeon.js';
-import { ENEMIES } from './data/enemies.js';
+import { ENEMIES, ZONES } from './data/enemies.js';
+import { cleared } from './data/stages.js';
 import { cheb } from './core/util.js';
 import { T, isTrap } from './data/terrain.js';
 import { Hud, lowHealth } from './ui/hud.js';
 import { renderPanel, renderVillageHud } from './ui/hub.js';
 import { showChoice, showSummary, showTalk, closeTalk, closeModal, modalOpen } from './ui/modal.js';
+import { showStages } from './ui/stages.js';
 import { showEvolve } from './ui/evo.js';
 import { showsLeft } from './ui/beat.js';
 import { bossCard } from './ui/bosscard.js';
@@ -124,7 +126,8 @@ function showStory(id, then) {
 
 function afterRunStory() {
   const st = meta.story, beat = meta.stats.bosses;
-  const id = meta.stats.wins && !st.ending ? 'ending' : ['ratking', 'skelking'].find(b => beat.includes(b) && !st[b]);
+  // the ending comes the first time the last stage falls
+  const id = cleared(meta, ZONES.length - 1) && !st.ending ? 'ending' : ['ratking', 'skelking'].find(b => beat.includes(b) && !st[b]);
   // the ending covers the licenses that came with it
   if (id === 'ending') st.ratking = st.skelking = true;
   if (id) showStory(id, () => showVillage('run'));
@@ -132,6 +135,14 @@ function afterRunStory() {
 }
 
 // `restored`: a run left off last time (core/suspend.js), picked up where it was
+// Heading out: first the stage select (ui/stages.js), then the trip it picked
+function chooseStage() {
+  if (run) return;
+  sfx.play('talk');
+  showVillageTip('');
+  showStages({ meta, onGo: () => { saveMeta(meta); startRun(); } });
+}
+
 function startRun(left) {
   if (run) return;
   const restored = left instanceof Run ? left : null;   // a click passes its event here
@@ -147,7 +158,7 @@ function startRun(left) {
   showVillageTip('');
   // the stage changed shape, so measure it again before drawing
   fitCanvas();
-  run = restored || new Run(meta, meta.sel);
+  run = restored || new Run(meta, meta.sel, { stage: meta.stage || 0, loop: meta.loop || 1 });
   hud.reset();
   run.on(onRunEvent);
   scene.attach(run);
@@ -172,7 +183,7 @@ function talkTo(id, line) {
     who: f.sprite, name: f.name, line,
     build: (box, redraw) => renderPanel(f.panel, box, {
       meta,
-      onStart: startRun,
+      onStart: chooseStage,
       changed: () => { saveMeta(meta); redraw(); renderVillageHud(meta); village().resync(); },
       setMeta: m => { meta = m; closeModal(); showVillage(); },
       onStory: () => { closeTalk(); showStory('intro', () => showVillage()); },
@@ -216,7 +227,7 @@ const villageHooks = {
     renderVillageHud(meta);
   },
   onDive: () => { sfx.unlockAudio(); sfx.play('dive'); },
-  onLeave: () => startRun(),
+  onLeave: () => chooseStage(),
   onArrive: id => {
     meta.village.seen[id] = true;
     saveMeta(meta);
@@ -268,19 +279,19 @@ function onRunEvent(type, d) {
     setAim(false);
     // what the neighbour will be talking about when you get back
     meta.lastRun = {
-      won: d.won, floor: run.floor, zone: run.zone.name, cause: run.cause, kills: run.kills, gold: run.gold,
-      recipes: run.newRecipes.length, who: CHARACTERS[meta.sel].name,
+      won: d.won, floor: run.floor - run.startFloor + 1, zone: run.zone.name, stage: run.stage, loop: run.loop, cause: run.cause, kills: run.kills, gold: run.gold,
+      recipes: run.newRecipes.length, who: CHARACTERS[meta.sel].name, friend: run.rescued.length ? CHARACTERS[run.rescued[0]].kind : null,
       honey: run.p.honey || 0, ring: !!run.told.ring, spring: !!run.told.spring, weeds: run.weeds || 0, screams: run.screams || 0,
     };
     saveMeta(meta);
     hud.update(run);
-    const summary = () => showSummary({ won: d.won, run, newlyUnlockable: d.newlyUnlockable, stepOpened: d.stepOpened, opened: d.opened, onClose: () => { scene.detach(); run = null; afterRunStory(); } });
+    const summary = () => showSummary({ won: d.won, run, rescued: d.rescued, news: d.news, opened: d.opened, onClose: () => { scene.detach(); run = null; afterRunStory(); } });
     if (d.won) summary();
     else fallen(summary);
   }
 }
 
-// Down: the field turns grey and quiet, then one line says where and to what ("2구역 · 들쥐에게 당했다"),
+// Down: the field turns grey and quiet, then one line says where and to what ("초원 2 · 들쥐에게 당했다"),
 // like Shattered Pixel Dungeon's "Killed by a marsupial rat on depth 2". A tap (or a few seconds) moves on.
 function fallen(then) {
   sfx.setHeartbeat(0);
@@ -289,7 +300,7 @@ function fallen(then) {
   let gone = false;
   const go = () => { if (gone) return; gone = true; line.hidden = true; line.onclick = null; then(); };
   scene.fall(() => {
-    line.textContent = `${run.floor}구역 · ${run.cause || '쓰러졌다'}`;
+    line.textContent = `${run.floorName()} · ${run.cause || '쓰러졌다'}`;
     line.hidden = false;
     line.onclick = go;
     setTimeout(go, 2600);
@@ -380,7 +391,7 @@ document.addEventListener('keydown', ev => {
   // in the village: walk a step, or bump whoever is there; Enter heads out
   if (inVillage) {
     if (KEYS[k]) { ev.preventDefault(); village().step(...KEYS[k]); }
-    if (k === 'Enter' && document.activeElement === document.body) startRun();
+    if (k === 'Enter' && document.activeElement === document.body) chooseStage();
     if (k === 'm') toggleSound();
     return;
   }
@@ -503,7 +514,7 @@ function toggleSound() {
 $('soundBtn').addEventListener('click', toggleSound);
 $('vSound').addEventListener('click', toggleSound);
 // 32px or 16px characters: the textures are built once, so switching reloads the page (the save is kept)
-$('vGo').addEventListener('click', () => startRun());
+$('vGo').addEventListener('click', () => chooseStage());
 showSoundState();
 // browsers allow sound only after the first click or key press
 // (iPhone only counts a finger lifting or a click, so listen for those every time, not just once)

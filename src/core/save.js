@@ -22,7 +22,9 @@ export function freshMeta() {
     lastRun: null,          // how the last run went, for the village gossip
     story: {},              // picture-book scenes already shown: intro, ratking, skelking, ending (ui/story.js)
     pack: null,             // a basic relic paid for in the shop to take on the next run (data/upgrades.js PACK_COST)
-    step: 0,                // the 탐험 단계 picked at the guild (data/balance.js)
+    clears: {},             // stage -> the highest 회차 it has been beaten at (data/stages.js)
+    stage: 0, loop: 1,      // what the stage select has picked for the next trip
+    dares: { on: {}, won: {} },  // the rival's dares: switched on, and the furthest stage won with each (data/dares.js)
     home: [],               // 집 꾸미기 pieces put up round your house (data/home.js)
     bookGifts: 0,           // the smith's recipe-book gifts already taken (data/balance.js bookGift)
   };
@@ -52,6 +54,8 @@ export function loadMeta() {
         open: { ...m.open },
         story: { ...m.story },
         home: Array.isArray(m.home) ? m.home : [],
+        clears: { ...m.clears },
+        dares: { on: { ...m.dares?.on }, won: { ...m.dares?.won } },
       };
     }
   } catch (e) { /* storage blocked or corrupt: start fresh */ }
