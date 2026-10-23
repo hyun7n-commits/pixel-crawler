@@ -27,7 +27,7 @@ export function createMap() {
     fire: new Uint8Array(n),      // turns of fire left
     open: new Uint8Array(n),      // 1 on a door someone is standing in
     room: new Int16Array(n).fill(-1),
-    gas: { sleep: new Float32Array(n), mine: new Float32Array(n) },
+    gas: { sleep: new Float32Array(n), mine: new Float32Array(n), grump: new Float32Array(n) },
     doors: [],
     vents: [],
     lights: [],                   // miners' lamps hung on wall faces: { x, y } of the wall tile

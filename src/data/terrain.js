@@ -9,6 +9,8 @@ export const T = {
   DUG: 11, ANVIL: 12, RING: 13, BERRY: 14,
   // v0.23: the new stages' grounds
   LAVA: 15, ICE: 16, CHASM: 17, BRIDGE: 18, SLIME: 19, HONEY: 20,
+  // v0.26: 심술 버섯, a plant that goes off like a trap (always in plain sight)
+  TRAP_GRUMP: 21,
 };
 // you cannot walk onto these (a drop, molten rock), but you can see across them
 export const isGap = t => t === T.CHASM || t === T.LAVA;
@@ -18,7 +20,7 @@ export const isPool = t => t === T.WATER || t === T.ICE || t === T.LAVA;
 // Like Shattered Pixel Dungeon traps: a plate that goes off once when stepped on (or blown up).
 // Some are hidden (map.hidden) until you spot them standing next to them.
 export const TRAPS = [T.TRAP_SLEEP, T.TRAP_SUMMON, T.TRAP_ALARM, T.TRAP_SPIKE];
-export const isTrap = t => t >= T.TRAP_SLEEP && t <= T.TRAP_SPIKE;
+export const isTrap = t => (t >= T.TRAP_SLEEP && t <= T.TRAP_SPIKE) || t === T.TRAP_GRUMP;
 
 // burn: turns a fire lasts on this feature (0 = does not burn)
 // sprite: overlay drawn on the floor tile (see TER_SPR in sprites.js)
@@ -32,6 +34,7 @@ export const TERRAIN = {
   [T.TRAP_SUMMON]: { name: '수상한 굴',  sprite: 'trapSummon', tip: '밟으면 굴 속에서 몬스터가 우르르 튀어나온다.' },
   [T.TRAP_ALARM]: { name: '방울 덫',      sprite: 'trapAlarm',  tip: '밟으면 방울이 울려 구역 전체의 적이 몰려온다.' },
   [T.TRAP_SPIKE]: { name: '밤송이',       sprite: 'trapSpike',  tip: '밟으면 가시에 찔린다.' },
+  [T.TRAP_GRUMP]: { name: '심술 버섯',    sprite: 'trapGrump',  tip: '밟거나 뭘 던져 맞히면 포자가 퍼진다. 포자를 마신 녀석은 심술이 나서 옆에 있는 녀석을 문다. 나는 재채기만 난다.' },
   [T.TRAP_OFF]:   { name: '밟힌 덫',      sprite: 'trapOff',    tip: '이미 작동한 덫이다.' },
   [T.DUG]:        { name: '파헤친 흙',    sprite: 'dug',        tip: '누군가 파헤친 자리다.' },
   [T.ANVIL]:      { name: '모루',         sprite: 'anvil',      tip: '대장장이의 모루다.' },
@@ -67,12 +70,14 @@ export const TILE_INFO = {
 export const GASES = {
   sleep: { name: '졸음 꽃가루', color: 0xb58cf0, tip: '마시면 잠든다. 적도 잠든다.' },
   mine:  { name: '늪 가스', color: 0xf4d35a, tip: '그 자체는 무해하다.' },
+  grump: { name: '심술 포자', color: 0xf08c3a, tip: '마신 녀석은 심술이 나서 옆에 있는 녀석을 문다. 나는 재채기만 난다.' },
 };
-export const GAS_KEYS = ['sleep', 'mine'];
+export const GAS_KEYS = ['sleep', 'mine', 'grump'];
 
 // How strong a gas must be to do something
 export const SLEEP_MIN = 2;
 export const MINE_MIN = 1;
+export const GRUMP_MIN = 2;
 
 // basic: the rule is common sense and its tooltip already says it
 // hint: what villagers or overheard enemies say before you find it
@@ -96,6 +101,7 @@ export const DISCOVERIES = [
   { id: 'bell_den',    combo: '방울 + 낮잠 방',     result: '자던 녀석들이 우르르 방울 쪽으로 몰려간다', hint: '모여 자는 녀석들 근처에서 방울을 울리면 다 같이 보러 간대.' },
   { id: 'brawl',       combo: '빗나간 공격 + 다른 녀석', result: '대신 맞은 녀석이 화가 나서 둘이 싸운다', hint: '멧돼지 돌진을 옆으로 피하면 뒤에 있던 녀석이 대신 받힌대. 그럼 둘이 싸운대.' },
   { id: 'pine_brawl',  combo: '솔방울 + 두 녀석',   result: '부딪힌 녀석이 밀고 온 녀석과 싸운다', hint: '솔방울로 한 녀석을 다른 녀석한테 밀어붙이면 둘이 싸운대.' },
+  { id: 'grump_brawl', combo: '심술 포자 + 녀석들', result: '심술 난 녀석들끼리 물고 뜯는다', hint: '빨간 버섯 포자를 마신 녀석은 옆에 있는 녀석을 문대. 몰려 있을 때 터뜨려 봐.' },
 ];
 
 // Things enemies mutter when you overhear them unseen
@@ -136,6 +142,7 @@ export const FLOOR_HINTS = [
   { has: 'ore',    text: '반짝 바위 옆 틈에서 가스 샌다던데. 불은 조심해.' },
   { has: 'garden', text: '저쪽 풀숲은 키가 커서 안이 하나도 안 보여.' },
   { has: 'trap',   text: '이 구역 땅 어딘가에 함정이 숨어 있대. 발밑 조심해.' },
+  { has: 'grump',  text: '빨간 버섯 근처에선 녀석들이 서로 물어뜯는대. 포자 때문이래.' },
   { has: 'vault',  text: '잠긴 비밀 정원이 있대. 열쇠는 다른 방에 있다던데.' },
   { has: 'locked', text: '잠긴 상자가 하나 있대. 열쇠만 찾으면 좋은 게 들었대.' },
   { has: 'grave',  text: '다람쥐 도토리 창고가 있대. 파헤치면 청설모가 화낸대.' },

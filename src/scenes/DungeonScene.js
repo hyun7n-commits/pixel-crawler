@@ -14,7 +14,7 @@ import { T, TERRAIN, GASES, GAS_KEYS, isTrap } from '../data/terrain.js';
 import { idx, inMap, lineOfSight, WALL, FLOOR, STAIRS, DOOR, ORE, UPSTAIRS, GRAVE, LOCKED, HIVE, WEED } from '../core/dungeon.js';
 import { WAKE_AT } from '../core/ai.js';
 import { BOMB_RANGE } from '../core/run.js';
-import { ORE_HITS, HEAR_STEPS, BELL_RANGE } from '../data/balance.js';
+import { ORE_HITS, HEAR_STEPS, BELL_RANGE, SNEEZE_NOISE } from '../data/balance.js';
 import { ORES } from '../data/ores.js';
 import { cheb } from '../core/util.js';
 import { faceKey } from '../data/faces.js';
@@ -68,6 +68,7 @@ export class DungeonScene extends Phaser.Scene {
     this.fx = {
       blood: burst([0xff6b7a, 0xffc4cc]), // a soft pink puff, not gore
       spore: burst([0xc49aff, 0xf4f0e8, 0x9a5fd1], { gravityY: 20 }),
+      grump: burst([0xf08c3a, 0xf4cf4f, 0xd9454a], { gravityY: 12, speed: { min: 10, max: 45 } }),
       slime: burst([0x6cc45a, 0x2f7a43]),
       fire: burst([0xf08c3a, 0xf4cf4f, 0xd9454a], { gravityY: -50 }),
       ember: burst([0xf08c3a, 0xf4cf4f], { gravityY: -40, speed: { min: 4, max: 14 }, lifespan: { min: 300, max: 600 }, scale: { start: 1, end: 0 } }),
@@ -751,6 +752,8 @@ export class DungeonScene extends Phaser.Scene {
       s.was = e.state; s.wasAngry = e.angry; s.wasRage = e.rage;
       // still hot from the chili: a little steam off its head every turn
       if (seen && e.fear > 0) this.fx.steam.explode(4, center(e.x), foot(e.y) - TILE);
+      // still cross from the toadstool's spores: the 💢 comes back every turn
+      if (seen && e.grump > 0) this.emote(s, 'anger', 800);
       if (seen && !e.d.npc && !run.calm(e) && !['hide', 'stone', 'sleep'].includes(e.state)) threat = true;
     }
     this.safe = !threat;
@@ -1219,6 +1222,9 @@ export class DungeonScene extends Phaser.Scene {
         this.heardMarks = d.list.map(e => ({ e, until: this.time.now + 2200 }));
         break;
       case 'say': this.say(d.who, d.text); break;
+      // 심술 버섯: a whiff of the spores and it bristles (the mark keeps coming back while it is cross)
+      case 'grump': { const s = this.enemySprites[d.enemy.id]; if (s && this.run.isVisible(d.enemy.x, d.enemy.y)) this.emote(s, 'anger', 900); break; }
+      case 'sneeze': this.noiseRing(d.x, d.y, SNEEZE_NOISE, 0xf08c3a); break;
       // 다툼: the winner puffs up a size (run.puffUp), with a sparkle and a 쑥
       case 'puffUp': {
         const s = this.enemySprites[d.enemy.id];
@@ -1578,6 +1584,7 @@ export class DungeonScene extends Phaser.Scene {
       [T.TRAP_SLEEP]: ['쉬익!', '#d8c2ff', 0xb58cf0],
       [T.TRAP_ALARM]: ['따르릉!', '#ff8a8a', 0xff6b6b],
       [T.TRAP_SUMMON]: ['쿠궁!', '#e6a6ff', 0x9a5fd1],
+      [T.TRAP_GRUMP]: ['퍽!', '#ffb07a', 0xf08c3a],
     }[d.kind];
     if (!look) return;
     this.float(d.x, d.y - 0.4, look[0], look[1], 0, 12);
@@ -2038,7 +2045,7 @@ export class DungeonScene extends Phaser.Scene {
       if (!map.visible[i]) continue;
       const x = (i % map.w) * TILE, y = ((i / map.w) | 0) * TILE;
       for (const k of GAS_KEYS) {
-        const v = map.gas[k][i];
+        const v = map.gas[k]?.[i] || 0;
         if (v < 0.3) continue;
         const a = Math.min(k === 'mine' ? 0.32 : 0.55, 0.08 + v / (k === 'mine' ? 40 : 28)) * (0.85 + 0.15 * Math.sin(time / 380 + i));
         this.gasGfx.fillStyle(GASES[k].color, a);

@@ -86,6 +86,7 @@ export function enemyAct(run, e, dmP) {
   if (crawl) { e.skip = !e.skip; if (e.skip) return; }
   e.timer++;
   if (e.burn > 0 && !d.boss && Math.random() < 0.5) { randomStep(run, e); return; }
+  if (e.grump > 0 && grumpTick(run, e)) return;
   if (e.foe != null && scrap(run, e)) return;
 
   const sees = canSee(run, e, e.state === 'hunt' ? 9 : e.state === 'wander' && behind(e, p) ? BEHIND_SIGHT : 7);
@@ -852,6 +853,31 @@ export function brawl(run, a, b) {
   }
   return true;
 }
+// 심술 (v0.26): with the toadstool's spores up its nose it is cross with the whole world. It bites
+// whoever is beside it, another critter first (and that one bites back: a brawl), or you if there is
+// nobody else; with nobody beside it, it stomps off towards the nearest critter it can see. With no
+// one about at all it just goes on as usual. False when it did nothing of the sort this turn.
+function grumpTick(run, e) {
+  e.grump--;
+  const p = run.p, other = o => o !== e && o.hp > 0 && !o.d.npc && !['hide', 'lurk', 'stone'].includes(o.state);
+  const near = run.enemies.filter(o => other(o) && run.touching(e, o));
+  if (near.length) {
+    const o = pick(near);
+    if (o.x !== e.x) e.face = Math.sign(o.x - e.x);
+    run.emit('attack', { from: { x: e.x, y: e.y }, to: { x: o.x, y: o.y }, who: e });
+    run.hurt(o, Math.max(1, e.atk - (o.def || 0)), 'brawl', e);
+    if (run.isVisible(o.x, o.y)) run.discover('grump_brawl');
+    return true;
+  }
+  if (run.touching(e, p) && p.hp > 0) { attackPlayer(run, e); return true; }
+  const t = run.enemies.filter(o => other(o) && cheb(o, e) <= 5 && lineOfSight(run.map, e.x, e.y, o.x, o.y)).sort((a, b) => cheb(a, e) - cheb(b, e))[0];
+  if (!t) return false;
+  if (t.x !== e.x) e.face = Math.sign(t.x - e.x);
+  const dm = distMap(run.map, t.x, t.y);
+  for (let i = e.d.fast || e.d.hops ? 2 : 1; i > 0; i--) if (!stepToward(run, e, dm) || run.touching(e, t)) break;
+  return true;
+}
+
 // a blow meant for you lands on `o` instead
 function strayHit(run, e, o, dmg, verb) {
   if (run.isVisible(o.x, o.y)) run.log(`${josa(e.d.name, '이', '가')} 대신 ${josa(o.d.name, '을', '를')} ${verb}!`, 'good');

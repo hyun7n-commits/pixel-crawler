@@ -89,7 +89,9 @@ export function describeTile(run, x, y, always = false) {
       // 다툼: busy with another critter, it pays you no mind
       const foe = e.foe != null && run.enemies.find(o => o.id === e.foe && o.hp > 0);
       const scrap = foe ? `${josa(foe.d.name, '과', '와')} 싸우는 중. 나는 안중에도 없다 (지금 치면 기습)` : '';
-      const how = [hot || stuck || scrap || dizzy || heap || STATE[e.state] || '', fire].filter(Boolean).join(', ');
+      // 심술 버섯: cross with everyone
+      const cross = e.grump > 0 ? `심술 나서 옆에 있는 녀석을 무는 중 (${e.grump}턴)` : '';
+      const how = [hot || stuck || cross || scrap || dizzy || heap || STATE[e.state] || '', fire].filter(Boolean).join(', ');
       lines.push(`${e.chief ? '우두머리 ' : e.big ? '기세등등한 ' : ''}${e.d.name} · 체력 ${e.hp}/${e.maxHp} · 공격 ${e.atk} · ${how}${e.d.tip ? ` · ${e.d.tip}` : ''}`);
     }
   }
@@ -124,7 +126,7 @@ export function describeTile(run, x, y, always = false) {
   if (map.fire[i] && map.visible[i]) lines.push(`${TILE_INFO.fire.name}: ${TILE_INFO.fire.tip}`);
   if (map.visible[i]) {
     for (const k of GAS_KEYS) {
-      if (map.gas[k][i] < 0.5) continue;
+      if (!(map.gas[k]?.[i] >= 0.5)) continue;
       const extra = k === 'mine' && run.meta.found.fire_mine ? ' 불이 닿으면 한꺼번에 터진다!' : '';
       lines.push(`${GASES[k].name}: ${GASES[k].tip}${extra}`);
     }

@@ -40,6 +40,7 @@ export const UNLOCKS = [
   { id: 'sleepy', icon: 'sleepflower', what: '졸음 꽃', desc: '던지면 졸음 꽃가루가 퍼져서 적이 잠든다. 너무 가까우면 나도 잠든다', when: m => m.stats.maxFloor >= 6 || m.stats.runs >= 10 },
   { id: 'den', icon: 'chest', what: '낮잠 방', desc: '들판 구석 방에 녀석들이 상자를 둘러싸고 모여 잔다. 깨우지 않고 털어 볼까?', when: m => m.stats.maxFloor >= 7 || m.stats.runs >= 11 },
   { id: 'chili', icon: 'chili', what: '매운 고추', desc: '적에게 던지면 매워서 한동안 허둥지둥 달아난다', when: m => m.stats.maxFloor >= 9 || m.stats.runs >= 12 },
+  { id: 'grump', icon: 'grump', what: '심술 버섯', desc: '들판에 빨간 버섯이 난다. 밟거나 뭘 던져 맞히면 포자가 퍼지고, 마신 녀석들은 옆에 있는 녀석을 문다', when: m => m.stats.maxFloor >= 10 || m.stats.runs >= 13 },
   { id: 'bell', icon: 'bell', what: '방울', desc: '던지면 몇 턴 동안 딸랑딸랑 울린다. 나를 못 보는 적은 그리로 간다', when: m => m.stats.maxFloor >= 13 || m.stats.runs >= 15 },
   { id: 'pick', relic: 'pick', when: m => broken(m) >= 8 },
   { id: 'turtle', icon: 'turtle', what: '반짝 거북', desc: '먼저 건드리지 않으면 싸우지 않는 거북. 쓰러뜨리면 보물을 떨군다', when: m => m.stats.kills >= 60 },

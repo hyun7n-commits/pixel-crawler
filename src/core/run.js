@@ -15,7 +15,7 @@ import {
   createMap, carveRooms, carveArena, idx, inMap, passable, squeeze, distMap, lineOfSight, computeFOV,
   FLOOR, STAIRS, ORE, UPSTAIRS, GRAVE, LOCKED, DOOR, HIVE, WEED,
 } from './dungeon.js';
-import { decorate, decorateArena, placeTraps } from './decorate.js';
+import { decorate, decorateArena, placeTraps, placeGrumps } from './decorate.js';
 import { placeSpecials, SET_PIECES } from './specials.js';
 import { carveChasms, fillPools } from './cliffs.js';
 import { NPC_TEXT, PEDDLER_FLOORS, STALL } from '../data/npcs.js';
@@ -383,6 +383,7 @@ export class Run {
     // loose traps, enemies and loot stay out of the set pieces
     const open = rooms.filter((r, i) => !SET_PIECES.has(deco.themes[i]));
     if (placeTraps(map, open, { start: this.p, stairs }, this.floor, this.open('traps'))) this.has.add('trap');
+    if (this.open('grump') && Math.random() < B.GRUMP_CHANCE && placeGrumps(map, open, { start: this.p, stairs })) this.has.add('grump');
     for (const o of map.ores) o.tier = Math.min(ORES.length - 1, Math.floor(B.gs(zi)) + (Math.random() < B.ORE_START_BONUS ? 1 : 0));
 
     // a free spot in a room other than the start; returns the spot and its room
@@ -1554,8 +1555,9 @@ export class Run {
     } else {
       // 다툼: a blow of yours (not the fire, the spores or a falling stone) turns a scrapper back to you
       if (e.foe != null && !by && !['fire', 'bones', 'rock', 'slam'].includes(kind)) Object.assign(e, { foe: null, foeT: 0, state: 'hunt', last: { x: this.p.x, y: this.p.y } });
-      // another critter's blow: it goes for that one, not for you
-      if (by && brawl(this, e, by)) { /* busy */ }
+      // another critter's blow: it goes for that one if it is the brawling kind; either way it was not
+      // you, so nothing turns on you for it
+      if (by) brawl(this, e, by);
       // bees singed by fire are in its smoke too (world.js smokeHive): dozy, not angry
       else if (!(kind === 'fire' && e.d.swarm)) rouse(this, e, 'hit');
       if (e.d.splits && e.hp >= 4) this.split(e);
