@@ -1179,6 +1179,18 @@ export class Run {
       return;
     }
     // 공벌레 curls up tight at the knock and goes rolling off like a bowling ball (rollBug)
+    // 물범 catches it on the tip of its nose and starts a show, bouncing it and clapping its flippers, with
+    // no eyes for you till the show is over (ai.js e.juggle); then the pinecone drops at its feet
+    if (e && e.type === 'seal' && e.hp > 0 && !e.stun && !['sleep', 'lurk'].includes(e.state)) {
+      this.emit('pine', { x, y, hit: false, caught: e.id, mark: '퐁!' });
+      Object.assign(e, { state: 'wander', juggle: B.JUGGLE_TURNS, target: null, foe: null, foeT: 0, aim: false, aimAt: null, charge: null, fear: 0 });
+      this.say(e, '♥');
+      if (this.isVisible(x, y)) {
+        this.log(`${josa(e.d.name, '이', '가')} 솔방울을 코끝으로 받더니 묘기를 부리기 시작했다!`, 'good');
+        this.discover('pine_seal');
+      }
+      return;
+    }
     if (e && e.type === 'garg' && e.hp > 0 && !e.chief) {
       this.emit('pine', { x, y, hit: true });
       this.rollBug(e);
@@ -1211,6 +1223,14 @@ export class Run {
     const heard = this.noise(x, y, B.PINE_NOISE);
     this.log(heard.length ? '톡! 솔방울 소리에 근처 녀석이 고개를 돌렸다.' : '톡! 솔방울이 데구루루 굴러갔다.');
     if (heard.length) this.emit('heard', { x, y, list: heard });
+  }
+
+  // the seal's show is over (or cut short): the pinecone drops at its feet, there to be picked up again
+  dropJuggle(e) {
+    if (!(e.juggle > 0)) return;
+    e.juggle = 0;
+    if (!this.pickups.some(q => q.x === e.x && q.y === e.y && q.type === 'pinecone')) this.pickups.push({ x: e.x, y: e.y, type: 'pinecone' });
+    this.emit('juggleDone', { enemy: e });
   }
 
   // 공벌레 + 솔방울: rolled up into a ball, it goes the way the pinecone flew, up to ROLL_TILES, unhurt in
@@ -1749,6 +1769,7 @@ export class Run {
     e.hp -= dmg;
     e.hitAt = this.turn;
     e.bury = 0;   // a blow brings a squirrel busy with its pinecone back to its senses
+    if (e.juggle > 0) this.dropJuggle(e);   // and ends a seal's show
     if (e.toy) { e.toy = false; e.sweetT = 0; }  // and a cat playing with a bell
     this.emit('hit', { enemy: e, x: e.x, y: e.y, dmg, kind });
     // 무당벌레: the first time it should fall, it flips over and plays dead

@@ -85,6 +85,16 @@ export function enemyAct(run, e, dmP) {
       return;
     }
   }
+  // 물범 with a pinecone on its nose (run.pinecone): it stays put, bouncing it and clapping, till the show
+  // is over; a nap, a noise to look into, spores or a scrap end it early
+  if (e.juggle > 0) {
+    if (e.state !== 'wander' || e.grump > 0 || e.foe != null) run.dropJuggle(e);
+    else {
+      if (e.juggle === 1) run.dropJuggle(e);
+      else if (--e.juggle % 2 === 0 && run.isVisible(e.x, e.y)) run.emit('clap', { enemy: e });
+      return;
+    }
+  }
   // bees at the honey from a 꿀 병 (run.splashHoney) hum round it until it is licked clean; a bee made
   // angry again (a blow, the stump robbed) drops it at once
   if (e.sweetT > 0) {

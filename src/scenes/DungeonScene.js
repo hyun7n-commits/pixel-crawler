@@ -25,6 +25,9 @@ import { pace } from '../ui/speed.js';
 import { LANDMARKS, landmarkSpot, stoneHead } from './landmarks.js';
 import { patchNoise, scatterKey, patchKey, PATCH_VARIANTS, footKey, sideKey, bloomKey, fieldTreeKey, fieldTreeCount, moteKeys, TREE_ODDS, SCATTER_VARIANTS, FOOT_VARIANTS, SIDE_VARIANTS, BLOOM_VARIANTS, FOOT_UP } from './field-decor.js';
 
+// Critter pictures drawn looking left (data/sprites.js); the rest look right, which is what an unflipped
+// sprite means here (pose flips it to face left)
+const LEFT_ART = new Set(['rat', 'thief', 'hopper', 'woodpecker', 'snail', 'gull', 'hermit', 'hermitBare', 'dungbeetle', 'seal', 'salamander', 'shadecat']);
 const D = { tiles: 0, ter: 1, fire: 2, gas: 3, telegraph: 4, pickups: 5, enemies: 6, player: 7, overlay: 8, fx: 9, bubble: 10, text: 11 };
 // what a pickup looks like on the floor (items use their own sprite)
 const PICKUP_TEX = { gold: 'gold', chest: 'chest', lockedChest: 'lockedChest', bossChest: 'bossChest', key: 'key', cageKey: 'cageKey', necklace: 'necklace', tag: 'workertag', candy: 'candy', crystal: 'pedestal' };
@@ -1110,13 +1113,21 @@ export class DungeonScene extends Phaser.Scene {
         if (d.caught != null) {
           const s = this.enemySprites[d.caught];
           if (s) this.tweens.add({ targets: s, hop: 6, duration: 110, yoyo: true, ease: 'Quad.out' });
-          this.float(d.x, d.y, '덥석!', '#f29bb2', 0, 10);
+          this.float(d.x, d.y, d.mark || '덥석!', '#f29bb2', 0, 10);
           break;
         }
         this.fx.dust.explode(d.hit ? 10 : 6, center(d.x), center(d.y));
         this.float(d.x, d.y, d.hit ? '딱!' : '톡', d.hit ? '#f4cf4f' : '#d8d2c0', 0, d.hit ? 12 : 9);
         if (!d.hit) this.noiseRing(d.x, d.y, 3, 0xd8d2c0);
         break;
+      // 물범's show: a clap of the flippers now and then, and the pinecone dropping when it is over
+      case 'clap': {
+        const s = this.enemySprites[d.enemy.id];
+        if (s) this.tweens.add({ targets: s, hop: 3, duration: 90, yoyo: true, ease: 'Quad.out' });
+        this.float(d.enemy.x, d.enemy.y, '짝짝', '#f4cf4f', 0, 8);
+        break;
+      }
+      case 'juggleDone': if (this.run.isVisible(d.enemy.x, d.enemy.y)) this.float(d.enemy.x, d.enemy.y, '톡', '#d8d2c0', 0, 8); break;
       case 'roll': {
         // 공벌레 rolled up into a ball: a trail of dust behind it, and 데굴데굴 where it stops
         const n = Math.max(Math.abs(d.to.x - d.from.x), Math.abs(d.to.y - d.from.y));
@@ -2437,8 +2448,8 @@ export class DungeonScene extends Phaser.Scene {
         case 'vamp': hop = Math.max(hop, 4 * k); sx = 1 + 0.1 * Math.sin(q / 50); break;
       }
     }
-    // a ladybug playing dead lies on its back
-    s.setFlipX(flip).setFlipY(who.state === 'dead').setRotation(rot);
+    // a ladybug playing dead lies on its back; art drawn looking left is mirrored the other way round
+    s.setFlipX(LEFT_ART.has(s.texture.key) ? !flip : flip).setFlipY(who.state === 'dead').setRotation(rot);
     if (who.d?.npc && who.type === 'ghost') hop = Math.max(hop, 2 + 1.5 * Math.sin(time / 380));
     if (asleep0) sy = 1 + 0.05 * Math.sin(time / 450 + id);
     else if (windup) { sx = 1.08; sy = 0.86; }
@@ -2510,6 +2521,12 @@ export class DungeonScene extends Phaser.Scene {
         if (t > 0.08 && t < 0.26) { g.fillStyle(0xf29bb2, 1); g.fillRect(x - 2, y, 5, 1); g.fillRect(x, y - 2, 1, 5); }
         g.fillStyle(0xfff3b0, 1); g.fillRect(x, y, 1, 1);
       }
+    }
+    // 물범 bouncing the pinecone on the tip of its nose
+    if (who.juggle > 0) {
+      const up = Math.round(Math.abs(Math.sin(time / 170)) * 4), x = Math.round(s.x + dir * 6) - 1, y = Math.round(top + 1 - up - (s.hop || 0));
+      g.fillStyle(0x4f331d, 1); g.fillRect(x + 1, y, 1, 1); g.fillRect(x, y + 1, 3, 3); g.fillRect(x + 1, y + 4, 1, 1);
+      g.fillStyle(0x9a6a3a, 1); g.fillRect(x + 1, y + 1, 1, 1); g.fillRect(x, y + 2, 1, 1); g.fillRect(x + 2, y + 2, 1, 1); g.fillRect(x + 1, y + 3, 1, 1);
     }
     // 도토리 다람쥐 hugging the pinecone it caught, on its way to bury it
     if (who.bury > 0) {
