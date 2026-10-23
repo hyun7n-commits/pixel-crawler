@@ -382,6 +382,30 @@ function driftTop(fill, r, v, y1, z) {
   if (r() < 0.5) { const x = 1 + Math.floor(r() * 13), y = Math.floor(r() * Math.max(1, y1 - 1)); fill('#ffffff', x, y); fill('#dff4ff', x + 1, y); }
 }
 
+// The mountain's and the sea cliffs' top: bare rock with a few boulders of different sizes lying on
+// it, each lit from the top left with its shadow on the rock, and a crack or two between them. (A
+// close mosaic of one size of boulder read as cobbles, a paved road, v0.26.)
+const STONES = [['.hhh.', 'hlllx', 'lllxx', '.xxx.'], ['..hhh..', '.hlllll', 'hllllxx', 'lllllxx', '.xxxxx.'], ['.hh', 'hlx', '.x.']];
+function rockTop(fill, r, v, y1, z, hi) {
+  const col = { h: hi, l: z.wallLight, x: mix(z.wallLight, z.wallTop, 0.5) }, shadow = z.wallDark, crack = mix(z.wallTop, z.wallDark, 0.6);
+  for (let k = 0; k < 2; k++) {
+    let x = 1 + Math.floor(r() * 14), y = Math.floor(r() * y1);
+    const dx = r() < 0.5 ? 1 : -1;
+    for (let n = 0; n < 3 + Math.floor(r() * 4) && x >= 0 && x < TILE && y < y1; n++) { fill(crack, x, y); if (r() < 0.55) x += dx; else y++; }
+  }
+  for (let gy = -1; gy < 4; gy++) for (let gx = -1; gx < 3; gx++) {
+    if (r() < 0.45) continue;
+    const st = STONES[Math.floor(r() * STONES.length)];
+    const ox = gx * 6 + (gy % 2 ? 3 : 0) + ((v + gy + 3) % 3) - 1, oy = gy * 5 + (gx % 2) + Math.floor(r() * 2);
+    st.forEach((row, j) => [...row].forEach((ch, i) => {
+      const x = ox + i, y = oy + j;
+      if (ch === '.' || x < 0 || x >= TILE || y < 0 || y >= y1) return;
+      fill(col[ch], x, y);
+      if (y + 1 < y1 && (j === st.length - 1 || st[j + 1][i] === '.')) fill(shadow, x, y + 1);
+    }));
+  }
+}
+
 // A wall seen from above. Its top fills the tile; where floor lies below it, its front shows on the
 // lower part of the tile. A dark line marks every side that faces open ground.
 //   meadow: a clipped hedge, leafy on top and in front
@@ -426,7 +450,8 @@ function wallTile(z, zi, mask, v) {
   else if (z.style === 'garden') leafTop(fill, r, v, topH, z, hi);
   else if (z.style === 'ruins') brickTop(fill, r, v, topH, z);
   else if (z.style === 'snow') driftTop(fill, r, v, topH, z);
-  else clumps(fill, r, v, 0, topH, ['rock', 'cave', 'volcano', 'sea'].includes(z.style) ? BOULDER : LEAVES, { h: hi, l: z.wallLight, d: z.wallDark });
+  else if (z.style === 'rock' || z.style === 'sea') rockTop(fill, r, v, topH, z, hi);
+  else clumps(fill, r, v, 0, topH, ['cave', 'volcano'].includes(z.style) ? BOULDER : LEAVES, { h: hi, l: z.wallLight, d: z.wallDark });
   // tufts of sea grass cling to the clifftop rocks
   if (z.style === 'sea') for (let k = 0; k < 2; k++) if (r() < 0.55) {
     const x = 1 + Math.floor(r() * 12), y = 1 + Math.floor(r() * Math.max(1, topH - 3));
