@@ -43,8 +43,9 @@ export const STAGE_UP = +(globalThis.process?.env?.STAGE_UP ?? 0);
 // v0.25: the legends' moves made the later stages' kit hands stronger, so those critters went up a little
 // (160 bot runs a stage, a fresh worker wins about one in five everywhere)
 // v0.26: 다툼 made the rock mountain (boar charges, fox fire, dung balls all going astray into each other)
-// and a little the deep forest (spider shots) easier, so their critters went up a touch (320 runs a stage)
-const FOE_UP = (globalThis.process?.env?.FOE_UP || '0,-0.08,0,0.08,0.16,0.42,0.46,0.6,0.18,0.66').split(',').map(Number);
+// and a little the deep forest (spider shots) easier, so their critters went up a touch; the old guild
+// grounds came out a little harder, so theirs went down a touch (320 runs a stage)
+const FOE_UP = (globalThis.process?.env?.FOE_UP || '0,-0.08,0,0.08,0.16,0.42,0.46,0.6,0.18,0.62').split(',').map(Number);
 export const foeUp = s => FOE_UP[Math.min(s, FOE_UP.length - 1)] + 0.1 * Math.max(0, s - (FOE_UP.length - 1));
 // 출발 보급: a deeper stage is entered as a seasoned explorer, the guild sees to that. You start at a
 // higher level, a little stronger and sturdier, and pick some relics (two levels each) before the
