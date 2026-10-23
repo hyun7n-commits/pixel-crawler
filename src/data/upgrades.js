@@ -13,8 +13,11 @@ export const PACK_COST = 300;
 // the next run and carried out at Lv1; from the second 회차 on, a legend too. Paid again every time,
 // so the late fields' gold always has somewhere to go, and a run can be planned round the legend
 // (or the myth) you are after. Price by tier (1 evolved, 2 legend); legends once FORGE_LEGEND_LOOP 회차 is open.
+// Priced (v0.25, 200-trip bot careers) so a legend is a treat saved up for over a trip or two, not a
+// given: at 9000G the bot took one every trip from the second 회차 and beat all forty stages in ~60
+// trips; at 15000G it takes ~90-100, and without the smith it stalls for good in the fourth 회차.
 // (FORGE_COST env "evolved,legend": a test override for the bot's careers)
-const FC = (globalThis.process?.env?.FORGE_COST || '2000,9000').split(',').map(Number);
+const FC = (globalThis.process?.env?.FORGE_COST || '3000,15000').split(',').map(Number);
 export const FORGE_COST = { 1: FC[0], 2: FC[1] };
 export const FORGE_LEGEND_LOOP = 2;
 // what the smith knows how to make: every evolved relic (and later legend) you have made at least once
