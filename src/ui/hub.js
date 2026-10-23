@@ -164,7 +164,7 @@ function pets(list, meta, buy, changed) {
       ? button('btn' + (on ? ' primary' : ''), on ? '데려감' : '데려가기', () => { meta.pet = on ? null : id; changed(); })
       : button('btn gold', `${pt.cost}G`, () => buy(pt.cost, () => { meta.pets = { ...meta.pets, [id]: true }; meta.pet = id; }));
     if (!have) b.disabled = meta.gold < pt.cost;
-    row.append(icon(pt.sprite, 40), main, b);
+    row.append(icon(pt.sprite, 32), main, b);
     list.append(row);
   }
 }
@@ -187,7 +187,7 @@ function home(box, { meta, changed, onDecor }) {
     });
     b.disabled = have || meta.gold < d.cost;
     const pic = decorCanvas(d.id), k = Math.min(44 / pic.width, 36 / pic.height);
-    pic.className = 'art decor-ic';
+    pic.className = 'pix decor-ic';
     pic.style.width = `${Math.round(pic.width * k)}px`;
     pic.style.height = `${Math.round(pic.height * k)}px`;
     const frame = el('span', 'decor-frame');

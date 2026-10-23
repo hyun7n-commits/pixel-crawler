@@ -12,26 +12,24 @@ import { daresOn, dareGold, DARE_BY_ID } from '../data/dares.js';
 import { josa } from '../core/util.js';
 import { isOpen } from '../data/unlocks.js';
 import { stageKit } from '../data/balance.js';
-import { wallArt, floorArt, shadeArt, waterArt, N, E, S, W_, NE, SE, SW, NW } from '../art/tiles.js';
 
-// a small view of the zone's ground, cut from the field's own tiles: a strip of its wall over its
-// floor, the wall's shade on the ground, a pool in the corner. A stage not open yet is a blank card with a ?
-function swatch(z, s, open) {
-  const T = 128, c = document.createElement('canvas');
-  c.width = T * 3; c.height = T * 2; c.className = 'stage-pic';
+// a small view of the zone's ground: a strip of its wall over its floor, a pool in the corner
+function swatch(z, open) {
+  const c = document.createElement('canvas');
+  c.width = 24; c.height = 16; c.className = 'pix stage-pic';
   const g = c.getContext('2d');
-  if (!open) {
-    g.fillStyle = '#ead9bc'; g.fillRect(0, 0, c.width, c.height);
-    g.font = '150px Jua, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillStyle = '#c9ab88'; g.fillText('?', c.width / 2, c.height / 2 + 8);
-    return c;
-  }
-  for (let x = 0; x < 3; x++) {
-    g.drawImage(wallArt(z, s, S | SE | SW, N, x % 3), x * T, 0, T, T);
-    g.drawImage(floorArt(z, s, x === 1 ? 4 : 0), x * T, T, T, T);
-    g.drawImage(shadeArt(N | E | W_ | NE | NW), x * T, T, T, T);
-  }
-  g.drawImage(waterArt(z, 0, N | W_ | NW | NE | SW), 2 * T, T, T, T);
+  if (!open) { g.fillStyle = '#16141f'; g.fillRect(0, 0, 24, 16); g.fillStyle = '#2a2638'; g.fillRect(0, 0, 24, 5); return c; }
+  g.fillStyle = z.floor; g.fillRect(0, 0, 24, 16);
+  g.fillStyle = z.floorDark;
+  for (const [x, y] of [[3, 9], [9, 12], [15, 8], [20, 13], [6, 14], [12, 10]]) g.fillRect(x, y, 1, 1);
+  g.fillStyle = z.floorLight;
+  for (const [x, y] of [[5, 7], [17, 11], [11, 14], [2, 12]]) g.fillRect(x, y, 1, 1);
+  g.fillStyle = z.wallFace; g.fillRect(0, 0, 24, 6);
+  g.fillStyle = z.wallTop; g.fillRect(0, 0, 24, 4);
+  g.fillStyle = z.wallLight; for (let x = 1; x < 24; x += 5) g.fillRect(x, 1, 2, 1);
+  g.fillStyle = z.wallLine; g.fillRect(0, 6, 24, 1);
+  g.fillStyle = z.water; g.fillRect(16, 10, 6, 4); g.fillRect(17, 9, 4, 6);
+  g.fillStyle = z.waterLight; g.fillRect(18, 10, 2, 1);
   return c;
 }
 
@@ -58,7 +56,7 @@ export function showStages({ meta, onGo, onClose }) {
     ZONES.forEach((z, s) => {
       const open = stageOpen(meta, s, loop), won = cleared(meta, s) >= loop;
       const card = el('div', 'stage' + (open ? '' : ' locked') + (won ? ' won' : ''));
-      card.append(swatch(z, s, open));
+      card.append(swatch(z, open));
       const info = el('div', 'stage-info');
       info.append(el('b', null, open ? `${s + 1}. ${z.name}` : `${s + 1}. ???`));
       const boss = ENEMIES[z.boss], met = meta.critters?.[z.boss];

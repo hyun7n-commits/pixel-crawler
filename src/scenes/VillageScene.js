@@ -4,8 +4,9 @@
 // Each time you come home a few shiny bits lie hidden in the grass for whoever wanders off the path.
 
 /* global Phaser */
-import { TILE, ART, dotScale, HOME_ZI, ensureHero, wallKey, waterKey, shadeKey, floorKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
-import { houseCanvas, pathKey, treeKey, lampPostCanvas, lotCanvas } from './village-art.js';
+import { pixEllipse } from './pix.js';
+import { TILE, HOME_ZI, wallKey, waterKey, shadeKey, floorKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
+import { houseCanvas, pathKey, lampPostCanvas, lotCanvas, treeKey, shrubCanvas, sunRaysCanvas, glintCanvas } from './village-art.js';
 import { baseZoom } from './zoom.js';
 import { faceKey } from '../data/faces.js';
 import { VILLAGE_MAP, HOUSES, FOLK, doorOf, HERO_LINES, HOME, ownsHome } from '../data/village.js';
@@ -14,7 +15,6 @@ import { VILLAGE_GROUND } from '../data/enemies.js';
 import { DECOR, hasDecor, LETTERS } from '../data/home.js';
 import { decorCanvas, pupCanvas } from './home-art.js';
 import { setEmote, drawEmote } from './emotes.js';
-import { speechBubble, FONT } from './bubble.js';
 
 const MW = VILLAGE_MAP[0].length, MH = VILLAGE_MAP.length;
 const D = { tiles: 0, deco: 1, house: 2, actors: 3, fx: 4, bubble: 5 };
@@ -43,23 +43,24 @@ export class VillageScene extends Phaser.Scene {
     const cam = this.cameras.main;
     cam.setRoundPixels(true);
     cam.setBackgroundColor(VILLAGE_GROUND.wallDark);
-    this.spark = this.add.particles(0, 0, 'dot', dotScale({
+    this.spark = this.add.particles(0, 0, 'px', {
       emitting: false, lifespan: { min: 300, max: 650 }, speed: { min: 15, max: 60 }, scale: { start: 1.5, end: 0 },
       gravityY: 40, tint: [0xf4cf4f, 0xffffff, 0xf29bb2],
-    })).setDepth(D.fx);
-    this.smoke = this.add.particles(0, 0, 'dot', dotScale({
+    }).setDepth(D.fx);
+    this.smoke = this.add.particles(0, 0, 'px', {
       emitting: false, lifespan: 1600, speedY: { min: -14, max: -8 }, speedX: { min: -2, max: 5 },
       scale: { start: 2, end: 3.5 }, alpha: { start: 0.45, end: 0 }, tint: 0xd8d4e0,
-    })).setDepth(D.fx);
+    }).setDepth(D.fx);
     this.shadows = this.add.graphics().setDepth(D.actors - 0.5);
     this.marks = this.add.graphics().setDepth(D.fx + 0.5);
     this.objs = [];
     this.bubbles = [];
 
     // tap a spot to walk there, or a villager to go and talk; hover with a mouse to read who is who
-    // or drag to look round the village (you walk off again, the view comes back to you)
+    // or drag to look round the village (walk off again and the view comes back to you)
     const tileOf = ptr => ({ x: Math.floor(ptr.worldX / TILE), y: Math.floor(ptr.worldY / TILE) });
-    this.input.on('pointerdown', ptr => { this.drag = { x: ptr.x, y: ptr.y, sx: cam.scrollX, sy: cam.scrollY, on: false }; });
+    const cam0 = this.cameras.main;
+    this.input.on('pointerdown', ptr => { this.drag = { x: ptr.x, y: ptr.y, sx: cam0.scrollX, sy: cam0.scrollY, on: false }; });
     this.input.on('pointerup', ptr => {
       const dragged = this.drag?.on;
       this.drag = null;
@@ -70,8 +71,8 @@ export class VillageScene extends Phaser.Scene {
     this.input.on('pointermove', ptr => {
       const d = this.drag;
       if (d && ptr.isDown) {
-        if (!d.on && Math.hypot(ptr.x - d.x, ptr.y - d.y) > 12 * this.dpr) { d.on = true; cam.stopFollow(); }
-        if (d.on) { cam.setScroll(d.sx - (ptr.x - d.x) / cam.zoom, d.sy - (ptr.y - d.y) / cam.zoom); return; }
+        if (!d.on && Math.hypot(ptr.x - d.x, ptr.y - d.y) > 12 * this.dpr) { d.on = true; cam0.stopFollow(); }
+        if (d.on) { cam0.setScroll(d.sx - (ptr.x - d.x) / cam0.zoom, d.sy - (ptr.y - d.y) / cam0.zoom); return; }
       }
       if (ptr.wasTouch) return;
       const t = tileOf(ptr);
@@ -108,17 +109,19 @@ export class VillageScene extends Phaser.Scene {
     // the hedge goes on past the edge, so a tall phone screen shows bushes around the village, not a void
     for (let y = -PAD.y; y < MH + PAD.y; y++) for (let x = -PAD.x; x < MW + PAD.x; x++) this.drawTile(x, y);
     this.plantTrees();
+    this.sunOnPond();
     // a house someone is just moving into still has its boards up until they arrive
     for (const h of HOUSES) {
       const f = FOLK[h.id], lived = f.when(meta), moving = lived && f.arrive && !meta.village.seen[h.id];
-      h.img = this.keep(this.add.image(h.x * TILE, h.y * TILE, this.houseKey(h, lived && !moving)).setOrigin(0).setScale(ART).setDepth(D.actors + (h.y + h.h - 1) / 100));
+      h.img = this.keep(this.add.image(h.x * TILE, h.y * TILE, this.houseKey(h, lived && !moving)).setOrigin(0).setDepth(D.actors + (h.y + h.h - 1) / 100));
+      this.shrubs(h);
       for (let y = h.y; y < h.y + h.h; y++) for (let x = h.x; x < h.x + h.w; x++) this.blocked[y * MW + x] = 1;
       h.lived = lived;
     }
     // your own house, or the roped-off lot where it will stand
     const home = ownsHome(meta);
     if (!this.textures.exists('village_lot')) this.textures.addCanvas('village_lot', lotCanvas(HOME.w, HOME.h));
-    this.keep(this.add.image(HOME.x * TILE, HOME.y * TILE, home ? this.houseKey(HOME, true) : 'village_lot').setOrigin(0).setScale(ART).setDepth(D.actors + (HOME.y + HOME.h - 1) / 100));
+    this.keep(this.add.image(HOME.x * TILE, HOME.y * TILE, home ? this.houseKey(HOME, true) : 'village_lot').setOrigin(0).setDepth(D.actors + (HOME.y + HOME.h - 1) / 100));
     for (let y = HOME.y; y < HOME.y + HOME.h; y++) for (let x = HOME.x; x < HOME.x + HOME.w; x++) this.blocked[y * MW + x] = 1;
     // what you have put round it (data/home.js); bumping the house in front of its door opens that list
     this.homeDoor = home ? { ...doorOf(HOME), home: true } : null;
@@ -169,9 +172,9 @@ export class VillageScene extends Phaser.Scene {
         this.time.delayedCall(900, () => tw({ sy: 0.9, duration: 120, yoyo: true, repeat: 1, ease: 'Quad.out' }));
         break;
       case 'shop': {
-        const c = this.keep(this.add.image(s.x + 3, s.y - TILE + 2, 'gold').setDepth(D.fx).setScale(0.45 * ART));
+        const c = this.keep(this.add.image(s.x + 3, s.y - TILE + 2, 'gold').setDepth(D.fx).setScale(0.45));
         this.tweens.add({ targets: c, y: c.y - 12, duration: 260, yoyo: true, ease: 'Quad.out', onComplete: () => { c.destroy(); setEmote(s, '♪', this.time.now, 1000); } });
-        this.tweens.add({ targets: c, scaleX: 0.1 * ART, duration: 90, yoyo: true, repeat: 2 });
+        this.tweens.add({ targets: c, scaleX: 0.1, duration: 90, yoyo: true, repeat: 2 });
         break;
       }
       case 'smith':
@@ -216,7 +219,7 @@ export class VillageScene extends Phaser.Scene {
       const key = `decor_${d.id}`;
       if (!this.textures.exists(key)) this.textures.addCanvas(key, decorCanvas(d.id));
       const x0 = Math.min(...d.at.map(a => a[0])), y1 = Math.max(...d.at.map(a => a[1]));
-      const img = this.keep(this.add.image(x0 * TILE, foot(y1), key).setOrigin(0, 1).setScale(ART).setDepth(D.actors + y1 / 100));
+      const img = this.keep(this.add.image(x0 * TILE, foot(y1), key).setOrigin(0, 1).setDepth(D.actors + y1 / 100));
       for (const [x, y] of d.at) this.blocked[y * MW + x] = 1;
       if (this.pup && d.at.some(([x, y]) => x === this.pup.x && y === this.pup.y)) this.movePup(39, 27);
       if (this.p && d.at.some(([x, y]) => x === this.p.x && y === this.p.y)) {
@@ -228,10 +231,10 @@ export class VillageScene extends Phaser.Scene {
       if (d.id === 'statue') this.tweens.add({ targets: img, alpha: 0.82, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
       if (d.id === 'dog') this.placePup();
       if (d.id === fresh) {
-        const cx = img.x + img.displayWidth / 2, cy = img.y - img.displayHeight / 2;
+        const cx = img.x + img.width / 2, cy = img.y - img.height / 2;
         this.spark.explode(30, cx, cy);
-        img.setScale(0.2 * ART);
-        this.tweens.add({ targets: img, scale: ART, duration: 320, ease: 'Back.out' });
+        img.setScale(0.2);
+        this.tweens.add({ targets: img, scale: 1, duration: 320, ease: 'Back.out' });
       }
     }
   }
@@ -280,7 +283,7 @@ export class VillageScene extends Phaser.Scene {
       const x = 1 + Math.floor(Math.random() * (MW - 2)), y = 1 + Math.floor(Math.random() * (MH - 2));
       if (!grassy(this.ch(x, y)) || !this.walkable(x, y) || this.finds.some(f => Math.abs(f.x - x) + Math.abs(f.y - y) < 8)) continue;
       if (Math.abs(x - this.p.x) + Math.abs(y - this.p.y) < 6) continue;
-      const img = this.keep(this.add.image(center(x), center(y) + 2, 't_chip_copper').setScale(ART).setDepth(D.deco).setAlpha(0.85));
+      const img = this.keep(this.add.image(center(x), center(y) + 2, 't_chip_copper').setDepth(D.deco).setAlpha(0.85));
       this.finds.push({ x, y, img, next: 0 });
     }
   }
@@ -293,7 +296,7 @@ export class VillageScene extends Phaser.Scene {
     this.tweens.add({ targets: f.img, y: f.img.y - 14, alpha: 0, duration: 380, ease: 'Quad.out', onComplete: () => f.img.destroy() });
     const k = this.dpr / (this.cameras.main.zoom || 3);
     const t = this.keep(this.add.text(f.img.x, f.img.y - 8, `+${n}G`, {
-      fontFamily: FONT, fontSize: `${16 * k}px`, color: '#ffd45a', stroke: '#4a2a3c', strokeThickness: 3.4 * k,
+      fontFamily: 'Galmuri14, sans-serif', fontSize: `${15 * k}px`, color: '#f4cf4f', stroke: '#1b1424', strokeThickness: 3 * k,
     }).setOrigin(0.5, 1).setDepth(D.bubble).setResolution(this.cameras.main.zoom || 3));
     this.tweens.add({ targets: t, y: t.y - 12, alpha: 0, delay: 350, duration: 700, ease: 'Quad.in' });
     this.ps.expr = 'sparkle';
@@ -336,6 +339,8 @@ export class VillageScene extends Phaser.Scene {
     this.bubbles = [];
     this.waterImgs = [];
     this.glows = [];
+    this.glints = [];
+    this.rays = null;
     this.finds = [];
     this.pending = null;
   }
@@ -348,8 +353,9 @@ export class VillageScene extends Phaser.Scene {
     const ch = this.ch(x, y);
     const around = test => (test(x, y - 1) && N) | (test(x + 1, y) && E) | (test(x, y + 1) && S) | (test(x - 1, y) && W_) |
       (test(x + 1, y - 1) && NE) | (test(x + 1, y + 1) && SE) | (test(x - 1, y + 1) && SW) | (test(x - 1, y - 1) && NW);
-    const add = (key, depth = D.tiles) => this.keep(this.add.image(x * TILE, y * TILE, key).setOrigin(0).setScale(ART).setDepth(depth));
-    const hedge = (nx, ny) => this.ch(nx, ny) === '#';
+    const add = (key, depth = D.tiles) => this.keep(this.add.image(x * TILE, y * TILE, key).setOrigin(0).setDepth(depth));
+    const hedge = (nx, ny) => this.ch(nx, ny) === '#' && !this.grove(nx, ny);
+    if (ch === '#' && this.grove(x, y)) { add(floorKey(HOME_ZI, hash(x, y) & 31)); return; } // grass under a lone tree (plantTrees)
     if (ch === '#') {
       add(wallKey(this, HOME_ZI, around((nx, ny) => !hedge(nx, ny)), hash(x + 99, y + 99) % 3));
       return;
@@ -358,39 +364,81 @@ export class VillageScene extends Phaser.Scene {
       const img = add(waterKey(this, HOME_ZI, 0, around((nx, ny) => this.ch(nx, ny) !== '~')));
       img.shore = around((nx, ny) => this.ch(nx, ny) !== '~');
       this.waterImgs.push(img);
-      if (hash(x, y) % 11 === 0) add(`t_lily${hash(x, y) % 2}`, D.deco);
+      if (x >= 0 && y >= 0 && hash(x, y) % 9 === 0) add(`t_lily${hash(x, y) % 2}`, D.deco);
       return;
     }
     const pathy = (nx, ny) => ':>'.includes(this.ch(nx, ny));
-    add(ch === '*' ? `z${HOME_ZI}_floor${4 + (hash(x, y) % 3)}` : floorKey(HOME_ZI, pathy(x, y) ? 0 : hash(x, y) & 31)); // '*': daisies, pink flowers, buttercups
-    // the path's edges stop short of whatever is not path; its inside corners round off into grass only
-    if (pathy(x, y)) add(pathKey(this, (around((nx, ny) => !pathy(nx, ny)) & (N | E | S | W_)) | (around((nx, ny) => grassy(this.ch(nx, ny))) & (NE | SE | SW | NW)), hash(x, y) % 3));
+    if (pathy(x, y)) add(pathKey(this, around((nx, ny) => !pathy(nx, ny)) & (N | E | S | W_)));
+    else add(ch === '*' ? `z${HOME_ZI}_floor${4 + (hash(x, y) % 3)}` : floorKey(HOME_ZI, hash(x, y) & 31)); // '*': daisies, pink flowers, buttercups
     const shade = around(hedge) & (N | E | W_ | NE | NW);
-    if (shade & N) add(shadeKey(this, shade));
+    if (shade) add(shadeKey(this, shade));
     if (ch === '>') add('t_stairs', D.deco);
     if (ch === 'L') {
       if (!this.textures.exists('village_post')) this.textures.addCanvas('village_post', lampPostCanvas());
-      this.keep(this.add.image(center(x), foot(y), 'village_post').setOrigin(0.5, 1).setScale(ART).setDepth(D.actors + y / 100));
+      this.keep(this.add.image(center(x), foot(y), 'village_post').setOrigin(0.5, 1).setDepth(D.actors + y / 100));
       const glow = this.keep(this.add.image(center(x) - 1, foot(y) - 14, 'glow').setDepth(D.fx).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.6));
       this.glows.push(glow);
     }
   }
 
-  // Trees: tall round ones along the woods' edge wherever the hedge is deep enough behind them to
-  // take the crown (so they never hide the paths), and the ones standing in the grass ('T').
+  // The woods: round trees wherever the hedge is deep enough behind them to take the crown (so they
+  // never hide a path), one over each little square of hedge inside the village, and the ones
+  // standing in the grass ('T'). The border trees are plain and dark; the grass ones bear fruit or blossom now and then.
   plantTrees() {
     const hedge = (x, y) => this.ch(x, y) === '#';
-    const tree = (x, y) => {
-      const r = hash(x * 3 + 7, y * 5 + 1) % 12, v = r < 7 ? 0 : r < 9 ? 1 : r < 11 ? 2 : 3;
-      this.keep(this.add.image(center(x), foot(y), treeKey(this, v)).setOrigin(0.5, 1).setScale(ART).setDepth(D.actors + y / 100 + 0.001));
-    };
+    const tree = (px, y, v) => this.keep(this.add.image(px, foot(y), treeKey(this, v)).setOrigin(0.5, 1).setDepth(D.actors + y / 100 + 0.001));
     for (let gy = -PAD.y; gy < MH + PAD.y; gy += 2) for (let gx = -PAD.x + ((gy / 2) & 1); gx < MW + PAD.x; gx += 3) {
       const h = hash(gx + 500, gy + 500), x = gx + (h % 2), y = gy + ((h >> 3) % 2);
       let deep = true;
       for (let dy = -2; dy <= 0 && deep; dy++) for (let dx = -1; dx <= 1 && deep; dx++) if (!hedge(x + dx, y + dy)) deep = false;
-      if (deep) tree(x, y);
+      if (deep) tree(center(x), y, h % 5 < 2 ? 1 : 0);
     }
-    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (this.ch(x, y) === 'T') tree(x, y);
+    for (let y = 1; y < MH - 1; y++) for (let x = 1; x < MW - 1; x++) {
+      // a 2x2 square of hedge on its own: one big tree over it
+      if (this.grove(x, y) && this.grove(x + 1, y) && this.grove(x, y - 1) && !hedge(x, y + 1) && !hedge(x - 1, y)) tree((x + 1) * TILE, y, 1);
+      if (this.ch(x, y) === 'T') { const r = hash(x * 3 + 7, y * 5 + 1) % 10; tree(center(x), y, r < 5 ? 0 : r < 7 ? 2 : r < 9 ? 3 : 1); }
+    }
+  }
+
+  // true for a cell of a little 2x2 square of hedge standing on its own in the grass: a tree grows there instead
+  grove(x, y) {
+    const hedge = (i, j) => this.ch(i, j) === '#';
+    for (const [bx, by] of [[x, y], [x - 1, y], [x, y - 1], [x - 1, y - 1]]) {
+      if (!(hedge(bx, by) && hedge(bx + 1, by) && hedge(bx, by + 1) && hedge(bx + 1, by + 1))) continue;
+      let alone = true;
+      for (let j = by - 1; j <= by + 2 && alone; j++) for (let i = bx - 1; i <= bx + 2 && alone; i++) {
+        if ((i === bx || i === bx + 1) && (j === by || j === by + 1)) continue;
+        if (hedge(i, j)) alone = false;
+      }
+      if (alone) return true;
+    }
+    return false;
+  }
+
+  // a flowering shrub against each side of a house, where there is grass for it
+  shrubs(h) {
+    if (!this.textures.exists('village_shrub')) this.textures.addCanvas('village_shrub', shrubCanvas());
+    const y = h.y + h.h - 1;
+    for (const x of [h.x - 1, h.x + h.w]) {
+      if (!grassy(this.ch(x, y)) || hash(x + 3, y + 9) % 4 === 0) continue;
+      this.keep(this.add.image(center(x), foot(y), 'village_shrub').setOrigin(0.5, 1).setDepth(D.actors + y / 100));
+      this.blocked[y * MW + x] = 1;
+    }
+  }
+
+  // sunlight falling through the trees onto the pond, and a few glints on the water
+  sunOnPond() {
+    const pond = [];
+    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (this.ch(x, y) === '~') pond.push({ x, y });
+    this.pondTiles = pond;
+    if (!pond.length) return;
+    const x0 = Math.min(...pond.map(t => t.x)) - 2, x1 = Math.max(...pond.map(t => t.x)) + 2;
+    const y0 = Math.min(...pond.map(t => t.y)) - 3, y1 = Math.max(...pond.map(t => t.y)) + 2;
+    const key = `village_rays_${x1 - x0}_${y1 - y0}`;
+    if (!this.textures.exists(key)) this.textures.addCanvas(key, sunRaysCanvas((x1 - x0) * TILE, (y1 - y0) * TILE));
+    this.rays = this.keep(this.add.image(x0 * TILE, y0 * TILE, key).setOrigin(0).setDepth(D.fx).setBlendMode(Phaser.BlendModes.ADD));
+    if (!this.textures.exists('village_glint')) this.textures.addCanvas('village_glint', glintCanvas());
+    for (let k = 0; k < 4; k++) this.glints.push(Object.assign(this.keep(this.add.image(0, 0, 'village_glint').setDepth(D.deco + 0.5).setAlpha(0)), { next: k * 500 }));
   }
 
   actor(tex, x, y) {
@@ -637,7 +685,10 @@ export class VillageScene extends Phaser.Scene {
   say(target, text, ms = 1700) {
     while (this.bubbles.length >= 3) this.bubbles.shift().destroy();
     const z = this.cameras.main.zoom || 3, k = this.dpr / z;
-    const b = speechBubble(this, target.x, target.y - 18, text, { k, res: z, depth: D.bubble });
+    const b = this.add.text(target.x, target.y - 18, text, {
+      fontFamily: 'Galmuri11, sans-serif', fontSize: `${12 * k}px`, color: '#1b1424', backgroundColor: '#f4f0e8',
+      padding: { x: 7 * k, y: 4 * k }, align: 'center', wordWrap: { width: 190 * k, useAdvancedWrap: true },
+    }).setOrigin(0.5, 1).setDepth(D.bubble).setResolution(z);
     b.target = target;
     b.until = this.time.now + ms;
     this.bubbles.push(b);
@@ -668,7 +719,6 @@ export class VillageScene extends Phaser.Scene {
     }
     const ps = this.ps, walking = time < (ps.stepUntil || 0);
     const base = CHARACTERS[this.p.id].sprite;
-    if (this.facesFor !== base) { ensureHero(this, base); this.facesFor = base; }
     let expr = time < (ps.exprUntil || 0) ? ps.expr : '';
     if (time > (ps.nextBlink || 0)) { ps.blinkUntil = time + 130; ps.nextBlink = time + 2200 + Math.random() * 2600; }
     if (!expr && !walking && time < ps.blinkUntil) expr = 'blink';
@@ -759,7 +809,7 @@ export class VillageScene extends Phaser.Scene {
       const k = TILE * 0.72 / pup.s.frame.height, br = 1 + 0.05 * Math.sin(time / 300);
       pup.s.setScale(k, k * br).setOrigin(0.5, 1 + (pup.s.hop || 0) / (pup.s.frame.height * k));
       g.fillStyle(0x000000, 0.25);
-      g.fillEllipse(pup.s.x, pup.s.y - 1, 9, 3);
+      pixEllipse(g, pup.s.x, pup.s.y - 1, 9, 3);
     }
     const all = [ps, ...this.folk.map(f => f.s), ...this.heroes.map(h => h.s)];
     all.forEach((s, i) => {
@@ -767,7 +817,7 @@ export class VillageScene extends Phaser.Scene {
       const k = texScale(s);
       if (!s.diving) s.setScale(k * (s.sx || 1), k * breathe * (s.sy || 1)).setOrigin(0.5, 1 + (s.hop || 0) / TILE);
       g.fillStyle(0x000000, 0.28);
-      g.fillEllipse(s.x, s.y - 1.5, 11, 4);
+      pixEllipse(g, s.x, s.y - 1.5, 11, 4);
     });
     const mk = this.marks;
     mk.clear();
@@ -780,17 +830,26 @@ export class VillageScene extends Phaser.Scene {
     // chimney smoke from the houses people live in, and the pond shimmering
     if (time > (this.nextSmoke || 0)) {
       this.nextSmoke = time + 450;
-      for (const h of HOUSES) if (h.lived && h.chimney) this.smoke.explode(1, h.x * TILE + h.w * TILE - 17.5, h.y * TILE);
-      if (ownsHome(this.meta)) this.smoke.explode(1, HOME.x * TILE + HOME.w * TILE - 17.5, HOME.y * TILE);
+      for (const h of HOUSES) if (h.lived && h.chimney) this.smoke.explode(1, h.x * TILE + h.w * TILE - 10, h.y * TILE + 1);
+      if (ownsHome(this.meta)) this.smoke.explode(1, HOME.x * TILE + HOME.w * TILE - 10, HOME.y * TILE + 1);
     }
     // the hidden bits twinkle now and then; the lamps flicker
     for (const f of this.finds) {
       if (time < f.next) continue;
       f.next = time + 1300 + Math.random() * 1800;
       this.spark.explode(2, f.img.x, f.img.y - 2);
-      this.tweens.add({ targets: f.img, alpha: 1, scale: 1.25 * ART, duration: 160, yoyo: true });
+      this.tweens.add({ targets: f.img, alpha: 1, scale: 1.25, duration: 160, yoyo: true });
     }
     this.glows.forEach((g, i) => g.setAlpha(0.5 + 0.12 * Math.sin(time / 300 + i * 2.1)));
+    // the sunlight on the pond breathes a little; now and then the water glints where it falls
+    if (this.rays) this.rays.setAlpha(0.85 + 0.15 * Math.sin(time / 1400));
+    for (const gl of this.glints) {
+      if (time < gl.next) continue;
+      const t = this.pondTiles[Math.floor(Math.random() * this.pondTiles.length)];
+      gl.next = time + 900 + Math.random() * 1600;
+      gl.setPosition(t.x * TILE + 3 + Math.floor(Math.random() * 10), t.y * TILE + 3 + Math.floor(Math.random() * 10)).setAlpha(0);
+      this.tweens.add({ targets: gl, alpha: 1, duration: 220, yoyo: true, hold: 200 });
+    }
     const wf = Math.floor(time / 600) % 2;
     if (wf !== this.waterFrame) {
       this.waterFrame = wf;

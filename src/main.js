@@ -572,14 +572,12 @@ function saveAndLeave() {
 // The canvas has one pixel per screen pixel (sharp on phones), shown at the stage's CSS size.
 const DPR = Math.min(3, window.devicePixelRatio || 1);
 const TOUCH = window.matchMedia('(pointer: coarse)').matches;
-// the font (fonts/, styles.css) is in before the first word is drawn on the canvas
-const fontsIn = document.fonts.load('13px Jua').catch(() => {});
+// the pixel fonts (fonts/, styles.css) are in before the first word is drawn on the canvas
+const fontsIn = Promise.all(['10px Galmuri9', '12px Galmuri11', 'bold 12px Galmuri11', '15px Galmuri14'].map(f => document.fonts.load(f))).catch(() => {});
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'phaser',
-  // the pictures are smooth illustrations drawn at high resolution (src/art), so they are filtered, not pixel-snapped
-  pixelArt: false,
-  antialias: true,
+  pixelArt: true,
   roundPixels: true,
   backgroundColor: '#07060a',
   scale: { mode: Phaser.Scale.NONE, width: 320, height: 240, zoom: 1 / DPR },
