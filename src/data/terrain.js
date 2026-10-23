@@ -93,6 +93,7 @@ export const DISCOVERIES = [
   { id: 'pine_cliff',  combo: '솔방울 + 절벽 끝',   result: '맞은 녀석이 절벽 아래로 데굴데굴', hint: '절벽 끝에 선 녀석한테 솔방울을 던지면 떨어진대.' },
   { id: 'pine_trap',   combo: '솔방울 + 함정',      result: '밀려난 녀석이 함정을 밟는다', hint: '솔방울에 맞고 밀려난 녀석이 함정을 밟았대.' },
   { id: 'bell_honey',  combo: '방울 + 꿀',          result: '방울 소리 따라온 녀석이 꿀에 붙는다', hint: '방울 둘레에 꿀을 부어 두면 몰려온 녀석들이 다 붙는대.' },
+  { id: 'bell_den',    combo: '방울 + 낮잠 방',     result: '자던 녀석들이 우르르 방울 쪽으로 몰려간다', hint: '모여 자는 녀석들 근처에서 방울을 울리면 다 같이 보러 간대.' },
 ];
 
 // Things enemies mutter when you overhear them unseen

@@ -1217,6 +1217,9 @@ export class Run {
     for (const b of bells.slice()) {
       this.emit('ring', { x: b.x, y: b.y });
       const heard = this.noise(b.x, b.y, B.BELL_RANGE);
+      // the nappers of a 낮잠 방 trooping off to the bell, the chest left alone
+      const den = this.map.den, troop = heard.filter(e => e.den);
+      if (troop.length && ((den && this.isVisible(den.x, den.y)) || troop.some(e => this.isVisible(e.x, e.y)))) this.discover('bell_den');
       for (const e of this.enemies) {
         if (e.hp <= 0 || e.d.npc || e.d.boss || this.calm(e) || cheb(e, b) > B.BELL_RANGE || e.fear > 0) continue;
         if (!['search', 'wander', 'hunt'].includes(e.state) || (e.state === 'hunt' && canSee(this, e, 9))) continue;
