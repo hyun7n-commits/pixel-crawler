@@ -1209,6 +1209,16 @@ export class Run {
     if (cheb(this.p, { x, y }) <= 1) this.p.sticky = 1;
     this.emit('honeyPour', { x, y, list: stuck });
     this.log(stuck.length ? `꿀 병이 깨지며 꿀이 쏟아졌다! ${stuck.length > 1 ? `${stuck.length}마리가` : josa(stuck[0].d.name, '이', '가')} 꿀에 붙어 버둥거린다.` : '꿀 병이 깨지며 꿀이 쏟아졌다! 끈적끈적.', 'good');
+    // bees can never pass up honey: every bee about (angry ones too) forgets you and hums round the
+    // puddle for a while, then goes home (ai.js e.sweetT)
+    const bees = this.enemies.filter(e => e.d.swarm && e.hp > 0 && e.state !== 'sleep' && cheb(e, { x, y }) <= B.BEE_SWEET_RANGE);
+    const angry = bees.filter(e => e.angry);
+    for (const e of bees) Object.assign(e, { angry: false, state: 'wander', aim: false, sweet: { x, y }, sweetT: B.BEE_SWEET_TURNS });
+    if (bees.length) this.emit('sweet', { x, y, list: bees });
+    if (angry.length) {
+      this.log('화난 벌들이 쏟아진 꿀로 몰려간다! 윙윙, 이제 나는 안중에도 없다.', 'good');
+      if (angry.some(e => this.isVisible(e.x, e.y))) this.discover('honey_bees');
+    }
   }
 
   // 졸음 꽃: pops into a cloud of sleep pollen, the same as the trap. Whoever is in it nods off at once

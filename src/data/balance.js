@@ -199,6 +199,8 @@ export const WELL_CHANCE = 0.22;
 // gimmick's) give up once you are farther than BEE_HOME from it; a fire within HIVE_SMOKE smokes them to sleep
 export const honeyHp = floor => 3 + Math.floor(gs(stageOf(floor)));
 export const BEE_HOME = 6;
+// 꿀 병 + 벌: bees this close to the spilt honey go to it and stay this many turns
+export const BEE_SWEET_RANGE = 8, BEE_SWEET_TURNS = 10;
 // 요정 고리: the chance a field has a pair of fairy rings, by zone (most in the deep forest)
 export const RING_CHANCE = [0.2, 0.7, 0.3, 0.2, 0.3, 0.5, 0.2, 0.25, 0.1, 0.3];
 // 온천: the chance a flooded room's pool is a hot spring, by zone (most up the rocky hills); anyone

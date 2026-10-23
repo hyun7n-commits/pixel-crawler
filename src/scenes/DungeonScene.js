@@ -1123,6 +1123,7 @@ export class DungeonScene extends Phaser.Scene {
           if (d.done) this.float(d.enemy.x, d.enemy.y, '토닥토닥', '#d8d2c0', 0, 8);
         }
         break;
+      case 'sweet': for (const e of d.list) if (this.run.isVisible(e.x, e.y)) this.float(e.x, e.y, '♥', '#f29bb2', 160, 8); break;
       case 'honeyPour': {
         const ring = this.add.circle(center(d.x), center(d.y), TILE * 0.6).setStrokeStyle(2, 0xf4cf4f, 0.9).setDepth(D.fx).setScale(0.4);
         this.tweens.add({ targets: ring, scale: 2.2, alpha: 0, duration: 380, ease: 'Quad.out', onComplete: () => ring.destroy() });

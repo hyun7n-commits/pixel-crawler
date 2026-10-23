@@ -85,6 +85,12 @@ export function enemyAct(run, e, dmP) {
       return;
     }
   }
+  // bees at the honey from a 꿀 병 (run.splashHoney) hum round it until it is licked clean; a bee made
+  // angry again (a blow, the stump robbed) drops it at once
+  if (e.sweetT > 0) {
+    if (e.angry || e.state === 'sleep') e.sweetT = 0;
+    else { e.sweetT--; hover(run, e, e.sweet); return; }
+  }
   // bees after you turn back once you are far enough from their stump
   const hive = d.swarm && run.map.hive;
   if (hive && !run.calm(e) && cheb(p, hive) > BEE_HOME) { e.angry = false; e.state = 'wander'; e.aim = false; }
