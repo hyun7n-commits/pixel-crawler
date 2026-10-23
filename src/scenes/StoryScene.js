@@ -3,6 +3,7 @@
 // text under it (ui/story.js). A tap moves on; the text box and the skip button are DOM.
 
 /* global Phaser */
+import { pixDisc, pixEllipse } from './pix.js';
 import { TILE, wallKey, floorKey, texScale, S } from './textures.js';
 import { houseCanvas, lampPostCanvas } from './village-art.js';
 import { faceKey } from '../data/faces.js';
@@ -63,14 +64,14 @@ export class StoryScene extends Phaser.Scene {
         const x = (k * 53 % 47) * 9 - 160, y = (k * 29 % 61) * 4 - 230;
         g.fillStyle(0xffffff, k % 3 ? 0.5 : 0.9).fillRect(x, y, 1, 1);
       }
-      g.fillStyle(0xfff3b0, 1).fillCircle(VIEW.w * TILE - 12, -8, 7);
-      g.fillStyle(SKY.night, 1).fillCircle(VIEW.w * TILE - 9, -10, 6);
+      g.fillStyle(0xfff3b0, 1); pixDisc(g, VIEW.w * TILE - 12, -8, 7);
+      g.fillStyle(SKY.night, 1); pixDisc(g, VIEW.w * TILE - 9, -10, 6);
     } else if (kind === 'day' || kind === 'dusk') {
       // a tall phone shows a lot of sky over the diorama: a sun and a few slow clouds fill it
       const g = this.keep(this.add.graphics().setDepth(D.sky));
       const sun = kind === 'day' ? 0xfff3b0 : 0xffd27a;
-      g.fillStyle(sun, 0.35).fillCircle(VIEW.w * TILE - 22, -70, 14);
-      g.fillStyle(sun, 1).fillCircle(VIEW.w * TILE - 22, -70, 10);
+      g.fillStyle(sun, 0.35); pixDisc(g, VIEW.w * TILE - 22, -70, 14);
+      g.fillStyle(sun, 1); pixDisc(g, VIEW.w * TILE - 22, -70, 10);
       const cloud = kind === 'day' ? 0xffffff : 0xffe2c4;
       [[8, -50, 1], [70, -110, 0.8], [-20, -170, 1.2], [90, -220, 0.9]].forEach(([x, y, s], i) => {
         const c = this.keep(this.add.graphics().setDepth(D.sky));
@@ -166,8 +167,9 @@ export class StoryScene extends Phaser.Scene {
   dream(im, key) {
     const g = this.keep(this.add.graphics().setDepth(D.bubble));
     const cx = im.x + 22, cy = im.y - im.displayHeight - 20;
-    g.fillStyle(0x1b1424, 1).fillCircle(im.x + 6, im.y - im.displayHeight - 2, 2.5).fillCircle(im.x + 11, im.y - im.displayHeight - 7, 3.5).fillEllipse(cx, cy, 46, 34);
-    g.fillStyle(0xf4f0e8, 1).fillCircle(im.x + 6, im.y - im.displayHeight - 2, 1.5).fillCircle(im.x + 11, im.y - im.displayHeight - 7, 2.5).fillEllipse(cx, cy, 44, 32);
+    const top = im.y - im.displayHeight;
+    g.fillStyle(0x1b1424, 1); pixDisc(g, im.x + 6, top - 2, 2.5); pixDisc(g, im.x + 11, top - 7, 3.5); pixEllipse(g, cx, cy, 46, 34);
+    g.fillStyle(0xf4f0e8, 1); pixDisc(g, im.x + 6, top - 2, 1.5); pixDisc(g, im.x + 11, top - 7, 2.5); pixEllipse(g, cx, cy, 44, 32);
     const pic = this.keep(this.add.image(cx, cy + 1, key).setDepth(D.bubble).setScale(0.42));
     for (const o of [g, pic]) { o.setAlpha(0); this.tweens.add({ targets: o, alpha: 1, duration: 300 }); }
     return pic;
@@ -176,15 +178,19 @@ export class StoryScene extends Phaser.Scene {
   // a 탐험 license: a round badge on a ribbon, in the zone's colour
   badge(x, y, color, delay = 0) {
     const g = this.keep(this.add.graphics().setDepth(D.fx));
-    g.fillStyle(0x1b1424, 1).fillTriangle(-6, 2, -1, 2, -7, 16).fillTriangle(6, 2, 1, 2, 7, 16);
-    g.fillStyle(0xd9454a, 1).fillTriangle(-5, 3, -2, 3, -6, 14).fillTriangle(5, 3, 2, 3, 6, 14);
-    g.fillStyle(0x1b1424, 1).fillCircle(0, 0, 9);
-    g.fillStyle(0xf4cf4f, 1).fillCircle(0, 0, 8);
-    g.fillStyle(color, 1).fillCircle(0, 0, 6);
+    // two ribbon tails stepping outwards, each notched at the end
+    for (const sd of [-1, 1]) for (let t = 0; t < 13; t++) {
+      const o = Math.floor(t / 4), x0 = sd < 0 ? -5 - o : 2 + o;
+      g.fillStyle(0x1b1424, 1).fillRect(x0 - 1, 3 + t, 5, 1);
+      if (t < 12) g.fillStyle(t === 11 ? 0xa83238 : 0xd9454a, 1).fillRect(x0, 3 + t, 3, 1);
+    }
+    g.fillStyle(0x1b1424, 1); pixDisc(g, 0, 0, 9.5);
+    g.fillStyle(0xf4cf4f, 1); pixDisc(g, 0, 0, 8.5);
+    g.fillStyle(0xc99a2b, 1); pixDisc(g, 0, 0, 6.5);
+    g.fillStyle(color, 1); pixDisc(g, 0, 0, 5.5);
+    // a star in the middle
     g.fillStyle(0xfff3b0, 1);
-    const star = [];
-    for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 1.6 : 4; star.push({ x: Math.cos(a) * r, y: Math.sin(a) * r }); }
-    g.fillPoints(star, true);
+    ['...#...', '..###..', '#######', '.#####.', '..###..', '.##.##.', '.#...#.'].forEach((r, j) => [...r].forEach((c, i) => { if (c === '#') g.fillRect(i - 3, j - 3, 1, 1); }));
     g.setPosition(x * TILE + TILE / 2, y * TILE + TILE / 2).setScale(0);
     this.tweens.add({ targets: g, scale: 1, duration: 380, delay, ease: 'Back.out', onStart: () => this.sparkle(x, y, 14) });
     return g;

@@ -4,6 +4,7 @@
 
 /* global Phaser */
 import { setEmote, drawEmote } from './emotes.js';
+import { pixEllipse, pixDisc, pixLine, pixDiamond, pixArrow } from './pix.js';
 import { TILE, buildTextures, wallKey, waterKey, shadeKey, floorKey, oreFrame, dropKey, chipKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
 import { CHARACTERS } from '../data/characters.js';
 import { PETS } from '../data/pets.js';
@@ -605,8 +606,8 @@ export class DungeonScene extends Phaser.Scene {
     const draw = () => {
       g.clear();
       const x = x0 + (x1 - x0) * o.t, y = y0 + (y1 - y0) * o.t;
-      g.lineStyle(2, 0xe58aa5, 1).lineBetween(x0, y0, x, y);
-      g.fillStyle(0xf29bb2, 1).fillCircle(x, y, 2);
+      g.fillStyle(0xe58aa5, 1); pixLine(g, x0, y0, x, y, 2);
+      g.fillStyle(0xf29bb2, 1); pixDisc(g, x, y, 2);
     };
     this.tweens.add({ targets: o, t: 1, duration: 110, ease: 'Quad.out', yoyo: true, hold: 60, onUpdate: draw, onComplete: () => g.destroy() });
   }
@@ -1361,14 +1362,14 @@ export class DungeonScene extends Phaser.Scene {
     // soft shadows under everyone standing on the floor (they stay put when an actor hops)
     const shadow = (s, w) => {
       if (!s || !s.visible || s.dying || s.wet) return;
-      if (s.flat) { this.shadowGfx.fillStyle(0x000000, 0.25); this.shadowGfx.fillEllipse(s.x, s.y - 2, 9, 3); return; }
+      if (s.flat) { this.shadowGfx.fillStyle(0x000000, 0.25); pixEllipse(this.shadowGfx, s.x, s.y - 2, 9, 3); return; }
       const lift = Math.min(1, (s.lift ?? s.hop ?? 0) / 6);
       this.shadowGfx.fillStyle(0x000000, 0.32 * (1 - 0.5 * lift));
-      this.shadowGfx.fillEllipse(s.x, s.y - 1.5, w * (1 - 0.3 * lift), 4);
+      pixEllipse(this.shadowGfx, s.x, s.y - 1.5, w * (1 - 0.3 * lift), 4);
     };
     shadow(this.playerSprite, 11);
     for (const s of Object.values(this.enemySprites)) shadow(s, s.scaleX / texScale(s) > 1.1 ? 15 : 11);
-    for (const s of Object.values(this.pickupSprites)) if (s.visible) { this.shadowGfx.fillStyle(0x000000, 0.25); this.shadowGfx.fillEllipse(s.x + 8, s.getData?.('baseY') ?? s.y + 15, 9, 3); }
+    for (const s of Object.values(this.pickupSprites)) if (s.visible) { this.shadowGfx.fillStyle(0x000000, 0.25); pixEllipse(this.shadowGfx, s.x + 8, s.getData?.('baseY') ?? s.y + 15, 9, 3); }
 
     // water ripples
     const wf = Math.floor(time / 650) % 2;
@@ -1421,7 +1422,7 @@ export class DungeonScene extends Phaser.Scene {
       this.teleGfx.fillStyle(0xff4646, pulse);
       this.teleGfx.fillRect(r.x * TILE, r.y * TILE, TILE, TILE);
       this.teleGfx.fillStyle(0x000000, 0.35 + 0.1 * Math.sin(time / 90));
-      this.teleGfx.fillEllipse(center(r.x), center(r.y) + 2, 10, 5);
+      pixEllipse(this.teleGfx, center(r.x), center(r.y) + 2, 10, 5);
     }
     for (const e of run.enemies) {
       if (!e.charge || e.hp <= 0 || !run.isVisible(e.x, e.y)) continue;
@@ -1439,11 +1440,11 @@ export class DungeonScene extends Phaser.Scene {
         if (run.passable(f.x + i, f.y + j)) this.teleGfx.fillRect((f.x + i) * TILE, (f.y + j) * TILE, TILE, TILE);
       }
       // the spore ball sits above whatever it dropped, wobbling bigger as it is about to go
-      const r = 5.5 + 1.5 * Math.sin(time / 60), cx = center(f.x), cy = center(f.y) - 1;
-      this.puffGfx.fillStyle(0x3a2150, 1).fillCircle(cx, cy, r + 1);
-      this.puffGfx.fillStyle(0xb57cf0, 1).fillCircle(cx, cy, r);
-      this.puffGfx.fillStyle(0xe2c8ff, 1).fillCircle(cx - r * 0.35, cy - r * 0.35, r * 0.35);
-      this.puffGfx.fillStyle(0x3a2150, 1).fillRect(cx - 2.5, cy, 1, 1.5).fillRect(cx + 1.5, cy, 1, 1.5);
+      const r = Math.round(5.5 + 1.5 * Math.sin(time / 60)), cx = center(f.x), cy = center(f.y) - 1;
+      this.puffGfx.fillStyle(0x3a2150, 1); pixDisc(this.puffGfx, cx, cy, r + 1);
+      this.puffGfx.fillStyle(0xb57cf0, 1); pixDisc(this.puffGfx, cx, cy, r);
+      this.puffGfx.fillStyle(0xe2c8ff, 1); pixDisc(this.puffGfx, cx - r * 0.35, cy - r * 0.35, Math.max(1, Math.round(r * 0.35)));
+      this.puffGfx.fillStyle(0x3a2150, 1).fillRect(cx - 3, cy, 1, 2).fillRect(cx + 2, cy, 1, 2);
     }
 
     // auto-walk path
@@ -1459,14 +1460,14 @@ export class DungeonScene extends Phaser.Scene {
       const full = bw * bh === ore.cells.length;
       const corner = full ? null : ore.cells.find(c => ore.cells.filter(o => cheb(o, c) === 1 && (o.x === c.x || o.y === c.y)).length === 2);
       const cx0 = (full ? bx : corner.x) * TILE, cy0 = (full ? by : corner.y) * TILE, sx = full ? bw : 1, sy = full ? bh : 1;
-      g.lineStyle(1, 0x1b1424, 0.9);
+      g.fillStyle(0x1b1424, 0.9);
       const cracks = [[8, 2, 6, 7], [6, 7, 9, 11], [3, 9, 6, 7], [9, 11, 12, 13], [10, 4, 12, 8]];
-      for (let k = 0; k < ore.hits; k++) g.lineBetween(cx0 + cracks[k][0] * sx, cy0 + cracks[k][1] * sy, cx0 + cracks[k][2] * sx, cy0 + cracks[k][3] * sy);
+      for (let k = 0; k < ore.hits; k++) pixLine(g, cx0 + cracks[k][0] * sx, cy0 + cracks[k][1] * sy, cx0 + cracks[k][2] * sx, cy0 + cracks[k][3] * sy);
       // the pips: how many swings it has taken, over the middle of the rock
       const px0 = bx * TILE + (bw * TILE) / 2 - 6.5;
       for (let k = 0; k < ORE_HITS; k++) {
         g.fillStyle(k < ore.hits ? 0xf4cf4f : 0x2c2536, 1);
-        g.fillRect(px0 + k * 2.6, by * TILE - 3, 2, 2);
+        g.fillRect(Math.round(px0) + k * 3, by * TILE - 3, 2, 2);
       }
       // a glint now and then, so it catches your eye from across the room (a big vein glitters more)
       const c = ore.cells[Math.floor(Math.random() * ore.cells.length)];
@@ -1487,9 +1488,7 @@ export class DungeonScene extends Phaser.Scene {
         const ax = Phaser.Math.Clamp(ex, view.x + pad, view.right - pad), ay = Phaser.Math.Clamp(ey, view.y + pad, view.bottom - pad);
         const a = Math.min(1, (until - now) / 500) * (0.65 + 0.35 * Math.sin(time / 90));
         g.fillStyle(0xff5a5a, a);
-        g.fillTriangle(ax + Math.cos(ang) * 6, ay + Math.sin(ang) * 6,
-          ax + Math.cos(ang + 2.4) * 5, ay + Math.sin(ang + 2.4) * 5,
-          ax + Math.cos(ang - 2.4) * 5, ay + Math.sin(ang - 2.4) * 5);
+        pixArrow(g, ax, ay, ang, 7, 8);
       }
     }
 
@@ -1507,24 +1506,24 @@ export class DungeonScene extends Phaser.Scene {
       if (s.crown) s.crown.setPosition(s.x, s.y - TILE * 1.25 + 2 - s.lift);
       const top = s.y - TILE * (s.scaleY / texScale(s)) * (e.d.boss || e.chief ? 1.25 : 1) - s.lift;
       if (e.type === 'peddler' && run.stall.some(x => !x.sold)) { // a coin over the stall while there's stock
-        const gy = top - 4 + Math.sin(time / 260) * 1.2;
-        g.fillStyle(0x1b1424, 1); g.fillCircle(s.x, gy, 3.5);
-        g.fillStyle(0xf4cf4f, 1); g.fillCircle(s.x, gy, 2.5);
-        g.fillStyle(0xfff3b0, 1); g.fillRect(s.x - 1, gy - 1.5, 1, 1);
+        const gy = Math.round(top - 4 + Math.sin(time / 260) * 1.2), sx = Math.round(s.x);
+        g.fillStyle(0x1b1424, 1); pixDisc(g, sx, gy, 3.5);
+        g.fillStyle(0xf4cf4f, 1); pixDisc(g, sx, gy, 2.5);
+        g.fillStyle(0xfff3b0, 1); g.fillRect(sx - 1, gy - 2, 1, 1);
       }
       if (['hide', 'stone', 'npc'].includes(e.state)) continue; // no marks: a chest, a statue, a friend
       this.drawStatus(g, s, e, top, flip ? -1 : 1, time);
       this.drawEmote(g, s, s.x, top - 5, time);
       if (e.loot) { // your gold, in a little sack over its head
-        const gy = top - 5 + Math.sin(time / 150) * 1;
-        g.fillStyle(0x1b1424, 1); g.fillCircle(s.x, gy, 3.5);
-        g.fillStyle(0xf4cf4f, 1); g.fillCircle(s.x, gy, 2.5);
-        g.fillStyle(0xfff3b0, 1); g.fillRect(s.x - 1, gy - 1.5, 1, 1);
+        const gy = Math.round(top - 5 + Math.sin(time / 150) * 1), sx = Math.round(s.x);
+        g.fillStyle(0x1b1424, 1); pixDisc(g, sx, gy, 3.5);
+        g.fillStyle(0xf4cf4f, 1); pixDisc(g, sx, gy, 2.5);
+        g.fillStyle(0xfff3b0, 1); g.fillRect(sx - 1, gy - 2, 1, 1);
       }
       if (e.d.quest) { // the necklace glints over the thief
         const gy = top - 6 + Math.sin(time / 200) * 1;
-        g.fillStyle(0xf4cf4f, 1); g.fillTriangle(s.x, gy - 3, s.x + 3, gy, s.x - 3, gy); g.fillTriangle(s.x, gy + 3, s.x + 3, gy, s.x - 3, gy);
-        g.fillStyle(0x8fd8f0, 1); g.fillRect(s.x - 0.5, gy - 0.5, 1, 1);
+        g.fillStyle(0xf4cf4f, 1); pixDiamond(g, s.x, gy, 3);
+        g.fillStyle(0x8fd8f0, 1); g.fillRect(Math.round(s.x), Math.round(gy), 1, 1);
       }
       if (e.state !== 'sleep' || e.hp < e.maxHp) {
         g.fillStyle(0x000000, 0.8); g.fillRect(s.x - 6, top - 3, 12, 2);
@@ -1532,8 +1531,9 @@ export class DungeonScene extends Phaser.Scene {
       }
       if (e.aim && e.aimAt) {
         const a = 0.45 + 0.4 * Math.sin(time / 80);
+        g.fillStyle(0xff5a5a, a);
+        pixLine(g, center(e.x), center(e.y), center(e.aimAt.x), center(e.aimAt.y));
         g.lineStyle(1, 0xff5a5a, a);
-        g.lineBetween(center(e.x), center(e.y), center(e.aimAt.x), center(e.aimAt.y));
         g.strokeRect(e.aimAt.x * TILE + 0.5, e.aimAt.y * TILE + 0.5, TILE - 1, TILE - 1);
       }
       if (run.willHit(e)) claw = true;
@@ -1541,8 +1541,8 @@ export class DungeonScene extends Phaser.Scene {
     // red claw marks on your tile: something will hit you next turn
     if (claw) {
       const a = 0.55 + 0.35 * Math.sin(time / 90), x0 = p.x * TILE, y0 = p.y * TILE;
-      g.lineStyle(1.5, 0xff3b3b, a);
-      for (let k = 0; k < 3; k++) g.lineBetween(x0 + 3 + k * 4, y0 + 2, x0 + 7 + k * 4, y0 + 13);
+      g.fillStyle(0xff3b3b, a);
+      for (let k = 0; k < 3; k++) pixLine(g, x0 + 3 + k * 4, y0 + 2, x0 + 7 + k * 4, y0 + 13);
     }
 
     this.clawed = claw;
@@ -1726,34 +1726,34 @@ export class DungeonScene extends Phaser.Scene {
       const depth = who.d ? 1 - Math.min(1, (who.wake || 0) / WAKE_AT) : 1;
       const r = (1.2 + 3.2 * depth) * (0.85 + 0.15 * Math.sin(time / 420 + (who.id || 0)));
       const bx = s.x + dir * 5, by = top + 8;
-      g.fillStyle(0xbfe8ff, 0.8); g.fillCircle(bx + dir * r * 0.6, by, r);
-      g.fillStyle(0xffffff, 0.9); g.fillRect(bx + dir * r * 0.4 - 0.5, by - r * 0.5, 1, 1);
+      g.fillStyle(0xbfe8ff, 0.8); pixDisc(g, bx + dir * r * 0.6, by, Math.max(1, Math.round(r * 2) / 2));
+      g.fillStyle(0xffffff, 0.9); g.fillRect(Math.round(bx + dir * r * 0.4), Math.round(by - r * 0.5), 1, 1);
     }
     if (who.state === 'flee') {
-      const bob = Math.sin(time / 120) * 1;
+      const bob = Math.round(Math.sin(time / 120)), dx = Math.round(s.x - dir * 6), ty = Math.round(top);
       g.fillStyle(0x6fc3ff, 1);
-      g.fillRect(s.x - dir * 6, top + 1 + bob, 2, 3); g.fillRect(s.x - dir * 6 + 0.5, top + bob, 1, 1);
+      g.fillRect(dx, ty + 1 + bob, 2, 3); g.fillRect(dx + (dir < 0 ? 1 : 0), ty + bob, 1, 1);
     }
     if (who.stun > 0) {
       g.fillStyle(0xf4cf4f, 1);
       for (let k = 0; k < 3; k++) {
         const a = time / 180 + k * 2.1;
-        g.fillRect(s.x + Math.cos(a) * 6 - 0.5, top - 1 + Math.sin(a) * 1.5, 2, 2);
+        g.fillRect(Math.round(s.x + Math.cos(a) * 6) - 1, Math.round(top - 1 + Math.sin(a) * 1.5), 2, 2);
       }
     }
     if (who.burn > 0) this.drawFlame(g, s.x - dir * 2, s.y - (s.hop || 0) - 2, 0.7, time, who.id || 7);
     if (who !== this.run.p) return;
     // a bead of sweat when something is about to hit you or has just noticed you
     if (this.clawed || time < (s.sweatUntil || 0)) {
-      const bob = Math.sin(time / 140), sx = s.x - dir * 7;
-      g.fillStyle(0x8fd8f0, 1); g.fillRect(sx, top + 3 + bob, 2, 3); g.fillRect(sx + 0.5, top + 2 + bob, 1, 1);
+      const bob = Math.round(Math.sin(time / 140)), sx = Math.round(s.x - dir * 7), ty = Math.round(top);
+      g.fillStyle(0x8fd8f0, 1); g.fillRect(sx, ty + 3 + bob, 2, 3); g.fillRect(sx + (dir < 0 ? 1 : 0), ty + 2 + bob, 1, 1);
     }
     // nearly out: now and then a tear rolls down from each eye (columns 7 and 12 of the sprite)
     if (s.texture.key.endsWith('~teary')) {
       const t = (time % 1600) / 900;
       if (t < 1) for (const c of [7, 12]) {
         const ex = s.flipX ? s.x + 7.5 - c : s.x - 7.5 + c;
-        g.fillStyle(0x8fd8f0, 1 - t * 0.6); g.fillRect(ex - 0.5, top + 8 + t * 5, 1, 2);
+        g.fillStyle(0x8fd8f0, 1 - t * 0.6); g.fillRect(Math.round(ex - 0.5), Math.round(top + 8 + t * 5), 1, 2);
       }
     }
   }

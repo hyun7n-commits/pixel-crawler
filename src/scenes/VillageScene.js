@@ -4,8 +4,9 @@
 // Each time you come home a few shiny bits lie hidden in the grass for whoever wanders off the path.
 
 /* global Phaser */
+import { pixEllipse } from './pix.js';
 import { TILE, HOME_ZI, wallKey, waterKey, shadeKey, floorKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
-import { houseCanvas, pathKey, lampPostCanvas, lotCanvas } from './village-art.js';
+import { houseCanvas, pathKey, lampPostCanvas, lotCanvas, treeKey, shrubCanvas, sunRaysCanvas, glintCanvas } from './village-art.js';
 import { baseZoom } from './zoom.js';
 import { faceKey } from '../data/faces.js';
 import { VILLAGE_MAP, HOUSES, FOLK, doorOf, HERO_LINES, HOME, ownsHome } from '../data/village.js';
@@ -56,13 +57,23 @@ export class VillageScene extends Phaser.Scene {
     this.bubbles = [];
 
     // tap a spot to walk there, or a villager to go and talk; hover with a mouse to read who is who
+    // or drag to look round the village (walk off again and the view comes back to you)
     const tileOf = ptr => ({ x: Math.floor(ptr.worldX / TILE), y: Math.floor(ptr.worldY / TILE) });
+    const cam0 = this.cameras.main;
+    this.input.on('pointerdown', ptr => { this.drag = { x: ptr.x, y: ptr.y, sx: cam0.scrollX, sy: cam0.scrollY, on: false }; });
     this.input.on('pointerup', ptr => {
-      if (Math.hypot(ptr.upX - ptr.downX, ptr.upY - ptr.downY) > 12 * this.dpr) return;
+      const dragged = this.drag?.on;
+      this.drag = null;
+      if (dragged || Math.hypot(ptr.upX - ptr.downX, ptr.upY - ptr.downY) > 12 * this.dpr) return;
       const t = tileOf(ptr);
       this.tap(t.x, t.y);
     });
     this.input.on('pointermove', ptr => {
+      const d = this.drag;
+      if (d && ptr.isDown) {
+        if (!d.on && Math.hypot(ptr.x - d.x, ptr.y - d.y) > 12 * this.dpr) { d.on = true; cam0.stopFollow(); }
+        if (d.on) { cam0.setScroll(d.sx - (ptr.x - d.x) / cam0.zoom, d.sy - (ptr.y - d.y) / cam0.zoom); return; }
+      }
       if (ptr.wasTouch) return;
       const t = tileOf(ptr);
       this.hooks.onHover?.(this.describe(t.x, t.y));
@@ -94,20 +105,23 @@ export class VillageScene extends Phaser.Scene {
     this.clear();
     this.fitZoom();
     this.blocked = new Uint8Array(MW * MH);
-    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if ('#~L'.includes(this.ch(x, y))) this.blocked[y * MW + x] = 1;
+    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if ('#~LT'.includes(this.ch(x, y))) this.blocked[y * MW + x] = 1;
     // the hedge goes on past the edge, so a tall phone screen shows bushes around the village, not a void
     for (let y = -PAD.y; y < MH + PAD.y; y++) for (let x = -PAD.x; x < MW + PAD.x; x++) this.drawTile(x, y);
+    this.plantTrees();
+    this.sunOnPond();
     // a house someone is just moving into still has its boards up until they arrive
     for (const h of HOUSES) {
       const f = FOLK[h.id], lived = f.when(meta), moving = lived && f.arrive && !meta.village.seen[h.id];
-      h.img = this.keep(this.add.image(h.x * TILE, h.y * TILE, this.houseKey(h, lived && !moving)).setOrigin(0).setDepth(D.house));
+      h.img = this.keep(this.add.image(h.x * TILE, h.y * TILE, this.houseKey(h, lived && !moving)).setOrigin(0).setDepth(D.actors + (h.y + h.h - 1) / 100));
+      this.shrubs(h);
       for (let y = h.y; y < h.y + h.h; y++) for (let x = h.x; x < h.x + h.w; x++) this.blocked[y * MW + x] = 1;
       h.lived = lived;
     }
     // your own house, or the roped-off lot where it will stand
     const home = ownsHome(meta);
     if (!this.textures.exists('village_lot')) this.textures.addCanvas('village_lot', lotCanvas(HOME.w, HOME.h));
-    this.keep(this.add.image(HOME.x * TILE, HOME.y * TILE, home ? this.houseKey(HOME, true) : 'village_lot').setOrigin(0).setDepth(D.house));
+    this.keep(this.add.image(HOME.x * TILE, HOME.y * TILE, home ? this.houseKey(HOME, true) : 'village_lot').setOrigin(0).setDepth(D.actors + (HOME.y + HOME.h - 1) / 100));
     for (let y = HOME.y; y < HOME.y + HOME.h; y++) for (let x = HOME.x; x < HOME.x + HOME.w; x++) this.blocked[y * MW + x] = 1;
     // what you have put round it (data/home.js); bumping the house in front of its door opens that list
     this.homeDoor = home ? { ...doorOf(HOME), home: true } : null;
@@ -325,6 +339,8 @@ export class VillageScene extends Phaser.Scene {
     this.bubbles = [];
     this.waterImgs = [];
     this.glows = [];
+    this.glints = [];
+    this.rays = null;
     this.finds = [];
     this.pending = null;
   }
@@ -338,7 +354,8 @@ export class VillageScene extends Phaser.Scene {
     const around = test => (test(x, y - 1) && N) | (test(x + 1, y) && E) | (test(x, y + 1) && S) | (test(x - 1, y) && W_) |
       (test(x + 1, y - 1) && NE) | (test(x + 1, y + 1) && SE) | (test(x - 1, y + 1) && SW) | (test(x - 1, y - 1) && NW);
     const add = (key, depth = D.tiles) => this.keep(this.add.image(x * TILE, y * TILE, key).setOrigin(0).setDepth(depth));
-    const hedge = (nx, ny) => this.ch(nx, ny) === '#';
+    const hedge = (nx, ny) => this.ch(nx, ny) === '#' && !this.grove(nx, ny);
+    if (ch === '#' && this.grove(x, y)) { add(floorKey(HOME_ZI, hash(x, y) & 31)); return; } // grass under a lone tree (plantTrees)
     if (ch === '#') {
       add(wallKey(this, HOME_ZI, around((nx, ny) => !hedge(nx, ny)), hash(x + 99, y + 99) % 3));
       return;
@@ -347,6 +364,7 @@ export class VillageScene extends Phaser.Scene {
       const img = add(waterKey(this, HOME_ZI, 0, around((nx, ny) => this.ch(nx, ny) !== '~')));
       img.shore = around((nx, ny) => this.ch(nx, ny) !== '~');
       this.waterImgs.push(img);
+      if (x >= 0 && y >= 0 && hash(x, y) % 9 === 0) add(`t_lily${hash(x, y) % 2}`, D.deco);
       return;
     }
     const pathy = (nx, ny) => ':>'.includes(this.ch(nx, ny));
@@ -361,6 +379,66 @@ export class VillageScene extends Phaser.Scene {
       const glow = this.keep(this.add.image(center(x) - 1, foot(y) - 14, 'glow').setDepth(D.fx).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.6));
       this.glows.push(glow);
     }
+  }
+
+  // The woods: round trees wherever the hedge is deep enough behind them to take the crown (so they
+  // never hide a path), one over each little square of hedge inside the village, and the ones
+  // standing in the grass ('T'). The border trees are plain and dark; the grass ones bear fruit or blossom now and then.
+  plantTrees() {
+    const hedge = (x, y) => this.ch(x, y) === '#';
+    const tree = (px, y, v) => this.keep(this.add.image(px, foot(y), treeKey(this, v)).setOrigin(0.5, 1).setDepth(D.actors + y / 100 + 0.001));
+    for (let gy = -PAD.y; gy < MH + PAD.y; gy += 2) for (let gx = -PAD.x + ((gy / 2) & 1); gx < MW + PAD.x; gx += 3) {
+      const h = hash(gx + 500, gy + 500), x = gx + (h % 2), y = gy + ((h >> 3) % 2);
+      let deep = true;
+      for (let dy = -2; dy <= 0 && deep; dy++) for (let dx = -1; dx <= 1 && deep; dx++) if (!hedge(x + dx, y + dy)) deep = false;
+      if (deep) tree(center(x), y, h % 5 < 2 ? 1 : 0);
+    }
+    for (let y = 1; y < MH - 1; y++) for (let x = 1; x < MW - 1; x++) {
+      // a 2x2 square of hedge on its own: one big tree over it
+      if (this.grove(x, y) && this.grove(x + 1, y) && this.grove(x, y - 1) && !hedge(x, y + 1) && !hedge(x - 1, y)) tree((x + 1) * TILE, y, 1);
+      if (this.ch(x, y) === 'T') { const r = hash(x * 3 + 7, y * 5 + 1) % 10; tree(center(x), y, r < 5 ? 0 : r < 7 ? 2 : r < 9 ? 3 : 1); }
+    }
+  }
+
+  // true for a cell of a little 2x2 square of hedge standing on its own in the grass: a tree grows there instead
+  grove(x, y) {
+    const hedge = (i, j) => this.ch(i, j) === '#';
+    for (const [bx, by] of [[x, y], [x - 1, y], [x, y - 1], [x - 1, y - 1]]) {
+      if (!(hedge(bx, by) && hedge(bx + 1, by) && hedge(bx, by + 1) && hedge(bx + 1, by + 1))) continue;
+      let alone = true;
+      for (let j = by - 1; j <= by + 2 && alone; j++) for (let i = bx - 1; i <= bx + 2 && alone; i++) {
+        if ((i === bx || i === bx + 1) && (j === by || j === by + 1)) continue;
+        if (hedge(i, j)) alone = false;
+      }
+      if (alone) return true;
+    }
+    return false;
+  }
+
+  // a flowering shrub against each side of a house, where there is grass for it
+  shrubs(h) {
+    if (!this.textures.exists('village_shrub')) this.textures.addCanvas('village_shrub', shrubCanvas());
+    const y = h.y + h.h - 1;
+    for (const x of [h.x - 1, h.x + h.w]) {
+      if (!grassy(this.ch(x, y)) || hash(x + 3, y + 9) % 4 === 0) continue;
+      this.keep(this.add.image(center(x), foot(y), 'village_shrub').setOrigin(0.5, 1).setDepth(D.actors + y / 100));
+      this.blocked[y * MW + x] = 1;
+    }
+  }
+
+  // sunlight falling through the trees onto the pond, and a few glints on the water
+  sunOnPond() {
+    const pond = [];
+    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (this.ch(x, y) === '~') pond.push({ x, y });
+    this.pondTiles = pond;
+    if (!pond.length) return;
+    const x0 = Math.min(...pond.map(t => t.x)) - 2, x1 = Math.max(...pond.map(t => t.x)) + 2;
+    const y0 = Math.min(...pond.map(t => t.y)) - 3, y1 = Math.max(...pond.map(t => t.y)) + 2;
+    const key = `village_rays_${x1 - x0}_${y1 - y0}`;
+    if (!this.textures.exists(key)) this.textures.addCanvas(key, sunRaysCanvas((x1 - x0) * TILE, (y1 - y0) * TILE));
+    this.rays = this.keep(this.add.image(x0 * TILE, y0 * TILE, key).setOrigin(0).setDepth(D.fx).setBlendMode(Phaser.BlendModes.ADD));
+    if (!this.textures.exists('village_glint')) this.textures.addCanvas('village_glint', glintCanvas());
+    for (let k = 0; k < 4; k++) this.glints.push(Object.assign(this.keep(this.add.image(0, 0, 'village_glint').setDepth(D.deco + 0.5).setAlpha(0)), { next: k * 500 }));
   }
 
   actor(tex, x, y) {
@@ -405,6 +483,7 @@ export class VillageScene extends Phaser.Scene {
     if (hero) return `${CHARACTERS[hero.id].name}: 부딪히면 오늘은 이 친구가 나간다.`;
     if (this.ch(x, y) === '>') return '들판 가는 땅굴: 쏙 들어가면 탐험을 나간다.';
     if (this.ch(x, y) === 'L') return '반딧불 등';
+    if (this.ch(x, y) === 'T') return '나무';
     return '';
   }
 
@@ -494,7 +573,8 @@ export class VillageScene extends Phaser.Scene {
   }
 
   moveTo(x, y) {
-    const ps = this.ps;
+    const ps = this.ps, cam = this.cameras.main;
+    if (cam._follow !== ps) cam.startFollow(ps, true, 0.2, 0.2, 0, TILE / 2);
     if (x !== this.p.x) ps.setFlipX(x < this.p.x);
     this.p.x = x; this.p.y = y;
     ps.stepFrame = ps.stepFrame === 1 ? 2 : 1;
@@ -729,7 +809,7 @@ export class VillageScene extends Phaser.Scene {
       const k = TILE * 0.72 / pup.s.frame.height, br = 1 + 0.05 * Math.sin(time / 300);
       pup.s.setScale(k, k * br).setOrigin(0.5, 1 + (pup.s.hop || 0) / (pup.s.frame.height * k));
       g.fillStyle(0x000000, 0.25);
-      g.fillEllipse(pup.s.x, pup.s.y - 1, 9, 3);
+      pixEllipse(g, pup.s.x, pup.s.y - 1, 9, 3);
     }
     const all = [ps, ...this.folk.map(f => f.s), ...this.heroes.map(h => h.s)];
     all.forEach((s, i) => {
@@ -737,7 +817,7 @@ export class VillageScene extends Phaser.Scene {
       const k = texScale(s);
       if (!s.diving) s.setScale(k * (s.sx || 1), k * breathe * (s.sy || 1)).setOrigin(0.5, 1 + (s.hop || 0) / TILE);
       g.fillStyle(0x000000, 0.28);
-      g.fillEllipse(s.x, s.y - 1.5, 11, 4);
+      pixEllipse(g, s.x, s.y - 1.5, 11, 4);
     });
     const mk = this.marks;
     mk.clear();
@@ -761,6 +841,15 @@ export class VillageScene extends Phaser.Scene {
       this.tweens.add({ targets: f.img, alpha: 1, scale: 1.25, duration: 160, yoyo: true });
     }
     this.glows.forEach((g, i) => g.setAlpha(0.5 + 0.12 * Math.sin(time / 300 + i * 2.1)));
+    // the sunlight on the pond breathes a little; now and then the water glints where it falls
+    if (this.rays) this.rays.setAlpha(0.85 + 0.15 * Math.sin(time / 1400));
+    for (const gl of this.glints) {
+      if (time < gl.next) continue;
+      const t = this.pondTiles[Math.floor(Math.random() * this.pondTiles.length)];
+      gl.next = time + 900 + Math.random() * 1600;
+      gl.setPosition(t.x * TILE + 3 + Math.floor(Math.random() * 10), t.y * TILE + 3 + Math.floor(Math.random() * 10)).setAlpha(0);
+      this.tweens.add({ targets: gl, alpha: 1, duration: 220, yoyo: true, hold: 200 });
+    }
     const wf = Math.floor(time / 600) % 2;
     if (wf !== this.waterFrame) {
       this.waterFrame = wf;

@@ -23,7 +23,7 @@ export function drawEmote(g, s, x, y, time) {
   const k = (E.k || 1) * (el < 90 ? 0.4 + 0.8 * el / 90 : el < 160 ? 1.2 - 0.2 * (el - 90) / 70 : 1);
   const a = left < 200 ? left / 200 : 1;
   const w = E.rows[0].length, h = E.rows.length;
-  const x0 = x - w * k / 2, y0 = y - h * k - Math.min(el, 300) / 300 * 1.5;
+  const x0 = Math.round(x - w * k / 2), y0 = Math.round(y - h * k - Math.min(el, 300) / 300 * 1.5);
   const px = [];
   E.rows.forEach((r, j) => [...r].forEach((c, i) => { if (c === 'c') px.push([x0 + i * k, y0 + j * k]); }));
   if (E.line !== null) {

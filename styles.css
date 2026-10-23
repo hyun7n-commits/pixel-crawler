@@ -108,6 +108,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #phaser { position: absolute; inset: 0; }
 #banner { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); font-family: var(--font-display); font-size: 15px; color: var(--gold); background: rgba(12, 10, 18, .85); padding: 4px 10px; text-shadow: 1px 1px 0 #000; pointer-events: none; white-space: nowrap; opacity: 0; transition: opacity .2s; }
 #banner.show { opacity: 1; }
+/* in the village the banner sits under the place name and purse row, not over it */
+#game.village #banner { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 52px); }
 /* the line after you fall: where, and to what (main.js fallen) */
 #fallen { position: absolute; left: 50%; top: 42%; transform: translateX(-50%); font-family: var(--font-display); font-size: 15px; color: #e8e4dc; text-shadow: 1px 1px 0 #000; white-space: nowrap; cursor: pointer; animation: fallen-in 1s ease-out both; }
 @keyframes fallen-in { from { opacity: 0; } }

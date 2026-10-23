@@ -162,3 +162,151 @@ export function lotCanvas(w, h) {
   for (const [x, y] of [[4, 3], [5, 3], [8, 3], [9, 3], [3, 4], [4, 4], [5, 4], [6, 4], [7, 4], [8, 4], [9, 4], [10, 4], [4, 5], [5, 5], [6, 5], [7, 5], [8, 5], [9, 5], [5, 6], [6, 6], [7, 6], [8, 6], [6, 7], [7, 7]]) fill('#f29bb2', bx + x, by + y);
   return c;
 }
+
+// ---------- the woods round the village ----------
+// A round tree in pixels: a crown of leafy clumps over a short trunk. Each clump is lit from the upper
+// left and the clumps in front throw a dark line onto the ones behind, which is what makes a pixel
+// crown read as leaves rather than a green ball. `v`: 0 a plain tree, 1 a big dark one, 2 fruit, 3 blossom.
+const TREE_KINDS = [
+  { leaf: ['#a6df6e', '#71c452', '#4aa446', '#33833d', '#215f30'], line: '#12301c' },
+  { leaf: ['#8fcf72', '#5bab58', '#3e8a4a', '#2b6a3d', '#1b4a2b'], line: '#0d2717', tall: true },
+  { leaf: ['#a6df6e', '#71c452', '#4aa446', '#33833d', '#215f30'], line: '#12301c', fruit: true },
+  { leaf: ['#ffe1ec', '#f8b4cc', '#ec8db0', '#cc6b93', '#9a4a72'], line: '#3a1830', petals: true },
+];
+// the crown's clumps: [x, y, radius], a ring of small bumps round the edge and a few big ones inside
+function crownClumps(tall, r) {
+  const cx = 16, cy = tall ? 17 : 14, rx = 13.2, ry = tall ? 16 : 12.6, out = [];
+  const n = tall ? 11 : 9;
+  for (let k = 0; k < n; k++) {
+    const a = -Math.PI / 2 + (k + 0.5) * Math.PI * 2 / n + (r() - 0.5) * 0.25;
+    const cr = 4.6 + r() * 1.6;
+    out.push([cx + Math.cos(a) * (rx - cr + 0.6), cy + Math.sin(a) * (ry - cr + 0.6), cr]);
+  }
+  const inner = tall ? [[12, 11], [20, 12], [16, 19], [11, 26], [21, 26]] : [[12, 10], [20, 10], [16, 17]];
+  for (const [x, y] of inner) out.push([x + (r() - 0.5) * 2, y + (r() - 0.5) * 2, 6 + r() * 1.5]);
+  // back to front: the higher a clump sits, the further back it is
+  return out.sort((a, b) => a[1] - b[1]);
+}
+
+export function treeCanvas(v) {
+  const kind = TREE_KINDS[v];
+  let s = v * 977 + 13;
+  const r = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+  const clumps = crownClumps(kind.tall, r);
+  const W = 32, crownH = kind.tall ? 34 : 28, H = crownH + 9;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  const px = Array.from({ length: H }, () => new Array(W).fill(null));
+  const own = Array.from({ length: H }, () => new Array(W).fill(-1));
+  // which clump (the one in front) covers each pixel
+  clumps.forEach(([cx, cy, cr], i) => {
+    for (let y = 0; y < crownH; y++) for (let x = 0; x < W; x++) {
+      const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+      if (dx * dx + dy * dy <= cr * cr) own[y][x] = i;
+    }
+  });
+  // trunk: three tones, a bark mark or two, roots splaying at the foot
+  const tx = 13, ty0 = crownH - 5, ty1 = H - 3;
+  for (let y = ty0; y <= ty1; y++) {
+    const spread = y === ty1 ? 2 : y === ty1 - 1 ? 1 : 0;
+    for (let x = tx - spread; x < tx + 6 + spread; x++) {
+      const t = x - tx;
+      px[y][x] = t <= 0 ? '#a7744a' : t < 4 ? '#8a5634' : '#5e3a22';
+    }
+  }
+  px[ty1 - 3][tx + 2] = '#5e3a22'; px[ty1 - 2][tx + 3] = '#5e3a22';
+  // the crown's tones
+  const tone = i => kind.leaf[Math.max(0, Math.min(4, i))];
+  const ccy = crownH / 2;
+  for (let y = 0; y < crownH; y++) for (let x = 0; x < W; x++) {
+    const i = own[y][x];
+    if (i < 0) continue;
+    const [cx, cy, cr] = clumps[i];
+    const nx = (x + 0.5 - cx) / cr, ny = (y + 0.5 - cy) / cr;
+    const T = -(0.5 * nx + 0.86 * ny) * 0.75 - (y - ccy) / crownH * 0.9;
+    let t = T > 0.6 ? 0 : T > 0.16 ? 1 : T > -0.32 ? 2 : T > -0.72 ? 3 : 4;
+    // soften the bands with a checker where two tones meet
+    for (const edge of [0.6, 0.16, -0.32, -0.72]) if (Math.abs(T - edge) < 0.045 && (x + y) % 2 === 0) t = Math.max(0, t - 1);
+    // a clump in front throws a little shade onto the one behind it
+    const below = own[y + 1]?.[x] ?? -1;
+    if (below > i && clumps[below][1] > cy + 2.5) t = Math.min(4, t + 2);
+    px[y][x] = tone(t);
+  }
+  // fruit or petals on the crown
+  if (kind.fruit || kind.petals) {
+    for (let k = 0, n = 0; k < 60 && n < (kind.fruit ? 7 : 16); k++) {
+      const x = 4 + Math.floor(r() * (W - 9)), y = 3 + Math.floor(r() * (crownH - 9));
+      if (own[y][x] < 0 || own[y + 1][x + 1] < 0 || px[y][x] === tone(4) || px[y][x] === tone(0)) continue;
+      n++;
+      if (kind.fruit) { px[y][x] = '#ff9a9a'; px[y][x + 1] = '#e0464e'; px[y + 1][x] = '#e0464e'; px[y + 1][x + 1] = '#a42838'; }
+      else px[y][x] = '#fff7fa';
+    }
+  }
+  // a soft shadow on the ground, then the picture with its outline
+  g.fillStyle = 'rgba(16,28,18,0.28)';
+  for (const [y, w] of [[H - 4, 14], [H - 3, 20], [H - 2, 22], [H - 1, 16]]) g.fillRect(16 - w / 2, y, w, 1);
+  const line = kind.line;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (px[y][x]) { g.fillStyle = px[y][x]; g.fillRect(x, y, 1, 1); continue; }
+    if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => px[y + dy]?.[x + dx])) { g.fillStyle = line; g.fillRect(x, y, 1, 1); }
+  }
+  return c;
+}
+export function treeKey(scene, v) {
+  const key = `village_tree${v}`;
+  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, treeCanvas(v));
+  return key;
+}
+
+// a round flowering shrub tucked against a house's side
+const SHRUB = [
+  '....kkkkkk......',
+  '..kkllggllkk....',
+  '.klllggggggkk...',
+  'kllgpgggglggk...',
+  'klgggggpgggggk..',
+  'kgglggggggggdk..',
+  'kgggggglgpggdk..',
+  'kdggpgggggggdk..',
+  '.kdgggggggddk...',
+  '..kddddddddk....',
+  '...kkkkkkkk.....',
+];
+const SHRUB_PAL = { k: '#12301c', l: '#a6df6e', g: '#4aa446', d: '#2a6f37', p: '#f8b4cc' };
+export function shrubCanvas() {
+  const c = document.createElement('canvas');
+  c.width = 16; c.height = SHRUB.length + 1;
+  const g = c.getContext('2d');
+  g.fillStyle = 'rgba(16,28,18,0.25)'; g.fillRect(1, SHRUB.length - 1, 13, 2);
+  SHRUB.forEach((row, j) => [...row].forEach((ch, i) => { if (ch !== '.') { g.fillStyle = SHRUB_PAL[ch]; g.fillRect(i + 1, j, 1, 1); } }));
+  return c;
+}
+
+// Sunlight falling on the pond through the trees: pale slanting shafts, densest in the middle and
+// fading out at both ends. Drawn row by row so the edges step like pixels; shown with additive blending.
+export function sunRaysCanvas(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  const shafts = [[0.08, 9], [0.26, 3], [0.36, 13], [0.58, 5], [0.72, 9], [0.9, 3]];
+  for (let y = 0; y < h; y++) {
+    const t = y / h, a = Math.sin(Math.PI * t) ** 1.4 * 0.19;
+    for (const [x0, sw] of shafts) {
+      const x = Math.round(x0 * w * 0.7 + y * 0.55);
+      g.fillStyle = `rgba(255,246,200,${a.toFixed(3)})`; g.fillRect(x, y, sw, 1);
+      g.fillStyle = `rgba(255,246,200,${(a * 0.45).toFixed(3)})`; g.fillRect(x - 1, y, 1, 1); g.fillRect(x + sw, y, 1, 1);
+    }
+  }
+  return c;
+}
+
+// a glint on the water: a little white cross
+export function glintCanvas() {
+  const c = document.createElement('canvas');
+  c.width = 5; c.height = 5;
+  const g = c.getContext('2d');
+  g.fillStyle = 'rgba(255,255,255,0.55)'; g.fillRect(2, 0, 1, 5); g.fillRect(0, 2, 5, 1);
+  g.fillStyle = '#ffffff'; g.fillRect(2, 1, 1, 3); g.fillRect(1, 2, 3, 1);
+  return c;
+}
