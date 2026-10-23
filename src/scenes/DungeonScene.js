@@ -2059,6 +2059,16 @@ export class DungeonScene extends Phaser.Scene {
       const i = map.spring[Math.floor(Math.random() * map.spring.length)];
       if (map.visible[i]) this.fx.warm.explode(1, (i % map.w) * TILE + 2 + Math.random() * 12, ((i / map.w) | 0) * TILE + 6 + Math.random() * 6);
     }
+    // 소원 우물: now and then a glint on its water, so it reads as something to walk up to
+    const well = map.well;
+    if (well && !well.dry && map.visible[idx(well.x, well.y)]) {
+      const t = (time % 2600) / 2600, wx = well.x * TILE + 9, wy = well.y * TILE + 8;
+      if (t < 0.12) {
+        g.fillStyle(0xffffff, 1);
+        g.fillRect(wx, wy, 1, 1);
+        if (t > 0.03 && t < 0.09) { g.fillRect(wx - 1, wy, 3, 1); g.fillRect(wx, wy - 1, 1, 3); }
+      }
+    }
 
     // gas clouds and fire on tiles you can see
     const burning = [];
