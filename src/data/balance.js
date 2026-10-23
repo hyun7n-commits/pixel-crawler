@@ -39,8 +39,10 @@ export const enemiesPerFloor = floor => 5 + localOf(floor) + Math.min(4, stageOf
 // Attack grows by ATK_SHARE of it, health in full.
 export const STAGE_UP = +(globalThis.process?.env?.STAGE_UP ?? 0);
 // ...but the five later stages' critters get this much more on top (the forest a touch less), tuned with the bot so a fresh save
-// with the stage's 출발 보급 finds each of them about as hard as the meadow (FOE_UP env: a test override)
-const FOE_UP = (globalThis.process?.env?.FOE_UP || '0,-0.12,0,0.08,0,0.4,0.35,0.6,0.15,0.6').split(',').map(Number);
+// with the stage's 출발 보급 finds each of them about as hard as the meadow (FOE_UP env: a test override).
+// v0.25: the legends' moves made the later stages' kit hands stronger, so those critters went up a little
+// (160 bot runs a stage, a fresh worker wins about one in five everywhere)
+const FOE_UP = (globalThis.process?.env?.FOE_UP || '0,-0.12,0,0.08,0.09,0.42,0.46,0.6,0.18,0.66').split(',').map(Number);
 export const foeUp = s => FOE_UP[Math.min(s, FOE_UP.length - 1)] + 0.1 * Math.max(0, s - (FOE_UP.length - 1));
 // 출발 보급: a deeper stage is entered as a seasoned explorer, the guild sees to that. You start at a
 // higher level, a little stronger and sturdier, and pick some relics (two levels each) before the
