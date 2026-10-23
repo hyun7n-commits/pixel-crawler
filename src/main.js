@@ -324,7 +324,7 @@ function onRunEvent(type, d) {
       won: d.won, floor: run.floor - run.startFloor + 1, zone: run.zone.name, stage: run.stage, loop: run.loop, cause: run.cause, kills: run.kills, gold: run.gold,
       recipes: run.newRecipes.length, who: CHARACTERS[meta.sel].name, friend: run.rescued.length ? CHARACTERS[run.rescued[0]].kind : null,
       honey: run.p.honey || 0, ring: !!run.told.ring, spring: !!run.told.spring, weeds: run.weeds || 0, screams: run.screams || 0,
-      tools: run.toolUse || {}, routes: run.routesTaken || [], brawls: run.brawls || 0,
+      tools: run.toolUse || {}, routes: run.routesTaken || [], brawls: run.brawls || 0, found: [...(run.found || [])],
     };
     saveMeta(meta);
     hud.update(run);
