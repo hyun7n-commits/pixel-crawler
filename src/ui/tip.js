@@ -92,7 +92,7 @@ export function describeTile(run, x, y, always = false) {
       // 심술 버섯: cross with everyone
       const cross = e.grump > 0 ? `심술 나서 옆에 있는 녀석을 무는 중 (${e.grump}턴)` : '';
       // 도토리 다람쥐 with a pinecone in its paws
-      const busy = e.bury > 0 ? '솔방울을 묻으러 가는 중. 나는 안중에도 없다 (지금 치면 기습)' : e.sweetT > 0 ? (e.toy ? '방울을 갖고 노느라 정신이 없다 (지금 치면 기습)' : '쏟아진 꿀에 정신이 팔려 있다') : '';
+      const busy = e.belly ? '배 속에서 방울이 딸랑거려 딸꾹질하는 중 (지금 치면 기습)' : e.bury > 0 ? '솔방울을 묻으러 가는 중. 나는 안중에도 없다 (지금 치면 기습)' : e.sweetT > 0 ? (e.toy ? '방울을 갖고 노느라 정신이 없다 (지금 치면 기습)' : '쏟아진 꿀에 정신이 팔려 있다') : '';
       const how = [hot || stuck || cross || scrap || busy || dizzy || heap || STATE[e.state] || '', fire].filter(Boolean).join(', ');
       lines.push(`${e.chief ? '우두머리 ' : e.big ? '기세등등한 ' : ''}${e.d.name} · 체력 ${e.hp}/${e.maxHp} · 공격 ${e.atk} · ${how}${e.d.tip ? ` · ${e.d.tip}` : ''}`);
     }
@@ -104,7 +104,7 @@ export function describeTile(run, x, y, always = false) {
   if (map.nests?.includes(i) && !e) lines.push('짚 잠자리: 낮잠 방 녀석이 웅크리고 자던 자리다. 아직 따뜻하다.');
   if (map.well && map.well.x === x && map.well.y === y) lines.push(map.well.dry ? '마른 우물: 바닥이 드러났다. 소원은 한 번뿐이었다.'
     : '소원 우물: 다가가서 유물을 하나 던져 넣으면 같은 레벨의 다른 유물로 바뀌어 떠오른다. 한 번뿐이다.');
-  const bell = map.bells?.find(o => o.x === x && o.y === y);
+  const bell = map.bells?.find(o => o.x === x && o.y === y && o.frog == null);
   if (bell) lines.push(`방울: 딸랑딸랑 울리는 중 (${bell.t}턴 더). 나를 못 보는 적은 이리로 온다. 다 울리면 주울 수 있다.`);
   if (map.flies?.some(o => o.x === x && o.y === y)) lines.push(`${TILE_INFO.fly.name}: ${TILE_INFO.fly.tip}`);
   if (t === STAIRS) {

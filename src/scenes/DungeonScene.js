@@ -793,6 +793,7 @@ export class DungeonScene extends Phaser.Scene {
     }
     // a thrown bell, ringing where it landed: it rocks to and fro until it falls quiet
     for (const b of map.bells || []) {
+      if (b.frog != null) continue;   // down a frog's throat
       const key = `${b.x},${b.y},ringing`;
       keep.add(key);
       let s = this.pickupSprites[key];

@@ -32,6 +32,15 @@ export const zoneOf = floor => ZONES[Math.floor((floor - 1) / B.FLOORS_PER_ZONE)
 export const isBossFloor = floor => floor % B.FLOORS_PER_ZONE === 0;
 export const BOMB_RANGE = 5;
 
+// a frog's tongue reaches `to`: within its length, straight or on the slant, nothing in the way
+function reachable(run, e, to) {
+  const dx = to.x - e.x, dy = to.y - e.y, dist = Math.max(Math.abs(dx), Math.abs(dy));
+  if (dist > (e.d.tongue || 0) || !(dx === 0 || dy === 0 || Math.abs(dx) === Math.abs(dy))) return false;
+  const sx = Math.sign(dx), sy = Math.sign(dy);
+  for (let k = 1; k < dist; k++) if (!passable(run.map, e.x + sx * k, e.y + sy * k) || run.enemyAt(e.x + sx * k, e.y + sy * k)) return false;
+  return lineOfSight(run.map, e.x, e.y, to.x, to.y);
+}
+
 export class Run {
   // `stage`: which zone this trip goes into (0-based, data/stages.js); `loop`: the 회차
   constructor(meta, charId, { stage = 0, loop = 1 } = {}) {
@@ -1322,7 +1331,21 @@ export class Run {
   // 방울: it rings where it lands for a few turns (ringBells, every turn before the critters move), and
   // then lies there to be picked up again
   dropBell(x, y) {
-    (this.map.bells ||= []).push({ x, y, t: B.BELL_TURNS });
+    const b = { x, y, t: B.BELL_TURNS };
+    (this.map.bells ||= []).push(b);
+    // 개구리 snaps up whatever jingles in front of its nose (in tongue's reach, straight or on the slant,
+    // nothing in between): down goes the bell, and it rings on in the frog's belly (ringBells)
+    const frog = this.enemies.find(e => e.hp > 0 && e.type === 'frog' && !['sleep', 'lurk'].includes(e.state) && !e.stun && reachable(this, e, b));
+    if (frog) {
+      Object.assign(b, { x: frog.x, y: frog.y, frog: frog.id });
+      Object.assign(frog, { belly: true, lick: null, aim: false, aimAt: null });
+      this.emit('tongue', { enemy: frog, to: { x, y }, hit: true });
+      if (this.isVisible(frog.x, frog.y)) {
+        this.log(`${josa(frog.d.name, '이', '가')} 혀를 쭉 뻗어 방울을 꿀꺽 삼켰다! 배 속에서 딸랑딸랑…`, 'good');
+        this.discover('bell_frog');
+      }
+      return;
+    }
     this.log('딸랑딸랑! 방울이 울린다.', 'good');
   }
 
@@ -1332,6 +1355,16 @@ export class Run {
     const bells = this.map.bells;
     if (!bells?.length) return;
     for (const b of bells.slice()) {
+      // in a frog's belly: the bell goes where the frog goes, and every ring is a hiccup that leaves it
+      // dizzy (a blow then is a surprise one); if the frog falls, the bell lies there ringing on
+      if (b.frog != null) {
+        const frog = this.enemies.find(e => e.id === b.frog && e.hp > 0);
+        if (frog) {
+          b.x = frog.x; b.y = frog.y;
+          frog.stun = Math.max(frog.stun || 0, 1);
+          if (this.isVisible(frog.x, frog.y)) this.say(frog, '딸꾹!');
+        } else b.frog = null;
+      }
       this.emit('ring', { x: b.x, y: b.y });
       const heard = this.noise(b.x, b.y, B.BELL_RANGE);
       // the nappers of a 낮잠 방 trooping off to the bell, the chest left alone
@@ -1369,6 +1402,9 @@ export class Run {
         bells.splice(bells.indexOf(b), 1);
         this.pickups.push({ x: b.x, y: b.y, type: 'bell' });
         this.emit('bellDone', { x: b.x, y: b.y });
+        // the frog coughs it back up
+        const frog = b.frog != null && this.enemies.find(e => e.id === b.frog && e.hp > 0);
+        if (frog) { frog.belly = false; if (this.isVisible(frog.x, frog.y)) this.say(frog, '퉤!'); }
       }
     }
   }
