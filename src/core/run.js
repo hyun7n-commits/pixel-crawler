@@ -1006,6 +1006,13 @@ export class Run {
       // bees singed by fire are in its smoke too (world.js smokeHive): dozy, not angry
       if (!(kind === 'fire' && e.d.swarm)) rouse(this, e, 'hit');
       if (e.d.splits && e.hp >= 4) this.split(e);
+      // caught: a goblin hit while it carries your gold lets go of the pouch, and runs off empty-handed
+      if (e.loot) {
+        this.pickups.push({ x: e.x, y: e.y, type: 'gold', amount: e.loot, stolen: true });
+        this.emit('dropLoot', { enemy: e, x: e.x, y: e.y, n: e.loot });
+        this.log(`${josa(e.d.name, '이', '가')} 훔친 골드를 떨어뜨렸다!`, 'good');
+        e.loot = 0;
+      }
     }
   }
 

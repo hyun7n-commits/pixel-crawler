@@ -357,6 +357,7 @@ const KEYS = {
 // Arrow keys (or WASD) pressed together walk diagonally: a key waits a moment for its partner.
 const ARROWS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd']);
 const held = new Set(), tapped = new Set();
+let lastKeyStep = 0;
 let chordTimer = 0;
 function chordStep() {
   chordTimer = 0;
@@ -413,6 +414,9 @@ document.addEventListener('keydown', ev => {
     } else if (run.canThrowAt(h.x, h.y) && canAct()) { clearPath(); run.throwBomb(h.x, h.y); setAim(false); }
     return;
   }
+  // a held key repeats faster than the hero walks: keep to the walk's beat so each step can glide
+  if (ev.repeat && (ARROWS.has(k) || KEYS[k]) && performance.now() - lastKeyStep < 120 / pace()) { ev.preventDefault(); return; }
+  if (ARROWS.has(k) || KEYS[k]) lastKeyStep = performance.now();
   if (ARROWS.has(k)) {
     ev.preventDefault(); clearPath(); setAim(false);
     held.add(k); tapped.add(k);

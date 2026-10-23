@@ -9,6 +9,7 @@ export const EMOTES = {
   anger: { c: 0xff3b3b, line: null, k: 1.5, rows: ['.c.c.', 'cc.cc', '.....', 'cc.cc', '.c.c.'] }, // 💢, bare
   '♪': { c: 0xf29bb2, rows: ['..c..', '..cc.', '..c.c', '..c..', 'ccc..', 'ccc..'] },
   '♥': { c: 0xff6b81, rows: ['.cc.cc.', 'ccccccc', 'ccccccc', '.ccccc.', '..ccc..', '...c...'] },
+  sweat: { c: 0x8fd8f0, rows: ['..c.', '.cc.', 'cccc', 'cccc', '.cc.'] }, // out of breath
 };
 
 export function setEmote(s, kind, now, ms = 1100) {

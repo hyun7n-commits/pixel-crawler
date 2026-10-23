@@ -27,6 +27,9 @@ const D = { tiles: 0, ter: 1, fire: 2, gas: 3, telegraph: 4, pickups: 5, enemies
 const PICKUP_TEX = { gold: 'gold', chest: 'chest', lockedChest: 'lockedChest', bossChest: 'bossChest', key: 'key', cageKey: 'cageKey', necklace: 'necklace', candy: 'candy', crystal: 'pedestal' };
 // critters on the wing, who never wade
 const FLIERS = new Set(['bat', 'vampLord', 'bee', 'ghostNpc']);
+// one step's glide (a touch longer than main.js's 120 ms walk beat, so steps run into each other)
+// and how quickly the view catches up with you (the time it takes to close most of the gap)
+const STEP_MS = 130, CAM_EASE_MS = 140;
 const center = v => v * TILE + TILE / 2;
 const foot = v => v * TILE + TILE;
 const hash = (x, y) => {
@@ -189,7 +192,7 @@ export class DungeonScene extends Phaser.Scene {
   // back to the hero, e.g. after looking around and then acting
   follow() {
     const cam = this.cameras.main;
-    if (this.playerSprite && !cam._follow) cam.startFollow(this.playerSprite, true, 0.25, 0.25, 0, TILE / 2);
+    if (this.playerSprite && !cam._follow) cam.startFollow(this.playerSprite, true, 0.1, 0.1, 0, TILE / 2);
   }
 
   textRes() { return this.zoom || 3; }
@@ -256,7 +259,7 @@ export class DungeonScene extends Phaser.Scene {
     this.playerSprite = this.makeActor(this.heroKey, run.p.x, run.p.y).setDepth(D.player);
     // the pet trots along a step behind (data/pets.js)
     if (run.pet) { this.petSprite = this.makeActor(PETS[run.pet].sprite, run.p.x, run.p.y).setDepth(D.player - 0.05); this.petSprite.x -= 10; }
-    this.cameras.main.startFollow(this.playerSprite, true, 0.25, 0.25, 0, TILE / 2);
+    this.cameras.main.startFollow(this.playerSprite, true, 0.1, 0.1, 0, TILE / 2);
     this.cameras.main.centerOn(center(run.p.x), foot(run.p.y) - TILE / 2);
     this.sync(true);
   }
@@ -456,7 +459,9 @@ export class DungeonScene extends Phaser.Scene {
     const run = this.run;
     if (!run || this.diving) return;
     const map = run.map, p = run.p;
-    const dur = instant ? 0 : 90;
+    // a step lasts as long as the walk's beat (main.js walkTick) at an even speed, so walking along is
+    // one smooth glide like SPD's, not a dart and a stop on every tile
+    const dur = instant ? 0 : STEP_MS;
 
     for (const [i, img] of Object.entries(this.doorImgs)) img.setTexture(this.doorTex(map.open[i]));
 
@@ -577,19 +582,39 @@ export class DungeonScene extends Phaser.Scene {
     }
   }
 
+  // Steps glide frame by frame (glideAll) rather than by tween: a new tween stands still for its
+  // first frame, which on every tile made walking hitch. A step that comes before the last one is
+  // done carries straight on from wherever the sprite is.
   moveTo(sprite, x, y, dur) {
     if (!sprite) return;
-    const tx = center(x), ty = foot(y);
-    if (sprite.x === tx && sprite.y === ty) return;
+    const tx = center(x), ty = foot(y), g = sprite.glide;
+    if (g ? g.x === tx && g.y === ty : sprite.x === tx && sprite.y === ty) return;
     this.tweens.killTweensOf(sprite);
     sprite.hop = 0;
-    if (!dur) { sprite.setPosition(tx, ty); return; }
+    if (!dur) { sprite.glide = null; sprite.setPosition(tx, ty); return; }
     // your feet take turns: one walk frame per step, back to standing once you arrive
     if (sprite === this.playerSprite) {
       sprite.stepFrame = sprite.stepFrame === 1 ? 2 : 1;
       sprite.stepUntil = this.time.now + dur + 70;
     }
-    this.tweens.add({ targets: sprite, x: tx, y: ty, duration: dur, ease: 'Quad.out' });
+    sprite.glide = { x: tx, y: ty, v: TILE / dur };
+  }
+
+  // Everyone on the way somewhere moves toward it at an even pace, both ways at once (so a diagonal
+  // step takes as long as a straight one). Left more than a tile behind, they hurry to catch up.
+  glideAll(dt) {
+    const step = s => {
+      const g = s?.glide;
+      if (!g) return;
+      if (s.dying) { s.glide = null; return; }
+      const dx = g.x - s.x, dy = g.y - s.y, d = Math.max(Math.abs(dx), Math.abs(dy));
+      const m = g.v * dt * (d > TILE * 1.25 ? d / TILE : 1);
+      if (m >= d) { s.setPosition(g.x, g.y); s.glide = null; return; }
+      s.x += Phaser.Math.Clamp(dx, -m, m);
+      s.y += Phaser.Math.Clamp(dy, -m, m);
+    };
+    step(this.playerSprite);
+    for (const s of Object.values(this.enemySprites)) step(s);
   }
 
   spriteFor(who) {
@@ -804,6 +829,28 @@ export class DungeonScene extends Phaser.Scene {
           });
         }
         this.float(d.from.x, d.from.y, `-${d.n}G`, '#f4cf4f', 100);
+        break;
+      }
+      case 'pant': {
+        // the goblin with your gold stops to catch its breath: a bead of sweat, a puff, a little sag
+        const s = this.enemySprites[d.enemy.id];
+        if (!s || !this.run.isVisible(d.enemy.x, d.enemy.y)) break;
+        this.emote(s, 'sweat', 900);
+        this.fx.dust.explode(4, center(d.enemy.x) + 5, center(d.enemy.y) - 2);
+        this.tweens.add({ targets: s, hop: 1.5, duration: 150, yoyo: true, repeat: 2, ease: 'Sine.inOut' });
+        break;
+      }
+      case 'dropLoot': {
+        // caught: the pouch bursts and the coins hop down onto the tile
+        for (let k = 0; k < Math.min(6, 2 + d.n / 5); k++) {
+          const c = this.add.image(center(d.x), center(d.y), 'gold').setScale(0.45).setDepth(D.fx);
+          const dx = (k - 2.5) * 3;
+          this.tweens.add({
+            targets: c, x: center(d.x) + dx, duration: 260, delay: k * 30, ease: 'Quad.out',
+            onUpdate: tw => { c.y = center(d.y) - Math.sin(tw.progress * Math.PI) * 10; },
+            onComplete: () => c.destroy(),
+          });
+        }
         break;
       }
       case 'escape': {
@@ -1059,6 +1106,7 @@ export class DungeonScene extends Phaser.Scene {
     this.bubbles = [];
     if (ps) {
       this.tweens.killTweensOf(ps);
+      ps.glide = null;
       const key = faceKey(this.heroKey, 'hit');
       if (this.textures.exists(key)) ps.setTexture(key);
       ps.clearTint().setAlpha(1);
@@ -1088,6 +1136,7 @@ export class DungeonScene extends Phaser.Scene {
     const dx = Math.sign(to.x - from.x) * 5, dy = Math.sign(to.y - from.y) * 5;
     const bx = center(from.x), by = foot(from.y);
     this.tweens.killTweensOf(sprite);
+    sprite.glide = null;
     sprite.setPosition(bx, by);
     this.tweens.add({ targets: sprite, x: bx + dx, y: by + dy, duration: 55, yoyo: true, ease: 'Quad.out' });
   }
@@ -1333,16 +1382,20 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   // ---------- per-frame drawing ----------
-  update(time) {
+  update(time, delta) {
     const run = this.run, g = this.overlay;
     // the game speed (배속), or the moment's stillness after a heavy hit
     const k = pace();
     this.tweens.timeScale = performance.now() < (this.stopUntil || 0) ? 0.05 : k;
     this.time.timeScale = k;
+    // the view eases after you by time, not by frame, so it glides the same on a 60 or a 120 Hz screen
+    const cam = this.cameras.main, dt = Math.min(delta || 16, 50);
+    if (cam._follow) cam.setLerp(1 - Math.exp(-dt * k / CAM_EASE_MS));
     g.clear(); this.teleGfx.clear(); this.puffGfx.clear(); this.pathGfx.clear(); this.gasGfx.clear(); this.fireGfx.clear(); this.shadowGfx.clear();
     // down a burrow, the old field stays on screen while the rules already hold the new one
     if (!run || !this.playerSprite || this.diving) return;
     const map = run.map, p = run.p;
+    this.glideAll(dt * this.tweens.timeScale);
 
     // fireflies drift about their spot and pulse
     for (const f of this.flyImgs) {
