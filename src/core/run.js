@@ -9,7 +9,7 @@ import { PETS, peckGold, PECKS_PER_FIELD } from '../data/pets.js';
 import { ENEMIES, ZONES } from '../data/enemies.js';
 import { ITEMS } from '../data/items.js';
 import { ORES } from '../data/ores.js';
-import { T, DISCOVERIES, GOSSIP, SLEEP_TALK, FLOOR_HINTS, isTrap } from '../data/terrain.js';
+import { T, DISCOVERIES, GOSSIP, SLEEP_TALK, FLOOR_HINTS, isTrap, isPool } from '../data/terrain.js';
 import { rnd, rint, pick, shuffle, cheb, josa, DIRS8 } from './util.js';
 import {
   createMap, carveRooms, carveArena, idx, inMap, passable, squeeze, distMap, lineOfSight, computeFOV,
@@ -17,12 +17,14 @@ import {
 } from './dungeon.js';
 import { decorate, decorateArena, placeTraps } from './decorate.js';
 import { placeSpecials, SET_PIECES } from './specials.js';
+import { carveChasms, fillPools } from './cliffs.js';
 import { NPC_TEXT, PEDDLER_FLOORS, STALL } from '../data/npcs.js';
+import { TAG_LINES } from '../data/lore.js';
 import { REQUESTS, pickRequest } from '../data/requests.js';
 import { isOpen, openNew, RELIC_GATES } from '../data/unlocks.js';
 import { caged, cleared, stageOpen, loopsOpen, loopFoe, loopGold, FRIENDS } from '../data/stages.js';
 import { daresOn, daresOpen, dareGold } from '../data/dares.js';
-import { enemyAct, rouse, awaken, angerSwarm } from './ai.js';
+import { enemyAct, rouse, awaken, angerSwarm, twist, inReach } from './ai.js';
 import { onEnter, explosion, envTick, waterBody, ignite, addGas, spotTraps, revealTraps, openGrave, setBurn, springTrap } from './world.js';
 
 export const zoneOf = floor => ZONES[Math.floor((floor - 1) / B.FLOORS_PER_ZONE)];
@@ -80,6 +82,8 @@ export class Run {
       relics: { ...this.char.start },
       // 햄스터's cheek pouch packs more potions; 펭귄 sets off with a bag of bombs
       items: { potion: this.dare('nopotion') ? 0 : meta.up.pot + (this.char.pouch || 0), bomb: this.char.bombs || (isOpen(meta, 'bomb') ? 1 : 0), map: 0 },
+      // 마법사's wand: sparks left, and turns since the last one came back
+      charges: this.char.wand ? B.WAND_CHARGES : 0, wandT: 0,
     };
     // the relic packed in town for this run (paid for already)
     if (meta.pack && RELICS[meta.pack] && !tierOf(meta.pack)) {
@@ -160,7 +164,8 @@ export class Run {
       sneak: best(1.5 + 0.25 * lv('boots'), f('shadow', 2.25, 0.25), f('dagger', 2.5, 0.25), f('owleye', 2, 0.25)) +
         0.5 * lv('phantom') + 0.5 * lv('nightowl') + (on('eclipse') ? 2 : 0) + (on('dawnstar') ? 1 : 0) + (ch.sneak || 0),
       sight: Math.min(B.SIGHT + 6, B.SIGHT + lv('lantern') + f('dreamlamp', 1, 1) + f('owleye', 1, 1) + f('headlamp', 1, 1) + f('sunlamp', 1, 1) + lv('nightowl')) - (this.dare('dark') ? B.DARE_DARK : 0) -
-        (this.zone.style === 'marsh' ? B.MARSH_DARK : 0) + Math.min(B.FLY_MAX, this.flies || 0) + (ch.sight || 0) + (pet.sight || 0),
+        (this.zone.style === 'marsh' ? B.MARSH_DARK : 0) + Math.min(B.FLY_MAX, this.flies || 0) + (ch.sight || 0) + (pet.sight || 0) -
+        (this.p?.inked > 0 ? 3 : 0),
       oreMult: best(1 + 0.5 * lv('pick'), f('goldrush', 1.5, 0.5), f('headlamp', 1.5, 0.5)),
       // extra chance a swing finds a better grade
       oreRise: best(0.05 * lv('pick'), f('goldrush', 0.1, 0.05), f('headlamp', 0.1, 0.05)) + (on('minecrown') ? 0.15 : 0),
@@ -211,10 +216,19 @@ export class Run {
   }
   // true if this enemy will hit you on its next turn (shown as a claw mark on your tile)
   willHit(e) {
-    return e.hp > 0 && e.state === 'hunt' && this.touching(e, this.p) && !e.aim && !e.slam && !e.stun &&
+    if (e.hp > 0 && e.state === 'hunt' && !e.stun && inReach(this, e)) return true;
+    return e.hp > 0 && e.state === 'hunt' && this.touching(e, this.p) && !e.aim && !e.slam && !e.stun && !e.d.drift && !e.d.mirror && !e.dug && !e.shellT &&
       !e.stoneT && !e.backoff && !e.charge && !e.diving && !e.lick && !(e.d.slow && !e.skip);
   }
-  get zone() { return zoneOf(this.floor); }
+  get zone() { return ZONES[this.stage]; }
+  // 깊은 곳 (v0.23): how far below the boss's floor you are, 0 up to the boss
+  get depth() { return Math.max(0, this.floor - this.bossFloor); }
+  // how far every tile is from you for something with wings (over drops, water and lava), once a turn
+  flyMap() {
+    const k = `${this.turn}:${this.p.x},${this.p.y}`;
+    if (this.flyDm?.k !== k) this.flyDm = { k, dm: distMap(this.map, this.p.x, this.p.y, { fly: true }) };
+    return this.flyDm.dm;
+  }
 
   // ---------- floors ----------
   start() {
@@ -241,12 +255,18 @@ export class Run {
     this.gasActive = false;
     this.overheard = false; // at most one overheard line per floor
     this.respawnT = 0;
-    if (isBossFloor(this.floor)) this.genBossFloor();
+    if (this.floor === this.bossFloor) this.genBossFloor();
     else this.genNormalFloor();
     this.enterFloor();
   }
 
   enterFloor() {
+    // fell down a drop: you land anywhere on the field, not at its burrow
+    if (this.landing) {
+      this.landing = false;
+      const t = this.landSpot();
+      if (t) this.arriveAt(t.x, t.y);
+    }
     this.telegraph = [];
     this.puffs = [];
     this.rocks = [];
@@ -318,6 +338,15 @@ export class Run {
       for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (map.ter[idx(x, y)] === T.WATER) map.spring.push(idx(x, y));
       if (!map.spring.length) delete map.spring;
     }
+    // v0.23: drops and a bridge by the sea, fallen floors in the ruins, ice and lava pools
+    const taken = new Set([...sp.pickups, ...sp.enemies].map(o => idx(o.x, o.y)));
+    if (this.zone.wet) fillPools(map, this.zone.wet, this.p, taken);
+    if (this.zone.chasm) {
+      const inR = (r, t) => t.x >= r.x && t.y >= r.y && t.x < r.x + r.w && t.y < r.y + r.h;
+      carveChasms(map, rooms.filter((r, i) => i > 0 && !SET_PIECES.has(deco.themes[i])), this.zone.style,
+        { start: this.p, taken, skip: r => inR(r, stairs) || inR(r, this.p) });
+      if (map.ter.includes(T.CHASM)) this.has.add('chasm');
+    }
     // loose traps, enemies and loot stay out of the set pieces
     const open = rooms.filter((r, i) => !SET_PIECES.has(deco.themes[i]));
     if (placeTraps(map, open, { start: this.p, stairs }, this.floor, this.open('traps'))) this.has.add('trap');
@@ -359,9 +388,13 @@ export class Run {
     for (let i = 0, n = rint(2, 4); i < n; i++) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'gold', amount: (zi + 1) * rint(3, 7) }));
     place(s => this.addChest(s.x, s.y));
     if (this.floor === 1) place(s => this.addChest(s.x, s.y));
+    // 깊은 곳: a locked-chest's worth of loot lying open on every floor, for the build to keep growing
+    if (this.depth) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'chest', rich: true }));
     if (!this.dare('nopotion') && Math.random() < B.POTION_CHANCE) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'potion' }));
     if (this.open('bomb') && Math.random() < 0.5) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'bomb' }));
     if (this.open('map') && Math.random() < 0.3) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'map' }));
+    // now and then an old worker's name tag in the grass; in the ruins, a few on every floor
+    for (let i = 0, n = B.tagsPerFloor(this.stage); i < n; i++) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'tag' }));
 
     this.pickups.push(...sp.pickups);
     for (const o of sp.enemies) {
@@ -455,6 +488,7 @@ export class Run {
     for (let y = r.y + 1; y < r.y + r.h - 1; y++) for (let x = r.x + 1; x < r.x + r.w - 1; x++) {
       if (map.tiles[idx(x, y)] === FLOOR && !near(x, y) && cheb({ x, y }, spots.start) > 3) open.push({ x, y });
     }
+    fillPools(map, this.zone.wet, spots.start, new Set([idx(spots.boss.x, spots.boss.y)]));
     if (this.zone.style === 'cave') map.drips = shuffle(open.filter(t => map.ter[idx(t.x, t.y)] !== T.WATER)).slice(0, 6);
     if (this.zone.style === 'marsh') {
       map.flies = [];
@@ -496,12 +530,14 @@ export class Run {
 
   // the banner and HUD name of a floor: the zone and how deep into this trip, or its boss
   floorName(floor = this.floor) {
-    return floor === this.bossFloor ? `${zoneOf(floor).name} · 대장` : `${zoneOf(floor).name} ${B.localOf(floor)}`;
+    const name = this.zone.name;
+    return floor === this.bossFloor ? `${name} · 대장` : floor > this.bossFloor ? `${name} · 깊은 곳 ${floor - this.bossFloor}` : `${name} ${B.localOf(floor)}`;
   }
 
   // dir = 1 down, -1 up. Floors you have been on come back exactly as you left them.
   changeFloor(dir) {
-    this.arrival = { dir, from: { x: this.p.x, y: this.p.y } };
+    this.arrival = { dir, from: this.fallAt || { x: this.p.x, y: this.p.y }, fell: !!this.fallAt };
+    this.fallAt = null;
     this.floors[this.floor] = {
       map: this.map, enemies: this.enemies.filter(e => e.hp > 0), pickups: this.pickups,
       boss: this.boss, has: this.has, gasActive: this.gasActive, overheard: this.overheard, respawnT: this.respawnT, stall: this.stall,
@@ -548,6 +584,94 @@ export class Run {
     this.catchFly(x, y);
   }
 
+  // Sliding on ice (or one tile on a snail's slime) the way you stepped, picking things up as you go;
+  // the slide stops where the ice ends, at a wall, a drop's edge, someone in the way or a burrow.
+  slidePlayer(dx, dy, once) {
+    const p = this.p, map = this.map, from = { x: p.x, y: p.y };
+    let n = 0;
+    while (n < 12) {
+      const x = p.x + dx, y = p.y + dy;
+      if (!this.passable(x, y) || this.enemyAt(x, y) || squeeze(map, p.x, p.y, dx, dy)) break;
+      p.x = x; p.y = y; n++;
+      this.trail.push({ x, y });
+      if (this.trail.length > 40) this.trail.shift();
+      onEnter(this, 'player', x, y);
+      this.pickupAt(x, y);
+      this.catchFly(x, y);
+      const i = idx(x, y);
+      if (once || map.ter[i] !== T.ICE || map.tiles[i] === STAIRS || map.tiles[i] === UPSTAIRS) break;
+    }
+    if (!n) return;
+    this.emit('slide', { from, to: { x: p.x, y: p.y } });
+    if (!this.told.ice && !once) { this.told.ice = true; this.log('미끄덩! 빙판에서는 끝까지 미끄러진다.', 'warn'); }
+  }
+
+  // Down a drop, by jumping or knocked over the edge: the fall hurts, and you land somewhere on the
+  // next field. A shortcut, if you can take the knock.
+  leap(knocked) {
+    const p = this.p;
+    this.emit('fall', { x: p.x, y: p.y });
+    this.log(knocked ? '떠밀려서 낭떠러지 아래로 떨어졌다!' : '에잇! 낭떠러지 아래로 뛰어내렸다!', 'warn');
+    this.hurtPlayer(Math.max(3, Math.round(this.stat().maxHp * B.FALL_HURT)), '낭떠러지에서 떨어졌다', 'fall');
+    if (p.hp <= 0) { this.afterTurn(); return true; }
+    this.landing = true;
+    this.changeFloor(1);
+    return true;
+  }
+  // somewhere open to land, with no critter right beside it
+  landSpot() {
+    const m = this.map;
+    for (let t = 0; t < 400; t++) {
+      const x = rnd(m.w), y = rnd(m.h), i = idx(x, y);
+      if (m.tiles[i] !== FLOOR || ![T.NONE, T.GRASS, T.BRUSH, T.ASH].includes(m.ter[i])) continue;
+      if (this.enemies.some(e => e.hp > 0 && cheb(e, { x, y }) <= 2) || this.pickups.some(q => q.x === x && q.y === y)) continue;
+      return { x, y };
+    }
+    return null;
+  }
+
+  // A snowball knocks you a tile back: a wall or someone stops you; over a drop you fall (at the end of
+  // the critters' turn); into lava you are burnt and bounce back out.
+  shovePlayer(src) {
+    const p = this.p, dx = Math.sign(p.x - src.x), dy = Math.sign(p.y - src.y), x = p.x + dx, y = p.y + dy;
+    if (!inMap(x, y) || (!dx && !dy)) return;
+    const ter = this.map.ter[idx(x, y)];
+    if (ter === T.CHASM) { this.pendingFall = true; this.fallAt = { x, y }; return; }
+    if (ter === T.LAVA) {
+      this.emit('bonk', { x: p.x, y: p.y, dx, dy });
+      this.hurtPlayer(B.lavaHurt(this.floor), '용암에 빠져 데었다', 'burn');
+      setBurn(this, 'player', 3);
+      return;
+    }
+    if (!this.passable(x, y) || this.enemyAt(x, y) || squeeze(this.map, p.x, p.y, dx, dy)) { this.emit('bonk', { x: p.x, y: p.y, dx, dy }); return; }
+    const from = { x: p.x, y: p.y };
+    p.x = x; p.y = y;
+    this.trail.push({ x, y });
+    if (this.trail.length > 40) this.trail.shift();
+    this.emit('pull', { from, to: { x, y } });
+    onEnter(this, 'player', x, y);
+    this.pickupAt(x, y);
+    if (ter === T.ICE) this.slidePlayer(dx, dy, false);
+  }
+
+  // A snail's slime trail or the queen's honey on the ground; it dries up after a while (GOO_TURNS)
+  goo(x, y, kind) {
+    const m = this.map, i = idx(x, y);
+    if (m.tiles[i] !== FLOOR || ![T.NONE, T.GRASS, T.ASH].includes(m.ter[i])) return;
+    m.ter[i] = kind;
+    (m.goo ||= {})[i] = this.turn + B.GOO_TURNS;
+    this.emit('tiles', { list: [i], soft: true });
+  }
+  dryGoo() {
+    const m = this.map, done = [];
+    for (const [i, t] of Object.entries(m.goo || {})) {
+      if (this.turn < t) continue;
+      delete m.goo[i];
+      if (m.ter[i] === T.SLIME || m.ter[i] === T.HONEY) { m.ter[i] = T.NONE; done.push(+i); }
+    }
+    if (done.length) this.emit('tiles', { list: done, soft: true });
+  }
+
   // ---------- player actions (return true if a turn was spent) ----------
   canAct() { return !this.over && this.queue.length === 0 && !this.p.sleep && !this.p.stun; }
 
@@ -588,7 +712,27 @@ export class Run {
     if (map.tiles[i] === LOCKED) return this.unlock(nx, ny);
     if (map.tiles[i] === HIVE) return this.takeHoney(nx, ny);
     if (map.tiles[i] === WEED) return this.pullWeed(nx, ny);
+    // 낭떠러지: the first step stops at the edge; walking on over it is a jump down to the next field
+    if (map.ter[i] === T.CHASM) {
+      if (p.brink?.x === nx && p.brink.y === ny) { p.brink = null; this.fallAt = { x: nx, y: ny }; return this.leap(false); }
+      p.brink = { x: nx, y: ny };
+      this.emit('brink', { x: nx, y: ny });
+      this.log('낭떠러지 끝이다. 한 걸음 더 가면 뛰어내린다. 아래 구역으로 떨어지지만 크게 다친다.', 'warn');
+      return false;
+    }
+    if (map.ter[i] === T.LAVA) {
+      if (!this.told.lava) { this.told.lava = true; this.log('부글부글 끓는 용암이다. 들어갈 수 없다.', 'warn'); }
+      return false;
+    }
     if (!this.passable(nx, ny)) return false;
+    // 꿀: a foot stuck in honey takes a turn to pull free
+    if (p.sticky) {
+      p.sticky = 0;
+      this.emit('struggle', { x: p.x, y: p.y, dx, dy });
+      this.log('꿀에 붙은 발을 떼느라 한 턴이 갔다.', 'warn');
+      this.endTurn();
+      return true;
+    }
     // 가재 집게: held fast, you can hit back but not walk off; trying shakes you loose and takes the turn
     if (p.held && this.enemies.some(o => o.id === p.held && o.hp > 0 && this.touching(o, p))) {
       this.emit('struggle', { x: p.x, y: p.y, dx, dy });
@@ -601,12 +745,16 @@ export class Run {
     p.dash = p.dash?.dx === dx && p.dash.dy === dy ? { dx, dy, n: p.dash.n + 1 } : { dx, dy, n: 1 };
     this.trail.push({ x: nx, y: ny });
     if (this.trail.length > 40) this.trail.shift();
+    this.lastMove = { dx, dy };
     this.emit('move', { x: nx, y: ny, ter: map.ter[i] });
     onEnter(this, 'player', nx, ny);
     this.pickupAt(nx, ny);
     this.catchFly(nx, ny);
-    if (map.tiles[i] === STAIRS) { this.changeFloor(1); return true; }
-    if (map.tiles[i] === UPSTAIRS) { this.changeFloor(-1); return true; }
+    // 빙판 and 달팽이 점액: you slide on the same way (to the end of the ice; one tile on slime)
+    if (map.ter[i] === T.ICE || map.ter[i] === T.SLIME) this.slidePlayer(dx, dy, map.ter[i] === T.SLIME);
+    const at = map.tiles[idx(p.x, p.y)];
+    if (at === STAIRS) { this.changeFloor(1); return true; }
+    if (at === UPSTAIRS) { this.changeFloor(-1); return true; }
     // 토끼: every few steps one is a hop, over before anyone else can move
     if (this.char.hop && (p.hops = (p.hops || 0) + 1) % this.char.hop === 0) { this.quick = true; this.emit('hop', { x: nx, y: ny, dx, dy }); }
     this.endTurn();
@@ -866,6 +1014,41 @@ export class Run {
     return true;
   }
 
+  // 마법사's wand (v0.23): tap a monster you can see two to four tiles off and a spark of magic flies at
+  // it; the first one in its way takes it. It costs the turn and a spark, and a spark comes back every
+  // few turns, so the wand opens a fight but does not win it while you run. (Before v0.23 the mage's
+  // bolt went off by itself every few turns, and running in circles won every fight.)
+  canZapAt(x, y) {
+    const p = this.p, e = inMap(x, y) && this.enemyAt(x, y);
+    return !!(this.char.wand && p.charges > 0 && e && e.hp > 0 && !e.d.npc && e.state !== 'hide' && this.isVisible(x, y)
+      && cheb(e, p) >= 2 && cheb(e, p) <= B.WAND_RANGE);
+  }
+
+  castWand(x, y) {
+    if (!this.canAct() || !this.canZapAt(x, y)) return false;
+    const p = this.p, s = this.stat();
+    // along the line toward the target: whoever stands in the way first
+    let e = this.enemyAt(x, y), cx = p.x, cy = p.y;
+    const dx = Math.abs(x - cx), dy = -Math.abs(y - cy), sx = cx < x ? 1 : -1, sy = cy < y ? 1 : -1;
+    for (let err = dx + dy; !(cx === x && cy === y);) {
+      const e2 = 2 * err;
+      if (e2 >= dy) { err += dy; cx += sx; }
+      if (e2 <= dx) { err += dx; cy += sy; }
+      const o = this.enemyAt(cx, cy);
+      if (o && o.hp > 0 && !o.d.npc && o.state !== 'hide') { e = o; break; }
+    }
+    p.charges--;
+    p.wandT = 0;
+    p.blend = false;
+    if (e.x !== p.x) p.face = Math.sign(e.x - p.x);
+    (this.struck ||= new Set()).add(e.id);
+    this.emit('wand', { from: { x: p.x, y: p.y }, to: { x: e.x, y: e.y } });
+    // half again as hard as a swing of your staff, and it shocks the water the target stands in
+    this.zapHit({ x: p.x, y: p.y }, e, Math.max(1, Math.round((s.atk + rnd(2)) * B.WAND_POWER) - e.def), new Set(), true);
+    this.endTurn();
+    return true;
+  }
+
   pickupAt(x, y) {
     const map = this.map;
     for (const q of this.pickups.filter(q => q.x === x && q.y === y)) {
@@ -880,11 +1063,14 @@ export class Run {
         this.log('보물 상자를 열었다!', 'good');
         if (q.guarded) this.wakeStatues(x, y);
       } else if (q.type === 'bossChest') {
-        // the stage's prize: the gold comes out in a heap and the trip is won (finish adds it)
+        // the stage's prize: the gold comes out in a heap, every relic you carry grows a level (and
+        // whatever that completes evolves, one after another), and then you choose: home with the
+        // win, or down through the floor to 깊은 곳 (bank adds the gold either way)
         this.meta.stats.chests = (this.meta.stats.chests || 0) + 1;
-        this.victory = true;
         this.emit('bossChest', { x, y, gold: Math.round(B.stageBonus(this.stage) * this.goldBonus) });
         this.log('대장의 보물 상자를 열었다!', 'good');
+        this.bossPrize();
+        this.queue.push({ kind: 'deeper' });
       } else if (q.type === 'lockedChest') {
         map.keyHeld = false;
         this.queue.push({ kind: 'chest', rich: true });
@@ -897,11 +1083,19 @@ export class Run {
         this.log('작은 열쇠를 주웠다. 이 구역의 잠긴 곳을 연다.', 'good');
       } else if (q.type === 'candy') this.fission(q.n || B.candySteps(this.floor), x, y);
       else if (q.type === 'crystal') this.takeCrystal(q);
+      else if (q.type === 'tag') this.takeTag();
       else if (q.type === 'necklace') {
         this.quests.ghost.state = 'found';
         this.log('아기새 리본을 찾았다! 울보 아기새에게 돌려주자.', 'good');
       } else { this.p.items[q.type]++; this.log(`${josa(ITEMS[q.type].name, '을', '를')} 주웠다.`); }
     }
+  }
+
+  // An old worker's name tag: the guild pays a little for each one brought back, and asks nothing.
+  takeTag() {
+    const st = this.meta.stats, n = st.tags = (st.tags || 0) + 1;
+    this.addGold(B.TAG_GOLD * (1 + this.stage));
+    this.log(n === 1 ? '낡은 일꾼 명찰을 주웠다. 이름 자리가 긁혀 있다. 조합에서 골드로 바꿔 준다.' : pick(TAG_LINES));
   }
 
   // A relic from a crystal vault: the other crystals of that vault shatter.
@@ -929,6 +1123,7 @@ export class Run {
 
   playerAttack(e, ram = false) {
     const s = this.stat(), L = this.levels(), p = this.p;
+    (this.struck ||= new Set()).add(e.id);
     const base = (s.atk + rnd(2)) * (ram ? 2 : 1);
     if (ram) this.emit('ram', { x: e.x, y: e.y, from: { x: p.x, y: p.y } });
     // 그림자 걸음: right after a kill you are still in the shadows, so the next blow is a surprise too
@@ -945,6 +1140,8 @@ export class Run {
     if (this.char.shove && e.hp > 0 && !e.d.boss && !e.d.npc) this.knock(e, 2 + Math.floor(this.floor / 4));
     // 수정 고슴도치: a blow on its spines pricks back
     if (e.d.spiky) { this.emit('prick', { x: p.x, y: p.y, from: { x: e.x, y: e.y } }); this.hurtPlayer(e.d.spiky, `${e.d.name}의 가시에 찔렸다`, 'thorns'); }
+    // 해파리: touching it to hit it stings too
+    if (e.d.sting) { this.emit('sting', { x: p.x, y: p.y }); this.hurtPlayer(2 + Math.floor(this.floor / 8), `${e.d.name}에 쏘였다`, 'thorns'); }
     // the swing carries on into everyone else standing next to you
     const share = L.quake || L.whirlwind ? 1 : L.whirl ? 0.6 + 0.1 * L.whirl : 0.3 * (L.sweep || 0);
     if (share) {
@@ -983,7 +1180,15 @@ export class Run {
   // it is put out.
   knock(e, dmg) {
     const dx = Math.sign(e.x - this.p.x), dy = Math.sign(e.y - this.p.y), x = e.x + dx, y = e.y + dy;
-    const other = this.enemyAt(x, y);
+    const other = this.enemyAt(x, y), ter = inMap(x, y) ? this.map.ter[idx(x, y)] : T.NONE;
+    // over the edge it goes (a boss, a crowned one or a flier holds on)
+    if (ter === T.CHASM && !e.d.flies && !e.d.boss && !e.chief) { this.plunge(e, { x, y }); return; }
+    if (ter === T.LAVA && !e.d.flies && !e.d.fireproof) {
+      this.emit('bonk', { x: e.x, y: e.y, dx, dy });
+      this.hurt(e, B.lavaHurt(this.floor) * 2, 'fire');
+      if (e.hp > 0) setBurn(this, e, 3);
+      return;
+    }
     if (!this.passable(x, y) || other || (x === this.p.x && y === this.p.y)) {
       this.emit('bonk', { x: e.x, y: e.y, dx, dy });
       this.hurt(e, dmg, 'bonk');
@@ -999,10 +1204,31 @@ export class Run {
 
   hurt(e, dmg, kind) {
     if (e.hp <= 0 || e.d.npc) return;
-    if (e.stoneT > 0) dmg = 1; // a gargoyle gone to stone barely feels it
+    if (e.stoneT > 0 || e.shellT > 0) dmg = 1; // a gargoyle gone to stone, a hermit crab in its shell
+    if (e.state === 'dead') dmg = e.hp;         // a ladybug playing dead: one more blow and it is over
     e.hp -= dmg;
     e.hitAt = this.turn;
     this.emit('hit', { enemy: e, x: e.x, y: e.y, dmg, kind });
+    // 무당벌레: the first time it should fall, it flips over and plays dead
+    if (e.hp <= 0 && e.d.playDead && !e.faked) {
+      Object.assign(e, { faked: true, hp: Math.max(1, Math.round(e.maxHp * 0.3)), state: 'dead', fakeT: 3, aim: false });
+      this.emit('fakeDeath', { enemy: e });
+      if (this.isVisible(e.x, e.y)) this.log(`${josa(e.d.name, '이', '가')} 발랑 뒤집혔다.`, 'good');
+      return;
+    }
+    if (e.d.twist && !e.twisted && e.hp > 0) twist(this, e);
+    // 소라게: tucks into its shell for two turns; half beaten, it leaves the shell and runs
+    if (e.d.shell && e.hp > 0 && !e.bare) {
+      if (e.hp <= e.maxHp / 2) {
+        Object.assign(e, { bare: true, def: 0, shellT: 0, look: 'hermitBare', state: 'flee', ran: 0, pants: 0 });
+        this.pickups.push({ x: e.x, y: e.y, type: 'gold', amount: (Math.floor((this.floor - 1) / 4) + 1) * rint(2, 4) });
+        this.emit('shed', { enemy: e });
+        if (this.isVisible(e.x, e.y)) this.log(`${josa(e.d.name, '이', '가')} 껍데기를 버리고 맨몸으로 달아난다! 껍데기 안에 동전이 있었다.`, 'good');
+      } else if (!e.shellT) {
+        e.shellT = 2; e.look = 'hermitIn';
+        this.emit('tuck', { enemy: e });
+      }
+    }
     if (e.hp <= 0) this.onKill(e);
     else {
       // bees singed by fire are in its smoke too (world.js smokeHive): dozy, not angry
@@ -1016,6 +1242,19 @@ export class Run {
         e.loot = 0;
       }
     }
+  }
+
+  // Knocked over a drop: it falls away for good. It counts, but whatever it carried falls with it.
+  plunge(e, to) {
+    this.emit('plunge', { enemy: e, from: { x: e.x, y: e.y }, to });
+    e.x = to.x; e.y = to.y;
+    e.hp = 0;
+    this.log(`${josa(e.d.name, '이', '가')} 낭떠러지 아래로 떨어졌다!`, 'good');
+    this.kills++; this.meta.stats.kills++;
+    const book = this.meta.critters ||= {};
+    book[e.type] = (book[e.type] || 0) + 1;
+    this.emit('kill', { enemy: e, fell: true });
+    this.gainXp(e.xp ?? e.d.xp);
   }
 
   // A slime that takes a hit and lives splits off half of what it has left into a little one beside it.
@@ -1048,6 +1287,20 @@ export class Run {
     const book = this.meta.critters ||= {};
     book[e.type] = (book[e.type] || 0) + 1;
     this.emit('kill', { enemy: e });
+    // 연속 처치 (v0.23): monsters knocked down one right after another (each within a couple of turns
+    // of the last; a bomb or a chain of lightning does several at once) drop more gold each, and the
+    // cheer climbs with the count
+    if (!e.d.boss && !e.d.npc) {
+      const c = this.combo ||= { n: 0, t: -9 };
+      c.n = this.turn - c.t <= B.COMBO_TURNS ? c.n + 1 : 1;
+      c.t = this.turn;
+      if (c.n >= 2) {
+        this.addGold(c.n * (1 + this.stage) * B.COMBO_GOLD);
+        this.emit('combo', { n: c.n, x: e.x, y: e.y });
+        stats.bestCombo = Math.max(stats.bestCombo || 0, c.n);
+        if (c.n === 5) this.log('다섯 마리 연속! 대박!', 'evo');
+      }
+    }
     if (e.d.boss) {
       if (!stats.bosses.includes(e.type)) stats.bosses.push(e.type);
       this.log(`${josa(e.d.name, '을', '를')} 쓰러뜨렸다!`, 'good');
@@ -1084,6 +1337,7 @@ export class Run {
       this.pickups.push({ x: e.x, y: e.y, type: 'gold', amount: (Math.floor((this.floor - 1) / 3) + 1) * rint(1, 4) });
     }
     if (e.d.bones) this.swell(e);
+    this.afterlife(e);
     if (L.shadow && !e.d.npc) { this.p.shade = 3; this.emit('shade', { x: this.p.x, y: this.p.y }); }
     const heal = 2 * (L.fang || 0) + (L.bloodcrown ? 4 + 2 * L.bloodcrown : 0) + (L.goldfang ? 5 + L.goldfang : 0);
     if (heal) this.heal(heal);
@@ -1091,6 +1345,42 @@ export class Run {
   }
 
   chiefName(e) { return `우두머리 ${e.d.name}`; }
+
+  // what some v0.23 critters leave when they fall
+  afterlife(e) {
+    const d = e.d, scale = B.enemyScale(this.floor), seen = this.isVisible(e.x, e.y);
+    // 눈사람: the head rolls off and keeps throwing
+    if (d.head) {
+      const h = this.spawnEnemy('snowhead', e.x, e.y, scale);
+      Object.assign(h, { state: 'hunt', last: { x: this.p.x, y: this.p.y } });
+      if (seen) this.log('눈사람 머리가 데굴데굴 굴러 나왔다!', 'warn');
+    }
+    // 빈 갑옷: the pieces lie there, and put themselves back together unless scattered
+    if (d.reform && !e.reformed) {
+      const pile = this.spawnEnemy('armorpile', e.x, e.y);
+      Object.assign(pile, { reformT: d.reform, armorAtk: e.atk, state: 'hunt' });
+      if (seen) this.log('갑옷이 와르르 무너졌다. 조각이 덜그럭거린다…', 'warn');
+    }
+    if (e.type === 'armorpile' && seen) this.log('갑옷 조각을 흩어 놓았다. 이제 조용하다.', 'good');
+    // 불나방: sparks fly about where it falls
+    if (d.lantern) {
+      // (never onto you: you swatted it, you get a moment to step back from the flames)
+      const near = shuffle(DIRS8.filter(([dx, dy]) => e.x + dx !== this.p.x || e.y + dy !== this.p.y)).slice(0, 3);
+      this.emit('sparks', { x: e.x, y: e.y });
+      for (const [dx, dy] of near) ignite(this, e.x + dx, e.y + dy, true);
+    }
+    if (e.type === 'bigmask') this.log('큰 가면이 툭 떨어졌다. 가면 뒤에는… 아무도 없었다.', 'warn');
+  }
+
+  // 숯덩이 burnt out: a heap of ash
+  crumble(e) {
+    const i = idx(e.x, e.y);
+    if (this.map.tiles[i] === FLOOR && [T.NONE, T.GRASS].includes(this.map.ter[i])) { this.map.ter[i] = T.ASH; this.emit('tiles', { list: [i] }); }
+    this.emit('crumble', { enemy: e });
+    if (this.isVisible(e.x, e.y)) this.log(`${josa(e.d.name, '이', '가')} 다 타서 재가 되었다.`, 'good');
+    e.shellT = 0; e.stoneT = 0;
+    this.hurt(e, e.hp, 'fire');
+  }
 
   // A poison mushroom that falls swells up, and bursts after your next move: everyone next to it then
   // takes a hit, monsters too. The tiles around it glow, so one step away keeps you out of it.
@@ -1262,6 +1552,8 @@ export class Run {
     this.quick = false;
     this.turn++;
     if (p.shade > 0) p.shade--;
+    if (p.inked > 0) p.inked--;
+    if (this.char.wand && p.charges < B.WAND_CHARGES && ++p.wandT >= B.WAND_RECHARGE) { p.charges++; p.wandT = 0; this.emit('recharge', { n: p.charges }); }
     if (!this.char.noRegen && this.turn % B.REGEN_TURNS === 0 && p.hp > 0 && p.hp < this.stat().maxHp) p.hp++;
     if (L.goldbolt && this.turn % (L.goldstorm ? 2 : 3) === 0) this.zap(L.goldbolt + 1 + (L.goldstorm ? 1 : 0), 6 + 2 * L.goldbolt);
     else if (L.bolt && this.turn % 6 === 0) this.zap(1, 4 * L.bolt);
@@ -1286,12 +1578,18 @@ export class Run {
     p.held = null;
     this.enemyPhase = true;
     if (!quick) for (const e of this.enemies.slice()) {
-      if (e.hp > 0 && p.hp > 0) enemyAct(this, e, dm);
+      if (e.hp > 0 && p.hp > 0 && !this.pendingFall) enemyAct(this, e, dm);
     }
     this.enemyPhase = false;
+    this.lastMove = null;
+    this.struck = null;
+    p.brink = null;
     p.shell = false;
-    if (p.hp > 0) envTick(this);
+    if (p.hp > 0 && !this.pendingFall) envTick(this);
     this.enemies = this.enemies.filter(e => e.hp > 0);
+    this.dryGoo();
+    if (this.pendingFall && p.hp > 0) { this.pendingFall = false; this.leap(true); return; }
+    this.pendingFall = false;
     if (p.hp > 0) { this.chatter(); spotTraps(this); }
     this.magnetize();
     this.respawnTick();
@@ -1359,7 +1657,7 @@ export class Run {
   // Like Shattered Pixel Dungeon: once you thin a floor out, a new enemy wanders in now and then,
   // somewhere out of sight, and roams until it runs into you.
   respawnTick() {
-    if (isBossFloor(this.floor) || this.over) return;
+    if (this.floor === this.bossFloor || this.over) return;
     const hostile = this.enemies.filter(e => !e.d.peaceful && !e.d.gimmick).length;
     if (hostile >= B.enemiesPerFloor(this.floor)) { this.respawnT = 0; return; }
     if (++this.respawnT < B.RESPAWN_TURNS) return;
@@ -1424,11 +1722,11 @@ export class Run {
     }
   }
 
-  zapHit(from, e, dmg, hit) {
+  zapHit(from, e, dmg, hit, wand = false) {
     if (hit.has(e.id) || e.hp <= 0) return;
     hit.add(e.id);
     const at = { x: e.x, y: e.y };
-    this.emit('zap', { from, to: at });
+    if (!wand) this.emit('zap', { from, to: at });
     this.hurt(e, dmg, 'bolt');
     // water carries the shock to everyone standing in it, you included
     if (this.map.ter[idx(at.x, at.y)] === T.WATER) {
@@ -1573,6 +1871,126 @@ export class Run {
         }
       }
     }
+    // 대왕 문어: a tentacle comes down on a row of tiles through you (step off it, across); badly hurt,
+    // it sprays ink and you see only what is close
+    if (e.type === 'octopus') {
+      if (e.slam) {
+        e.slam = false;
+        const hit = this.telegraph.some(t => t.x === p.x && t.y === p.y);
+        this.emit('slam', { tiles: this.telegraph, hit });
+        for (const o of this.enemies.filter(o => o !== e && o.hp > 0 && this.telegraph.some(t => t.x === o.x && t.y === o.y))) this.hurt(o, 12, 'slam');
+        if (hit) { this.hurtPlayer(10 + 2 * this.floor, '대왕 문어 다리에 맞았다', 'slam'); this.log('철썩! 문어 다리에 맞았다!', 'warn'); }
+        else this.log('문어 다리를 피했다!', 'good');
+        this.telegraph = [];
+        return true;
+      }
+      if (!e.rage && e.hp <= e.maxHp / 2) {
+        e.rage = true;
+        p.inked = 8;
+        this.emit('ink', { x: e.x, y: e.y });
+        this.log('대왕 문어가 먹물을 푸악 뿜었다! 앞이 깜깜하다!', 'warn');
+        return true;
+      }
+      if (e.timer % 3 === 0 && cheb(e, p) <= 7) {
+        e.slam = true;
+        const across = Math.abs(p.x - e.x) >= Math.abs(p.y - e.y);
+        this.telegraph = [];
+        for (let k = -2; k <= 2; k++) {
+          const t = across ? { x: p.x + k, y: p.y } : { x: p.x, y: p.y + k };
+          if (passable(this.map, t.x, t.y)) this.telegraph.push(t);
+        }
+        this.log('대왕 문어가 다리를 번쩍 들었다! 붉은 줄에서 옆으로 비키자!', 'warn');
+        return true;
+      }
+    }
+    // 여왕벌: every few turns two angry bees; she drips honey as she goes (ai.js moveEnemy)
+    if (e.type === 'queen' && e.timer % 5 === 0) {
+      let n = 0;
+      for (const [dx, dy] of shuffle(DIRS8.slice())) {
+        if (n < 2 && this.canEnemyEnter(e.x + dx, e.y + dy)) {
+          const b = this.spawnEnemy('bee', e.x + dx, e.y + dy, B.enemyScale(this.floor));
+          Object.assign(b, { angry: true, state: 'hunt', last: { x: p.x, y: p.y } });
+          n++;
+        }
+      }
+      if (n) { this.log('여왕벌이 윙윙 꿀벌을 불렀다!', 'warn'); return true; }
+    }
+    // 용암 거북: breathes a line of fire that keeps burning; in the lava its wounds close
+    if (e.type === 'lavaturtle') {
+      const inLava = this.map.ter[idx(e.x, e.y)] === T.LAVA;
+      if (inLava && e.hp < e.maxHp) { const n = Math.min(4, e.maxHp - e.hp); e.hp += n; this.emit('regen', { enemy: e, n }); }
+      if (e.breath) {
+        e.breath = false;
+        const hit = this.telegraph.some(t => t.x === p.x && t.y === p.y);
+        this.emit('lavabreath', { from: { x: e.x, y: e.y }, tiles: this.telegraph, hit });
+        for (const t of this.telegraph) {
+          ignite(this, t.x, t.y, true);
+          const i = idx(t.x, t.y);
+          if (passable(this.map, t.x, t.y)) this.map.fire[i] = Math.max(this.map.fire[i], 3);
+        }
+        if (hit) { this.hurtPlayer(8 + this.floor, '용암 거북의 불길에 휩싸였다', 'burn'); this.log('화르륵! 불길에 휩싸였다!', 'warn'); }
+        this.telegraph = [];
+        return true;
+      }
+      const dist = cheb(e, p);
+      if (e.timer % 4 === 0 && dist >= 2 && dist <= 6) {
+        const sx = Math.sign(p.x - e.x), sy = Math.sign(p.y - e.y);
+        this.telegraph = [];
+        for (let k = 1; k <= 6; k++) {
+          const x = e.x + sx * k, y = e.y + sy * k;
+          if (!inMap(x, y) || this.map.tiles[idx(x, y)] === 0) break;
+          if (passable(this.map, x, y)) this.telegraph.push({ x, y });
+        }
+        // a line that misses you entirely is not worth the breath
+        if (this.telegraph.length && (sx === 0 || sy === 0 || Math.abs(p.x - e.x) === Math.abs(p.y - e.y))) {
+          e.breath = true;
+          this.log('용암 거북이 숨을 크게 들이쉰다! 붉은 줄에서 비키자!', 'warn');
+          return true;
+        }
+        this.telegraph = [];
+      }
+      // badly hurt, it wades back into the lava to cool off
+      if (!inLava && e.hp < e.maxHp * 0.5) {
+        const lava = DIRS8.map(([dx, dy]) => ({ x: e.x + dx, y: e.y + dy })).find(t => inMap(t.x, t.y) && this.map.ter[idx(t.x, t.y)] === T.LAVA && !this.enemyAt(t.x, t.y));
+        if (lava) {
+          const from = { x: e.x, y: e.y };
+          e.x = lava.x; e.y = lava.y;
+          this.emit('wade', { enemy: e, from, to: lava });
+          return true;
+        }
+      }
+    }
+    // 큰 가면: pops up somewhere that can see you and aims; at half, two masked workers come
+    if (e.type === 'bigmask') {
+      if (!e.rage && e.hp <= e.maxHp / 2) {
+        e.rage = true;
+        let n = 0;
+        for (const [dx, dy] of shuffle(DIRS8.slice())) {
+          if (n < 2 && this.canEnemyEnter(e.x + dx, e.y + dy)) {
+            const m = this.spawnEnemy('maskman', e.x + dx, e.y + dy, B.enemyScale(this.floor));
+            Object.assign(m, { state: 'hunt', last: { x: p.x, y: p.y } });
+            n++;
+          }
+        }
+        this.emit('rage', { enemy: e });
+        this.log('큰 가면이 손짓했다. 똑같은 가면을 쓴 일꾼들이 걸어 나온다.', 'warn');
+        return true;
+      }
+      if (e.timer % 5 === 0 && !e.aim) {
+        const spots = [];
+        for (let y = p.y - 6; y <= p.y + 6; y++) for (let x = p.x - 6; x <= p.x + 6; x++) {
+          const dd = Math.max(Math.abs(x - p.x), Math.abs(y - p.y));
+          if (dd >= 3 && this.canEnemyEnter(x, y) && lineOfSight(this.map, x, y, p.x, p.y)) spots.push({ x, y });
+        }
+        if (spots.length) {
+          const t = pick(spots);
+          this.emit('teleport', { enemy: e, from: { x: e.x, y: e.y }, to: t });
+          e.x = t.x; e.y = t.y;
+          e.aim = true; e.aimAt = { x: p.x, y: p.y };
+          return true;
+        }
+      }
+    }
     if (e.type === 'ratking' && e.timer % 5 === 0) {
       let n = 0;
       for (const [dx, dy] of shuffle(DIRS8.slice())) {
@@ -1621,9 +2039,10 @@ export class Run {
       if (passable(this.map, x, y) && !(x === e.x && y === e.y) && !(x === p.x && y === p.y)) spots.push({ x, y });
     }
     const n = e.hp <= e.maxHp / 2 ? 6 : 4;
-    for (const t of [{ x: p.x, y: p.y }, ...shuffle(spots).slice(0, n - 1)]) this.dropRock(t.x, t.y, B.rockDmg(this.floor), '떨어진 돌에 맞았다');
-    this.emit('quake', { x: e.x, y: e.y });
-    this.log('쿠웅! 멧돼지 대장이 바위에 박았다! 돌이 떨어진다!', 'warn');
+    const ice = e.type === 'yeti';
+    for (const t of [{ x: p.x, y: p.y }, ...shuffle(spots).slice(0, n - 1)]) this.dropRock(t.x, t.y, B.rockDmg(this.floor), ice ? '떨어진 고드름에 맞았다' : '떨어진 돌에 맞았다');
+    this.emit('quake', { x: e.x, y: e.y, ice });
+    this.log(ice ? '쿠웅! 설인이 벽에 박았다! 고드름이 떨어진다!' : '쿠웅! 멧돼지 대장이 바위에 박았다! 돌이 떨어진다!', 'warn');
   }
 
   // ---------- relic choices ----------
@@ -1703,8 +2122,56 @@ export class Run {
     else if (o.kind === 'relic') this.gainRelic(o.id);
     else if (o.kind === 'fuse') this.fuse(o.a, o.b);
     else if (o.kind === 'buy') this.buy(o.what);
-    else if (o.kind === 'twin') for (const id of [o.a, o.b]) if (this.p.relics[id] && this.p.relics[id] < maxLevelOf(id)) this.gainRelic(id);
+    else if (o.kind === 'twin') { for (const id of [o.a, o.b]) if (this.p.relics[id] && this.p.relics[id] < maxLevelOf(id)) this.gainRelic(id); }
+    else if (o.act === 'home') { this.finish(true); return; }
+    else if (o.act === 'deeper') { this.goDeeper(); return; }
     this.emit('relics');
+  }
+
+  // 대장의 보물: every relic not at its top grows one level, the lowest first, so a pair that was one
+  // level short meets and evolves, and an evolved pair may go on into a legend
+  bossPrize() {
+    const rl = this.p.relics, ids = Object.keys(rl).filter(id => rl[id] < maxLevelOf(id)).sort((a, b) => rl[a] - rl[b]);
+    if (!ids.length) return;
+    this.log('대장의 보물: 가방 속 유물이 모두 한 단계씩 자랐다!', 'evo');
+    for (const id of ids) if (rl[id] && rl[id] < maxLevelOf(id)) this.gainRelic(id);
+  }
+
+  // 깊은 곳: the stage is won here and now (bank), and you drop through a hole in the boss's floor to a
+  // field below it with this stage's critters grown stronger, a rich chest lying out on each floor,
+  // and better rocks. The stairs keep going down; going home (나가기) or falling there still counts
+  // as the win, with all the gold.
+  goDeeper() {
+    if (!this.banked) this.bank();
+    const p = this.p;
+    this.map.tiles[idx(p.x, p.y)] = STAIRS;
+    this.map.down = { x: p.x, y: p.y };
+    this.emit('tiles', { list: [idx(p.x, p.y)] });
+    this.fallAt = { x: p.x, y: p.y };
+    this.landing = true;
+    this.deepest = Math.max(this.deepest || 0, 1);
+    this.log('대장 방 바닥의 구멍으로 뛰어내렸다. 더 깊은 곳이다.', 'warn');
+    this.changeFloor(1);
+  }
+
+  // The win, written down: the stage's clear, what it opens, and the stage bonus into the purse.
+  bank() {
+    const meta = this.meta, stats = meta.stats, news = { stage: null, loop: 0, dares: 0 };
+    stats.wins++;
+    this.bonus = Math.round(B.stageBonus(this.stage) * this.goldBonus);
+    this.gold += this.bonus;
+    // the first win of this stage at this 회차 opens the next stage, and the last one the next 회차
+    const loopsBefore = loopsOpen(meta), daresBefore = daresOpen(meta);
+    this.firstClear = cleared(meta, this.stage) < this.loop;
+    meta.clears = { ...meta.clears, [this.stage]: Math.max(cleared(meta, this.stage), this.loop) };
+    if (this.firstClear && this.stage + 1 < FRIENDS.length && stageOpen(meta, this.stage + 1, this.loop)) news.stage = this.stage + 1;
+    if (loopsOpen(meta) > loopsBefore) news.loop = loopsOpen(meta);
+    if (daresOpen(meta) > daresBefore) news.dares = daresOpen(meta);
+    // the rival keeps count: the furthest stage you have won with each dare on
+    for (const id of this.dares) meta.dares.won[id] = Math.max(meta.dares.won[id] || 0, this.stage + 1);
+    this.banked = news;
+    this.emit('banked', { news });
+    return news;
   }
 
   // Buying at the stall: the gold goes now (it won't come home with you); a relic buy opens its pick.
@@ -1794,25 +2261,14 @@ export class Run {
     this.over = true;
     this.queue = [];
     const meta = this.meta, stats = meta.stats;
-    const news = { stage: null, loop: 0, dares: 0 };
-    if (won) {
-      stats.wins++;
-      this.bonus = Math.round(B.stageBonus(this.stage) * this.goldBonus);
-      this.gold += this.bonus;
-      // the first win of this stage at this 회차 opens the next stage, and the last one the next 회차
-      const loopsBefore = loopsOpen(meta), daresBefore = daresOpen(meta);
-      this.firstClear = cleared(meta, this.stage) < this.loop;
-      meta.clears = { ...meta.clears, [this.stage]: Math.max(cleared(meta, this.stage), this.loop) };
-      if (this.firstClear && this.stage + 1 < FRIENDS.length && stageOpen(meta, this.stage + 1, this.loop)) news.stage = this.stage + 1;
-      if (loopsOpen(meta) > loopsBefore) news.loop = loopsOpen(meta);
-      if (daresOpen(meta) > daresBefore) news.dares = daresOpen(meta);
-    }
-    // the rival keeps count: the furthest stage you have won with each dare on
-    for (const id of this.dares) if (won) meta.dares.won[id] = Math.max(meta.dares.won[id] || 0, this.stage + 1);
+    // down in 깊은 곳 the stage is already won, however this ends
+    if (this.banked) won = true;
+    const news = this.banked || (won ? this.bank() : { stage: null, loop: 0, dares: 0 });
+    if (this.depth) stats.deepest = { ...stats.deepest, [this.stage]: Math.max(stats.deepest?.[this.stage] || 0, this.depth) };
     meta.gold += this.gold;
     stats.bestGold = Math.max(stats.bestGold, this.gold);
     const opened = openNew(meta);
-    this.emit('end', { won, rescued: this.rescued, news, opened });
+    this.emit('end', { won, fell: this.p.hp <= 0, rescued: this.rescued, news, opened });
   }
 }
 Run.nextId = 1;

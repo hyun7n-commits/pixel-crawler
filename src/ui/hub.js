@@ -13,6 +13,7 @@ import { freshMeta, saveMeta } from '../core/save.js';
 import { josa } from '../core/util.js';
 import { DISCOVERIES } from '../data/terrain.js';
 import { ORES } from '../data/ores.js';
+import { LORE, LORE_AFTER } from '../data/lore.js';
 import { ENEMIES, ZONES } from '../data/enemies.js';
 import { FOLK, HOUSES, gossip } from '../data/village.js';
 import { BOOK_GIFT_EVERY, bookGift, bookGiftsDue } from '../data/balance.js';
@@ -46,8 +47,8 @@ const startButton = (meta, onStart) => {
   return wrap;
 };
 
-// the five 탐험 licenses (one per stage), greyed out until earned; see scenes/storyboards.js
-const LICENSE_COLORS = ['#6fbf4e', '#2f7a46', '#5fb3a1', '#a39a86', '#8a7aa8'];
+// the ten 탐험 licenses (one per stage), greyed out until earned; see scenes/storyboards.js
+const LICENSE_COLORS = ['#6fbf4e', '#2f7a46', '#5fb3a1', '#4f8db0', '#a39a86', '#e08aa8', '#b8c8dc', '#8a7aa8', '#d0603a', '#7a6a62'];
 function licenses(meta) {
   const row = el('div', 'licenses');
   row.append(el('span', 'lic-title', '탐험 자격증'));
@@ -305,7 +306,10 @@ function critterBook(box, meta) {
     cell.onclick = () => {
       grid.querySelectorAll('.picked').forEach(c => c.classList.remove('picked'));
       cell.classList.add('picked');
+      // after enough of them, a second line: something you have started to notice (data/lore.js)
+      const lore = met && LORE[t] && (book[t] || 0) >= (d.boss ? 1 : LORE_AFTER);
       note.textContent = met ? `${d.name}: ${d.tip}` : '아직 만나지 못했다.';
+      if (lore) note.append(el('span', 'lore', LORE[t]));
     };
     grid.append(cell);
   }

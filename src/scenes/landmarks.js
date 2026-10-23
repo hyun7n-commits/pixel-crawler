@@ -193,6 +193,138 @@ function giantCrystal() {
 // same tiny door between its roots as the one in the village
 const meadowTree = () => bigTreeCanvas(['#86a466', '#6a8a52', '#526e42', '#3c5636', '#283c28'], '#0b160e', ['#7a6450', '#5e4a3a', '#3e3026'], 11, true, 112, 120);
 
+// ---------- v0.23: the five new stages' ----------
+// 바닷가 절벽: a sea stack out in the water with a lighthouse on it, its lamp still lit.
+function lighthouse() {
+  const W = 64, H = 128, gy = H - 4, p = new Pix(W, H), r = rand(21);
+  const rock = ['#b8b2a0', '#9a937f', '#7a7262', '#5a5348', '#3e3830'], white = ['#f4f0e8', '#d8d2c6', '#b0a898'], red = ['#e06a5a', '#c04a40', '#8e3430'];
+  // the stack: rock in layers, wider at the foot, grass on its top
+  for (let y = 70; y <= gy; y++) {
+    const k = (y - 70) / (gy - 70), w = 30 + k * 22 + (r() - 0.5) * 2, cx = W / 2 + Math.sin(y / 7) * 1.5;
+    for (let x = Math.round(cx - w / 2); x <= Math.round(cx + w / 2); x++) {
+      const t = (x - (cx - w / 2)) / w, band = (y + Math.round(x / 9)) % 6 === 0;
+      p.set(x, y, band ? rock[3] : rock[t < 0.2 ? 0 : t < 0.5 ? 1 : t < 0.8 ? 2 : 3]);
+    }
+  }
+  p.ell(W / 2, 71, 16, 4, (x, y, nx) => (nx < -0.2 ? '#8fb86a' : '#6f9a58'));
+  // surf round the foot
+  for (let x = 4; x < W - 4; x++) if ((x * 7) % 5 < 3) p.set(x, gy - 1 + (x % 3 === 0 ? 1 : 0), '#e8f4f8');
+  // the tower: white with red bands, narrowing as it goes up
+  for (let y = 22; y <= 70; y++) {
+    const k = (y - 22) / 48, w = 11 + k * 7, cx = W / 2;
+    const pal = Math.floor((y - 22) / 9) % 2 ? red : white;
+    for (let x = Math.round(cx - w / 2); x <= Math.round(cx + w / 2); x++) {
+      const t = (x - (cx - w / 2)) / w;
+      p.set(x, y, pal[t < 0.3 ? 0 : t < 0.75 ? 1 : 2]);
+    }
+  }
+  p.rect(W / 2 - 1, 52, 3, 6, '#3a2c2a'); p.rect(W / 2 - 1, 34, 2, 3, '#3a2c2a');
+  // the gallery, the lamp room with its warm light, the cap
+  p.rect(W / 2 - 9, 20, 19, 2, '#3a3438'); p.rect(W / 2 - 9, 19, 1, 1, '#3a3438'); p.rect(W / 2 + 9, 19, 1, 1, '#3a3438');
+  p.rect(W / 2 - 6, 10, 13, 10, '#3a3438');
+  p.rect(W / 2 - 5, 11, 11, 8, '#ffe08a'); p.rect(W / 2 - 3, 12, 6, 6, '#fff6c8'); p.rect(W / 2 + 3, 11, 1, 8, '#3a3438');
+  p.poly([[W / 2 - 8, 10], [W / 2, 2], [W / 2 + 8, 10]], (x) => (x < W / 2 ? red[0] : red[2]));
+  p.outline('#14110f');
+  // the beam, faint, reaching out to the side
+  for (let k = 0; k < 22; k++) for (let j = -Math.floor(k / 6); j <= Math.floor(k / 6); j++) if ((k + j) % 2 === 0) p.set(W / 2 + 8 + k, 15 + j, k < 10 ? '#fff6c8' : '#ffe9a0');
+  return finish(p, 50, 'rgba(4,12,20,0.4)');
+}
+
+// 거인 꽃밭: a sunflower taller than a house, its head bowed as if looking down at you.
+function giantSunflower() {
+  const W = 88, H = 128, gy = H - 3, p = new Pix(W, H), r = rand(31);
+  const stem = ['#8fcf72', '#5f9a48', '#3f6f34'], leaf = ['#9ad06a', '#6aa848', '#467a34', '#2f5426'];
+  const petal = ['#fff0a0', '#f4d040', '#e0a828', '#b07818'], seed = ['#8a5a30', '#6a4224', '#4a2c18', '#2e1a10'];
+  for (let y = 46; y <= gy; y++) { const cx = W / 2 + Math.sin(y / 14) * 2; p.rect(Math.round(cx - 3), y, 2, 1, stem[0]); p.rect(Math.round(cx - 1), y, 3, 1, stem[1]); p.set(Math.round(cx + 2), y, stem[2]); }
+  // two big leaves
+  for (const [cx, cy, dir] of [[W / 2 - 16, 86, -1], [W / 2 + 16, 72, 1]]) {
+    p.ell(cx, cy, 16, 7, (x, y, nx, ny) => (Math.abs(ny) < 0.12 ? leaf[3] : ny < 0 ? leaf[dir < 0 ? 0 : 1] : leaf[2]));
+  }
+  // the head: petals in a ring, a seed disc dotted in a spiral
+  for (let k = 0; k < 22; k++) {
+    const a = k / 22 * Math.PI * 2, cx = W / 2 + Math.cos(a) * 27, cy = 34 + Math.sin(a) * 24;
+    p.ell(cx, cy, 8, 6, (x, y, nx, ny) => petal[Math.max(0, Math.min(3, (ny < -0.3 ? 0 : 1) + (Math.sin(a) > 0.3 ? 1 : 0)))]);
+  }
+  p.ell(W / 2, 34, 22, 19, (x, y, nx, ny) => {
+    const d = Math.hypot(nx, ny), ang = Math.atan2(ny, nx) + d * 5;
+    return seed[(Math.sin(ang * 6) > 0.6 ? 0 : 1) + (ny > 0.3 ? 1 : 0) + (d > 0.85 ? 1 : 0)];
+  });
+  for (let k = 0; k < 8; k++) p.set(W / 2 - 12 + r() * 10, 22 + r() * 10, '#c08a50');
+  p.outline('#1e1408');
+  return finish(p, 56);
+}
+
+// 눈 고원: a snowman as tall as a house, with a bucket for a hat, a carrot nose, and a red scarf
+// just like the ones the Guild hands out.
+function giantSnowman() {
+  const W = 80, H = 116, gy = H - 3, p = new Pix(W, H);
+  const snow = ['#ffffff', '#e4ecf6', '#c2d0e2', '#97a8c2', '#6e7f9c'];
+  const ball = (cx, cy, rr) => p.ell(cx, cy, rr, rr * 0.92, (x, y, nx, ny) => {
+    const T = -(0.6 * nx + 0.75 * ny);
+    return snow[T > 0.65 ? 0 : T > 0.2 ? 1 : T > -0.3 ? 2 : T > -0.7 ? 3 : 4];
+  });
+  ball(W / 2, gy - 22, 30); ball(W / 2, gy - 62, 22); ball(W / 2, gy - 92, 16);
+  // stick arms
+  p.line(W / 2 - 20, gy - 66, W / 2 - 36, gy - 80, '#5e3a22'); p.line(W / 2 - 31, gy - 75, W / 2 - 34, gy - 70, '#5e3a22');
+  p.line(W / 2 + 20, gy - 66, W / 2 + 37, gy - 74, '#5e3a22'); p.line(W / 2 + 30, gy - 70, W / 2 + 33, gy - 78, '#5e3a22');
+  // scarf, coal buttons, coal eyes, the nose, a smile of pebbles
+  p.rect(W / 2 - 15, gy - 80, 30, 5, '#d84a4a'); p.rect(W / 2 - 15, gy - 76, 30, 1, '#a03434');
+  p.rect(W / 2 + 6, gy - 76, 5, 14, '#d84a4a'); p.rect(W / 2 + 10, gy - 76, 1, 14, '#a03434');
+  for (const y of [gy - 64, gy - 54, gy - 30, gy - 18]) p.ell(W / 2, y, 2.5, 2.5, '#2a2430');
+  for (const ex of [W / 2 - 6, W / 2 + 6]) p.ell(ex, gy - 96, 2, 2, '#2a2430');
+  p.poly([[W / 2 - 1, gy - 92], [W / 2 + 12, gy - 89], [W / 2 - 1, gy - 88]], '#f08c3a');
+  for (const dx of [-6, -3, 0, 3, 6]) p.set(W / 2 + dx, gy - 84 + (Math.abs(dx) > 4 ? -1 : 0), '#2a2430');
+  // the bucket
+  p.poly([[W / 2 - 11, gy - 104], [W / 2 - 8, gy - 116], [W / 2 + 8, gy - 116], [W / 2 + 11, gy - 104]], (x) => (x < W / 2 - 3 ? '#8aa8c8' : x < W / 2 + 4 ? '#6a88a8' : '#4c6888'));
+  p.outline('#14161c');
+  return finish(p, 64, 'rgba(20,28,44,0.35)');
+}
+
+// 불꽃 화산: a tree burnt black, still warm, embers glowing in the cracks of its bark.
+function emberTree() {
+  const W = 88, H = 112, gy = H - 3, p = new Pix(W, H), r = rand(41);
+  const bark = ['#4a3a38', '#33282a', '#1e1618'];
+  trunk(p, W / 2, 40, gy, 16, bark, r);
+  // bare branches
+  const branch = (x0, y0, x1, y1, w) => { for (let k = 0; k <= 20; k++) { const x = x0 + (x1 - x0) * k / 20, y = y0 + (y1 - y0) * k / 20; p.rect(Math.round(x - w / 2), Math.round(y), Math.max(1, Math.round(w * (1 - k / 30))), 2, bark[k % 3 === 0 ? 0 : 1]); } };
+  branch(W / 2 - 4, 46, 12, 14, 5); branch(W / 2 + 4, 44, 76, 10, 5); branch(W / 2, 42, W / 2 - 4, 4, 5);
+  branch(22, 26, 8, 22, 3); branch(64, 24, 82, 26, 3); branch(W / 2 - 3, 20, W / 2 + 12, 10, 3);
+  // glowing cracks and embers
+  for (let k = 0; k < 14; k++) {
+    const x = W / 2 - 6 + r() * 12, y = 48 + r() * (gy - 58);
+    p.rect(Math.round(x), Math.round(y), 1, 3, '#c4501f'); p.set(Math.round(x), Math.round(y) + 1, '#ffb347');
+  }
+  for (let k = 0; k < 10; k++) p.set(6 + r() * (W - 12), 2 + r() * 40, r() < 0.5 ? '#ffb347' : '#ff7a2a');
+  p.outline('#080506');
+  return finish(p, 58, 'rgba(30,8,4,0.4)');
+}
+
+// 옛 조합 터: a great statue of a worker in the Guild's coat, broken off at the knees, a mask on its
+// face. Under the mask the stone has been chipped away.
+export function maskStatue() {
+  const W = 80, H = 120, gy = H - 3, p = new Pix(W, H), r = rand(51);
+  const st = ['#c8bfb4', '#a89e92', '#857b70', '#62594f', '#433c35'], moss = ['#7d9a62', '#5f7a4a'];
+  const shade = (x, y, nx, ny) => { const T = -(0.6 * nx + 0.7 * ny) + (r() - 0.5) * 0.1; return st[T > 0.6 ? 0 : T > 0.15 ? 1 : T > -0.3 ? 2 : T > -0.7 ? 3 : 4]; };
+  // plinth, broken legs, the coat, round head and ears
+  p.rect(10, gy - 12, 60, 12, (x, y, i) => st[i < 4 ? 1 : i > 54 ? 3 : 2]); p.rect(10, gy - 12, 60, 1, st[0]);
+  p.rect(24, gy - 26, 12, 14, (x, y, i) => st[i < 3 ? 1 : 2]); p.rect(44, gy - 26, 12, 14, (x, y, i) => st[i < 3 ? 1 : 3]);
+  p.ell(W / 2, gy - 48, 24, 26, shade);
+  p.rect(W / 2 - 1, gy - 70, 2, 40, st[3]);
+  for (const y of [gy - 60, gy - 50, gy - 40]) p.ell(W / 2 + 5, y, 1.5, 1.5, st[4]);
+  p.ell(W / 2, gy - 86, 20, 18, shade);
+  p.ell(W / 2 - 15, gy - 100, 6, 7, shade); p.ell(W / 2 + 15, gy - 100, 6, 7, shade);
+  // the mask: a plain pale oval with two holes and a painted smile, cracked across
+  p.ell(W / 2, gy - 84, 12, 13, (x, y, nx) => (nx < -0.3 ? '#f4f0e8' : nx < 0.4 ? '#e2dcd0' : '#bdb5a8'));
+  p.ell(W / 2 - 5, gy - 87, 2, 2.5, '#1b1424'); p.ell(W / 2 + 5, gy - 87, 2, 2.5, '#1b1424');
+  for (let k = -5; k <= 5; k++) p.set(W / 2 + k, gy - 76 - Math.round((k * k) / 10), '#c04a40');
+  for (let k = 0; k < 9; k++) p.set(W / 2 - 9 + k * 2, gy - 92 + k, '#857b70');
+  // moss creeping over the shoulders
+  p.ell(W / 2 - 14, gy - 68, 9, 4, (x, y, nx) => moss[nx < 0 ? 0 : 1], (x, y) => p.get(x, y));
+  p.ell(W / 2 + 16, gy - 66, 7, 3, moss[1], (x, y) => p.get(x, y));
+  p.outline('#100c0e');
+  return finish(p, 66);
+}
+
 // size in tiles of each zone's landmark, and what looking at it says
 export const LANDMARKS = {
   meadow: { w: 7, h: 8, make: meadowTree, name: '외딴 고목', tip: '들판 한가운데 혼자 선 아주 큰 나무. 뿌리 사이에 작은 문이 있다.' },
@@ -200,6 +332,11 @@ export const LANDMARKS = {
   marsh: { w: 6, h: 6, make: giantLotus, name: '거인 연꽃', tip: '방만 한 연잎 위에 집채만 한 꽃봉오리. 아직 안 피었다.' },
   rock: { w: 6, h: 7, make: () => stoneHead(false), name: '돌 얼굴', tip: '산비탈에 반쯤 묻힌 커다란 돌 얼굴. 눈을 감고 있다.' },
   cave: { w: 5, h: 7, make: giantCrystal, name: '거인 수정', tip: '박쥐 왕보다 큰 수정 덩어리. 안쪽에서 빛이 일렁인다.' },
+  sea: { w: 4, h: 8, make: lighthouse, name: '등대 바위', tip: '바다 한가운데 솟은 바위 위의 등대. 아무도 안 사는데 불이 켜져 있다.' },
+  garden: { w: 6, h: 8, make: giantSunflower, name: '거인 해바라기', tip: '집보다 큰 해바라기. 고개를 숙이고 이쪽을 내려다본다.' },
+  snow: { w: 5, h: 7, make: giantSnowman, name: '거인 눈사람', tip: '누가 이렇게 큰 눈사람을 만들었을까. 빨간 목도리가 조합 일꾼 것과 똑같다.' },
+  volcano: { w: 6, h: 7, make: emberTree, name: '불씨 나무', tip: '다 타 버린 나무인데 속에서 아직 불씨가 빛난다. 가까이 가면 따뜻하다.' },
+  ruins: { w: 5, h: 8, make: maskStatue, name: '가면 석상', tip: '조합 옷을 입은 커다란 석상. 가면을 쓰고 있다. 가면 아래 얼굴은 깎여 나가 있다.' },
 };
 
 // Where a field's landmark stands: a w x h block that is all plain wall (no lone props), as close to

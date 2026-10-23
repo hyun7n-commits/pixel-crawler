@@ -29,7 +29,19 @@ export function freshMeta() {
     bookGifts: 0,           // the smith's recipe-book gifts already taken (data/balance.js bookGift)
     pets: {},               // pets bought at the shop, and the one that comes along (data/pets.js)
     pet: null,
+    ten: true,              // stage numbers are the ten-stage ones (v0.23)
   };
+}
+
+// v0.23 went from five stages to ten, the new ones slotted in between: what the five were then
+const OLD_STAGE = [0, 1, 2, 4, 7];
+function tenStages(m) {
+  if (m.ten) return m;
+  const clears = {};
+  for (const [s, l] of Object.entries(m.clears || {})) if (OLD_STAGE[s] != null) clears[OLD_STAGE[s]] = l;
+  const won = {};
+  for (const [id, n] of Object.entries(m.dares?.won || {})) won[id] = n ? OLD_STAGE[n - 1] + 1 : 0;
+  return { ...m, clears, stage: OLD_STAGE[m.stage] ?? 0, dares: { on: { ...m.dares?.on }, won }, ten: true };
 }
 
 // Saves from before v0.14 kept the legends made as { id: true }; those were these recipes.
@@ -40,7 +52,7 @@ export function loadMeta() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (raw) {
-      const m = JSON.parse(raw), f = freshMeta();
+      const m = tenStages(JSON.parse(raw)), f = freshMeta();
       return {
         ...f, ...m,
         up: { ...f.up, ...m.up },

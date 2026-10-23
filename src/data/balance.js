@@ -4,7 +4,7 @@ export const MAP_W = 44;
 export const MAP_H = 32;
 export const SIGHT = 7;            // view radius in tiles
 // A trip is one stage (data/stages.js): FLOORS_PER_ZONE fields of one zone, the last its boss. Floors
-// are numbered across all five stages (stage 2 starts at floor 5), so a floor says which zone it is in.
+// are numbered across all ten stages (stage 2 starts at floor 5), so a floor says which zone it is in.
 export const FLOORS_PER_ZONE = 4;
 export const LAST_FLOOR = 20;
 export const stageOf = floor => Math.floor((floor - 1) / FLOORS_PER_ZONE);
@@ -47,6 +47,11 @@ export const bossScale = floor => 1 + STAGE_UP * stageOf(floor);
 // 우두머리: the crowned mid-boss that carries a caged friend's key (data/stages.js): this many times a
 // critter of its kind on that field, in health and in attack
 export const CHIEF_HP = 3, CHIEF_ATK = 1.4;
+// v0.23: jumping or being knocked down a drop costs this share of your health; lava burns this much
+export const FALL_HURT = 0.2;
+export const lavaHurt = floor => 6 + Math.floor(floor / 3);
+// how long a snail's slime and the queen bee's honey stay on the ground
+export const GOO_TURNS = 14;
 
 // v0.21 zones. The marsh is darker (MARSH_DARK tiles of sight) but its fireflies light FLY_LIGHT tiles
 // around them, and each one caught in a jar gives a tile of sight back for the trip (FLY_MAX at most).
@@ -81,6 +86,12 @@ export const HIT_ROLL = [0.5, 1.6];
 // Wounds close slowly on their own (1 HP every this many turns), so backing off and catching your
 // breath is worth it, but monsters keep wandering in while you wait.
 export const REGEN_TURNS = 15;
+// 연속 처치 (v0.23): how many turns may pass between two kills for the second to count on, and the
+// gold for the n-th one in a row (n × (stage + 1) × this)
+export const COMBO_TURNS = 2, COMBO_GOLD = 1;
+// 마법사's wand (v0.23): how far a spark reaches, how many the wand holds, and how many turns each one
+// takes to come back
+export const WAND_RANGE = 4, WAND_CHARGES = 3, WAND_RECHARGE = 4, WAND_POWER = 1.5;
 
 // The big ore on each floor: how many swings it takes, how far each swing is heard,
 // how much mine gas the crack beside it puffs per swing, and what it pays.
@@ -149,16 +160,16 @@ export const HIVE_CHANCE = 0.35;       // the honey stump, a little rarer
 export const honeyHp = floor => 3 + Math.floor((floor - 1) / FLOORS_PER_ZONE);
 export const BEE_HOME = 6;
 // 요정 고리: the chance a field has a pair of fairy rings, by zone (most in the deep forest)
-export const RING_CHANCE = [0.2, 0.7, 0.3, 0.3, 0.25];
+export const RING_CHANCE = [0.2, 0.7, 0.3, 0.2, 0.3, 0.5, 0.2, 0.25, 0.1, 0.3];
 // 온천: the chance a flooded room's pool is a hot spring, by zone (most up the rocky hills); anyone
 // standing in it gets SPRING_HEAL back every other turn, critters too
-export const SPRING_CHANCE = [0, 0.25, 0.2, 0.7, 0.4];
+export const SPRING_CHANCE = [0, 0.25, 0.2, 0.15, 0.7, 0.1, 0.6, 0.4, 0, 0.1];
 export const SPRING_HEAL = 1;
 export const HIVE_SMOKE = 2;
 // 풀뽑기 밭: the chance a field has a weed patch, by zone (most out on the meadow); each weed pulled
 // pays a little, one or two are screaming roots that run off yelling (heard SCREAM_RANGE away) for
 // ROOT_TURNS turns before they dig back in, and the last weed of the patch hides a star candy
-export const WEED_CHANCE = [0.65, 0.35, 0.3, 0.15, 0.1];
+export const WEED_CHANCE = [0.65, 0.35, 0.3, 0.2, 0.15, 0.45, 0.05, 0.1, 0.05, 0.2];
 export const weedGold = floor => (1 + Math.floor((floor - 1) / FLOORS_PER_ZONE)) * (2 + Math.floor(Math.random() * 2));
 export const SCREAM_RANGE = 7;
 // the smith's gift for every BOOK_GIFT_EVERY recipes in the book: the k-th one (from 1) is bookGift(k) gold
@@ -167,3 +178,7 @@ export const bookGift = k => 100 + 100 * k;
 export const bookGiftsDue = (found, claimed) => Math.floor(found / BOOK_GIFT_EVERY) - (claimed || 0);
 export const ROOT_TURNS = 8;
 export const graveGold = floor => (2 + Math.floor((floor - 1) / FLOORS_PER_ZONE)) * (3 + Math.floor(Math.random() * 4));
+
+// 낡은 일꾼 명찰 (v0.23): rare from the second stage on, a few on every floor of the ruins (stage 10)
+export const TAG_GOLD = 2;
+export const tagsPerFloor = (stage) => stage === 9 ? 2 + (Math.random() < 0.5) : stage >= 1 && Math.random() < 0.15 ? 1 : 0;

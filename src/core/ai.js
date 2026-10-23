@@ -10,12 +10,12 @@
 //            (none of these act; a hit, or reaching for the mimic or the statue's chest, wakes them up)
 //   lurk   - a diving beetle under the water, only its bubbles showing; bites whoever comes next to it
 
-import { lineOfSight, distMap, idx, passable, squeeze } from './dungeon.js';
-import { SLEEP_MIN } from '../data/terrain.js';
+import { lineOfSight, distMap, idx, passable, squeeze, flyable, WALL, FLOOR } from './dungeon.js';
+import { SLEEP_MIN, T } from '../data/terrain.js';
 import { NPC_TEXT } from '../data/npcs.js';
 import { MAP_W, BEE_HOME, SCREAM_RANGE } from '../data/balance.js';
 import { cheb, shuffle, josa, rint, pick, DIRS8 } from './util.js';
-import { onEnter } from './world.js';
+import { onEnter, ignite } from './world.js';
 
 export const WAKE_AT = 10;
 // Shattered Pixel Dungeon's vault (v4.0) stealth: a wanderer barely sees what is behind its back, and
@@ -40,6 +40,16 @@ export function enemyAct(run, e, dmP) {
     return;
   }
   if (e.state === 'hide' || e.state === 'stone') return;
+  // v0.23 critters that are not quite themselves this turn
+  if (d.inert) { pileTick(run, e); return; }
+  if (e.state === 'dead') { playDeadTick(run, e); return; }
+  if (e.shellT > 0) { if (--e.shellT === 0) { e.look = null; run.emit('peek', { enemy: e }); } return; }
+  if (d.coal && e.lit > 0 && --e.lit === 0) { run.crumble(e); return; }
+  if (d.twist && !e.twisted) { lost(run, e); return; }
+  // fliers go over drops, water and lava
+  if (d.flies) dmP = run.flyMap();
+  // 불나방 never sleeps: it can tell where your light is from far off
+  if (d.lantern && e.state !== 'hunt' && cheb(e, p) <= 10 && !e.stun) { e.state = 'hunt'; e.last = { x: p.x, y: p.y }; run.say(e, '!'); }
   // 우파루파: a turn without a hit and its wounds close a little
   if (d.regen && e.hp < e.maxHp && run.turn - (e.hitAt ?? -9) >= 2) {
     e.hp = Math.min(e.maxHp, e.hp + d.regen);
@@ -52,9 +62,12 @@ export function enemyAct(run, e, dmP) {
   const hive = d.swarm && run.map.hive;
   if (hive && !run.calm(e) && cheb(p, hive) > BEE_HOME) { e.angry = false; e.state = 'wander'; e.aim = false; }
   if (run.calm(e)) { if (hive && e.state !== 'sleep') hover(run, e, hive); else calmAct(run, e); return; }
+  if (d.drift && e.state !== 'sleep') { drift(run, e); return; }
   if (e.state === 'sleep') { sleepTick(run, e); return; }
   if (d.screams) { scream(run, e, dmP); return; }
-  if (d.slow) { e.skip = !e.skip; if (e.skip) return; }
+  // slow ones act every other turn; so do an unlit lump of charcoal, and a seal off the ice
+  const crawl = d.slow || (d.coal && !e.lit) || (d.slide && run.map.ter[idx(e.x, e.y)] !== T.ICE && !e.charge);
+  if (crawl) { e.skip = !e.skip; if (e.skip) return; }
   e.timer++;
   if (e.burn > 0 && !d.boss && Math.random() < 0.5) { randomStep(run, e); return; }
 
@@ -190,8 +203,15 @@ export function rouse(run, e, by, x, y) {
 function hunt(run, e, dm) {
   const p = run.p, d = e.d;
   if (run.bossSpecial(e)) return;
-  if (e.backoff > 0) { e.backoff--; retreat(run, e, dm, d.fast ? 2 : 1); return; }
-  if (d.charge && charge(run, e)) return;
+  if (e.backoff > 0) { e.backoff--; retreat(run, e, dm, d.hops ? 3 : d.fast ? 2 : 1); return; }
+  if (d.mirror) { mirror(run, e); return; }
+  if (d.burrow && burrow(run, e, dm)) return;
+  if (d.reach && reach(run, e)) return;
+  if (d.ball && rollBall(run, e)) return;
+  if (d.dive && dive(run, e)) return;
+  // a seal on the ice shoots along it on its belly, like a charge
+  const lane = d.charge || (d.slide && (e.charge || run.map.ter[idx(e.x, e.y)] === T.ICE) ? d.slide : 0);
+  if (lane && charge(run, e, lane)) return;
   if (d.tongue && tongue(run, e)) return;
   if (d.blink && blink(run, e)) return;
   const dist = cheb(e, p);
@@ -200,9 +220,9 @@ function hunt(run, e, dm) {
       e.aim = false;
       const stillThere = e.aimAt && e.aimAt.x === p.x && e.aimAt.y === p.y;
       const hit = stillThere && dist <= d.ranged && lineOfSight(run.map, e.x, e.y, p.x, p.y);
-      run.emit('shot', { from: { x: e.x, y: e.y }, to: e.aimAt || { x: p.x, y: p.y }, hit });
-      if (hit) run.damagePlayer(e.atk, e, 'ranged');
-      else run.log(`${d.name}의 공격을 피했다.`, 'good');
+      run.emit('shot', { from: { x: e.x, y: e.y }, to: e.aimAt || { x: p.x, y: p.y }, hit, kind: d.knock ? 'snow' : null });
+      if (hit && run.damagePlayer(e.atk, e, 'ranged') && d.knock && p.hp > 0) run.shovePlayer(e);
+      else if (!hit) run.log(`${d.name}의 공격을 피했다.`, 'good');
       return;
     }
     if (dist > 1 && dist <= d.ranged && lineOfSight(run.map, e.x, e.y, p.x, p.y) && Math.random() < 0.7) {
@@ -211,9 +231,15 @@ function hunt(run, e, dm) {
       return;
     }
   }
+  // 사마귀 and 눈사람 stand their ground
+  if (d.still && !run.touching(e, p)) { if (p.x !== e.x) e.face = Math.sign(p.x - e.x); return; }
   if (run.touching(e, p)) {
     run.emit('attack', { from: { x: e.x, y: e.y }, to: { x: p.x, y: p.y }, who: e });
-    const landed = run.damagePlayer(e.atk, e, 'melee');
+    const landed = run.damagePlayer(e.lit ? Math.round(e.atk * 1.5) : e.atk, e, 'melee');
+    // 딱따구리: peck-peck, two in a turn
+    if (d.drill && p.hp > 0) { run.emit('attack', { from: { x: e.x, y: e.y }, to: { x: p.x, y: p.y }, who: e }); run.damagePlayer(e.atk, e, 'melee'); }
+    // 나비: every flap scatters sleepy dust; fight beside it too long and you nod off
+    if (d.pollen && p.hp > 0) dust(run, e);
     if (d.thief && landed && run.gold > 0) steal(run, e, dm);
     // 가재: a pinch that holds on (not every turn: it lets go to snap again)
     if (d.grab && landed && p.hp > 0 && e.timer - (e.grabT ?? -9) >= 3) {
@@ -223,10 +249,12 @@ function hunt(run, e, dm) {
       run.log(`${josa(d.name, '이', '가')} 집게로 꽉 붙잡았다! 이번 턴엔 못 걸어간다.`, 'warn');
     }
     if (d.hitAndRun) e.backoff = 2;
+    if (d.hops) e.backoff = 1;
     if (d.stoneSkin && e.hp > 0) { e.stoneT = 1; run.emit('stone', { enemy: e }); }
     return;
   }
-  const moves = d.fast ? 2 : 1;
+  // 메뚜기 hops two tiles; burning charcoal rolls quick
+  const moves = d.fast || d.hops || e.lit ? 2 : 1;
   for (let i = 0; i < moves; i++) {
     if (!followTrail(run, e, dm) && !stepToward(run, e, dm)) break;
     if (cheb(e, p) === 1 || e.hp <= 0) break;
@@ -283,7 +311,7 @@ function retreat(run, e, dm, steps) {
 
 // The knight: when you stand in a straight line from it, it paints the lane red and rams down it next
 // turn. Still in the lane: a double hit. Stepped aside: it runs to the end and stands there dizzy.
-function charge(run, e) {
+function charge(run, e, range = e.d.charge) {
   const p = run.p;
   if (e.charge) {
     const lane = e.charge;
@@ -310,7 +338,7 @@ function charge(run, e) {
   const dx = p.x - e.x, dy = p.y - e.y, dist = cheb(e, p);
   const straight = dx === 0 || dy === 0 || Math.abs(dx) === Math.abs(dy);
   const rest = e.d.boss && e.hp <= e.maxHp / 2 ? 3 : 4;
-  if (!straight || dist < 2 || dist > e.d.charge || e.timer - (e.chargeT ?? -99) < rest) return false;
+  if (!straight || dist < 2 || dist > range || e.timer - (e.chargeT ?? -99) < rest) return false;
   const sx = Math.sign(dx), sy = Math.sign(dy), lane = [];
   for (let k = 1; k <= dist + 2; k++) {
     const x = e.x + sx * k, y = e.y + sy * k;
@@ -489,6 +517,13 @@ function search(run, e) {
 }
 
 function wander(run, e) {
+  // 딱따구리 drums on a tree now and then, and whatever sleeps near it wakes
+  if (e.d.drill && Math.random() < 0.12 && DIRS8.some(([dx, dy]) => run.map.tiles[idx(e.x + dx, e.y + dy)] === WALL) && cheb(e, run.p) <= 12) {
+    run.say(e, '따다닥!');
+    run.emit('drill', { enemy: e });
+    run.noise(e.x, e.y, 5);
+    return;
+  }
   if (!e.target || (e.x === e.target.x && e.y === e.target.y) || Math.random() < 0.03) e.target = run.randomFloorTile();
   const dm = distMap(run.map, e.target.x, e.target.y);
   if (!stepToward(run, e, dm)) e.target = null;
@@ -512,12 +547,230 @@ function stepToward(run, e, dm) {
   return true;
 }
 
-const canStep = (run, e, x, y) => run.canEnemyEnter(x, y) && !squeeze(run.map, e.x, e.y, x - e.x, y - e.y);
+// fliers cross drops and pools; fireproof critters wade into lava
+const canStep = (run, e, x, y) => {
+  if (squeeze(run.map, e.x, e.y, x - e.x, y - e.y)) return false;
+  if (run.canEnemyEnter(x, y)) return true;
+  if (!flyable(run.map, x, y) || run.enemyAt(x, y) || (x === run.p.x && y === run.p.y)) return false;
+  const ter = run.map.ter[idx(x, y)];
+  return !!e.d.flies || (!!e.d.fireproof && ter === T.LAVA);
+};
 
 function moveEnemy(run, e, x, y) {
+  const from = { x: e.x, y: e.y }, d = e.d;
   e.face = x < e.x ? -1 : x > e.x ? 1 : e.face;
   e.dir = { x: Math.sign(x - e.x), y: Math.sign(y - e.y) };
   e.x = x; e.y = y;
+  // what it leaves behind: slime, honey, a line of fire
+  if (d.slimy) run.goo(from.x, from.y, T.SLIME);
+  if (e.type === 'queen' && Math.random() < 0.5) run.goo(from.x, from.y, T.HONEY);
+  if (d.fireTrail) ignite(run, from.x, from.y, true);
   run.refreshDoors();
   onEnter(run, e, x, y);
+  // on ice (or a snail's slime) a walker slides on the same way
+  const ter = run.map.ter[idx(e.x, e.y)];
+  if ((ter === T.ICE || (ter === T.SLIME && !d.slimy)) && !d.flies && !d.slide && e.hp > 0) {
+    for (let k = 0; k < 12; k++) {
+      const nx = e.x + e.dir.x, ny = e.y + e.dir.y;
+      if (!run.canEnemyEnter(nx, ny) || squeeze(run.map, e.x, e.y, e.dir.x, e.dir.y)) break;
+      e.x = nx; e.y = ny;
+      onEnter(run, e, nx, ny);
+      if (ter === T.SLIME || run.map.ter[idx(nx, ny)] !== T.ICE) break;
+    }
+    run.refreshDoors();
+  }
+}
+
+// ---------- v0.23 critters ----------
+
+// 갑옷 조각: the pieces of an empty suit of armour rattle back together a few turns after it falls
+function pileTick(run, e) {
+  if (--e.reformT > 0) { if (run.isVisible(e.x, e.y)) run.say(e, '덜그럭…'); return; }
+  const a = run.spawnEnemy('armor', e.x, e.y);
+  e.hp = 0;
+  Object.assign(a, { hp: Math.ceil(a.maxHp * 0.6), maxHp: a.maxHp, atk: e.armorAtk || a.atk, reformed: true, state: 'hunt', last: { x: run.p.x, y: run.p.y } });
+  a.x = e.x; a.y = e.y;
+  run.emit('reform', { enemy: a });
+  if (run.isVisible(a.x, a.y)) run.log('갑옷 조각이 덜그럭덜그럭 다시 맞춰졌다!', 'warn');
+}
+
+// 무당벌레 lying on its back: if you walk off it gets up and comes after you
+function playDeadTick(run, e) {
+  if (--e.fakeT > 0) return;
+  e.state = 'hunt';
+  e.last = { x: run.p.x, y: run.p.y };
+  run.emit('rise', { enemy: e });
+  run.say(e, '벌떡!');
+  if (run.isVisible(e.x, e.y)) run.log(`죽은 척하던 ${josa(e.d.name, '이', '가')} 벌떡 일어났다!`, 'warn');
+}
+
+// 길 잃은 꼬마: sobbing, it toddles after you at a little distance. Come right up to it, or hit it,
+// and it lifts its head.
+function lost(run, e) {
+  const p = run.p, dist = cheb(e, p);
+  if (dist <= 1 && run.isVisible(e.x, e.y)) { twist(run, e); return; }
+  if (e.state === 'sleep') { if (canSee(run, e, 5)) e.state = 'wander'; else return; }
+  if (Math.random() < 0.25 && run.isVisible(e.x, e.y)) run.say(e, pick(['훌쩍…', '흐윽…', '엄마…', '여기 어디야…']));
+  if (dist > 2 && dist <= 9 && canSee(run, e, 9) && Math.random() < 0.7) stepToward(run, e, distMap(run.map, p.x, p.y));
+  else if (dist > 9 && Math.random() < 0.3) randomStep(run, e);
+}
+export function twist(run, e) {
+  if (e.twisted) return;
+  e.twisted = true;
+  e.look = 'lostkidTwist';
+  e.state = 'hunt';
+  e.last = { x: run.p.x, y: run.p.y };
+  run.emit('twist', { enemy: e });
+  run.say(e, '찾았다.');
+  run.log('…꼬마가 고개를 들었다. 입이 귀까지 찢어져 있다!', 'warn');
+}
+
+// 해파리: drifts on the wind, never after you. Touch it on its turn and it stings you stiff for a turn.
+function drift(run, e) {
+  const p = run.p;
+  if (run.touching(e, p) && !p.stun && p.hp > 0) {
+    run.emit('attack', { from: { x: e.x, y: e.y }, to: { x: p.x, y: p.y }, who: e });
+    if (run.damagePlayer(e.atk, e, 'melee') && p.hp > 0) sting(run, e);
+    return;
+  }
+  e.skip = !e.skip;
+  if (e.skip) return;
+  if (!e.wind || Math.random() < 0.15) e.wind = pick(DIRS8);
+  const [dx, dy] = e.wind;
+  if (canStep(run, e, e.x + dx, e.y + dy)) moveEnemy(run, e, e.x + dx, e.y + dy);
+  else e.wind = null;
+}
+export function sting(run, e) {
+  run.p.stun = Math.max(run.p.stun || 0, 1);
+  run.emit('sting', { x: run.p.x, y: run.p.y });
+  run.log('찌릿! 몸이 굳어서 한 턴 동안 못 움직인다.', 'warn');
+}
+
+// 나비: sleepy dust every flap; three turns side by side and you doze off for a turn
+function dust(run, e) {
+  const p = run.p;
+  p.drowsy = (p.drowsy || 0) + 1;
+  run.emit('pollen', { x: p.x, y: p.y });
+  if (p.drowsy < e.d.pollen) return;
+  p.drowsy = 0;
+  if (run.lv('mint') >= 3 || run.lv('dreamlamp') || run.lv('pillow')) return;
+  p.sleep = Math.max(p.sleep || 0, 1);
+  run.say('player', '꾸벅…');
+  run.log('졸음 가루를 너무 마셔서 꾸벅 졸았다!', 'warn');
+}
+
+// 사마귀: lined up within reach (straight or on the slant, nothing between), its blade shoots out
+const lined = (a, b) => a.x === b.x || a.y === b.y || Math.abs(a.x - b.x) === Math.abs(a.y - b.y);
+export function inReach(run, e) {
+  const p = run.p, dist = cheb(e, p);
+  return e.d.reach && dist >= 2 && dist <= e.d.reach && lined(e, p) && lineOfSight(run.map, e.x, e.y, p.x, p.y) &&
+    !run.enemyAt(e.x + Math.sign(p.x - e.x), e.y + Math.sign(p.y - e.y));
+}
+function reach(run, e) {
+  if (!inReach(run, e)) return false;
+  const p = run.p;
+  run.emit('lunge', { enemy: e, to: { x: p.x, y: p.y } });
+  run.damagePlayer(e.atk, e, 'melee');
+  return true;
+}
+
+// 쇠똥구리: lined up with you, it paints the lane, then sends its ball rolling down it next turn. The
+// ball hits the first one in its way, you or a critter, and stops there.
+function rollBall(run, e) {
+  const p = run.p;
+  if (e.lane) {
+    const lane = e.lane;
+    e.lane = null;
+    e.ballT = e.timer;
+    let end = null, hit = null;
+    for (const t of lane) {
+      if (!passable(run.map, t.x, t.y)) break;
+      end = t;
+      if (t.x === p.x && t.y === p.y) { hit = 'player'; break; }
+      const o = run.enemyAt(t.x, t.y);
+      if (o && o !== e) { hit = o; break; }
+    }
+    run.emit('ball', { enemy: e, from: { x: e.x, y: e.y }, to: end || { x: e.x, y: e.y } });
+    const dmg = Math.round(e.atk * 1.5);
+    if (hit === 'player') { run.damagePlayer(dmg, e, 'ranged'); run.log('쇠똥 공에 데굴데굴 치였다!', 'warn'); }
+    else if (hit) { run.hurt(hit, dmg * 2, 'bonk'); if (run.isVisible(hit.x, hit.y)) run.log(`쇠똥 공이 ${josa(hit.d.name, '을', '를')} 쳤다!`, 'good'); }
+    else if (run.isVisible(e.x, e.y)) run.log('쇠똥 공이 헛굴렀다.', 'good');
+    return true;
+  }
+  const dx = p.x - e.x, dy = p.y - e.y, dist = cheb(e, p);
+  if (!lined(e, p) || dist < 2 || dist > e.d.ball || e.timer - (e.ballT ?? -99) < 3) return false;
+  const sx = Math.sign(dx), sy = Math.sign(dy), lane = [];
+  for (let k = 1; k <= e.d.ball; k++) {
+    const x = e.x + sx * k, y = e.y + sy * k;
+    if (!passable(run.map, x, y)) break;
+    lane.push({ x, y });
+  }
+  if (lane.length < dist) return false;
+  e.lane = lane;
+  run.emit('aimCharge', { enemy: e });
+  return true;
+}
+
+// 갈매기: marks your tile with its shadow, then swoops down on it next turn
+function dive(run, e) {
+  const p = run.p;
+  if (e.swoop) {
+    const at = e.swoop;
+    e.swoop = null; e.aim = false; e.aimAt = null;
+    e.diveT = e.timer;
+    const hit = p.x === at.x && p.y === at.y;
+    // it lands beside the spot (or on it, if you got away)
+    const land = hit ? DIRS8.map(([dx, dy]) => ({ x: at.x + dx, y: at.y + dy })).filter(t => canStep(run, e, t.x, t.y))
+      .sort((a, b) => cheb(a, e) - cheb(b, e))[0] : canStep(run, e, at.x, at.y) ? at : null;
+    const from = { x: e.x, y: e.y };
+    if (land) { e.x = land.x; e.y = land.y; run.refreshDoors(); }
+    run.emit('swoop', { enemy: e, from, to: { x: e.x, y: e.y }, at, hit });
+    if (hit) run.damagePlayer(Math.round(e.atk * 1.5), e, 'charge');
+    else if (run.isVisible(e.x, e.y)) run.log(`${josa(e.d.name, '이', '가')} 헛내리꽂았다!`, 'good');
+    return true;
+  }
+  const dist = cheb(e, p);
+  if (dist < 2 || dist > e.d.dive || e.timer - (e.diveT ?? -99) < 3 || !lineOfSight(run.map, e.x, e.y, p.x, p.y)) return false;
+  e.swoop = { x: p.x, y: p.y };
+  e.aim = true; e.aimAt = { x: p.x, y: p.y };
+  run.say(e, '끼룩!');
+  return true;
+}
+
+// 눈토끼: under the snow it is only a moving lump, quick; right beside you it bursts out
+function burrow(run, e, dm) {
+  const p = run.p, dist = cheb(e, p);
+  if (!e.dug && dist >= 4 && e.timer - (e.upT ?? -99) >= 4) {
+    e.dug = true;
+    e.look = 'snowmound';
+    run.emit('mound', { enemy: e });
+    return true;
+  }
+  if (!e.dug) return false;
+  if (run.touching(e, p)) {
+    e.dug = false; e.look = null; e.upT = e.timer;
+    run.emit('pop', { enemy: e });
+    run.say(e, '퐁!');
+    return true;
+  }
+  for (let i = 0; i < 2; i++) {
+    if (!stepToward(run, e, dm) || run.touching(e, p)) break;
+  }
+  return true;
+}
+
+// 가면 일꾼: does exactly what you just did. You stepped, it steps the same way; you stood still, so
+// does it. Beside you, a step of yours is its chance to hit.
+function mirror(run, e) {
+  const p = run.p, m = run.lastMove;
+  if (!m) { if (run.touching(e, p) && run.struck?.has(e.id)) attackPlayer(run, e); return; }
+  if (run.touching(e, p)) { attackPlayer(run, e); return; }
+  const x = e.x + m.dx, y = e.y + m.dy;
+  if (canStep(run, e, x, y)) moveEnemy(run, e, x, y);
+  else run.emit('bump', { enemy: e, dx: m.dx, dy: m.dy });
+}
+function attackPlayer(run, e) {
+  const p = run.p;
+  run.emit('attack', { from: { x: e.x, y: e.y }, to: { x: p.x, y: p.y }, who: e });
+  run.damagePlayer(e.atk, e, 'melee');
 }

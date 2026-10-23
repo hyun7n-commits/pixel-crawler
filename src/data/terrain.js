@@ -7,7 +7,14 @@ export const T = {
   NONE: 0, BRUSH: 1, ASH: 2, WATER: 3, VENT: 4, GRASS: 5,
   TRAP_SLEEP: 6, TRAP_SUMMON: 7, TRAP_ALARM: 8, TRAP_SPIKE: 9, TRAP_OFF: 10,
   DUG: 11, ANVIL: 12, RING: 13, BERRY: 14,
+  // v0.23: the new stages' grounds
+  LAVA: 15, ICE: 16, CHASM: 17, BRIDGE: 18, SLIME: 19, HONEY: 20,
 };
+// you cannot walk onto these (a drop, molten rock), but you can see across them
+export const isGap = t => t === T.CHASM || t === T.LAVA;
+// what fills a zone's pools: water, or (zone.wet) ice on the snowy plateau and lava on the volcano
+export const POOLS = [T.WATER, T.ICE, T.LAVA];
+export const isPool = t => t === T.WATER || t === T.ICE || t === T.LAVA;
 // Like Shattered Pixel Dungeon traps: a plate that goes off once when stepped on (or blown up).
 // Some are hidden (map.hidden) until you spot them standing next to them.
 export const TRAPS = [T.TRAP_SLEEP, T.TRAP_SUMMON, T.TRAP_ALARM, T.TRAP_SPIKE];
@@ -29,6 +36,12 @@ export const TERRAIN = {
   [T.DUG]:        { name: '파헤친 흙',    sprite: 'dug',        tip: '누군가 파헤친 자리다.' },
   [T.ANVIL]:      { name: '모루',         sprite: 'anvil',      tip: '대장장이의 모루다.' },
   [T.BERRY]:      { name: '산딸기 덤불',  sprite: 'berry',     burn: 4, tip: '빨간 산딸기가 열렸다. 들어가면 따 먹고 체력이 조금 찬다. 덤불이라 앞을 가린다.' },
+  [T.LAVA]:      { name: '용암', tip: '부글부글 끓는다. 들어갈 수 없다. 떠밀려 빠지면 크게 데인다. 불에 강한 녀석들은 헤엄쳐 다닌다.' },
+  [T.ICE]:       { name: '빙판', tip: '올라서면 미끄러져서 빙판 끝까지 쭉 간다. 적도 미끄러진다.' },
+  [T.CHASM]:     { name: '낭떠러지', tip: '아찔하게 깊다. 한 번 더 걸어 들어가면 뛰어내려서 다음 구역으로 떨어진다. 대신 크게 다친다. 떠밀린 적은 그대로 떨어진다.' },
+  [T.BRIDGE]:    { name: '외나무다리', burn: 3, tip: '낭떠러지를 건너는 좁은 나무다리. 한 줄로만 지나갈 수 있다. 불이 붙으면 타서 무너진다.' },
+  [T.SLIME]:     { name: '달팽이 점액', sprite: 'goo', tip: '미끌미끌하다. 밟으면 한 칸 더 미끄러진다. 곧 마른다.' },
+  [T.HONEY]:     { name: '꿀', sprite: 'honey', tip: '끈적끈적하다. 밟으면 다음 걸음은 발을 떼느라 한 턴이 간다. 곧 마른다.' },
   [T.RING]:       { name: '요정 고리',    sprite: 'fairyRing',  tip: '버섯이 동그랗게 났다. 들어가면 이 구역 어딘가의 짝 고리로 뿅 하고 나간다.' },
 };
 

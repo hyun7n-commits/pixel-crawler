@@ -7,7 +7,7 @@
 // Floor features (brush, water...) live in map.ter, see data/terrain.js.
 
 import { MAP_W as W, MAP_H as H, SIGHT } from '../data/balance.js';
-import { T } from '../data/terrain.js';
+import { T, isGap } from '../data/terrain.js';
 import { rint, pick, DIRS8 } from './util.js';
 
 export const WALL = 0, FLOOR = 1, STAIRS = 2, DOOR = 3, ORE = 4, UPSTAIRS = 5, GRAVE = 6, LOCKED = 7, HIVE = 8, WEED = 9;
@@ -41,9 +41,11 @@ export const idx = (x, y) => y * W + x;
 export const inMap = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
 export const passable = (map, x, y) => {
   if (!inMap(x, y)) return false;
-  const t = map.tiles[idx(x, y)];
-  return t !== WALL && !isBump(t);
+  const i = idx(x, y), t = map.tiles[i];
+  return t !== WALL && !isBump(t) && !isGap(map.ter[i]);
 };
+// what a flier can cross: anything but walls, so drops and lava too
+export const flyable = (map, x, y) => inMap(x, y) && map.tiles[idx(x, y)] !== WALL && !isBump(map.tiles[idx(x, y)]);
 // Two walls that touch only at their corners leave a crack: nobody slips through it on the diagonal, so
 // two passages that meet corner to corner stay apart.
 export const squeeze = (map, x, y, dx, dy) =>
@@ -336,7 +338,7 @@ export function distMap(map, sx, sy, opts = {}) {
     const [x, y] = q[h], d = dm[idx(x, y)];
     for (const [dx, dy] of DIRS8) {
       const nx = x + dx, ny = y + dy;
-      if (!passable(map, nx, ny) || squeeze(map, x, y, dx, dy)) continue;
+      if (!(opts.fly ? flyable : passable)(map, nx, ny) || squeeze(map, x, y, dx, dy)) continue;
       if (opts.exploredOnly && !map.explored[idx(nx, ny)]) continue;
       if (dm[idx(nx, ny)] <= d + 1) continue;
       if (opts.block && opts.block(nx, ny)) continue;

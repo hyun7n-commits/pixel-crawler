@@ -158,6 +158,14 @@ const SOUNDS = {
   alert() { tone(880, 0.05, { type: 'square', vol: 0.05 }); tone(1320, 0.07, { type: 'square', vol: 0.05, delay: 0.05 }); },
   snore() { hiss(0.55, { vol: 0.14, freq: 320, to: 160, type: 'lowpass', attack: 0.25 }); },
   zap() { tone(1400, 0.12, { type: 'sawtooth', vol: 0.06, to: 300 }); hiss(0.1, { vol: 0.15, freq: 5000, type: 'highpass' }); },
+  // 마법사's wand: a soft whoosh up and a twinkle; a spark coming back is a tiny ding
+  wand() { tone(520, 0.14, { type: 'triangle', vol: 0.12, to: 1560 }); chime([1568, 2093], 0.05, 0.08, 0.06, 0.02); },
+  recharge() { chime([2093], 0.03, 0.06, 0.04, 0); },
+  // 연속 처치: a little run up the scale, one note more (and higher) for each kill in the row
+  combo(n) {
+    const steps = [1047, 1175, 1319, 1568, 1760, 2093, 2349, 2637];
+    chime(steps.slice(0, Math.min(steps.length, n + 1)).map(f => f * (n >= 5 ? 1.12 : 1)), 0.04, 0.1 + Math.min(0.08, n * 0.012), 0.14, 0.05);
+  },
   // into a burrow: a scuffle of dirt and a sliding whistle down (쏙)
   dive() {
     hiss(0.18, { vol: 0.16, freq: 900, to: 300, q: 0.7, delay: 0.12 });
@@ -234,6 +242,9 @@ export function onRunEvent(type, d) {
     case 'alert': play('alert'); break;
     case 'snore': play('snore'); break;
     case 'zap': play('zap'); break;
+    case 'wand': play('wand'); break;
+    case 'recharge': play('recharge'); break;
+    case 'combo': play('combo', d.n); break;
     case 'floor': if (d.dir) play('dive'); play('pop', d.dir ? 0.62 : 0.05); break;
     case 'dodge': play('dodge'); break;
     case 'puff': play('puff'); break;

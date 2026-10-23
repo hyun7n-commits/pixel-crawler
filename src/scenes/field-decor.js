@@ -9,6 +9,7 @@
 import { treeCanvas } from './village-art.js';
 
 const TILE = 16;
+const STONY = new Set(['rock', 'cave', 'volcano', 'ruins', 'snow']);
 const FOOT_UP = 6;   // how far the band at a wall's foot reaches up over the wall's face
 
 // a few colours that read at night under the lantern without shouting
@@ -58,6 +59,25 @@ const STAMPS = {
   crystalP: ['.p.', '.pP', '.PP'],
   glow: ['.tt.', 'tTTt', '.ww.', '.w..'],
   glow2: ['tt.', 'TT.', '.wtt', '.wTT', '..w.'],
+  // v0.23's new grounds
+  shell: ['.ww.', 'wWWw', '.qq.'],
+  star: ['.o.', 'ooo', 'o.o'],
+  kelp: ['g.', 'gv', '.g', 'gv', '.g'],
+  driftwood: ['nnnN', '.uNN'],
+  bigpetal: ['qqq.', 'qQqq', '.qQ.'],
+  bigpetalY: ['yyy.', 'yYyy', '.yY.'],
+  sprout: ['v.v', '.g.', '.g.'],
+  pollen: ['y..', '..y', '.y.'],
+  snowlump: ['.ww.', 'wwWw', 'WWWW'],
+  icicle: ['cwc', '.c.', '.C.'],
+  firtwig: ['..g..', '.ggg.', 'g.g.g', '..N..'],
+  ember: ['.o.', 'oRo', '.R.'],
+  obsid: ['.d.', 'ddP', '.P.'],
+  ash: ['l.L', '.L.', 'L.l'],
+  tag: ['n...', '.www', '.wRw', '.www'],
+  brick: ['rR.', 'RRd'],
+  ivy: ['g.g', 'vgv', '.g.', 'g..'],
+  bone: ['w..w', '.WW.', 'w..w'],
 };
 
 // what each kind of place scatters about, the more likely ones listed more than once
@@ -67,6 +87,11 @@ const SCATTER = {
   marsh: ['reed', 'reed', 'cattail', 'cattail', 'puddle', 'moss', 'moss', 'pale', 'pale', 'tuft', 'clover', 'blue'],
   rock: ['pebble', 'pebbles', 'pebbles', 'rubble', 'tuft', 'tuft', 'edel', 'edel', 'lichen', 'lichen', 'blue', 'moss'],
   cave: ['crystal', 'crystalP', 'glow', 'glow', 'glow2', 'rubble', 'pebbles', 'lichen', 'puddle', 'moss'],
+  sea: ['shell', 'shell', 'star', 'kelp', 'kelp', 'driftwood', 'pebble', 'pebbles', 'tuft', 'puddle'],
+  garden: ['bigpetal', 'bigpetalY', 'bigpetal', 'sprout', 'sprout', 'pollen', 'pollen', 'clover', 'daisy', 'leaf', 'tuft'],
+  snow: ['snowlump', 'snowlump', 'icicle', 'firtwig', 'firtwig', 'pebble', 'pebbles', 'puff'],
+  volcano: ['ember', 'ember', 'obsid', 'obsid', 'ash', 'ash', 'rubble', 'pebbles'],
+  ruins: ['tag', 'brick', 'brick', 'ivy', 'ivy', 'rubble', 'pebbles', 'moss', 'tuft', 'bone'],
 };
 // what crowds the foot of a wall, besides the band of leaves
 const FOOT = {
@@ -75,6 +100,11 @@ const FOOT = {
   marsh: ['cattail', 'reed', 'pale', 'moss'],
   rock: ['rubble', 'pebbles', 'edel', 'tuft'],
   cave: ['glow', 'glow2', 'crystal', 'crystalP', 'rubble'],
+  sea: ['kelp', 'shell', 'driftwood', 'tuft'],
+  garden: ['bigpetal', 'bigpetalY', 'sprout', 'daisy', 'clover'],
+  snow: ['snowlump', 'icicle', 'firtwig'],
+  volcano: ['ember', 'obsid', 'rubble', 'ash'],
+  ruins: ['brick', 'ivy', 'rubble', 'moss'],
 };
 
 const hash = (x, y) => {
@@ -144,6 +174,11 @@ const PATCH = {
   marsh: ['reed', 'cattail', 'reed', 'pale', 'tuft', 'moss'],
   rock: ['edel', 'tuft', 'edel', 'pebbles', 'lichen', 'blue'],
   cave: ['glow', 'glow2', 'crystal', 'glow', 'lichen', 'crystalP'],
+  sea: ['shell', 'kelp', 'star', 'kelp', 'pebbles', 'tuft'],
+  garden: ['bigpetal', 'bigpetalY', 'sprout', 'daisy', 'pink', 'butter', 'clover'],
+  snow: ['snowlump', 'firtwig', 'icicle', 'snowlump', 'pebbles'],
+  volcano: ['ember', 'obsid', 'ash', 'ember', 'pebbles'],
+  ruins: ['ivy', 'moss', 'brick', 'tuft', 'tag'],
 };
 function patchCanvas(z, zi, v) {
   const [c, g] = canvas(TILE, TILE), r = rng(zi * 2741 + v * 6007 + 41), list = PATCH[z.style];
@@ -165,7 +200,7 @@ function footCanvas(z, zi, v) {
   const H = TILE + FOOT_UP, [c, g] = canvas(TILE, H), r = rng(zi * 4513 + v * 7717 + 3);
   const G = greens(z), dark = z.wallDark, base = FOOT_UP + 1;
   const px = (col, x, y) => { if (x >= 0 && x < TILE && y >= 0 && y < H) { g.fillStyle = col; g.fillRect(x, y, 1, 1); } };
-  if (z.style === 'rock' || z.style === 'cave') {
+  if (STONY.has(z.style)) {
     // fallen stones heaped against the cliff
     for (let x = 0; x < TILE; x += 1 + Math.floor(r() * 2)) {
       const h = 1 + Math.floor(r() * 3);
@@ -199,7 +234,7 @@ function sideCanvas(z, zi, v, east) {
   const [c, g] = canvas(TILE, TILE), r = rng(zi * 3301 + v * 911 + (east ? 5 : 9));
   const G = greens(z);
   const px = (col, x, y) => { g.fillStyle = col; g.fillRect(east ? TILE - 1 - x : x, y, 1, 1); };
-  if (z.style === 'rock' || z.style === 'cave') {
+  if (STONY.has(z.style)) {
     for (let y = 2; y < TILE - 1; y += 2 + Math.floor(r() * 3)) { px(z.wallDark, 0, y); px(z.wallFace, 1, y); if (r() < 0.5) px(z.wallLight, 0, y - 1); }
   } else {
     for (let y = 1; y < TILE - 1; y += 1 + Math.floor(r() * 2)) {
@@ -223,6 +258,11 @@ const BLOOM = {
   marsh: ['cattail', 'pale', 'daisy', 'puff'],
   rock: ['moss', 'edel', 'tuft', 'lichen'],
   cave: ['crystal', 'crystalP', 'glow', 'crystal'],
+  sea: ['tuft', 'daisy', 'puff', 'blue'],
+  garden: ['bigpetal', 'bigpetalY', 'daisy', 'pink'],
+  snow: ['snowlump', 'firtwig', 'icicle'],
+  volcano: ['ember', 'obsid', 'ash'],
+  ruins: ['ivy', 'moss', 'ivy', 'brick'],
 };
 function bloomCanvas(z, zi, v) {
   const [c, g] = canvas(TILE, TILE), r = rng(zi * 6151 + v * 523 + 29), list = BLOOM[z.style];
@@ -251,7 +291,28 @@ const FIELD_TREES = {
   rock: [
     { leaf: ['#6f8a74', '#55705c', '#42584a', '#314238', '#212d26'], line: '#0d1210', tall: true },
   ],
+  sea: [
+    { leaf: ['#6a8a62', '#52704e', '#3e5a40', '#2e4632', '#1e3024'], line: '#081008', tall: true },
+  ],
+  // in the giant garden the "trees" are flower heads on their stalks
+  garden: [
+    { leaf: ['#f0b8cc', '#d890ac', '#b8708c', '#90526c', '#663a4c'], line: '#1e0c18', petals: true },
+    { leaf: ['#f4e08a', '#e0c060', '#c09a40', '#957430', '#6a5020'], line: '#1e1408' },
+    { leaf: ['#d8c8f4', '#b8a0e0', '#9478c0', '#6e5496', '#4c3a6a'], line: '#140c1e', petals: true },
+  ],
+  snow: [
+    { leaf: ['#eef4fa', '#cfdbe8', '#a8b8cc', '#7d8ea6', '#56657e'], line: '#10141c', tall: true },
+  ],
+  // burnt trees with embers caught in them
+  volcano: [
+    { leaf: ['#5a4a4a', '#463a3a', '#382e2e', '#2a2222', '#1c1616'], line: '#080506', fruit: true },
+  ],
+  ruins: [
+    { leaf: ['#5a7a52', '#46623f', '#364e32', '#283a26', '#1a281a'], line: '#080c08' },
+  ],
 };
+// how thick the trees stand in a zone's deep walls (out of ten)
+export const TREE_ODDS = { meadow: 1, forest: 7, marsh: 7, rock: 7, sea: 2, garden: 5, snow: 4, volcano: 2, ruins: 3 };
 export const fieldTreeCount = style => (FIELD_TREES[style] || []).length;
 
 export const SCATTER_VARIANTS = 12, FOOT_VARIANTS = 6, SIDE_VARIANTS = 4, BLOOM_VARIANTS = 8;
@@ -277,6 +338,11 @@ const MOTES = {
   marsh: [['w', 'W'], ['.w', 'w.']],
   rock: [['w'], ['W']],
   cave: [['t'], ['c']],
+  sea: [['w'], ['.w', 'w.'], ['c']],
+  garden: [['.q', 'qQ'], ['y', 'Y'], ['.y', 'y.']],
+  snow: [['w'], ['.w.', 'www', '.w.'], ['w.', '.w']],
+  volcano: [['o'], ['R'], ['o', 'R']],
+  ruins: [['l'], ['w'], ['L']],
 };
 export function moteKeys(scene, style) {
   return MOTES[style].map((rows, i) => key(scene, `mote_${style}${i}`, () => {

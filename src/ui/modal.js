@@ -95,6 +95,7 @@ export function showChoice({ title, sub, run, opts, onPick, onReroll, who }) {
         b.append(icon('heal'));
         info.append(el('span', 'nm', '응급 치료'), el('span', 'ds', '체력 50% 회복'));
       } else if (o.kind === 'ok') {
+        if (o.icon) b.append(icon(o.icon));
         info.append(el('span', 'nm', o.name), el('span', 'ds', o.desc));
       } else {
         b.append(icon('gold'));
@@ -142,7 +143,8 @@ export function showSummary({ won, run, rescued = [], news = {}, opened = [], on
   openSheet(sh => {
     const zone = run.zone.name, boss = run.boss?.d?.name || ENEMIES[run.zone.boss].name;
     sh.append(el('h2', null, won ? `${zone} ${run.loop}회차 돌파!` : '쓰러졌다'));
-    if (!won && run.cause) sh.append(el('p', 'cause', `마지막 순간: ${run.cause}`));
+    if (run.cause && (!won || run.p.hp <= 0)) sh.append(el('p', 'cause', `마지막 순간: ${run.cause}`));
+    if (won && run.depth) sh.append(el('p', 'deep-note', `대장 방 아래 깊은 곳 ${run.depth}층까지 내려갔다.`));
     sh.append(el('p', null, won
       ? `${josa(boss, '을', '를')} 쓰러뜨렸다. 돌파 보너스 ${run.bonus || 0}G를 받았다.`
       : '모은 골드는 그대로 가져간다. 마을에서 강해진 다음 다시 도전하자.'));

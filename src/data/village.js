@@ -137,6 +137,15 @@ export const HERO_LINES = ['오늘은 내가 갈게!', '맡겨 줘!', '나도 �
 
 // The neighbour's take on how the last run went (`last`: meta.lastRun), a few lines at most.
 // `cause` reads like "들쥐에게 당했다", so "~면서?" turns it into hearsay.
+// the later ones only once more tags have come back
+const EERIE = [
+  '명찰 주워 왔다며? 조합장이 고맙대. 근데 그 명찰들은 어디에 두는 걸까?',
+  '깊은 곳에 가면 누가 이름을 부른대. 대답하면 안 된대!',
+  '끝집 일꾼 요즘 안 보이더라. 이사 갔나 봐! …그치?',
+  '조합장 방 벽에 가면이 잔뜩 걸려 있대. 폐허에서 하나씩 주워 온 거래.',
+  '들판 친구들 말이야, 가끔 우리랑 똑같이 웃지 않아?',
+];
+
 export function gossip(last, meta) {
   if (!last) return ['아직 아무 일도 없었어. 얼른 들판에 다녀와!'];
   const out = [];
@@ -153,6 +162,9 @@ export function gossip(last, meta) {
   else if (last.honey && out.length < 3) out.push('벌집 꿀 먹었다며? 벌한테 쏘인 데는 괜찮아? 꿀 냄새 난다.');
   else if (last.screams && out.length < 3) out.push('어제 들판에서 꺄아아 소리 들렸는데, 너였어? 비명 뿌리 뽑았구나.');
   else if (last.weeds && out.length < 3) out.push(`풀뽑기도 했다며? ${last.weeds}포기나! 일꾼 다 됐네.`);
+  // and once in a while, after the name tags start turning up, something nobody quite finishes saying
+  const tags = meta.stats?.tags || 0;
+  if (tags >= 3 && out.length < 3 && Math.random() < 0.35) out.push(EERIE[Math.floor(Math.random() * Math.min(EERIE.length, 1 + (tags >> 1)))]);
   // what you have put up round your house (data/home.js) gets talked about too
   const home = meta.home || [];
   if (home.includes('dog') && out.length < 3) out.push('너네 강아지 오늘 우리 집 앞까지 놀러 왔더라. 귀여워!');
