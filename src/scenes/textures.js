@@ -83,18 +83,8 @@ export function spriteForDom(name) {
   const art = !grade && artDraw(name);
   return (domCache[name] ||= grade ? oreCanvas(grade, DOM_PX / 16) : art ? artCanvas(art, DOM_PX / art.w) : namedCanvas(name, DOM_RES));
 }
-// A canvas drawn in world pixels (the village's houses, for now) blown up to texture resolution.
-export function upscale(src) {
-  const c = document.createElement('canvas');
-  c.width = src.width * RES; c.height = src.height * RES;
-  const g = c.getContext('2d');
-  g.imageSmoothingEnabled = false;
-  g.drawImage(src, 0, 0, c.width, c.height);
-  return c;
-}
-
 // true when the picture is smooth (drawn in code), so the DOM shows it without pixel sharpening
-export const isSmooth = name => !!artDraw(name);
+export const isSmooth = name => name.startsWith('t_ore_') || !!artDraw(name);
 
 // A hero's faces (every frame times every expression) are drawn when the hero first appears.
 export function ensureHero(scene, base) {
