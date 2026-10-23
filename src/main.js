@@ -370,7 +370,7 @@ function nextChoice() {
       title: '대장을 쓰러뜨렸다!', sub: `${run.zone.name} 돌파. 대장 방 바닥에 구멍이 하나 나 있다. 아래에서 찬 바람이 올라온다.`, run, onPick,
       opts: [
         { kind: 'ok', act: 'home', icon: 'gold', name: '마을로 돌아간다', desc: '탐험 성공. 모은 골드와 돌파 보너스를 들고 간다.' },
-        { kind: 'ok', act: 'deeper', icon: 'stairs', name: '더 깊이 들어간다', desc: '지금 유물 그대로 더 센 들판으로. 층마다 좋은 상자가 있다. 쓰러져도 돌파와 골드는 그대로다.' },
+        { kind: 'ok', act: 'deeper', icon: 'stairs', name: '더 깊이 들어간다', desc: '지금 유물 그대로 더 센 들판으로. 층마다 좋은 상자가 있다. 쓰러지면 깊은 곳에서 주운 골드는 두고 온다. 언제든 메뉴에서 돌아갈 수 있다.' },
       ],
     });
     return;

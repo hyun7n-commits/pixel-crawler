@@ -76,7 +76,7 @@ function trample(run, who, x, y) {
   if (run.isVisible(x, y)) run.emit('rustle', { x, y });
   // now and then something glints in the grass
   if (who === 'player' && Math.random() < B.GRASS_COIN) {
-    const n = rint(1, 3) * (1 + Math.floor((run.floor - 1) / B.FLOORS_PER_ZONE));
+    const n = rint(1, 3) * (1 + Math.floor(B.gs(B.stageOf(run.floor))));
     run.addGold(n);
     run.log(`풀 속에서 동전 ${n}개를 주웠다.`, 'good');
   }
@@ -114,7 +114,7 @@ export function springTrap(run, x, y) {
     }
     const n = Math.min(spots.length, B.trapSummon(run.floor));
     for (const s of spots.slice(0, n)) {
-      const e = run.spawnEnemy(pick(run.zone.enemies), s.x, s.y, B.enemyScale(run.floor));
+      const e = run.spawnEnemy(pick(run.zone.enemies), s.x, s.y, run.foeScale);
       e.state = 'hunt';
       e.last = { x: run.p.x, y: run.p.y };
       run.emit('summon', { x: s.x, y: s.y });
@@ -137,7 +137,7 @@ export function openGrave(run, x, y) {
   run.noise(x, y, 5);
   const roll = Math.random();
   if (big || roll < 0.3) {
-    const e = run.spawnEnemy('wraith', x, y, B.gimmickScale(run.floor));
+    const e = run.spawnEnemy('wraith', x, y, run.oddScale);
     e.state = 'hunt';
     e.last = { x: run.p.x, y: run.p.y };
     run.say(e, '!');

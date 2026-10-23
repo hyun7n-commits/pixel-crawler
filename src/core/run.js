@@ -222,6 +222,9 @@ export class Run {
   }
   get zone() { return ZONES[this.stage]; }
   // 깊은 곳 (v0.23): how far below the boss's floor you are, 0 up to the boss
+  // critters' stat multiplier here; down in 깊은 곳 it keeps climbing from the last field before the boss
+  get foeScale() { return this.depth ? B.enemyScale(this.bossFloor - 1) * (1 + B.DEEP_UP * this.depth) : B.enemyScale(this.floor); }
+  get oddScale() { return this.depth ? B.gimmickScale(this.bossFloor - 1) * (1 + B.DEEP_UP * this.depth) : B.gimmickScale(this.floor); }
   get depth() { return Math.max(0, this.floor - this.bossFloor); }
   // how far every tile is from you for something with wings (over drops, water and lava), once a turn
   flyMap() {
@@ -350,7 +353,7 @@ export class Run {
     // loose traps, enemies and loot stay out of the set pieces
     const open = rooms.filter((r, i) => !SET_PIECES.has(deco.themes[i]));
     if (placeTraps(map, open, { start: this.p, stairs }, this.floor, this.open('traps'))) this.has.add('trap');
-    for (const o of map.ores) o.tier = Math.min(ORES.length - 1, zi + (Math.random() < B.ORE_START_BONUS ? 1 : 0));
+    for (const o of map.ores) o.tier = Math.min(ORES.length - 1, Math.floor(B.gs(zi)) + (Math.random() < B.ORE_START_BONUS ? 1 : 0));
 
     // a free spot in a room other than the start; returns the spot and its room
     const free = () => {
@@ -365,7 +368,7 @@ export class Run {
       return null;
     };
     const place = (fn) => { const s = free(); if (s) fn(s); };
-    const scale = B.enemyScale(this.floor);
+    const scale = this.foeScale;
     // about half of them start asleep
     for (let i = 0; i < B.enemiesPerFloor(this.floor); i++) {
       place(s => {
@@ -385,7 +388,7 @@ export class Run {
     if (this.open('turtle') && Math.random() < B.TURTLE_CHANCE) {
       place(s => { this.spawnEnemy('turtle', s.x, s.y, scale).state = Math.random() < 0.5 ? 'sleep' : 'wander'; });
     }
-    for (let i = 0, n = rint(2, 4); i < n; i++) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'gold', amount: (zi + 1) * rint(3, 7) }));
+    for (let i = 0, n = rint(2, 4); i < n; i++) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'gold', amount: Math.round((B.gs(zi) + 1) * rint(3, 7)) }));
     place(s => this.addChest(s.x, s.y));
     if (this.floor === 1) place(s => this.addChest(s.x, s.y));
     // 깊은 곳: a locked-chest's worth of loot lying open on every floor, for the build to keep growing
@@ -398,7 +401,7 @@ export class Run {
 
     this.pickups.push(...sp.pickups);
     for (const o of sp.enemies) {
-      const e = this.spawnEnemy(o.type, o.x, o.y, ENEMIES[o.type].swarm || o.chief ? B.enemyScale(this.floor) : B.gimmickScale(this.floor));
+      const e = this.spawnEnemy(o.type, o.x, o.y, ENEMIES[o.type].swarm || o.chief ? this.foeScale : this.oddScale);
       e.state = o.state;
       if (o.chief) this.crown(e);
       if (o.type === 'cage') e.friend = this.friend;
@@ -410,7 +413,7 @@ export class Run {
     // the shopkeeper's stall, the floor before each boss: what's for sale, priced for the zone
     this.stall = [];
     if (this.floor === this.bossFloor - 1 && this.open('stall')) {
-      this.stall = Object.entries(STALL).map(([what, it]) => ({ what, price: it.price * (zi + 1), sold: false }));
+      this.stall = Object.entries(STALL).map(([what, it]) => ({ what, price: Math.round(it.price * (B.gs(zi) + 1)), sold: false }));
       place(s => { this.spawnEnemy('peddler', s.x, s.y).state = 'npc'; });
     }
     if (this.floor === q.smith.floor && this.open('smith')) {
@@ -471,7 +474,7 @@ export class Run {
   // A chest, or from floor 2 on now and then a mimic pretending to be one.
   addChest(x, y) {
     if (this.floor >= 2 && this.open('mimic') && Math.random() < B.MIMIC_CHANCE) {
-      this.spawnEnemy('mimic', x, y, B.gimmickScale(this.floor)).state = 'hide';
+      this.spawnEnemy('mimic', x, y, this.oddScale).state = 'hide';
       this.has.add('mimic');
     } else this.pickups.push({ x, y, type: 'chest' });
   }
@@ -858,7 +861,7 @@ export class Run {
       if (q.state === 'idle') {
         q.state = 'asked';
         const s = this.hiddenSpot() || this.randomFloorTile();
-        this.spawnEnemy('thief', s.x, s.y, B.gimmickScale(this.floor)).state = 'wander';
+        this.spawnEnemy('thief', s.x, s.y, this.oddScale).state = 'wander';
         sheet(text.ask, ok());
       } else if (q.state === 'found') {
         q.state = 'done';
@@ -924,7 +927,7 @@ export class Run {
     const k = ore.hits - 1, last = ore.hits >= B.ORE_HITS - (this.char.dig || 0), top = ORES.length - 1;
     if (ore.hits === 1) this.meetOre(ore.tier);
     const nugget = !last && Math.random() < B.ORE_NUGGET[k];
-    const above = Math.max(0, ore.tier - Math.floor((this.floor - 1) / B.FLOORS_PER_ZONE));
+    const above = Math.max(0, ore.tier - Math.floor(B.gs(B.stageOf(this.floor))));
     const rise = B.ORE_RISE[k] * B.ORE_RISE_DECAY ** above + s.oreRise;
     const rose = !last && ore.tier < top && (nugget || Math.random() < rise);
     if (rose) { ore.tier++; this.meetOre(ore.tier); }
@@ -964,7 +967,7 @@ export class Run {
     for (let n = 0; n < (this.char.quiet ? wave - 1 : wave); n++) {
       const t = this.waveSpot(ore);
       if (!t) break;
-      const e = this.spawnEnemy(pick(this.zone.enemies), t.x, t.y, B.enemyScale(this.floor));
+      const e = this.spawnEnemy(pick(this.zone.enemies), t.x, t.y, this.foeScale);
       e.state = 'search'; e.searchT = 0; e.last = { x: ore.x, y: ore.y };
       came.push(e);
     }
@@ -1295,7 +1298,7 @@ export class Run {
       c.n = this.turn - c.t <= B.COMBO_TURNS ? c.n + 1 : 1;
       c.t = this.turn;
       if (c.n >= 2) {
-        this.addGold(c.n * (1 + this.stage) * B.COMBO_GOLD);
+        this.addGold(Math.min(c.n, 6) * (1 + B.gs(this.stage)) * B.COMBO_GOLD);
         this.emit('combo', { n: c.n, x: e.x, y: e.y });
         stats.bestCombo = Math.max(stats.bestCombo || 0, c.n);
         if (c.n === 5) this.log('다섯 마리 연속! 대박!', 'evo');
@@ -1319,7 +1322,7 @@ export class Run {
         this.emit('stairs', { x: up.x, y: up.y });
         this.log('다음 구역으로 가는 땅굴이 뚫리고, 돌아가는 굴도 열렸다.', 'good');
       }
-      this.addGold(30 * (this.floor / 3));
+      this.addGold(30 * (B.gfl(this.floor) / 3));
       this.dropNear(e.x, e.y, { type: 'candy', n: B.candySteps(this.floor) + B.CANDY_BOSS });
     } else if (e.chief) {
       this.dropNear(e.x, e.y, { type: 'cageKey' });
@@ -1348,7 +1351,7 @@ export class Run {
 
   // what some v0.23 critters leave when they fall
   afterlife(e) {
-    const d = e.d, scale = B.enemyScale(this.floor), seen = this.isVisible(e.x, e.y);
+    const d = e.d, scale = this.foeScale, seen = this.isVisible(e.x, e.y);
     // 눈사람: the head rolls off and keeps throwing
     if (d.head) {
       const h = this.spawnEnemy('snowhead', e.x, e.y, scale);
@@ -1664,7 +1667,7 @@ export class Run {
     const spot = this.hiddenSpot();
     if (!spot) return;
     this.respawnT = 0;
-    this.spawnEnemy(pick(this.zone.enemies), spot.x, spot.y, B.enemyScale(this.floor)).state = 'wander';
+    this.spawnEnemy(pick(this.zone.enemies), spot.x, spot.y, this.foeScale).state = 'wander';
   }
 
   // Where a monster answering the ore comes from: out of sight, a good walk from the ore.
@@ -1816,7 +1819,7 @@ export class Run {
         // the slam shakes spores loose: a little mushroom pops up where the hammer fell (one at a time)
         const spot = shuffle(this.telegraph.length ? this.telegraph.slice() : []).find(t => this.canEnemyEnter(t.x, t.y));
         if (spot && this.enemies.filter(m => m.hp > 0 && m.sprout).length < 1) {
-          const m = this.spawnEnemy('skel', spot.x, spot.y, B.enemyScale(this.floor));
+          const m = this.spawnEnemy('skel', spot.x, spot.y, this.foeScale);
           Object.assign(m, { hp: Math.ceil(m.hp / 2), maxHp: Math.ceil(m.maxHp / 2), state: 'hunt', last: { x: p.x, y: p.y }, small: true, sprout: true, xp: 1 });
           this.log('내려친 자리에서 꼬마 독버섯이 솟아났다!', 'warn');
         }
@@ -1850,7 +1853,7 @@ export class Run {
         e.rage = true;
         let n = 0;
         for (const [dx, dy] of shuffle(DIRS8.slice())) {
-          if (n < 2 && this.canEnemyEnter(e.x + dx, e.y + dy)) { this.spawnEnemy('frog', e.x + dx, e.y + dy, B.enemyScale(this.floor)).state = 'hunt'; n++; }
+          if (n < 2 && this.canEnemyEnter(e.x + dx, e.y + dy)) { this.spawnEnemy('frog', e.x + dx, e.y + dy, this.foeScale).state = 'hunt'; n++; }
         }
         this.emit('rage', { enemy: e });
         this.log('개굴 대왕이 개굴개굴 울었다! 개구리들이 몰려온다!', 'warn');
@@ -1908,7 +1911,7 @@ export class Run {
       let n = 0;
       for (const [dx, dy] of shuffle(DIRS8.slice())) {
         if (n < 2 && this.canEnemyEnter(e.x + dx, e.y + dy)) {
-          const b = this.spawnEnemy('bee', e.x + dx, e.y + dy, B.enemyScale(this.floor));
+          const b = this.spawnEnemy('bee', e.x + dx, e.y + dy, this.foeScale);
           Object.assign(b, { angry: true, state: 'hunt', last: { x: p.x, y: p.y } });
           n++;
         }
@@ -1967,7 +1970,7 @@ export class Run {
         let n = 0;
         for (const [dx, dy] of shuffle(DIRS8.slice())) {
           if (n < 2 && this.canEnemyEnter(e.x + dx, e.y + dy)) {
-            const m = this.spawnEnemy('maskman', e.x + dx, e.y + dy, B.enemyScale(this.floor));
+            const m = this.spawnEnemy('maskman', e.x + dx, e.y + dy, this.foeScale);
             Object.assign(m, { state: 'hunt', last: { x: p.x, y: p.y } });
             n++;
           }
@@ -2170,6 +2173,7 @@ export class Run {
     // the rival keeps count: the furthest stage you have won with each dare on
     for (const id of this.dares) meta.dares.won[id] = Math.max(meta.dares.won[id] || 0, this.stage + 1);
     this.banked = news;
+    this.goldBanked = this.gold;
     this.emit('banked', { news });
     return news;
   }
@@ -2220,7 +2224,7 @@ export class Run {
     let gold = 0;
     for (let k = 0; k < n; k++) {
       const ids = Object.keys(rl).filter(id => rl[id] < maxLevelOf(id));
-      if (!ids.length) { gold += 6 + 4 * Math.floor((this.floor - 1) / B.FLOORS_PER_ZONE); steps.push({ gold: true }); continue; }
+      if (!ids.length) { gold += 6 + 4 * Math.floor(B.gs(B.stageOf(this.floor))); steps.push({ gold: true }); continue; }
       const w = ids.map(id => (recipesWith(id).some(rc => rl[rc.a === id ? rc.b : rc.a]) ? 3 : 1));
       let r = Math.random() * w.reduce((a, b) => a + b, 0), id = ids[0];
       for (let i = 0; i < ids.length; i++) if ((r -= w[i]) < 0) { id = ids[i]; break; }
@@ -2265,6 +2269,11 @@ export class Run {
     if (this.banked) won = true;
     const news = this.banked || (won ? this.bank() : { stage: null, loop: 0, dares: 0 });
     if (this.depth) stats.deepest = { ...stats.deepest, [this.stage]: Math.max(stats.deepest?.[this.stage] || 0, this.depth) };
+    // falling down there leaves behind the gold picked up past the boss (the win and the rest come home)
+    if (this.depth && this.p.hp <= 0 && this.goldBanked != null && this.gold > this.goldBanked) {
+      this.lostDeep = this.gold - this.goldBanked;
+      this.gold = this.goldBanked;
+    }
     meta.gold += this.gold;
     stats.bestGold = Math.max(stats.bestGold, this.gold);
     const opened = openNew(meta);

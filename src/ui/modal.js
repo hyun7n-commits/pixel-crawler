@@ -145,6 +145,7 @@ export function showSummary({ won, run, rescued = [], news = {}, opened = [], on
     sh.append(el('h2', null, won ? `${zone} ${run.loop}회차 돌파!` : '쓰러졌다'));
     if (run.cause && (!won || run.p.hp <= 0)) sh.append(el('p', 'cause', `마지막 순간: ${run.cause}`));
     if (won && run.depth) sh.append(el('p', 'deep-note', `대장 방 아래 깊은 곳 ${run.depth}층까지 내려갔다.`));
+    if (run.lostDeep) sh.append(el('p', 'deep-note', `깊은 곳에서 주운 ${run.lostDeep}G는 거기 두고 왔다.`));
     sh.append(el('p', null, won
       ? `${josa(boss, '을', '를')} 쓰러뜨렸다. 돌파 보너스 ${run.bonus || 0}G를 받았다.`
       : '모은 골드는 그대로 가져간다. 마을에서 강해진 다음 다시 도전하자.'));
