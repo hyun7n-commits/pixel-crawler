@@ -74,6 +74,8 @@ export const BELL_TURNS = 4, BELL_RANGE = 7, PINE_NOISE = 3;
 export const CHILI_TURNS = 5, CHILI_BOSS = 2;
 // 민들레 홀씨 carries you at least this many steps' walk from where you were
 export const BLOW_MIN = 10;
+// 갈림길 (data/routes.js): the second burrow is at least this many steps from where you come in and from the first
+export const FORK_APART = 10;
 
 // v0.21 zones. The marsh is darker (MARSH_DARK tiles of sight) but its fireflies light FLY_LIGHT tiles
 // around them, and each one caught in a jar gives a tile of sight back for the trip (FLY_MAX at most).

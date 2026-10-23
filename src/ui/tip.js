@@ -3,6 +3,7 @@
 import { T, TERRAIN, TILE_INFO, GASES, GAS_KEYS } from '../data/terrain.js';
 import { ORE_HITS, candySteps } from '../data/balance.js';
 import { ITEMS } from '../data/items.js';
+import { ROUTES } from '../data/routes.js';
 import { ORES } from '../data/ores.js';
 import { idx, inMap, STAIRS, DOOR, ORE, UPSTAIRS, WALL, GRAVE, LOCKED, HIVE, WEED } from '../core/dungeon.js';
 import { RELICS } from '../data/relics.js';
@@ -94,7 +95,11 @@ export function describeTile(run, x, y, always = false) {
   const bell = map.bells?.find(o => o.x === x && o.y === y);
   if (bell) lines.push(`방울: 딸랑딸랑 울리는 중 (${bell.t}턴 더). 나를 못 보는 적은 이리로 온다. 다 울리면 주울 수 있다.`);
   if (map.flies?.some(o => o.x === x && o.y === y)) lines.push(`${TILE_INFO.fly.name}: ${TILE_INFO.fly.tip}`);
-  if (t === STAIRS) lines.push(`${TILE_INFO.stairs.name}: ${TILE_INFO.stairs.tip}`);
+  if (t === STAIRS) {
+    // 갈림길: the sign by the hole says what the field past it has
+    const r = map.routes?.find(o => o.x === x && o.y === y);
+    lines.push(`${TILE_INFO.stairs.name}: ${TILE_INFO.stairs.tip}${r ? `\n표지판: 이 굴 너머 들판엔 ${ROUTES[r.kind].sign}.` : ''}`);
+  }
   if (t === UPSTAIRS) lines.push(`${TILE_INFO.upStairs.name}: ${TILE_INFO.upStairs.tip}`);
   if (t === DOOR) lines.push(`${TILE_INFO.door.name}: ${TILE_INFO.door.tip}`);
   if (t === LOCKED) lines.push(`${TILE_INFO.locked.name}: ${TILE_INFO.locked.tip}${map.keyHeld ? ' 열쇠가 있다!' : ''}`);

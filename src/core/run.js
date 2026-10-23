@@ -20,6 +20,7 @@ import { placeSpecials, SET_PIECES } from './specials.js';
 import { carveChasms, fillPools } from './cliffs.js';
 import { NPC_TEXT, PEDDLER_FLOORS, STALL } from '../data/npcs.js';
 import { TAG_LINES } from '../data/lore.js';
+import { ROUTES } from '../data/routes.js';
 import { REQUESTS, pickRequest } from '../data/requests.js';
 import { isOpen, openNew, RELIC_GATES } from '../data/unlocks.js';
 import { caged, cleared, stageOpen, loopsOpen, loopFoe, loopGold, FRIENDS } from '../data/stages.js';
@@ -302,6 +303,7 @@ export class Run {
     if (this.lv('eclipse') && !this.told.eclipse) { this.told.eclipse = true; this.log('해가 가려졌다. 적들은 두 칸 앞도 잘 못 본다.', 'evo'); }
     // `dir`: 1 down a burrow to the next field, -1 back, 0 the first field; `from`: the hole you went into
     this.emit('floor', this.arrival || {});
+    if (this.routeSaid) { this.log(`표지판대로, 이 들판엔 ${ROUTES[this.routeSaid].sign}.`, 'good'); this.routeSaid = null; }
     this.arrival = null;
     this.spotVeins();
   }
@@ -325,7 +327,8 @@ export class Run {
   }
 
   genNormalFloor() {
-    const map = this.map, rooms = carveRooms(map), start = rooms[0];
+    const map = this.map, rooms = carveRooms(map), start = rooms[0], route = this.route;
+    this.route = null;
     this.p.x = start.cx; this.p.y = start.cy;
     const dm = distMap(map, start.cx, start.cy);
     // the layout already picked the stairs room, on a loop with the start (see dungeon.js buildLoop)
@@ -446,6 +449,64 @@ export class Run {
         if (a) map.ter[idx(a.x, a.y)] = T.ANVIL;
       });
     }
+    // 갈림길: what the sign by the burrow you came down promised is here; and from here on, two ways
+    if (route) this.routeBonus(route, place);
+    if (this.open('fork') && B.localOf(this.floor) < B.FLOORS_PER_ZONE - 1) this.fork(open);
+  }
+
+  // The second burrow on a field: in a room far from where you came in and from the first one, never
+  // by a door or a trap, and a sign by each (map.routes) saying what the field past it has (ROUTES).
+  // One of the two is always a breather; the other a prize.
+  fork(open) {
+    const m = this.map, first = m.down, dm = distMap(m, this.p.x, this.p.y), d2 = distMap(m, first.x, first.y);
+    let best = null, bs = -1;
+    for (const r of open.slice(1)) for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
+      const i = idx(x, y);
+      if (m.tiles[i] !== FLOOR || ![T.NONE, T.GRASS].includes(m.ter[i]) || dm[i] >= 9999 || dm[i] < B.FORK_APART || d2[i] < B.FORK_APART) continue;
+      if (this.enemyAt(x, y) || this.pickups.some(q => q.x === x && q.y === y)) continue;
+      if (DIRS8.some(([dx, dy]) => !inMap(x + dx, y + dy) || isTrap(m.ter[idx(x + dx, y + dy)]) || [DOOR, STAIRS, UPSTAIRS, ORE].includes(m.tiles[idx(x + dx, y + dy)]))) continue;
+      const sc = Math.min(dm[i], d2[i]) + Math.random() * 4;
+      if (sc > bs) { bs = sc; best = { x, y }; }
+    }
+    if (!best) return;
+    m.tiles[idx(best.x, best.y)] = STAIRS;
+    const safe = TOOLS.some(id => this.open(id)) && Math.random() < 0.5 ? 'tools' : 'rest';
+    const prize = pick(['chest', 'gold', 'chief', ...(this.open('candy') ? ['candy'] : [])]);
+    const [a, b] = shuffle([safe, prize]);
+    m.routes = [{ x: first.x, y: first.y, kind: a }, { x: best.x, y: best.y, kind: b }];
+    this.has.add('fork');
+  }
+
+  // Down a burrow with a sign: the next field (when it is new) is made with what the sign said.
+  takeBurrow(x, y) {
+    const m = this.map, r = m.routes?.find(o => o.x === x && o.y === y);
+    m.down = { x, y };
+    if (r && !this.floors[this.floor + 1]) this.route = r.kind;
+  }
+
+  routeBonus(kind, place) {
+    const m = this.map;
+    if (kind === 'chest') place(s => this.addChest(s.x, s.y));
+    if (kind === 'candy') place(s => this.pickups.push({ x: s.x, y: s.y, type: 'candy', n: B.candySteps(this.floor) }));
+    if (kind === 'tools') {
+      const t = TOOLS.filter(id => this.open(id));
+      for (let k = 0; k < 2; k++) place(s => this.pickups.push({ x: s.x, y: s.y, type: t.length ? pick(t) : 'bomb' }));
+    }
+    if (kind === 'rest') {
+      place(s => this.pickups.push({ x: s.x, y: s.y, type: 'potion' }));
+      place(s => { if (this.bareSpot(s.x, s.y)) m.ter[idx(s.x, s.y)] = T.BERRY; });
+    }
+    if (kind === 'gold') for (const o of m.ores) o.tier = Math.min(ORES.length - 1, o.tier + 1);
+    if (kind === 'chief') {
+      place(s => {
+        const type = pick(this.zone.enemies.filter(t => !ENEMIES[t].pack)) || this.zone.enemies[0];
+        const e = this.spawnEnemy(type, s.x, s.y, this.foeScale);
+        e.state = 'sleep';
+        this.crown(e);
+        e.prize = true;
+      });
+    }
+    this.routeSaid = kind;
   }
 
   // What each new zone adds to a field: the marsh's diving beetles slip under the water and fireflies
@@ -778,7 +839,7 @@ export class Run {
     // 빙판 and 달팽이 점액: you slide on the same way (to the end of the ice; one tile on slime)
     if (map.ter[i] === T.ICE || map.ter[i] === T.SLIME) this.slidePlayer(dx, dy, map.ter[i] === T.SLIME);
     const at = map.tiles[idx(p.x, p.y)];
-    if (at === STAIRS) { this.changeFloor(1); return true; }
+    if (at === STAIRS) { this.takeBurrow(p.x, p.y); this.changeFloor(1); return true; }
     if (at === UPSTAIRS) { this.changeFloor(-1); return true; }
     // 토끼: every few steps one is a hop, over before anyone else can move
     if (this.char.hop && (p.hops = (p.hops || 0) + 1) % this.char.hop === 0) { this.quick = true; this.emit('hop', { x: nx, y: ny, dx, dy }); }
@@ -1545,6 +1606,10 @@ export class Run {
       }
       this.addGold(30 * (B.gfl(this.floor) / 3));
       this.dropNear(e.x, e.y, { type: 'candy', n: B.candySteps(this.floor) + B.CANDY_BOSS });
+    } else if (e.chief && e.prize) {
+      // the crowned one the sign by the burrow warned of (갈림길): the prize it was guarding
+      this.dropNear(e.x, e.y, { type: 'chest', rich: true });
+      this.log(`${josa(this.chiefName(e), '이', '가')} 쓰러지며 좋은 보물 상자를 떨궜다!`, 'good');
     } else if (e.chief) {
       this.dropNear(e.x, e.y, { type: 'cageKey' });
       this.log(`${josa(this.chiefName(e), '이', '가')} 쓰러지며 우리 열쇠를 떨궜다!`, 'good');
@@ -2096,6 +2161,11 @@ export class Run {
     this.refreshDoors();
     computeFOV(this.map, this.p.x, this.p.y, this.stat().sight, this.lights());
     this.meetCritters();
+    // 갈림길: the first time a burrow with a sign comes into view, a word on what the sign is
+    if (!this.meta.found.fork_seen && this.map.routes?.some(r => this.isVisible(r.x, r.y))) {
+      this.meta.found.fork_seen = true;
+      this.log('땅굴 옆에 표지판이 서 있다. 굴 너머 들판에 뭐가 있는지 그려져 있다. 땅굴은 하나 더 있다.', 'good');
+    }
     if (this.p.hp <= 0) { this.p.hp = 0; this.finish(false); return; }
     if (this.victory) { this.finish(true); return; }
     this.emit('turn');

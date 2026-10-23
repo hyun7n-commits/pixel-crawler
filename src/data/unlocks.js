@@ -25,6 +25,7 @@ export const UNLOCKS = [
   { id: 'pinecone', icon: 'pinecone', what: '솔방울', desc: '들판에 솔방울이 떨어져 있다. 던지면 맞은 적이 밀려나고 어질어질해진다', when: m => m.stats.runs >= 3 || m.stats.maxFloor >= 3 },
   { id: 'bomb', icon: 'bomb', what: '폭탄', desc: '상자와 들판에서 폭탄이 나온다. 던지면 덤불도 바위도 날아간다', when: m => m.stats.maxFloor >= 3 || m.stats.runs >= 4 },
   { id: 'ring', relic: 'ring', when: m => m.stats.maxFloor >= 3 || m.stats.runs >= 4 },
+  { id: 'fork', icon: 'routeSign', what: '갈림길', desc: '들판에 땅굴이 두 개 생긴다. 굴 옆 표지판에 그 너머 들판에 뭐가 있는지 나온다', when: m => m.stats.maxFloor >= 4 || m.stats.runs >= 5 },
   { id: 'dandelion', icon: 'dandelion', what: '민들레 홀씨', desc: '후 불면 이 들판의 먼 곳으로 날아간다. 쫓아오던 적이 나를 놓친다', when: m => m.stats.maxFloor >= 4 || m.stats.runs >= 6 },
   { id: 'candy', icon: 'candy', what: '별사탕', desc: '반짝 바위와 잡초 밭에서도 별사탕이 나온다. 먹으면 유물이 다다닥 자란다', when: m => beat(m, 'ratking') },
   { id: 'stall', icon: 'peddler', what: '대장 앞 좌판', desc: '대장 바로 앞 들판에 상점 주인이 좌판을 편다', when: m => beat(m, 'ratking') },

@@ -9,6 +9,7 @@ import { TILE, buildTextures, wallKey, waterKey, chasmKey, seaKey, bridgeKey, GR
 import { CHARACTERS } from '../data/characters.js';
 import { PETS } from '../data/pets.js';
 import { ITEMS } from '../data/items.js';
+import { ROUTES } from '../data/routes.js';
 import { T, TERRAIN, GASES, GAS_KEYS, isTrap } from '../data/terrain.js';
 import { idx, inMap, lineOfSight, WALL, FLOOR, STAIRS, DOOR, ORE, UPSTAIRS, GRAVE, LOCKED, HIVE, WEED } from '../core/dungeon.js';
 import { WAKE_AT } from '../core/ai.js';
@@ -550,6 +551,14 @@ export class DungeonScene extends Phaser.Scene {
       if (spr) add(ter === T.BRUSH || ter === T.GRASS ? `t_${spr}${hash(x, y) % 3}${GRASS_PAL[style] ? '_' + style : ''}` : `t_${spr}`, D.ter);
       if (t === STAIRS) add('t_stairs', D.ter);
       if (t === UPSTAIRS) add('t_upStairs', D.ter);
+      // 갈림길: a notice board planted behind the hole, with the picture of what the field past it has
+      const route = t === STAIRS && map.routes?.find(o => o.x === x && o.y === y);
+      if (route) {
+        const bx = center(x), by = y * TILE + 5, pic = ROUTES[route.kind].icon;
+        add('routeBoard', D.pickups + 0.2).setOrigin(0.5, 1).setPosition(bx, by);
+        const im = add(pic, D.pickups + 0.3).setOrigin(0.5, 0).setPosition(bx, by - 20);
+        if (im.width <= 8) im.setScale(2);
+      }
       if (t === DOOR) this.doorImgs[i] = add(this.doorTex(map.open[i]), D.ter);
       // a stalactite overhead (its shadow and drip mark on the ground); a firefly swarm
       if (map.drips?.some(o => o.x === x && o.y === y)) add('t_drip', D.ter);

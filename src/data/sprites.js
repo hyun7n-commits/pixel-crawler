@@ -714,6 +714,17 @@ export const SPR = {
   ],
 };
 
+// 갈림길 (v0.26): the little notice board planted behind a burrow; the picture of what the field past
+// it has (data/routes.js) is drawn on its paper (scenes/DungeonScene.js buildTile)
+SPR.routeBoard = [
+  '.kkkkkkkkkkkkkkkkkk.',
+  'kMMMMMMMMMMMMMMMMMMk',
+  ...Array(16).fill('kMaaaaaaaaaaaaaaaaNk'),
+  'kNNNNNNNNNNNNNNNNNNk',
+  '.kkkkkkkkNNkkkkkkkk.',
+  '........kNNk........',
+  '........kNNk........',
+];
 Object.assign(SPR, ICONS);
 
 // the field peddler is the shopkeeper; only the 32px look (sprites32.js) gives them a pack
