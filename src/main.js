@@ -38,6 +38,9 @@ import { mapToFind, mapId } from './data/play.js';
 import { renderBasket, renderSeeds, renderCook, renderDish, hasCookable } from './ui/life.js';
 import { toast } from './ui/toast.js';
 import { renderBook } from './ui/book.js';
+import { heartsRow, heartsClosed } from './ui/hearts.js';
+import { giftTo, heartsAfter, heartsTap, actorOf } from './scenes/village-hearts.js';
+import { chatToday, give, errandAsk, takeErrand } from './data/affinity.js';
 import { $, el, button, icon } from './ui/dom.js';
 import * as sfx from './audio/sfx.js';
 import { setMusic, musicOff, setMusicOff } from './audio/music.js';
@@ -240,9 +243,10 @@ function talkTo(id, line) {
   const f = FOLK[id];
   sfx.play('talk');
   showVillageTip('');
+  const ties = closeness(id);
   showTalk({
-    who: f.sprite, name: f.name, line,
-    build: (box, redraw) => renderPanel(f.panel, box, {
+    who: f.sprite, name: f.name, line, onClose: ties.onClose,
+    build: (box, redraw) => { box.append(ties.row(redraw)); renderPanel(f.panel, box, {
       meta,
       onStart: chooseStage,
       changed: () => { saveMeta(meta); redraw(); renderVillageHud(meta); village().resync(); },
@@ -255,8 +259,55 @@ function talkTo(id, line) {
       onGoHome: ownsHome(meta) ? () => { closeTalk(); showHome(); } : null,
       // the rival's race (scenes/village-play.js)
       onRace: () => { closeTalk(); village().startRace(); },
-    }),
+    }); },
   });
+}
+
+// 친밀도 (data/affinity.js, ui/hearts.js, scenes/village-hearts.js): the first chat of a village day
+// counts; the hearts row in someone's sheet, with a present to give and an errand they may ask; and,
+// when the sheet closes, whatever that brought about (a milestone, two friends' moment)
+function closeness(id) {
+  const v = village();
+  if (chatToday(meta, id)) saveMeta(meta);
+  let ask = errandAsk(meta, id, who => !!actorOf(v, who));
+  return {
+    row: redraw => heartsRow(meta, id, {
+      redraw, ask,
+      onGift: item => {
+        const res = give(meta, id, item);
+        saveMeta(meta);
+        renderVillageHud(meta);
+        // their answer first, so the closing sheet does not start anything over it
+        giftTo(v, id, res);
+        closeTalk();
+      },
+      onErrand: () => {
+        takeErrand(meta, ask);
+        ask = null;
+        saveMeta(meta);
+        sfx.play('pluck');
+        redraw();
+      },
+    }),
+    onClose: () => { heartsClosed(); heartsAfter(v, [id]); },
+  };
+}
+
+// A friend in the meadow: what they have to say, how close you are, and them going out today instead
+function talkToFriend(id, line) {
+  const c = CHARACTERS[id];
+  sfx.play('talk');
+  showVillageTip('');
+  const ties = closeness(id);
+  let go = null;
+  showTalk({
+    who: c.sprite, name: c.name, line, onClose: ties.onClose,
+    build: (box, redraw) => {
+      go = button('btn primary', `오늘은 ${josa(c.name, '이', '가')} 나간다`, () => { closeTalk(); villageHooks.onSwap(id); });
+      box.append(ties.row(redraw), go);
+    },
+  });
+  setTimeout(() => go?.focus({ preventScroll: true }), 0);
 }
 
 // Through your own door (scenes/HomeScene.js): the village sleeps while you are in, and wakes with you
@@ -352,6 +403,8 @@ const homeHooks = {
 
 const villageHooks = {
   onTalk: talkTo,
+  onFriend: talkToFriend,
+  sheetUp: () => modalOpen(),
   onHome: () => showHome(),
   onPet: () => sfx.play('bark'),
   // a letter from the mailbox (data/home.js LETTERS)
@@ -734,8 +787,8 @@ document.addEventListener('keydown', ev => {
   if (inVillage) {
     if (KEYS[k]) { ev.preventDefault(); village().step(...KEYS[k], ev.repeat); }
     // Space: a game's button (scenes/village-play.js)
-    if (k === ' ' && document.activeElement === document.body && village().playKey(ev.repeat)) ev.preventDefault();
-    if (k === 'Enter' && document.activeElement === document.body && !village().play) chooseStage();
+    if (k === ' ' && document.activeElement === document.body && (village().playKey(ev.repeat) || heartsTap(village(), ev.repeat))) ev.preventDefault();
+    if (k === 'Enter' && document.activeElement === document.body && !village().play && !heartsTap(village(), ev.repeat)) chooseStage();
     if (k === 'm') toggleSound();
     return;
   }

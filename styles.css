@@ -700,3 +700,15 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .bag-map { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px; background: var(--panel); border: 1px solid var(--line); margin-bottom: 4px; }
 .bag-map canvas { max-width: 100%; height: auto !important; aspect-ratio: 64 / 48; }
 .race-row { border-color: #b48ade; margin-bottom: 8px; }
+/* v0.30 친밀도 (ui/hearts.js): the hearts in a talk sheet, a present out of the basket, an errand */
+.ties { display: flex; flex-direction: column; gap: 8px; }
+.ties-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; min-height: 32px; }
+.ties-gift { padding: 4px 10px; }
+.ties-gift.on { border-color: var(--accent); }
+.ties-grid { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); }
+.ties-grid .bag-cell { height: 44px; }
+.ties-give { align-self: flex-start; }
+.ties-errand { padding: 8px 10px; }
+.ties-ask { line-height: 1.5; }
+.ties-hearts { width: 158px; height: 12px; }
+@media (min-width: 600px) { .ties-hearts { width: 237px; height: 18px; } }
