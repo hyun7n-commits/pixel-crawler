@@ -13,7 +13,7 @@
 export const PER_TRIP = 2;
 // The release a save last opened in (meta.seenBuild); goes up with each release that adds unlocks, see
 // sinceUpdate.
-export const BUILD = 27;
+export const BUILD = 28;
 
 const broken = m => Object.values(m.ores || {}).reduce((a, b) => a + b, 0);
 const beat = (m, boss) => m.stats.bosses.includes(boss);
