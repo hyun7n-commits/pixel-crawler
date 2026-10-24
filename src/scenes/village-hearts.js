@@ -138,7 +138,7 @@ function hold(...ones) {
 }
 function release(sc, ...ones) {
   for (const one of ones) {
-    if (!one) continue;
+    if (!one?.s.active) continue;
     one.busy = false;
     one.s.sy = 1;
     one.next = sc.time.now + 1500;
@@ -389,20 +389,28 @@ function chatPair(sc, p, A, B, visit) {
   T.meet = meet;
   hold(A, B);
   const [guest, host] = Math.random() < 0.5 ? [A, B] : [B, A];
+  // still theirs (one of them gone, as when the friends are placed anew: it is dropped)
+  const on = () => {
+    if (T.meet !== meet) return false;
+    if (A.s.active && B.s.active) return true;
+    T.meet = null;
+    release(sc, A, B);
+    return false;
+  };
   const talk = () => {
-    if (T.meet !== meet) return;
+    if (!on()) return;
     faceTo(A, B.x); faceTo(B, A.x);
     const [la, lb] = pick(p.chat);
     sc.say(A.s, la, sayMs(la));
     sc.time.delayedCall(sayMs(la) - 300, () => {
-      if (T.meet !== meet) return;
+      if (!on()) return;
       sc.say(B.s, lb, sayMs(lb));
       sc.time.delayedCall(sayMs(lb), () => {
-        if (T.meet !== meet) return;
+        if (!on()) return;
         setEmote(Math.random() < 0.5 ? A.s : B.s, Math.random() < 0.5 ? '♪' : '♥', sc.time.now, 1200);
         if (meetToday(sc.meta, p.key)) sc.hooks.onLife?.();
         sc.time.delayedCall(900, () => {
-          if (T.meet !== meet) return;
+          if (!on()) return;
           T.meet = null;
           release(sc, A, B);
         });
@@ -411,7 +419,7 @@ function chatPair(sc, p, A, B, visit) {
   };
   if (!visit) { talk(); return; }
   walk(sc, guest, host.x, host.y, true, ok => {
-    if (T.meet !== meet) return;
+    if (!on()) return;
     if (ok) { talk(); return; }
     T.meet = null;
     release(sc, A, B);
@@ -428,7 +436,14 @@ function pairScene(sc, p) {
   const ps = { p, n, a: A, b: B };
   T.pair = ps;
   hold(A, B);
-  const alive = () => T.pair === ps && A.s.active && B.s.active;
+  // still theirs (one of them gone, as when the friends are placed anew: it is dropped)
+  const alive = () => {
+    if (T.pair !== ps) return false;
+    if (A.s.active && B.s.active) return true;
+    T.pair = null;
+    release(sc, A, B);
+    return false;
+  };
   const end = () => {
     if (T.pair !== ps) return;
     doneBond(sc.meta, p.key, n);
