@@ -30,6 +30,14 @@ export const WEAR = {
   bib:    { name: '턱받이', slot: 'neck', cost: 1300, art: ['kwwwwwwwwk', '.kwqwqwk..', '..kwwwk...', '...kkk....'] },
   tie:    { name: '넥타이', slot: 'neck', cost: 3500, art: ['kwwwwwwwwk', '....kbk...', '....kBk...', '.....k....'] },
   pearl:  { name: '진주 목걸이', slot: 'neck', cost: 9000, art: ['kwlwlwlwlk', '....kak...', '.....k....'] },
+  // v0.30 친밀도: presents from the villagers (data/affinity-people.js), never in the shop
+  coinpin: { name: '금화 핀', slot: 'head', gift: true, cost: 0, art: ['.kkk.', 'kzyyk', 'kyYyk', 'kyyYk', '.kkk.'] },
+  shaving: { name: '대팻밥 핀', slot: 'head', gift: true, cost: 0, art: ['.kkk.', 'kJMJk', 'kMkJk', 'kJMk.', '.kk..'] },
+  headband: { name: '보라 머리띠', slot: 'head', gift: true, cost: 0, art: ['kkkk..', 'kpppkk', 'kPPPpk', 'kkkkPk', '....kk'] },
+  knit:   { name: '손뜨개 목도리', slot: 'neck', gift: true, cost: 0, art: ['kgwgwgwgwk', '..kgwk....', '..kw.k....', '..kgwk....', '...kk.....'] },
+  medal:  { name: '쇠 메달', slot: 'neck', gift: true, cost: 0, art: ['kLLLLLLLLk', '....klk...', '...kldlk..', '....klk...', '.....k....'] },
+  oldbadge: { name: '낡은 배지', slot: 'neck', gift: true, cost: 0, art: ['khhhhhhhhk', '....kuk...', '...kuUuk..', '....kUk...', '.....k....'] },
+  rescuer: { name: '구조대 손수건', slot: 'neck', gift: true, cost: 0, art: ['koOoOoOoOk', '...koOk...', '....kk....'] },
 };
 export const SLOTS = ['head', 'neck'];
 

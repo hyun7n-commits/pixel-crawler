@@ -36,6 +36,8 @@ import { placeVillagePlay, playTap, playStep, playAct, playStepOn, playDescribe,
 import {
   dayToday, placeVillageDay, dayTap, dayStep, dayKey, dayAct, dayStepOn, dayMeet, dayDescribe, dayTick, dayGossip, dayFire,
 } from './village-days.js';
+import { placeVillageHearts, heartsTick, heartsTap, heartsMeet } from './village-hearts.js';
+import { chatLine } from '../data/affinity.js';
 import { patchNoise, scatterKey, patchKey, footKey, bloomKey, moteKeys, SCATTER_VARIANTS, PATCH_VARIANTS, FOOT_VARIANTS, BLOOM_VARIANTS, FOOT_UP } from './field-decor.js';
 import { propCanvas, critterCanvas } from './village-props.js';
 import { poke, pokeKind, stillInFlowers, flutterTo, petPup } from './village-secrets.js';
@@ -305,6 +307,7 @@ export class VillageScene extends Phaser.Scene {
     placeVillageLife(this);
     placeVillagePlay(this);
     placeVillageDay(this);
+    placeVillageHearts(this);
     this.festival();
     this.playGrowth(arrivals);
   }
@@ -1279,7 +1282,7 @@ export class VillageScene extends Phaser.Scene {
     const d = this.decorAt(x, y);
     if (d) return `${d.name}: ${d.desc}`;
     const hero = this.heroAt(x, y);
-    if (hero) return `${CHARACTERS[hero.id].name}: 부딪히면 오늘은 이 친구가 나간다.`;
+    if (hero) return `${CHARACTERS[hero.id].name}: 마을에 사는 친구. 부딪히면 말을 건다.`;
     const b = this.buildingAt(x, y);
     if (b) return `${b.cot != null ? cottageName(this.meta, b.cot) : b.name}: ${b.tip}`;
     if (this.bigTree && BIG_TREE.block.some(([bx, by]) => bx === x && by === y)) return '아주 오래된 큰 나무: 뿌리 사이에 아주 작은 문이 있다. 늘 잠겨 있다.';
@@ -1294,6 +1297,8 @@ export class VillageScene extends Phaser.Scene {
   // a tap: walk to the spot; on a villager or a house, walk up to them and talk; on the sign, head out
   tap(x, y) {
     if (this.ps?.diving) return;
+    // someone showing you something (scenes/village-hearts.js): a tap hurries them on
+    if (heartsTap(this)) return;
     // a game going on, or something to play with (scenes/village-play.js)
     if (playTap(this, x, y)) return;
     // what is going on today (scenes/village-days.js)
@@ -1338,6 +1343,7 @@ export class VillageScene extends Phaser.Scene {
   // is one press)
   step(dx, dy, repeat) {
     if (this.showing) { this.skipShow(); return; }
+    if (heartsTap(this, repeat)) return;
     if (this.play) { playStep(this, this.p.x + dx, this.p.y + dy, repeat); return; }
     if (this.ps?.diving || this.time.now < this.nextStep) return;
     this.nextStep = this.time.now + STEP_MS;
@@ -1468,15 +1474,24 @@ export class VillageScene extends Phaser.Scene {
       this.hooks.onPet?.();
       return;
     }
+    // something you were asked to take over (scenes/village-hearts.js)
+    if (heartsMeet(this, who)) return;
     who.s.setFlipX(this.p.x < who.x);
     this.tweens.add({ targets: who.s, hop: 4, duration: 90, yoyo: true, ease: 'Quad.out' });
     // the day may have something of its own for them (scenes/village-days.js)
     if (dayMeet(this, who)) return;
     if (who.f) {
       const pick = who.f.lines[Math.floor(Math.random() * who.f.lines.length)];
-      const line = typeof pick === 'function' ? pick(this.meta) : pick;
+      const line = chatLine(this.meta, who.id) ?? (typeof pick === 'function' ? pick(this.meta) : pick);
       this.say(who.s, line);
       this.time.delayedCall(260, () => this.hooks.onTalk?.(who.id, line));
+      return;
+    }
+    // a friend: a word, and a sheet of their own (main.js talkToFriend)
+    const line = chatLine(this.meta, who.id);
+    if (line && this.hooks.onFriend) {
+      this.say(who.s, line);
+      this.time.delayedCall(260, () => this.hooks.onFriend(who.id, line));
       return;
     }
     this.hooks.onSwap?.(who.id);
@@ -1543,6 +1558,7 @@ export class VillageScene extends Phaser.Scene {
     lifeTick(this, time, Math.min(delta || 16, 50));
     playTick(this, time, Math.min(delta || 16, 50));
     dayTick(this, time, Math.min(delta || 16, 50));
+    heartsTick(this, time);
     // the big tree's crown goes see-through while you are under it
     if (this.bigTree) {
       const want = this.underBigTree(this.p.x, this.p.y) && this.p.y < BIG_TREE.y ? 0.45 : 1;

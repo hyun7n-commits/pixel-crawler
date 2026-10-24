@@ -31,6 +31,7 @@ import { savedRun } from '../core/suspend.js';
 import { SECRETS, secretsFound } from '../data/secrets.js';
 import { bookCount } from '../data/book.js';
 import { basketCount, bagItems, picOf } from './life.js';
+import { seedCut, sellUp } from '../data/affinity.js';
 
 export function renderPanel(id, box, ctx) {
   PANELS[id](box, ctx);
@@ -269,7 +270,7 @@ function lifeGoods(list, meta, buy, badge) {
   list.append(el('h3', null, '씨앗'));
   list.append(el('p', 'row-sub', hasDecor(meta, 'garden') ? `한 봉지에 ${SEED_PACK}알. 집 마당 텃밭에 심는다.` : `한 봉지에 ${SEED_PACK}알. 목수가 집 마당에 텃밭을 만들어 주면 심을 수 있다.`));
   for (const c of seeds) {
-    const cost = seedCost(c.days), have = meta.bag?.[seedId(c.id)] || 0;
+    const cost = Math.round(seedCost(c.days) * seedCut(meta)), have = meta.bag?.[seedId(c.id)] || 0;
     const row = el('div', 'row'), main = el('div', 'row-main');
     main.append(badge(el('span', 'row-name', `${c.name} 씨앗`), `seed:${c.id}`), el('span', 'row-sub', `${c.days}일이면 자란다${have ? ` · 가진 씨앗 ${have}알` : ''}`));
     const b = button('btn gold', `${cost}G`, () => buy(cost, () => { meta.bag = { ...meta.bag, [seedId(c.id)]: have + SEED_PACK }; }));
@@ -285,7 +286,7 @@ function sellGoods(list, meta, changed) {
   if (!ids.length) return;
   list.append(el('h3', null, '팔기'), el('p', 'row-sub', '바구니에 든 것을 사 준다. 요리할 건 남겨 두자.'));
   for (const id of ids) {
-    const n = meta.bag[id], p = sellPrice(id);
+    const n = meta.bag[id], p = Math.round(sellPrice(id) * sellUp(meta));
     const row = el('div', 'row'), main = el('div', 'row-main');
     main.append(el('span', 'row-name', `${itemName(id)} <small>${n}개</small>`), el('span', 'row-sub', `하나에 ${p}G`));
     const sell = k => { meta.gold += k * p; meta.bag[id] -= k; if (!meta.bag[id]) delete meta.bag[id]; shopNote = `${itemName(id)} ${k}개를 ${k * p}G에 팔았다.`; changed(); };
@@ -299,8 +300,9 @@ function sellGoods(list, meta, changed) {
 // 꾸미기 (data/wear.js): one thing for the head and one for the neck; each row shows the hero you play
 // wearing it. Bought, it goes on at once; tap again to take it off, or put on another.
 function wardrobe(list, meta, buy, changed, badge) {
-  const ids = Object.keys(WEAR).filter(id => stocked(meta, `wear:${id}`));
-  if (!isOpen(meta, 'wear') || !ids.length) return;
+  // (and the ones the villagers gave you, 친밀도)
+  const ids = Object.keys(WEAR).filter(id => (WEAR[id].gift ? meta.wardrobe?.[id] : isOpen(meta, 'wear') && stocked(meta, `wear:${id}`)));
+  if (!ids.length) return;
   list.append(el('h3', null, '꾸미기'));
   const hero = CHARACTERS[meta.sel].sprite;
   for (const id of ids) {

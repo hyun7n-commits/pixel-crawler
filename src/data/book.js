@@ -22,6 +22,7 @@ import { ROOMS, ROOM_KINDS, ROOM_PIC, roomId } from './rooms.js';
 import { FISH, BUGS, CROPS, FORAGE, DISHES } from './life.js';
 import { PLAY_LIST, playId, WISH_LIST, wishId, DAYS, dayId, HIDE_LINES, HIDE_IDS, hideId, TREASURES, FOGS, treasureId } from './play.js';
 import { CHARACTERS } from './characters.js';
+import { HEART_PAGES, PAIR_PAGES } from './affinity.js';
 
 // the hand-made secrets' little pictures
 const SECRET_PIC = {
@@ -56,6 +57,9 @@ export const CHAPTERS = [
   { id: 'day', name: '마을의 하루', pic: { find: ['star', 'y'] }, note: '어느 날 마을에서 있었던 일' },
   { id: 'hide', name: '숨바꼭질', pic: { find: ['leaf', 'g'] }, note: '숨바꼭질에서 찾아낸 친구들' },
   { id: 'treasure', name: '마을 보물', pic: { find: ['map', 'c'] }, note: '마을 땅속과 안개 속에서 찾은 것' },
+  // v0.30 친밀도 (data/affinity.js)
+  { id: 'heart', name: '하트', pic: { find: ['heart', 'r'] }, note: '마을 이웃, 친구들과 가까워진 날' },
+  { id: 'pair', name: '단짝', pic: { find: ['heart', 'q'] }, note: '마을 이웃들끼리 가까워진 일' },
 ];
 
 const ENTRIES_ALL = [
@@ -83,6 +87,8 @@ const ENTRIES_ALL = [
   ...DAYS.map(o => ({ id: dayId(o.id), ch: 'day', name: o.name, line: o.line, pic: o.pic })),
   ...HIDE_IDS.map(id => ({ id: hideId(id), ch: 'hide', name: CHARACTERS[id].name, line: HIDE_LINES[id], pic: { spr: CHARACTERS[id].sprite } })),
   ...[...Object.values(TREASURES), ...FOGS].map(t => ({ id: treasureId(t.id), ch: 'treasure', name: t.name, line: t.line, pic: t.pic })),
+  ...HEART_PAGES.map(e => ({ ...e, ch: 'heart' })),
+  ...PAIR_PAGES.map(e => ({ ...e, ch: 'pair' })),
 ];
 
 export const ENTRIES = ENTRIES_ALL;

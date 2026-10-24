@@ -55,6 +55,7 @@ export function freshMeta() {
     meal: null,             // a dish eaten for the next trip (data/life.js DISHES)
     hearts: {},             // how close you are with each villager and friend (data/affinity.js)
     bonds: {},              // how close the villagers are with each other, by pair
+    errand: null,           // something a villager asked you to take to a friend: { key, from, to, what }
     games: {},              // the village games' best scores (data/play.js)
     today: null,            // what is going on in the village today, and how far it has got (data/play.js DAYS)
     boon: null,             // a wish at the fountain for the next trip: { luck, gold } (data/play.js WISHES)
@@ -119,6 +120,7 @@ export function loadMeta() {
         meal: m.meal || null,
         hearts: { ...m.hearts },
         bonds: { ...m.bonds },
+        errand: m.errand || null,
         games: { ...m.games },
         today: m.today || null,
         boon: m.boon || null,
