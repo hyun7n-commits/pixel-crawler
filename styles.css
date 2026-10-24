@@ -289,7 +289,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #mtop, #mbar, #mtray, #shade, #mlog, .bag-head { display: none; }
 
 /* ---------- Modal ---------- */
-#modal { position: fixed; inset: 0; background: rgba(6,5,10,.78); display: grid; place-items: center; padding: 16px; z-index: 20; }
+/* one column no wider than the screen: a sheet with a wide scrolling row (the book's chapter tabs) must not stretch the column and push itself off to the side */
+#modal { position: fixed; inset: 0; background: rgba(6,5,10,.78); display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; padding: 16px; z-index: 20; }
 .sheet { background: var(--panel); border: 2px solid #4a4466; box-shadow: 0 0 0 2px #0a0910, inset 2px 2px 0 #2b2739, inset -2px -2px 0 #15131c; border-radius: 0; width: min(640px, 100%); max-height: 100%; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
 .sheet h2 { font-weight: 400; font-family: var(--font-display); font-size: 30px; margin: 0; color: var(--gold); text-wrap: balance; }
 .sheet p { margin: 0; color: var(--muted); line-height: 1.5; }
