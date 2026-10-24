@@ -2395,6 +2395,27 @@ const SRC = {
       '................',
     ],
   },
+  // the phone's settings button (v0.29): a little cog
+  gear: {
+    rows: [
+      '................',
+      '.......ll.......',
+      '.......ll.......',
+      '...ll.llll.ll...',
+      '...llllllllll...',
+      '....llllllll....',
+      '...lll....lll...',
+      '.lllll....lllll.',
+      '.lllll....lllll.',
+      '...lll....lll...',
+      '....llllllll....',
+      '...llllllllll...',
+      '...ll.llll.ll...',
+      '.......ll.......',
+      '.......ll.......',
+      '................',
+    ],
+  },
   wand: {
     rows: [
       '................',

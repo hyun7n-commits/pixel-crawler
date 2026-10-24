@@ -7,7 +7,7 @@ import { wait, fissionMs, evolveMs, FISSION_LEAD, FISSION_STEP, EVOLVE_FLASH, GR
 const VOLUME = 0.4;
 const MUTE_KEY = 'pixel-crawler-muted';
 
-let ctx = null, out = null, noiseBuf = null;
+let ctx = null, out = null, noiseBuf = null, stale = false;
 let muted = false;
 try { muted = localStorage.getItem(MUTE_KEY) === '1'; } catch (e) { /* storage blocked */ }
 
@@ -22,6 +22,13 @@ export function setMuted(m) {
 
 // Browsers only allow sound after a click or a key press, so call this from one.
 export function unlockAudio() {
+  // back from another app, a phone may hand back a sound that says it is running and plays nothing
+  // (v0.29: no sound after switching apps): the old one is let go and a new one made on this touch
+  if (ctx && stale) {
+    stale = false;
+    try { ctx.close()?.catch?.(() => {}); } catch (e) { /* already closed */ }
+    ctx = null;
+  }
   if (!ctx) {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
@@ -37,6 +44,12 @@ export function unlockAudio() {
   }
   // iPhone suspends (or "interrupts") the sound after a call or a trip to another app
   if (ctx.state !== 'running') ctx.resume()?.catch?.(() => {});
+}
+// the page was put away (another app, another tab): the sound rests, and is made fresh on the next touch
+export function audioAway() {
+  if (!ctx) return;
+  stale = true;
+  try { ctx.suspend()?.catch?.(() => {}); } catch (e) { /* closed */ }
 }
 
 function envelope(g, t, vol, attack, dur) {
@@ -126,8 +139,13 @@ const SOUNDS = {
     tone(98, 0.24, { type: 'triangle', vol: 0.28, delay: 0.14 });
     tone(92.5, 0.4, { type: 'triangle', vol: 0.28, delay: 0.38 });
   },
-  // footsteps: a soft scuff on stone, a splash in water; `alt` swaps feet so steps don't sound identical
-  step(alt) { hiss(0.05, { vol: 0.09, freq: alt ? 520 : 430, type: 'lowpass', attack: 0.004 }); tone(alt ? 110 : 95, 0.04, { vol: 0.05, to: 60 }); },
+  // footsteps, 도도도도 (v0.29: the old soft scuff was too low for a phone's speaker to carry): a small
+  // round pip that drops a little, the two feet a note apart, a breath of scuff under it; a splash in water
+  step(alt) {
+    tone(alt ? 587 : 523, 0.05, { type: 'triangle', vol: 0.075, to: alt ? 440 : 392, attack: 0.003 });
+    tone(alt ? 196 : 175, 0.035, { vol: 0.04, to: 110 });
+    hiss(0.025, { vol: 0.025, freq: 2200, q: 0.8 });
+  },
   splash() { hiss(0.12, { vol: 0.14, freq: 1400, to: 500, q: 0.9 }); },
   hit() { hiss(0.06, { vol: 0.3, freq: 1500, q: 0.8 }); tone(180, 0.08, { vol: 0.25, to: 90 }); },
   sneak() { hiss(0.14, { vol: 0.4, freq: 3200, to: 800, q: 0.7 }); tone(280, 0.16, { vol: 0.4, to: 60 }); },
@@ -185,6 +203,18 @@ const SOUNDS = {
   roll() { hiss(0.3, { vol: 0.12, freq: 420, to: 200, type: 'lowpass', attack: 0.02 }); tone(150, 0.28, { type: 'triangle', vol: 0.07, to: 95 }); },
   puff() { hiss(0.35, { vol: 0.15, freq: 900, to: 300, q: 0.6, attack: 0.02 }); },
   levelup() { chime([659, 784, 988, 1319], 0.07, 0.13); },
+  // a boss down (v0.29): a short brass-ish fanfare, 빠바바밤 빠-밤!, over a drum roll
+  fanfare() {
+    const notes = [[523, 0, 0.1], [523, 0.11, 0.1], [523, 0.22, 0.1], [659, 0.33, 0.3], [587, 0.66, 0.14], [784, 0.82, 0.5]];
+    for (const [f, t, d] of notes) {
+      tone(f, d + 0.06, { type: 'square', vol: 0.05, delay: t });
+      tone(f * 2, d + 0.1, { type: 'triangle', vol: 0.11, delay: t });
+      tone(f / 2, d + 0.08, { type: 'triangle', vol: 0.09, delay: t });
+    }
+    for (let k = 0; k < 6; k++) hiss(0.05, { vol: 0.07 + k * 0.012, freq: 1800, q: 0.8, delay: k * 0.055 });
+    tone(98, 0.5, { vol: 0.25, to: 60, delay: 0.82 });
+    chime([1568, 2093, 2637], 0.05, 0.07, 0.3, 0.9);
+  },
   // a relic you picked lands: one pip, a little run up when it is full
   grow(max, delay) {
     tone(1175, 0.1, { type: 'triangle', vol: 0.1, delay });
@@ -324,6 +354,9 @@ export function onRunEvent(type, d) {
     case 'rumble': case 'quake': play('boom'); break;
     case 'fly': play('rise', 0); break;
     case 'berry': play('honey'); break;
+    case 'plop': setTimeout(() => play('splash'), 1700); break;
+    case 'roast': play('sizzle'); play('pop'); break;
+    case 'lull': play('snore'); break;
     // the meadow tools (v0.26)
     case 'pine': play(d.hit ? 'hit' : 'pop'); if (d.caught != null) play('swap'); break;
     case 'roll': play('roll'); break;
@@ -339,6 +372,9 @@ export function onRunEvent(type, d) {
     case 'poke': play(d.kind === 'rock' ? 'knock' : 'rustle'); break;
     case 'headbonk': play('bonk'); break;
     case 'squeeze': play('rustle'); play('pop', 0.15); break;
+    case 'pry': play('mine', d.n); if (d.last) play('jackpot'); else play('gold'); break;
+    case 'hideHit': if (d.kind === 'rock') { play('knock'); play('mine', d.n); } else { play('rustle'); play('rustle'); } break;
+    case 'hideOpen': play(d.kind === 'rock' ? 'boom' : 'rustle'); play('pop', 0.12); play('rise', 1); break;
     case 'baby': play('squeak'); break;
     case 'spirit': play('rise', 2); play('splash'); break;
     case 'dream': play('snore'); break;

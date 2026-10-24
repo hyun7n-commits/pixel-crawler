@@ -107,6 +107,9 @@ export function describeTile(run, x, y, always = false) {
   const bell = map.bells?.find(o => o.x === x && o.y === y && o.frog == null);
   if (bell) lines.push(`방울: 딸랑딸랑 울리는 중 (${bell.t}턴 더). 나를 못 보는 적은 이리로 온다. 다 울리면 주울 수 있다.`);
   if (map.flies?.some(o => o.x === x && o.y === y)) lines.push(`${TILE_INFO.fly.name}: ${TILE_INFO.fly.tip}`);
+  const seam = map.seams?.find(o => o.i === i && o.left > 0);
+  if (seam) lines.push(seam.kind === 'gem' ? `반짝 광맥: 벽에 보석이 ${seam.left}개 박혀 있다. 부딪쳐서 하나씩 캔다. 캘수록 값지고, 소리도 커진다.`
+    : `황금 도토리: 덤불에 ${seam.left}개 걸려 있다. 부딪쳐서 하나씩 털어 낸다. 털수록 값지고, 소리도 커진다.`);
   if (t === STAIRS) {
     // 갈림길: the sign by the hole says what the field past it has
     const r = map.routes?.find(o => o.x === x && o.y === y);

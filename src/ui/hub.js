@@ -21,6 +21,8 @@ import { FRIENDS, friendSpot, cleared, loopsOpen } from '../data/stages.js';
 import { DARES, daresOpen, daresOn, dareGold, DARE_GOLD } from '../data/dares.js';
 import { DECOR, hasDecor, HOUSE_LEVELS, houseLevel, roomOf, FURNITURE, CATALOG, bringIn, extendHouse, homePerks, COMFORT_STEP, COMFORT_MAX } from '../data/home.js';
 import { decorCanvas } from '../scenes/home-art.js';
+import { dressedCanvas } from '../scenes/textures.js';
+import { WEAR } from '../data/wear.js';
 import { furnitureCanvas } from '../scenes/home-interior-art.js';
 import { savedRun } from '../core/suspend.js';
 import { SECRETS, secretsFound } from '../data/secrets.js';
@@ -124,6 +126,7 @@ function shop(box, { meta, changed }) {
     list.append(row);
   }
   pets(list, meta, buy, changed);
+  wardrobe(list, meta, buy, changed);
   // the relic shelf and packing a relic come once the meadow's boss has fallen (data/unlocks.js)
   if (!isOpen(meta, 'shelf')) { box.append(list); return; }
   list.append(el('h3', null, '들판에 새 유물 추가'));
@@ -172,6 +175,26 @@ function pets(list, meta, buy, changed) {
       : button('btn gold', `${pt.cost}G`, () => buy(pt.cost, () => { meta.pets = { ...meta.pets, [id]: true }; meta.pet = id; }));
     if (!have) b.disabled = meta.gold < pt.cost;
     row.append(icon(pt.sprite, 32), main, b);
+    list.append(row);
+  }
+}
+
+// 꾸미기 (data/wear.js): one thing for the head and one for the neck; each row shows the hero you play
+// wearing it. Bought, it goes on at once; tap again to take it off, or put on another.
+function wardrobe(list, meta, buy, changed) {
+  if (!isOpen(meta, 'wear')) return;
+  list.append(el('h3', null, '꾸미기'));
+  const hero = CHARACTERS[meta.sel].sprite;
+  for (const [id, w] of Object.entries(WEAR)) {
+    const have = meta.wardrobe?.[id], on = meta.wear?.[w.slot] === id;
+    const row = el('div', 'row' + (on ? ' owned' : '')), main = el('div', 'row-main');
+    main.append(el('span', 'row-name', `${w.name} <small>${w.slot === 'head' ? '머리' : '목'}</small>`));
+    const wearIt = () => { meta.wear = { ...meta.wear, [w.slot]: id }; };
+    const b = have
+      ? button('btn' + (on ? ' primary' : ''), on ? '하는 중' : '하기', () => { if (on) meta.wear = { ...meta.wear, [w.slot]: null }; else wearIt(); changed(); })
+      : button('btn gold', `${w.cost}G`, () => buy(w.cost, () => { meta.wardrobe = { ...meta.wardrobe, [id]: true }; wearIt(); }));
+    if (!have) b.disabled = meta.gold < w.cost;
+    row.append(frame(dressedCanvas(hero, { [w.slot]: id })), main, b);
     list.append(row);
   }
 }

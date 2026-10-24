@@ -10,7 +10,7 @@
 /* global Phaser */
 import { pixEllipse } from './pix.js';
 import { diveInto } from './burrow.js';
-import { TILE, HOME_ZI, wallKey, waterKey, shadeKey, floorKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
+import { TILE, HOME_ZI, dressKey, wallKey, waterKey, roundedWater, shadeKey, floorKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
 import { chimneyAt } from './village-houses.js';
 import { houseCanvas, pathKey, lampPostCanvas, lotCanvas, treeKey, shrubCanvas, sunRaysCanvas, glintCanvas } from './village-art.js';
 import { baseZoom } from './zoom.js';
@@ -115,10 +115,19 @@ export class VillageScene extends Phaser.Scene {
 
     // tap a spot to walk there, or a villager to go and talk; hover with a mouse to read who is who
     // or drag to look round the village (walk off again and the view comes back to you)
+    // (and, as in the fields, pinch or the mouse wheel to zoom: v0.29)
     const tileOf = ptr => ({ x: Math.floor(ptr.worldX / TILE), y: Math.floor(ptr.worldY / TILE) });
     const cam0 = this.cameras.main;
-    this.input.on('pointerdown', ptr => { this.drag = { x: ptr.x, y: ptr.y, sx: cam0.scrollX, sy: cam0.scrollY, on: false }; });
+    this.input.addPointer(1);
+    const downs = () => this.input.manager.pointers.filter(q => q.isDown);
+    const spread = ([a, b]) => Math.hypot(a.x - b.x, a.y - b.y);
+    this.input.on('pointerdown', ptr => {
+      const two = downs();
+      if (two.length >= 2) { this.drag = null; this.pinch = { d: spread(two), z: cam0.zoom }; return; }
+      this.drag = { x: ptr.x, y: ptr.y, sx: cam0.scrollX, sy: cam0.scrollY, on: false };
+    });
     this.input.on('pointerup', ptr => {
+      if (this.pinch) { if (!downs().length) this.pinch = null; return; }
       const dragged = this.drag?.on;
       this.drag = null;
       if (dragged || Math.hypot(ptr.upX - ptr.downX, ptr.upY - ptr.downY) > 12 * this.dpr) return;
@@ -127,6 +136,11 @@ export class VillageScene extends Phaser.Scene {
       this.tap(t.x, t.y);
     });
     this.input.on('pointermove', ptr => {
+      if (this.pinch) {
+        const two = downs();
+        if (two.length >= 2) this.zoomBy(Math.round(this.pinch.z * spread(two) / this.pinch.d) - cam0.zoom);
+        return;
+      }
       const d = this.drag;
       if (d && ptr.isDown && !this.showing) {
         if (!d.on && Math.hypot(ptr.x - d.x, ptr.y - d.y) > 12 * this.dpr) { d.on = true; cam0.stopFollow(); }
@@ -136,7 +150,9 @@ export class VillageScene extends Phaser.Scene {
       const t = tileOf(ptr);
       this.hooks.onHover?.(this.describe(t.x, t.y));
     });
+    this.input.on('wheel', (ptr, objs, dx, dy) => { if (dy && !this.showing) this.zoomBy(dy < 0 ? 1 : -1); });
     this.input.on('gameout', () => this.hooks.onHover?.(''));
+    this.zoomBias = 0;
     this.scale.on('resize', () => this.fitZoom());
     // back out of your own door the village is as you left it; anything else builds it afresh
     this.events.on('wake', (sys, d) => (d?.from === 'home' && d.meta === this.meta && this.ps ? this.outOfHome() : this.enter(d)));
@@ -150,13 +166,22 @@ export class VillageScene extends Phaser.Scene {
   // strip of woods round it), so a small village feels small; when the screen is bigger than that (a
   // tall phone), it sits in the middle of the woods instead of in a corner
   fitZoom() {
-    const z = baseZoom(this, TILE), cam = this.cameras.main;
-    if (!z) return;
+    const z0 = baseZoom(this, TILE), cam = this.cameras.main;
+    if (!z0) return;
+    const r = this.dpr, z = Phaser.Math.Clamp(z0 + (this.zoomBias || 0), Math.max(1, Math.round(1.5 * r)), Math.round(6 * r));
+    this.zoomBias = z - z0;
     cam.setZoom(z);
     const b = this.openBox || { x0: 0, y0: 0, x1: MW - 1, y1: MH - 1 };
     const x0 = (b.x0 - 3) * TILE, x1 = (b.x1 + 4) * TILE, y0 = (b.y0 - 2) * TILE - TOP, y1 = (b.y1 + 3) * TILE;
     const vw = cam.width / z, vh = cam.height / z, bw = Math.max(x1 - x0, vw), bh = Math.max(y1 - y0, vh);
     cam.setBounds((x0 + x1 - bw) / 2, (y0 + y1 - bh) / 2, bw, bh);
+  }
+
+  // closer in or further out, a step at a time (pinch, wheel); the view keeps to the village
+  zoomBy(n) {
+    if (!n) return;
+    this.zoomBias = (this.zoomBias || 0) + n;
+    this.fitZoom();
   }
 
   // ---------- building the place ----------
@@ -573,7 +598,7 @@ export class VillageScene extends Phaser.Scene {
         this.time.delayedCall(900, () => tw({ sy: 0.9, duration: 120, yoyo: true, repeat: 1, ease: 'Quad.out' }));
         break;
       case 'shop': {
-        const c = this.keep(this.add.image(s.x + 3, s.y - TILE + 2, 'gold').setDepth(D.fx).setScale(0.45));
+        const c = this.keep(this.add.image(s.x + 3, s.y - TILE + 2, 'coin').setDepth(D.fx));
         this.tweens.add({ targets: c, y: c.y - 12, duration: 260, yoyo: true, ease: 'Quad.out', onComplete: () => { c.destroy(); setEmote(s, '♪', this.time.now, 1000); } });
         this.tweens.add({ targets: c, scaleX: 0.1, duration: 90, yoyo: true, repeat: 2 });
         break;
@@ -815,15 +840,18 @@ export class VillageScene extends Phaser.Scene {
     }
     if ((ch === '~' || ch === '=') && this.baking) {
       // the old look (overlayOld) is one still picture
-      add(waterKey(this, HOME_ZI, 0, around((nx, ny) => !'~='.includes(this.ch(nx, ny)))));
+      const shore = around((nx, ny) => !'~='.includes(this.ch(nx, ny)));
+      if (roundedWater(shore)) add(floorKey(HOME_ZI, hash(x, y) & 31));
+      add(waterKey(this, HOME_ZI, 0, shore, false, null, true));
       if (ch === '~' && hash(x, y) % 9 === 0) add(`t_lily${hash(x, y) % 2}`, D.deco);
       if (ch === '=') add(this.growthKey('bridge', '~'.includes(this.ch(x, y - 1)) || '~'.includes(this.ch(x, y + 1)) ? 0 : 1), D.deco + 0.1);
       return;
     }
     if (ch === '~') {
       const shore = around((nx, ny) => !'~='.includes(this.ch(nx, ny)));
-      const img = this.keep(this.add.image(x * TILE, y * TILE, waterKey(this, HOME_ZI, 0, shore)).setOrigin(0).setDepth(D.tiles + 0.2));
+      const img = this.keep(this.add.image(x * TILE, y * TILE, waterKey(this, HOME_ZI, 0, shore, false, null, true)).setOrigin(0).setDepth(D.tiles + 0.2));
       img.shore = shore;
+      img.round = true;
       this.waterImgs.push(img);
       if (x >= 0 && y >= 0 && hash(x, y) % 9 === 0) this.keep(this.add.image(x * TILE, y * TILE, `t_lily${hash(x, y) % 2}`).setOrigin(0).setDepth(D.deco));
       return;
@@ -1383,7 +1411,14 @@ export class VillageScene extends Phaser.Scene {
     const other = this.heroes.find(h => h.id === id);
     if (!other) return;
     const was = this.p.id, ws = this.ps;
+    // both stop where they stand (a step half done would finish on the wrong one) and wear their own faces
+    for (const [sp, x, y] of [[ws, this.p.x, this.p.y], [other.s, other.x, other.y]]) {
+      this.tweens.killTweensOf(sp);
+      sp.hop = 0;
+      sp.setPosition(center(x), foot(y));
+    }
     ws.setTexture(CHARACTERS[was].sprite);
+    other.s.setTexture(CHARACTERS[id].sprite);
     this.ps = other.s;
     this.p.id = id;
     const px = this.p.x, py = this.p.y;
@@ -1459,7 +1494,7 @@ export class VillageScene extends Phaser.Scene {
     let expr = time < (ps.exprUntil || 0) ? ps.expr : '';
     if (time > (ps.nextBlink || 0)) { ps.blinkUntil = time + 130; ps.nextBlink = time + 2200 + Math.random() * 2600; }
     if (!expr && !walking && time < ps.blinkUntil) expr = 'blink';
-    const key = faceKey(walking ? `${base}_walk${ps.stepFrame}` : base, expr);
+    const key = dressKey(this, faceKey(walking ? `${base}_walk${ps.stepFrame}` : base, expr), this.meta.wear);
     if (ps.texture.key !== key && this.textures.exists(key)) ps.setTexture(key);
 
     // villagers breathe and turn to look at you when you come close; the first time, they say hello
@@ -1501,9 +1536,11 @@ export class VillageScene extends Phaser.Scene {
       if (this.fest && Math.max(Math.abs(x - MAYPOLE.x), Math.abs(y - MAYPOLE.y)) > 4) continue;
       h.x = x; h.y = y;
       if (dx) h.s.setFlipX(dx < 0);
-      const sp = CHARACTERS[h.id].sprite;
-      h.s.setTexture(`${sp}_walk1`);
-      this.tweens.add({ targets: h.s, x: center(x), y: foot(y), duration: 260, onComplete: () => h.s.scene && h.s.setTexture(sp) });
+      // the sprite and its picture are kept from now: a swap during the step hands this sprite to you and
+      // `h` gets yours, and setting `h.s` back to this hero's picture then dressed both of you alike (v0.29)
+      const s = h.s, sp = CHARACTERS[h.id].sprite;
+      s.setTexture(`${sp}_walk1`);
+      this.tweens.add({ targets: s, x: center(x), y: foot(y), duration: 260, onComplete: () => { if (s.scene && s !== this.ps) s.setTexture(sp); } });
       h.s.setDepth(D.actors + y / 100);
     }
     // the puppy pads round its yard, and trots over when you come by
@@ -1620,7 +1657,7 @@ export class VillageScene extends Phaser.Scene {
     const wf = Math.floor(time / 600) % 2;
     if (wf !== this.waterFrame) {
       this.waterFrame = wf;
-      for (const img of this.waterImgs) img.setTexture(waterKey(this, HOME_ZI, wf, img.shore));
+      for (const img of this.waterImgs) img.setTexture(waterKey(this, HOME_ZI, wf, img.shore, false, null, img.round));
     }
     const view = this.cameras.main.worldView;
     this.bubbles = this.bubbles.filter(b => {

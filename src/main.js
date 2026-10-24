@@ -18,9 +18,10 @@ import { T, isTrap } from './data/terrain.js';
 import { Hud, lowHealth } from './ui/hud.js';
 import { renderPanel, renderVillageHud } from './ui/hub.js';
 import { renderHomeHud, heartLine } from './ui/homehud.js';
-import { showChoice, showSummary, showTalk, closeTalk, closeModal, modalOpen, showUpdateNews } from './ui/modal.js';
-import { sinceUpdate } from './data/unlocks.js';
+import { showChoice, showSummary, showTalk, closeTalk, closeModal, modalOpen, showUpdateNews, openSheet } from './ui/modal.js';
+import { sinceUpdate, isOpen } from './data/unlocks.js';
 import { showStages } from './ui/stages.js';
+import { showBoard } from './ui/board.js';
 import { showEvolve } from './ui/evo.js';
 import { showsLeft } from './ui/beat.js';
 import { speed, pace, nextSpeed } from './ui/speed.js';
@@ -30,7 +31,7 @@ import { placed, rollVisitor, roomOf, bringIn } from './data/home.js';
 import { CHARACTERS } from './data/characters.js';
 import { describeTile } from './ui/tip.js';
 import { SECRETS, secretOf, secretsFound } from './data/secrets.js';
-import { $ } from './ui/dom.js';
+import { $, el, button, icon } from './ui/dom.js';
 import * as sfx from './audio/sfx.js';
 import { setMusic, musicOff, setMusicOff } from './audio/music.js';
 
@@ -185,7 +186,15 @@ function chooseStage() {
   if (left) { startRun(left); return; }
   sfx.play('talk');
   showVillageTip('');
-  showStages({ meta, onGo: () => { saveMeta(meta); startRun(); } });
+  // the stage, then the guild's board (ui/board.js) once requests are open, then out
+  showStages({
+    meta,
+    onGo: () => {
+      saveMeta(meta);
+      if (!isOpen(meta, 'request')) { startRun(); return; }
+      showBoard({ meta, onGo: () => { saveMeta(meta); startRun(); }, onBack: () => { saveMeta(meta); chooseStage(); } });
+    },
+  });
 }
 
 function startRun(left) {
@@ -422,6 +431,8 @@ function onRunEvent(type, d) {
   // a new field's name shows once you have popped out of the burrow
   if (type === 'banner') setTimeout(() => hud.banner(d.text), Math.max(scene?.busy() ? 650 : 0, showsLeft()));
   if (type === 'discover') hud.banner(`새 발견! ${d.d.combo}`);
+  // a boss down: a short fanfare and a word across the screen (v0.29)
+  if (type === 'bossDown') setTimeout(() => { sfx.play('fanfare'); hud.banner(d.last ? '대장을 쓰러뜨렸다!' : `${josa(d.name, '을', '를')} 쓰러뜨렸다!`, 2400); }, 350);
   if (type === 'secret') setTimeout(() => announceSecret(d.id), d.delay || 0);
   if (type === 'request') setTimeout(() => hud.banner(`조합 의뢰 완료! +${d.pay}G`), 300);
   if (type === 'evolve') showEvolve(d);
@@ -525,26 +536,18 @@ function nextChoice() {
     });
     return;
   }
-  // the boss's chest is open: home with the win, or on down into 깊은 곳
-  if (q.kind === 'deeper' && !q.burrow) {
-    showChoice({
-      title: '대장을 쓰러뜨렸다!', sub: `${run.zone.name} 돌파. 대장 방 바닥에 구멍이 하나 나 있다. 아래에서 찬 바람이 올라온다.`, run, onPick,
-      opts: [
-        { kind: 'ok', act: 'home', icon: 'gold', name: '마을로 돌아간다', desc: '탐험 성공. 모은 골드와 돌파 보너스를 들고 간다.' },
-        { kind: 'ok', act: 'deeper', icon: 'stairs', name: '더 깊이 들어간다', desc: '한 층 내려갈 때마다 적이 훨씬 세지고 골드도 더 많이 나온다. 깊은 곳에서 주운 골드는 땅굴에서 돌아가야 들고 간다. 쓰러지면 두고 온다.' },
-      ],
-    });
-    return;
-  }
-  // a burrow down in 깊은 곳: home with all of it, or another floor down for more (and harder)
+  // into the hole behind the boss's chest, or a burrow down in 깊은 곳: home with all of it, or another
+  // floor down for more (and harder); or not yet
   if (q.kind === 'deeper') {
-    const deep = run.deepGold;
+    const deep = run.deepGold, depth = run.depth;
     showChoice({
-      title: `깊은 곳 ${run.depth}의 땅굴`, sub: deep ? `깊은 곳에서 ${deep}G를 주웠다. 여기서 돌아가면 다 내 것이다.` : '굴 아래에서 찬 바람이 올라온다.', run, onPick,
+      title: depth ? `깊은 곳 ${depth}의 땅굴` : '대장 방 바닥의 구멍',
+      sub: deep ? `깊은 곳에서 ${deep}G를 주웠다. 여기서 돌아가면 다 내 것이다.` : '굴 아래에서 찬 바람이 올라온다.', run, onPick,
       opts: [
-        { kind: 'ok', act: 'home', icon: 'gold', name: '마을로 돌아간다', desc: deep ? `주운 ${deep}G와 돌파 보너스를 다 들고 간다.` : '돌파 보너스를 들고 간다.' },
-        { kind: 'ok', act: 'deeper', icon: 'stairs', name: '더 내려간다', desc: `깊은 곳 ${run.depth + 1}: 적은 더 세지고 골드는 더 많이 나온다. 쓰러지면 깊은 곳에서 주운 골드를 모두 두고 온다.` },
-        { kind: 'ok', act: 'stay', icon: 'look', name: '조금 더 둘러본다', desc: '이 들판에 남는다. 땅굴은 그대로 있다.' },
+        { kind: 'ok', act: 'home', icon: 'gold', name: '마을로 돌아간다', desc: deep ? `주운 ${deep}G와 돌파 보너스를 다 들고 간다.` : '탐험 성공. 모은 골드와 돌파 보너스를 들고 간다.' },
+        depth ? { kind: 'ok', act: 'deeper', icon: 'stairs', name: '더 내려간다', desc: `깊은 곳 ${depth + 1}: 적은 더 세지고 골드는 더 많이 나온다. 쓰러지면 깊은 곳에서 주운 골드를 모두 두고 온다.` }
+          : { kind: 'ok', act: 'deeper', icon: 'stairs', name: '더 깊이 들어간다', desc: '한 층 내려갈 때마다 적이 훨씬 세지고 골드도 더 많이 나온다. 깊은 곳에서 주운 골드는 땅굴에서 돌아가야 들고 간다. 쓰러지면 두고 온다.' },
+        { kind: 'ok', act: 'stay', icon: 'look', name: '조금 더 둘러본다', desc: depth ? '이 들판에 남는다. 땅굴은 그대로 있다.' : '대장 방에 남는다. 구멍은 그대로 있다.' },
       ],
     });
     return;
@@ -563,7 +566,7 @@ function nextChoice() {
     return;
   }
   const title = q.kind === 'level' ? `레벨 ${run.p.lvl}!` : q.kind === 'kit' ? `출발 보급 ${q.k}/${q.n}` : q.sneak ? '낮잠 방 상자' : q.vein ? '바위 속 상자' : q.locked ? '잠긴 상자' : q.rich ? '금테 상자' : '보물 상자';
-  const sub = q.kind === 'level' ? '유물을 하나 고르자.' : q.kind === 'kit' ? '조합이 챙겨 준 보급품이다. 하나 고르자.'
+  const sub = q.kind === 'level' ? '유물을 하나 고르자.' : q.kind === 'kit' ? '조합이 챙겨 준 보급품이다. 고른 유물은 다 자란 채로 받는다.'
     : q.sneak ? '아무도 깨지 않았다. 넷 중 하나를 가져가자.' : q.rich ? '좋은 상자다. 넷 중 하나를 가져가자.' : '안에 든 유물 중 하나를 가져가자.';
   const open = () => showChoice({
     title, sub, run, opts: run.offers(q.rich ? 4 : 3), onPick,
@@ -737,8 +740,9 @@ function walkTo(x, y) {
   if (!run.passable(x, y) || !m.explored[idx(x, y)]) return [];
   return pathTo(m, p.x, p.y, x, y,
     (tx, ty) => (isTrap(m.ter[idx(tx, ty)]) && !m.hidden[idx(tx, ty)]) || m.fire[idx(tx, ty)] > 0 || SKIRT.includes(m.ter[idx(tx, ty)]),
-    // never change floors by walking over stairs on the way somewhere else
-    (tx, ty) => isStairs(m.tiles[idx(tx, ty)]));
+    // never change floors by walking over stairs on the way somewhere else, nor pick up a caged relic
+    // on the way to another (taking one shatters the rest: v0.29, a tap on one took the one in between)
+    (tx, ty) => isStairs(m.tiles[idx(tx, ty)]) || run.pickups.some(q => q.type === 'crystal' && q.x === tx && q.y === ty));
 }
 
 // auto-walk one step at a time so enemies get their turns in between (faster at 2x and 3x)
@@ -789,6 +793,26 @@ function toggleSound() {
   showSoundState();
 }
 $('soundBtn').addEventListener('click', toggleSound);
+// 설정 (v0.29): on a phone the sound, the speed and giving up sit behind a cog at the top, out on the
+// field, instead of only in the bag
+const soundLabel = () => (sfx.isMuted() ? '소리 끔' : musicOff() ? '효과음만' : '소리 켬');
+function showOptions() {
+  if (!run || run.over || modalOpen()) return;
+  clearPath();
+  setAim(false);
+  setBag(false);
+  openSheet(sh => {
+    sh.append(el('h2', null, '설정'));
+    const list = el('div', 'opt-list');
+    const snd = button('btn opt', `소리: ${soundLabel()}`, () => { toggleSound(); snd.textContent = `소리: ${soundLabel()}`; });
+    const spd = button('btn opt', `배속: ${speed()}x`, () => { nextSpeed(); showSpeed(); spd.textContent = `배속: ${speed()}x`; });
+    const out = button('btn opt', '탐험 그만두기', () => { closeModal(); $('quitBtn').click(); });
+    list.append(snd, spd, out);
+    sh.append(list);
+  }, () => closeModal());
+}
+$('mOpt').append(icon('gear'));
+$('mOpt').addEventListener('click', showOptions);
 $('vSound').addEventListener('click', toggleSound);
 // 32px or 16px characters: the textures are built once, so switching reloads the page (the save is kept)
 $('vGo').addEventListener('click', () => chooseStage());
@@ -829,33 +853,28 @@ document.addEventListener('gesturestart', ev => ev.preventDefault());
 $('lookBtn').addEventListener('click', () => setLook(!looking));
 $('bagClose').addEventListener('click', () => setBag(false));
 $('shade').addEventListener('click', () => setBag(false));
-// 나가기: save the trip and go home (pick it up later from the village), or give it up for good
+// 나가기: give the trip up and go home. A trip is never put aside for a visit to the village (v0.29):
+// closing the game keeps it, and opening the game again goes straight back to the same moment. Down in
+// 깊은 곳 the only way home is a burrow, which asks each time: home, or deeper.
 $('quitBtn').addEventListener('click', () => {
   if (!run || run.over || modalOpen()) return;
   clearPath();
   setAim(false);
+  const deep = !!run.banked;
   showChoice({
-    title: '탐험을 멈출까?', sub: '탐험은 저절로 저장된다. 언제 꺼도 이 순간부터 이어서 할 수 있다.', run,
+    title: deep ? `돌아가는 길은 ${run.depth ? '땅굴' : '구멍'}뿐이다` : '탐험을 그만둘까?',
+    sub: !deep ? '게임을 꺼도 탐험은 저장된다. 다시 켜면 이 순간부터 이어진다.'
+      : run.depth ? '깊은 곳에서는 땅굴에 들어갈 때 마을로 돌아갈지 더 내려갈지 고른다.' : '대장 방 바닥의 구멍에 들어가면 마을로 돌아갈지 더 깊이 갈지 고른다.',
+    run,
     opts: [
-      { kind: 'ok', id: 'save', name: '저장하고 마을로', desc: '지금 이대로 두고 마을에 간다. 마을의 이어서 탐험 버튼으로 돌아온다.' },
-      run.deepGold ? { kind: 'ok', id: 'quit', name: '포기하고 돌아가기', desc: `돌파 보너스는 들고 가지만 깊은 곳에서 주운 ${run.deepGold}G는 두고 간다. 땅굴에서 돌아가면 다 들고 간다.` }
-        : run.banked ? { kind: 'ok', id: 'quit', name: '마을로 돌아가기', desc: '돌파는 이미 했다. 모은 골드를 다 들고 간다.' }
-        : { kind: 'ok', id: 'quit', name: '탐험 포기', desc: '여기서 끝내고 돌아간다. 지금까지 주운 골드는 가져간다.' },
+      ...(deep ? [] : [{ kind: 'ok', id: 'quit', name: '탐험 포기', desc: '여기서 끝내고 마을로 돌아간다. 지금까지 주운 골드는 가져간다.' }]),
       { kind: 'ok', id: 'stay', name: '계속하기', desc: '들판으로 돌아간다.' },
     ],
     onPick: o => {
-      if (o.id === 'save') saveAndLeave();
-      if (o.id === 'quit') { run.cause = '스스로 돌아왔다'; run.finish(!!run.banked); }
+      if (o.id === 'quit') { run.cause = '스스로 돌아왔다'; run.finish(false); }
     },
   });
 });
-function saveAndLeave() {
-  putAway();
-  scene.detach();
-  run = null;
-  showVillage();
-  showVillageTip('탐험을 저장했다. 이어서 탐험을 누르면 그 자리로 돌아간다.', true);
-}
 
 // ---------- boot ----------
 // The canvas has one pixel per screen pixel (sharp on phones), shown at the stage's CSS size.
@@ -914,8 +933,8 @@ function putAway() {
   suspend(run);
   saveMeta(meta);
 }
-document.addEventListener('visibilitychange', () => { if (document.hidden) putAway(); });
-window.addEventListener('pagehide', putAway);
+document.addEventListener('visibilitychange', () => { if (document.hidden) { putAway(); sfx.audioAway(); } });
+window.addEventListener('pagehide', () => { putAway(); sfx.audioAway(); });
 
 // test hook for automated play-testing; harmless in normal play
 window.__game = { get run() { return run; }, get meta() { return meta; }, get scene() { return scene; }, get village() { return village(); }, get home() { return home(); }, startRun, setAim, showVillage, showStory, showHome, leaveHome, setHomeEdit, talkTo };

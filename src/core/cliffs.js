@@ -3,16 +3,23 @@
 // nothing lands on a drop. Every cut is undone if it would leave some part of the field out of reach.
 
 import { T } from '../data/terrain.js';
-import { idx, distMap, FLOOR, WALL } from './dungeon.js';
-import { rint, shuffle } from './util.js';
+import { idx, inMap, distMap, squeeze, isBump, FLOOR, WALL, DOOR } from './dungeon.js';
+import { rint, shuffle, DIRS8 } from './util.js';
 
 const OPEN = new Set([T.NONE, T.GRASS, T.BRUSH, T.ASH]);
 
-// how many tiles you can walk to from (x, y)
+// how many tiles you can walk to from (x, y), and how many things you can walk up to and bump (a locked
+// door, a sparkle rock, a mound: v0.29, so that no drop or lava cuts you off from one)
 function reach(map, x, y) {
   const dm = distMap(map, x, y);
   let n = 0;
-  for (let i = 0; i < dm.length; i++) if (dm[i] < 9999) n++;
+  for (let i = 0; i < dm.length; i++) {
+    if (dm[i] < 9999) n++;
+    else if (isBump(map.tiles[i])) {
+      const bx = i % map.w, by = (i / map.w) | 0;
+      if (DIRS8.some(([dx, dy]) => inMap(bx + dx, by + dy) && dm[idx(bx + dx, by + dy)] < 9999 && !squeeze(map, bx + dx, by + dy, -dx, -dy))) n++;
+    }
+  }
   return n;
 }
 
@@ -187,7 +194,11 @@ export function fillPools(map, wet, start, taken = new Set()) {
       }
     }
     const before = reach(map, start.x, start.y);
-    for (const j of pool) map.ter[j] = T.LAVA;
-    if (pool.some(j => taken.has(j)) || reach(map, start.x, start.y) + pool.length < before) for (const j of pool) map.ter[j] = T.ASH;
+    // ...and never in a doorway: what lies right by a door has cooled to crust (v0.29: a door on the
+    // volcano opened onto lava)
+    const byDoor = j => DIRS8.some(([dx, dy]) => map.tiles[idx(j % map.w + dx, ((j / map.w) | 0) + dy)] === DOOR);
+    for (const j of pool) map.ter[j] = byDoor(j) ? T.ASH : T.LAVA;
+    const hot = pool.filter(j => map.ter[j] === T.LAVA).length;
+    if (pool.some(j => taken.has(j)) || reach(map, start.x, start.y) + hot < before) for (const j of pool) map.ter[j] = T.ASH;
   }
 }

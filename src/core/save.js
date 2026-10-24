@@ -35,6 +35,9 @@ export function freshMeta() {
     pets: {},               // pets bought at the shop, and the one that comes along (data/pets.js)
     pet: null,
     secrets: {},            // 비밀 found round the village, the house and the fields: id -> when (data/secrets.js)
+    wardrobe: {},           // 꾸미기 bought at the shop, and what the hero wears now (data/wear.js)
+    wear: { head: null, neck: null },
+    board: null,            // the guild's notice board for the next trip, until it goes (data/requests.js)
     ten: true,              // stage numbers are the ten-stage ones (v0.23)
   };
 }
@@ -82,6 +85,8 @@ export function loadMeta() {
         dares: { on: { ...m.dares?.on }, won: { ...m.dares?.won } },
         pets: { ...m.pets },
         secrets: { ...m.secrets },
+        wardrobe: { ...m.wardrobe },
+        wear: { head: m.wear?.head || null, neck: m.wear?.neck || null },
       };
     }
   } catch (e) { /* storage blocked or corrupt: start fresh */ }

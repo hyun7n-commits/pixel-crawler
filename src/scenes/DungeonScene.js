@@ -5,17 +5,16 @@
 /* global Phaser */
 import { setEmote, drawEmote } from './emotes.js';
 import { pixEllipse, pixDisc, pixLine, pixDiamond, pixArrow } from './pix.js';
-import { TILE, buildTextures, wallKey, waterKey, chasmKey, seaKey, bridgeKey, GRASS_PAL, shadeKey, floorKey, oreFrame, dropKey, chipKey, pebbleKey, texScale, ORE_TALL, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
+import { TILE, buildTextures, dressKey, wallKey, waterKey, roundedWater, seamKey, SEAM_SPOTS, chasmKey, seaKey, bridgeKey, GRASS_PAL, shadeKey, floorKey, oreFrame, oreTall, dropKey, chipKey, pebbleKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
 import { CHARACTERS } from '../data/characters.js';
 import { PETS } from '../data/pets.js';
 import { ITEMS } from '../data/items.js';
-import { ROUTES } from '../data/routes.js';
 import { T, TERRAIN, GASES, GAS_KEYS, isTrap } from '../data/terrain.js';
 import { idx, inMap, lineOfSight, WALL, FLOOR, STAIRS, DOOR, ORE, UPSTAIRS, GRAVE, LOCKED, HIVE, WEED } from '../core/dungeon.js';
 import { diveInto } from './burrow.js';
 import { WAKE_AT } from '../core/ai.js';
 import { BOMB_RANGE } from '../core/run.js';
-import { ORE_HITS, HEAR_STEPS, BELL_RANGE, SNEEZE_NOISE } from '../data/balance.js';
+import { ORE_HITS, HEAR_STEPS, BELL_RANGE, SNEEZE_NOISE, oreGold } from '../data/balance.js';
 import { ORES } from '../data/ores.js';
 import { cheb } from '../core/util.js';
 import { faceKey } from '../data/faces.js';
@@ -30,6 +29,9 @@ import { patchNoise, scatterKey, patchKey, PATCH_VARIANTS, footKey, sideKey, blo
 // sprite means here (pose flips it to face left)
 const LEFT_ART = new Set(['rat', 'thief', 'hopper', 'woodpecker', 'snail', 'gull', 'hermit', 'hermitBare', 'dungbeetle', 'seal', 'salamander', 'shadecat']);
 const D = { tiles: 0, ter: 1, fire: 2, gas: 3, telegraph: 4, pickups: 5, enemies: 6, player: 7, overlay: 8, fx: 9, bubble: 10, text: 11 };
+// 골드 on the floor looks like how much is there, for the floor you are on (data/sprites.js gold_1..gold_5):
+// two coins, three, a stack, a heap, a sack
+const goldTex = (n, floor) => { const u = oreGold(floor); return n <= 1.5 * u ? 'gold_1' : n <= 3 * u ? 'gold_2' : n <= 6 * u ? 'gold' : n <= 12 * u ? 'gold_4' : 'gold_5'; };
 // what a pickup looks like on the floor (items use their own sprite)
 const PICKUP_TEX = { gold: 'gold', chest: 'chest', lockedChest: 'lockedChest', bossChest: 'bossChest', key: 'key', cageKey: 'cageKey', necklace: 'necklace', tag: 'workertag', candy: 'candy', crystal: 'pedestal' };
 // critters on the wing, who never wade
@@ -37,6 +39,8 @@ const FLIERS = new Set(['bat', 'vampLord', 'bee', 'ghostNpc', 'gull', 'jelly', '
 // one step's glide (a touch longer than main.js's 120 ms walk beat, so steps run into each other)
 // and how quickly the view catches up with you (the time it takes to close most of the gap)
 const STEP_MS = 130, CAM_EASE_MS = 140;
+// how much of a body is under the water when it wades: the feet and a sliver (v0.29; it was 0.22)
+const WADE = 0.13;
 // how far above the bottom of its tile the front rim of a burrow's mouth is (sprites.js stairs, upStairs)
 const HOLE_LIP = { on: 2, back: 3 };
 const center = v => v * TILE + TILE / 2;
@@ -286,6 +290,7 @@ export class DungeonScene extends Phaser.Scene {
     this.enemySprites = {};
     this.pickupSprites = {};
     this.doorImgs = {};
+    this.seamGlint = {};
     this.oreImgs = {};
     (this.oreGlows || new Map()).forEach(g => g.img.destroy());
     this.oreGlows = new Map();
@@ -312,7 +317,7 @@ export class DungeonScene extends Phaser.Scene {
     this.buildLamps();
     this.buildAir();
     this.heroKey = CHARACTERS[run.charId].sprite;
-    this.playerSprite = this.makeActor(this.heroKey, run.p.x, run.p.y).setDepth(D.player);
+    this.playerSprite = this.makeActor(dressKey(this, this.heroKey, run.meta.wear), run.p.x, run.p.y).setDepth(D.player);
     // the pet trots along a step behind (data/pets.js)
     if (run.pet) { this.petSprite = this.makeActor(PETS[run.pet].sprite, run.p.x, run.p.y).setDepth(D.player - 0.05); this.petSprite.x -= 10; }
     this.cameras.main.startFollow(this.playerSprite, true, 0.1, 0.1, 0, TILE / 2);
@@ -518,7 +523,11 @@ export class DungeonScene extends Phaser.Scene {
       add(wallKey(this, zi, open, hash(x, y) % 3));
       if (!open) imgs.deep = true;
       // 틈 너머 비밀 터: light leaking through a narrow gap in the wall's face
-      if (map.nook?.gap === i) add('t_gap', D.tiles + 0.6);
+      // (v0.29) a hidden room's way in: the bushes a little parted or a crack in the rock, more at each hit
+      if (map.nook?.gap === i) add(map.nook.hits == null ? 't_gap' : `t_hide_${map.nook.kind}${Math.min(2, map.nook.hits)}`, D.tiles + 0.6);
+      // 반짝 광맥 (v0.29): the gems (or golden acorns) still in this bit of wall
+      const seam = map.seams?.find(o => o.i === i);
+      if (seam?.left > 0) add(seamKey(this, seam.kind, seam.left), D.tiles + 0.6);
       // flowers, berries, cattail heads or crystals on top now and then (not on a face you look at)
       const hb = hash(x * 7 + 3, y * 11 + 5);
       if (!(open & S) && hb % 100 < 28) add(bloomKey(this, this.run.zone, zi, (hb >> 8) % BLOOM_VARIANTS), D.tiles + 0.5);
@@ -532,7 +541,9 @@ export class DungeonScene extends Phaser.Scene {
       if (ter === T.WATER || ter === T.ICE || ter === T.LAVA) {
         const shore = around((nx, ny) => wall(nx, ny) || map.ter[idx(nx, ny)] !== ter);
         const warm = !!map.spring?.includes(i), kind = ter === T.ICE ? 'ice' : ter === T.LAVA ? 'lava' : null;
-        const img = add(waterKey(this, zi, kind === 'ice' ? 0 : this.waterFrame, shore, warm, kind));
+        // a pool's outer corners curve round, over the ground (v0.29)
+        if (kind !== 'lava' && roundedWater(shore)) add(floorKey(zi, hash(x, y) & 31));
+        const img = add(waterKey(this, zi, kind === 'ice' ? 0 : this.waterFrame, shore, warm, kind, kind !== 'lava'));
         img.shore = shore;
         img.warm = warm;
         img.kind = kind;
@@ -551,26 +562,30 @@ export class DungeonScene extends Phaser.Scene {
           Object.assign(img, { sea: true, shore: land, v: hash(x, y) % 4 });
           this.waterImgs.add(img);
         } else add(chasmKey(this, zi, ground & (N | E | S | W_), hash(x, y) % 4));
-        if (ter === T.BRIDGE) add(bridgeKey(this, gap(x - 1, y) || gap(x + 1, y), hash(x, y) % 3), D.ter);
+        // the planks run the way the bridge does (v0.29: one that ran east-west was drawn as a row of
+        // little north-south pieces, which looked like doors); a lone tile goes across its drop
+        const plank = (nx, ny) => inMap(nx, ny) && map.ter[idx(nx, ny)] === T.BRIDGE, drop = (nx, ny) => inMap(nx, ny) && map.ter[idx(nx, ny)] === T.CHASM;
+        const ns = plank(x, y - 1) || plank(x, y + 1) ? true : plank(x - 1, y) || plank(x + 1, y) ? false : drop(x - 1, y) || drop(x + 1, y);
+        if (ter === T.BRIDGE) add(bridgeKey(this, ns, hash(x, y) % 3), D.ter);
       } else {
         add(floorKey(zi, hash(x, y) & 31));
         const shade = around(wall) & (N | E | W_ | NE | NW);
         if (shade) add(shadeKey(this, shade));
         this.decorate(x, y, add);
       }
-      const spr = !map.hidden[i] && TERRAIN[ter]?.sprite;
+      // a snail's slime or the queen's honey shows once you have seen it lying there, so a trail laid
+      // out of sight does not light up ground you only remember (v0.29)
+      const goo = ter === T.SLIME || ter === T.HONEY;
+      if (goo && map.visible[i]) (map.gooSeen ||= {})[i] = map.goo?.[i];
+      const spr = !map.hidden[i] && !(goo && map.gooSeen?.[i] !== map.goo?.[i]) && TERRAIN[ter]?.sprite;
       // grass comes in a few looks so a meadow does not look tiled
       if (spr) add(ter === T.BRUSH || ter === T.GRASS ? `t_${spr}${hash(x, y) % 3}${GRASS_PAL[style] ? '_' + style : ''}` : `t_${spr}`, D.ter);
-      if (t === STAIRS) add('t_stairs', D.ter);
-      if (t === UPSTAIRS) add('t_upStairs', D.ter);
-      // 갈림길: a notice board planted behind the hole, with the picture of what the field past it has
+      // 갈림길: a little wooden sign staked behind the hole where its flag would be, the picture of what
+      // the field past it has painted on it
       const route = t === STAIRS && map.routes?.find(o => o.x === x && o.y === y);
-      if (route) {
-        const bx = center(x), by = y * TILE + 5, pic = ROUTES[route.kind].icon;
-        add('routeBoard', D.pickups + 0.2).setOrigin(0.5, 1).setPosition(bx, by);
-        const im = add(pic, D.pickups + 0.3).setOrigin(0.5, 0).setPosition(bx, by - 20);
-        if (im.width <= 8) im.setScale(2);
-      }
+      if (t === STAIRS) add(route ? 't_stairsBare' : 't_stairs', D.ter);
+      if (route) add(`routeSign_${route.kind}`, D.pickups + 0.2).setOrigin(0, 1).setPosition(x * TILE + 4, y * TILE + 8);
+      if (t === UPSTAIRS) add('t_upStairs', D.ter);
       if (t === DOOR) this.doorImgs[i] = add(this.doorTex(map.open[i]), D.ter);
       // a stalactite overhead (its shadow and drip mark on the ground); a firefly swarm
       if (map.drips?.some(o => o.x === x && o.y === y)) add('t_drip', D.ter);
@@ -596,7 +611,7 @@ export class DungeonScene extends Phaser.Scene {
         const [key, frame] = ore?.pebble ? [pebbleKey(ore.tier)] : ore ? oreFrame(this, ore, x, y) : ['t_ore_copper'];
         const im = this.oreImgs[i] = add(key, D.ter);
         if (frame) im.setFrame(frame);
-        // a sparkle rock stands a little up over the tile above it (textures.js ORE_TALL)
+        // a sparkle rock stands a little up over the tile above it (textures.js oreTall), the 2x2 giant a lot
         im.setOrigin(0, 1).setY((y + 1) * TILE);
         if (ore && !ore.pebble) this.oreGlow(ore);
       }
@@ -784,7 +799,7 @@ export class DungeonScene extends Phaser.Scene {
       keep.add(key);
       let s = this.pickupSprites[key];
       if (!s) {
-        const tex = q.type === 'gold' && q.ore != null ? dropKey(q.ore) : q.type === 'chest' && q.rich ? 'richChest' : PICKUP_TEX[q.type] || ITEMS[q.type].sprite;
+        const tex = q.type === 'gold' ? (q.ore != null ? dropKey(q.ore) : goldTex(q.amount, this.run.payFloor || this.run.floor)) : q.type === 'chest' && q.rich ? 'richChest' : PICKUP_TEX[q.type] || ITEMS[q.type].sprite;
         s = this.add.image(q.x * TILE, q.y * TILE, tex).setOrigin(0).setDepth(D.pickups).setData('baseY', q.y * TILE + 14);
         if (q.type === 'bossChest') {
           // the boss's chest sits in a warm glow that breathes
@@ -833,6 +848,8 @@ export class DungeonScene extends Phaser.Scene {
   // fog of war with light falling off from the player
   paintFog() {
     const run = this.run, map = run.map, p = run.p, W = map.w, H = map.h, n = W * H;
+    // slime or honey laid while you were not looking appears when you see that spot
+    for (const i of Object.keys(map.goo || {})) if (map.visible[i] && map.gooSeen?.[i] !== map.goo[i]) this.buildTile(i % W, (i / W) | 0);
     const sight = run.stat().sight;
     if (this.fogSeen?.length !== n) { this.fogSeen = new Uint8Array(n); this.fogCol = new Float32Array(n * 3); this.fogCorner = new Float32Array((W + 1) * (H + 1) * 3); }
     const seenA = this.fogSeen, col = this.fogCol, cor = this.fogCorner;
@@ -1231,11 +1248,48 @@ export class DungeonScene extends Phaser.Scene {
         }
         break;
       case 'baby': this.babyOut(d); break;
+      // 숨은 방 (v0.29): leaves or chips of rock fly from the wall at each hit, and a burst when it opens
+      case 'hideHit':
+        this.bump(this.playerSprite, { x: d.x - d.dx, y: d.y - d.dy }, d);
+        this.fx[d.kind === 'rock' ? 'rock' : 'leaf'].explode(6 + d.n * 3, center(d.x) - d.dx * 5, center(d.y) - d.dy * 5 + 2);
+        if (d.kind === 'rock') this.fx.dust.explode(4 + d.n * 2, center(d.x), center(d.y) + 3);
+        this.float(d.x, d.y - 0.2, d.kind === 'rock' ? '쩍!' : '바스락!', d.kind === 'rock' ? '#d8d0c4' : '#c9f2a8', 0, 9);
+        break;
+      case 'pry': {
+        // a gem (or a golden acorn) pops out of the wall, more of a burst the further in it was
+        this.bump(this.playerSprite, d.from, d);
+        this.fx[d.kind === 'gem' ? 'crystal' : 'leaf'].explode(5 + d.n * 3, center(d.x), center(d.y));
+        if (d.kind === 'gem') this.fx.dust.explode(3 + d.n, center(d.x), center(d.y) + 3);
+        this.float(d.x, d.y - 0.3, d.last ? '반짝!' : d.kind === 'gem' ? '똑!' : '톡!', d.last ? '#fff3b0' : '#d8f6ff', 0, d.last ? 12 : 9);
+        if (d.last) this.face('sparkle', 1400);
+        break;
+      }
+      case 'hideOpen':
+        this.bump(this.playerSprite, { x: d.x - d.dx, y: d.y - d.dy }, d);
+        this.fx[d.kind === 'rock' ? 'rock' : 'leaf'].explode(18, center(d.x), center(d.y));
+        this.fx.dust.explode(12, center(d.x), center(d.y) + 2);
+        this.float(d.x, d.y - 0.2, d.kind === 'rock' ? '와르르!' : '쏙!', '#f4cf4f', 60, 11);
+        this.face('sparkle', 1400);
+        break;
       case 'squeeze':
         this.fx.leaf.explode(14, center(d.x), center(d.y));
         this.float(d.x, d.y - 0.2, '쏙!', '#c9f2a8', 60, 10);
         this.face('sparkle', 1400);
         break;
+      // 비밀 (v0.29): what went down the cliff, heard only a long while later; a pinecone roasting in
+      // the lava; a sleeper rolling over beside you
+      case 'plop': this.time.delayedCall(1700, () => this.float(d.x, d.y, '…퐁', '#9fd4ff', 0, 8)); break;
+      case 'roast':
+        this.fx.steam.explode(10, center(d.x), center(d.y));
+        this.float(d.x, d.y, '타닥타닥!', '#ffb062', 0, 10);
+        this.face('sparkle', 1200);
+        break;
+      case 'lull': {
+        const s = this.enemySprites[d.enemy.id];
+        if (s) { s.setFlipX(!s.flipX); this.tweens.add({ targets: s, hop: 4, duration: 140, yoyo: true, ease: 'Quad.out' }); this.emote(s, 'z', 1400); }
+        this.float(d.x, d.y, '데굴', '#f4f0e8', 0, 9);
+        break;
+      }
       case 'spirit': this.spiritUp(d); break;
       case 'spiritGone': this.spiritDown(d); break;
       case 'dream':
@@ -1379,7 +1433,7 @@ export class DungeonScene extends Phaser.Scene {
         // your coins hop over to the goblin
         const s = this.enemySprites[d.enemy.id];
         for (let k = 0; k < Math.min(8, 2 + d.n / 4); k++) {
-          const c = this.add.image(center(d.from.x), center(d.from.y), 'gold').setScale(0.45).setDepth(D.fx);
+          const c = this.add.image(center(d.from.x), center(d.from.y), 'coin').setDepth(D.fx);
           this.tweens.add({
             targets: c, x: s ? s.x : center(d.enemy.x), duration: 300, delay: k * 40, ease: 'Quad.out',
             onUpdate: tw => { c.y = center(d.from.y) + (center(d.enemy.y) - center(d.from.y)) * tw.progress - Math.sin(tw.progress * Math.PI) * TILE; },
@@ -1401,7 +1455,7 @@ export class DungeonScene extends Phaser.Scene {
       case 'dropLoot': {
         // caught: the pouch bursts and the coins hop down onto the tile
         for (let k = 0; k < Math.min(6, 2 + d.n / 5); k++) {
-          const c = this.add.image(center(d.x), center(d.y), 'gold').setScale(0.45).setDepth(D.fx);
+          const c = this.add.image(center(d.x), center(d.y), 'coin').setDepth(D.fx);
           const dx = (k - 2.5) * 3;
           this.tweens.add({
             targets: c, x: center(d.x) + dx, duration: 260, delay: k * 30, ease: 'Quad.out',
@@ -1800,7 +1854,7 @@ export class DungeonScene extends Phaser.Scene {
     if (ps) {
       this.tweens.killTweensOf(ps);
       ps.glide = null;
-      const key = faceKey(this.heroKey, 'hit');
+      const key = dressKey(this, faceKey(this.heroKey, 'hit'), this.run.meta.wear);
       if (this.textures.exists(key)) ps.setTexture(key);
       ps.clearTint().setAlpha(1);
       // a beat standing, then over onto your side (a quarter turn keeps every pixel square)
@@ -2195,8 +2249,8 @@ export class DungeonScene extends Phaser.Scene {
     this.tweens.add({ targets: s, scale: 1, duration: 160, yoyo: true, hold: 60, ease: 'Quad.out', onComplete: () => s.destroy() });
   }
 
-  coinFly(x, y, spread, delay, key = 'gold') {
-    const c = this.add.image(x, y, key).setScale(key === 'gold' ? 0.45 : 0.9).setDepth(D.fx);
+  coinFly(x, y, spread, delay, key = 'coin') {
+    const c = this.add.image(x, y, key).setScale(key === 'coin' ? 1 : 0.9).setDepth(D.fx);
     const a = Math.random() * Math.PI * 2, dist = TILE * spread * (0.5 + Math.random() * 0.5);
     const tx = x + Math.cos(a) * dist, ty = y + Math.sin(a) * dist * 0.6;
     this.tweens.add({
@@ -2267,10 +2321,17 @@ export class DungeonScene extends Phaser.Scene {
       this.babyStir = time + 2000 + Math.random() * 2400;
       this.sway(map.baby, 1);
     }
-    const gap = map.nook?.gap;
+    const gap = map.nook?.hits == null ? map.nook?.gap : -1;
     if (gap >= 0 && map.visible[gap] && time > (this.gapMote || 0)) {
       this.gapMote = time + 1400 + Math.random() * 1800;
       this.fx.firefly.explode(1, center(gap % map.w), ((gap / map.w) | 0) * TILE + 11);
+    }
+    // 반짝 광맥: one of the gems (acorns) still in the wall winks now and then
+    for (const sm of map.seams || []) {
+      if (sm.left <= 0 || !map.visible[sm.i] || time < (this.seamGlint[sm.i] || 0)) continue;
+      this.seamGlint[sm.i] = time + 1500 + Math.random() * 2500;
+      const n = SEAM_SPOTS.length - 1 - ((Math.random() * sm.left) | 0), [sx, sy] = SEAM_SPOTS[n], c = n === SEAM_SPOTS.length - 1 ? 3 : 2;
+      this.glint(sm.x * TILE + sx + c + 0.5, sm.y * TILE + sy + c + 0.5);
     }
 
     // lamps flicker
@@ -2282,7 +2343,17 @@ export class DungeonScene extends Phaser.Scene {
 
     // soft shadows under everyone standing on the floor (they stay put when an actor hops)
     const shadow = (s, w) => {
-      if (!s || !s.visible || s.dying || s.wet || s.sink > 0) return;
+      if (!s || !s.visible || s.dying || s.sink > 0) return;
+      // wading: a ring of ripples round the legs where the water meets them, breathing in and out
+      if (s.wet) {
+        const r = w * 0.5 + 1.5 + Math.round(Math.sin(time / 420 + s.x) * 0.8);
+        this.shadowGfx.fillStyle(0x0c2430, 0.35); pixEllipse(this.shadowGfx, s.x, s.y, r * 2, 4);
+        this.shadowGfx.fillStyle(0xd8f2ff, 0.55);
+        this.shadowGfx.fillRect(Math.round(s.x - r - 1), Math.round(s.y - 1), 3, 1);
+        this.shadowGfx.fillRect(Math.round(s.x + r - 2), Math.round(s.y - 1), 3, 1);
+        this.shadowGfx.fillRect(Math.round(s.x - r + 2), Math.round(s.y + 1), Math.round(r * 2 - 4), 1);
+        return;
+      }
       if (s.flat) { this.shadowGfx.fillStyle(0x000000, 0.25); pixEllipse(this.shadowGfx, s.x, s.y - 2, 9, 3); return; }
       const lift = Math.min(1, (s.lift ?? s.hop ?? 0) / 6);
       this.shadowGfx.fillStyle(0x000000, 0.32 * (1 - 0.5 * lift));
@@ -2296,7 +2367,7 @@ export class DungeonScene extends Phaser.Scene {
     const wf = Math.floor(time / 650) % 2;
     if (wf !== this.waterFrame) {
       this.waterFrame = wf;
-      for (const img of this.waterImgs) img.setTexture(img.sea ? seaKey(this, this.zi, img.shore, img.v, wf) : waterKey(this, this.zi, wf, img.shore, img.warm, img.kind));
+      for (const img of this.waterImgs) img.setTexture(img.sea ? seaKey(this, this.zi, img.shore, img.v, wf) : waterKey(this, this.zi, wf, img.shore, img.warm, img.kind, img.kind !== 'lava'));
     }
     // a screaming root in the weed patch gives itself away with a shiver now and then
     for (const w of this.shyWeeds) {
@@ -2398,13 +2469,14 @@ export class DungeonScene extends Phaser.Scene {
       const pips = ore.pebble ? 2 : ORE_HITS, px0 = bx * TILE + (bw * TILE) / 2 - (pips * 3 - 1) / 2;
       for (let k = 0; k < pips; k++) {
         g.fillStyle(k < ore.hits ? 0xf4cf4f : 0x2c2536, 1);
-        g.fillRect(Math.round(px0) + k * 3, by * TILE + (ore.pebble ? 3 : -ORE_TALL - 3), 2, 2);
+        g.fillRect(Math.round(px0) + k * 3, by * TILE + (ore.pebble ? 3 : -oreTall(ore) - 3), 2, 2);
       }
       // a glint winks on it now and then, so it catches your eye from across the room (a big vein more often)
       const c = ore.cells[Math.floor(Math.random() * ore.cells.length)];
       if (map.visible[idx(c.x, c.y)] && time > (ore.glint || 0)) {
         ore.glint = time + (900 + Math.random() * 1100) / ore.size;
-        this.glint(c.x * TILE + 3 + Math.random() * 10, (c.y + 1) * TILE - 4 - Math.random() * (ore.pebble ? 6 : 14));
+        const up = c.y === by ? oreTall(ore) : 0;
+        this.glint(c.x * TILE + 3 + Math.random() * 10, (c.y + 1) * TILE - 4 - Math.random() * (ore.pebble ? 6 : 14 + up));
       }
     }
     // their glow breathes, brighter in your light than in what you only remember
@@ -2466,9 +2538,13 @@ export class DungeonScene extends Phaser.Scene {
         g.fillStyle(0xf4cf4f, 1); pixDiamond(g, s.x, gy, 3);
         g.fillStyle(0x8fd8f0, 1); g.fillRect(Math.round(s.x), Math.round(gy), 1, 1);
       }
-      if (e.state !== 'sleep' || e.hp < e.maxHp) {
-        g.fillStyle(0x000000, 0.8); g.fillRect(s.x - 6, top - 3, 12, 2);
-        g.fillStyle(e.d.boss || e.chief ? 0xf4cf4f : run.calm(e) ? 0x8fd36a : 0xe0525a, 1); g.fillRect(s.x - 6, top - 3, 12 * Math.max(0, e.hp) / e.maxHp, 2);
+      // its health over its head once it is hurt, green over red like SPD's (v0.29: it was a thin line
+      // over anything awake, and the testers never noticed it); 대장 has its big one up top (ui/hud.js)
+      if (e.hp < e.maxHp && !e.d.boss) {
+        const w = e.chief || e.big ? 16 : 12, bx = Math.round(s.x - w / 2), by = Math.round(top - 3);
+        g.fillStyle(0x1b1424, 1); g.fillRect(bx - 1, by - 1, w + 2, 4);
+        g.fillStyle(0xc23b4a, 1); g.fillRect(bx, by, w, 2);
+        g.fillStyle(0x8fd36a, 1); g.fillRect(bx, by, Math.max(1, Math.round(w * Math.max(0, e.hp) / e.maxHp)), 2);
       }
       if (e.aim && e.aimAt) {
         const a = 0.45 + 0.4 * Math.sin(time / 80);
@@ -2506,7 +2582,7 @@ export class DungeonScene extends Phaser.Scene {
     // a blink every few seconds when the face is at rest
     if (time > (ps.nextBlink || 0)) { ps.blinkUntil = time + 130; ps.nextBlink = time + 2200 + Math.random() * 2600; }
     if (!expr && !walking && time < ps.blinkUntil) expr = 'blink';
-    const key = faceKey(walking ? `${this.heroKey}_walk${ps.stepFrame}` : this.heroKey, expr);
+    const key = dressKey(this, faceKey(walking ? `${this.heroKey}_walk${ps.stepFrame}` : this.heroKey, expr), this.run.meta.wear);
     if (ps.texture.key !== key && this.textures.exists(key)) ps.setTexture(key);
     if (walking || p.sleep || !ps.nextLook) ps.nextLook = time + 2500 + Math.random() * 2000;
     else if (time > ps.nextLook) { ps.lookAt = time; ps.nextLook = time + 4000 + Math.random() * 4000; }
@@ -2686,7 +2762,9 @@ export class DungeonScene extends Phaser.Scene {
     const wet = !s.dying && !who.d?.boss && !FLIERS.has(who.d?.sprite) && (ter === T.WATER || (ter === T.LAVA && who.d?.fireproof));
     // half out of a burrow: what is still in the hole is hidden below the rim of its mouth
     const fh = s.frame.height, sunk = s.sink > 0 ? Math.min(fh - 1, Math.round(fh * s.sink)) : 0;
-    const cut = sunk || (wet ? Math.round(fh * 0.22) : 0);
+    // (v0.29: only the feet and a sliver go under, about a third of what it was, so a body wades
+    // instead of swimming up to its chin)
+    const cut = sunk || (wet ? Math.round(fh * WADE) : 0);
     // squeezing up out of the hole: narrow while still in it (the way you went down, scenes/burrow.js)
     if (sunk) { sx *= 1 - 0.3 * s.sink; sy *= 1 + 0.15 * s.sink; }
     if (cut) { s.setCrop(0, 0, s.frame.width, fh - cut); hop -= cut * TILE / fh - (sunk ? s.lip : 1); } else if (s.isCropped) s.setCrop();
@@ -2698,7 +2776,7 @@ export class DungeonScene extends Phaser.Scene {
     s.lift = hop;
     if (time < s.flashUntil) return;
     // every boss has a picture of its own now (and the crown), so only rage colours one
-    let tint = who.rage ? 0xff8080 : 0xffffff;
+    let tint = who.rage || who.fury ? 0xff8080 : 0xffffff;
     if (who.burn > 0) tint = 0xffc890;
     if (who.sleep || who.state === 'sleep') tint = 0xc4c4dc;
     if (who.stoneT > 0) tint = 0x9a9aac;

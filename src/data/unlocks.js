@@ -13,13 +13,13 @@
 export const PER_TRIP = 2;
 // The release a save last opened in (meta.seenBuild); goes up with each release that adds unlocks, see
 // sinceUpdate.
-export const BUILD = 28;
+export const BUILD = 29;
 
 const broken = m => Object.values(m.ores || {}).reduce((a, b) => a + b, 0);
 const beat = (m, boss) => m.stats.bosses.includes(boss);
 
 export const UNLOCKS = [
-  { id: 'request', icon: 'guildBoss', what: '조합 의뢰', desc: '나갈 때마다 작은 의뢰가 붙는다. 해내면 그 자리에서 일당을 준다', when: m => m.stats.runs >= 1 },
+  { id: 'request', icon: 'guildBoss', what: '조합 의뢰', desc: '나갈 때마다 조합 게시판에서 의뢰를 세 개까지 받아 간다. 해내면 그 자리에서 일당을 준다', when: m => m.stats.runs >= 1 },
   { id: 'fang', relic: 'fang', when: m => m.stats.runs >= 1 },
   { id: 'weeds', icon: 'weed', what: '풀뽑기 밭', desc: '들판에 잡초 밭이 생긴다. 한 포기씩 뽑으면 일당. 가끔 뭔가 소리를 지른다', when: m => m.stats.maxFloor >= 2 || m.stats.runs >= 2 },
   { id: 'hammer', relic: 'hammer', when: m => m.stats.maxFloor >= 2 || m.stats.runs >= 2 },
@@ -35,6 +35,7 @@ export const UNLOCKS = [
   { id: 'candy', icon: 'candy', what: '별사탕', desc: '반짝 바위와 잡초 밭에서도 별사탕이 나온다. 먹으면 유물이 다다닥 자란다', when: m => beat(m, 'ratking') },
   { id: 'stall', icon: 'peddler', what: '대장 앞 좌판', desc: '대장 바로 앞 들판에 상점 주인이 좌판을 편다', when: m => beat(m, 'ratking') },
   { id: 'shelf', icon: 'shopkeep', what: '상점 유물 진열대', desc: '마을 상점에서 새 유물을 사서 들판에 풀 수 있다', when: m => beat(m, 'ratking') },
+  { id: 'wear', icon: 'dressup', what: '꾸미기', desc: '마을 상점에서 머리핀, 리본, 목도리 같은 걸 판다. 누구로 나가든 하고 다닌다', when: m => beat(m, 'ratking') || m.stats.runs >= 8 },
   { id: 'coin', relic: 'coin', when: m => broken(m) >= 4 },
   { id: 'ghost', icon: 'ghostNpc', what: '울보 아기새', desc: '들판 어딘가에서 아기새가 운다. 부탁을 들어주면 보답한다', when: m => m.stats.runs >= 3 },
   { id: 'hive', icon: 'hive', what: '꿀벌 그루터기', desc: '꿀단지를 먹으면 최대 체력이 오른다. 벌들은 화를 낸다', when: m => m.stats.maxFloor >= 5 },

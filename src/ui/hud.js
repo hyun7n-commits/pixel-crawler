@@ -20,8 +20,8 @@ const shownItems = run => Object.entries(ITEMS).filter(([id, d]) => run.p.items[
 
 // What the quest folk asked of you and have not had back yet.
 function questLines(run) {
-  const { ghost, smith } = run.quests, out = [], q = run.request, at = f => run.floorName(f);
-  if (q) out.push(q.done ? `조합 의뢰 완료! ${q.text} (+${q.pay}G)` : `조합 의뢰: ${q.text} (${q.got}/${q.n}) · 일당 ${q.pay}G`);
+  const { ghost, smith } = run.quests, out = [], at = f => run.floorName(f);
+  for (const q of run.requests || []) out.push(q.done ? `조합 의뢰 완료! ${q.text} (+${q.pay}G)` : `조합 의뢰: ${q.text} (${q.got}/${q.n}) · 일당 ${q.pay}G`);
   if (ghost.state === 'asked') out.push(`울보 아기새의 부탁: 리본 도둑 들쥐를 잡자 (${at(ghost.floor)})`);
   if (ghost.state === 'found') out.push(`울보 아기새에게 리본을 돌려주자 (${at(ghost.floor)})`);
   if (smith.state === 'asked') {
@@ -104,6 +104,25 @@ export class Hud {
     this.bannerTimer = setTimeout(() => b.classList.remove('show'), ms);
   }
 
+  // 대장's health, big across the top of the field from the moment it steps out on its card (main.js
+  // afterTurn) until it goes down (v0.29: the testers wanted it like SPD's)
+  bossBar(run) {
+    const b = run.enemies.find(e => e.d.boss && e.hp > 0 && run.bossShown === e.id), bar = $('bossbar');
+    bar.hidden = !b;
+    $('game').classList.toggle('bossfight', !!b);
+    if (!b) { bar.dataset.who = ''; return; }
+    const w = `${(Math.max(0, b.hp) / b.maxHp) * 100}%`, lag = bar.querySelector('.bb-lag');
+    if (bar.dataset.who !== String(b.id)) {
+      bar.dataset.who = b.id;
+      bar.querySelector('.bb-pic').replaceChildren(icon(b.d.sprite, 32));
+      bar.querySelector('.bb-name').textContent = b.d.name;
+      lag.style.transition = 'none'; lag.style.width = w; void lag.offsetWidth; lag.style.transition = '';
+    }
+    bar.querySelector('.bb-hp').style.width = w;
+    lag.style.width = w;
+    bar.classList.toggle('fury', !!b.fury);
+  }
+
   update(run) {
     const s = run.stat(), p = run.p;
     // the zone, how far into the trip (the last field is its boss), the 회차 and the dares taken
@@ -130,6 +149,7 @@ export class Hud {
     for (const t of st) $('pstatus').append(el('span', 'chip', t));
     $('quests').innerHTML = '';
     for (const t of questLines(run)) $('quests').append(el('div', 'quest', t));
+    this.bossBar(run);
 
     $('mFloor').innerHTML = `${run.zone.name} ${where}<small>${extra}</small>`;
     $('mGold').innerHTML = purse;
@@ -138,9 +158,9 @@ export class Hud {
     $('mXp').firstElementChild.style.width = $('xpbar').firstElementChild.style.width;
     $('mStatus').innerHTML = '';
     for (const t of st) $('mStatus').append(el('span', 'chip', t));
-    // phone: the request of the day as a small chip until it is done
-    const q = run.request;
-    if (q && !q.done) $('mStatus').append(el('span', 'chip req', `의뢰 ${q.got}/${q.n}`));
+    // phone: the requests taken as one small chip, how many are done
+    const qs = run.requests || [];
+    if (qs.length) $('mStatus').append(el('span', 'chip req' + (qs.every(q => q.done) ? ' done' : ''), `의뢰 ${qs.filter(q => q.done).length}/${qs.length}`));
     this.renderBar(run);
 
     const ids = Object.keys(p.relics);
@@ -182,7 +202,7 @@ export class Hud {
     // 마법사's wand: its sparks, full and spent
     if (run.char.wand) {
       const b = button('item wand', null, this.onWand);
-      b.append(icon('wand'), el('span', null, `마법 지팡이 ${'●'.repeat(p.charges)}${'○'.repeat(WAND_CHARGES - p.charges)}`), el('kbd', null, '키 X'));
+      b.append(icon('wand'), el('span', null, `마법 지팡이 ${'●'.repeat(p.charges)}${'○'.repeat(Math.max(0, WAND_CHARGES - p.charges))}`), el('kbd', null, '키 X'));
       b.title = `멀리(2~4칸) 있는 적을 누르면 마법 화살을 쏜다. ${WAND_RECHARGE}턴마다 한 발씩 다시 찬다.`;
       b.disabled = !p.charges;
       items.append(b);

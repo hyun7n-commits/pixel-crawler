@@ -89,6 +89,7 @@ export const DISCOVERIES = [
   { id: 'sleep_enemy', combo: '졸음 꽃가루 + 적',   result: '적도 꾸벅꾸벅 잠든다', hint: '졸음 꽃 꽃가루는 적한테도 똑같이 듣는대.' },
   { id: 'fire_mine',   combo: '불 + 늪 가스',       result: '가스 전체가 한 번에 대폭발', hint: '반짝 바위 옆에서 불 켜면 큰일 난대.' },
   { id: 'ore_jackpot', combo: '반짝 바위 + 끝까지', result: '반짝돌이 통째로 쏟아진다', hint: '반짝 바위 끝까지 캐면 대박이래.' },
+  { id: 'seam_all',    combo: '반짝 광맥 + 끝까지', result: '맨 안쪽의 커다란 보석이 나온다', hint: '벽에 박힌 보석은 끝까지 캐면 제일 큰 게 나온대. 대신 점점 시끄러워진대.' },
   { id: 'bomb_trap',   combo: '폭탄 + 함정',        result: '멀리서 함정을 터뜨린다', hint: '함정에 폭탄 던지면 멀리서도 터진대.' },
   { id: 'bolt_water',  combo: '번개 + 웅덩이',      result: '웅덩이에 있는 모두가 감전', hint: '웅덩이에 번개 떨어지면 다 찌릿하대.' },
   { id: 'smoke_bees',  combo: '연기 + 벌집',        result: '벌들이 꾸벅꾸벅 존다', hint: '벌집 옆에 불을 피우면 벌들이 졸린대.' },

@@ -41,8 +41,26 @@ export function recipeFor(run, id, grow) {
   const wrap = el('div', 'recipes');
   for (const rc of known) {
     const box = el('div', 'recipe' + (tierOf(rc.id) >= 2 ? ' legend' : ''));
+    box.dataset.result = rc.id;
     box.append(part(run, rc.a, grow), el('span', 'rc-op', '+'), part(run, rc.b, grow), el('span', 'rc-op', '→'), result(rc.id));
     wrap.append(box);
   }
+  return wrap;
+}
+
+// On a phone a choice card's recipes fold into one line (how many, and what they make), opened and
+// closed with a tap that does not pick the card (v0.29: with many recipes found, one pick took three
+// screens of scrolling). On a wide screen they are always open and the line is not shown.
+export function foldRecipes(rc) {
+  const wrap = el('div', 'rc-fold'), head = el('span', 'rc-fold-head');
+  const made = [...new Set([...rc.children].map(b => b.dataset.result))];
+  head.setAttribute('role', 'button');
+  head.append(el('span', 'rc-fold-n', `진화 ${rc.children.length}가지`));
+  const pics = el('span', 'rc-fold-pics');
+  for (const id of made.slice(0, 5)) pics.append(icon(id));
+  if (made.length > 5) pics.append(el('span', 'rc-fold-more', `+${made.length - 5}`));
+  head.append(pics, el('span', 'rc-fold-arrow', '▾'));
+  head.addEventListener('click', ev => { ev.stopPropagation(); ev.preventDefault(); wrap.classList.toggle('open'); });
+  wrap.append(head, rc);
   return wrap;
 }

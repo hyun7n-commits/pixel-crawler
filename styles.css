@@ -56,6 +56,16 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .stage-friend { flex: none; width: 36px; height: 36px; display: grid; place-items: center; background: #0f0e16; border: 2px solid var(--line); }
 .stage-friend canvas { filter: brightness(0) opacity(0.5); }
 .stage-friend.got canvas { filter: none; }
+/* 조합 의뢰 게시판 (ui/board.js): paper notes pinned to a wooden board; the ones you take glow gold */
+.board { display: flex; flex-direction: column; gap: 6px; background: #5e3d24; border: 2px solid #2e1d10; box-shadow: inset 0 0 0 2px #7a5233; padding: 8px; margin: 8px 0 10px; }
+.note { position: relative; display: flex; align-items: center; gap: 8px; text-align: left; background: #efe3c4; color: #2a2030; border: 2px solid #b89b6a; border-radius: 0; padding: 8px 10px 8px 24px; min-height: 40px; box-shadow: 2px 2px 0 rgba(0,0,0,.3); }
+.note b { flex: 1; font-weight: 600; font-size: 12px; }
+.note .note-pin { position: absolute; left: 8px; top: 50%; width: 8px; height: 8px; margin-top: -4px; background: #d9454a; box-shadow: inset -2px -2px 0 #8e2433; }
+.note .note-pay { color: #8a5a10; font-weight: 700; white-space: nowrap; font-size: 12px; }
+.note .note-tag { position: absolute; right: -4px; top: -8px; background: var(--gold); color: #2b2205; font-family: var(--font-tiny); font-size: 10px; padding: 1px 4px; border: 1px solid #8a5a10; }
+.note.on { background: #fff6cf; border-color: var(--gold); box-shadow: 2px 2px 0 rgba(0,0,0,.3), inset 0 0 0 1px #c99a2b; }
+.note.full { opacity: 0.55; }
+.board-go { width: 100%; padding: 10px 12px; }
 .loop-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
 .loop-tabs .btn.on { border-color: var(--accent); color: var(--gold); }
 .loop-note { font-family: var(--font-body); font-size: 12px; }
@@ -111,6 +121,22 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #phaser { position: absolute; inset: 0; }
 #banner { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); font-family: var(--font-display); font-size: 15px; color: var(--gold); background: rgba(12, 10, 18, .85); padding: 4px 10px; text-shadow: 1px 1px 0 #000; pointer-events: none; white-space: nowrap; opacity: 0; transition: opacity .2s; }
 #banner.show { opacity: 1; }
+/* 대장's health across the top of the field while it is up (ui/hud.js, v0.29, like SPD's): its face, its
+   name, and a thick bar; what a hit takes off lingers pale for a moment before it drains */
+#bossbar { position: absolute; left: 50%; top: 8px; transform: translateX(-50%); width: min(78%, 360px); display: flex; align-items: center; gap: 8px; padding: 4px 10px 6px 6px; background: rgba(12, 10, 18, .88); border: 2px solid #3b2b45; pointer-events: none; z-index: 2; }
+#bossbar[hidden] { display: none; }
+#bossbar .bb-pic { flex: none; width: 32px; height: 32px; }
+#bossbar .bb-pic canvas { width: 32px; height: 32px; }
+#bossbar .bb-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+#bossbar .bb-name { font-family: var(--font-display); font-size: 14px; color: var(--gold); text-shadow: 1px 1px 0 #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#bossbar .bb-bar { position: relative; height: 10px; background: #2a0f16; border: 2px solid #000; }
+#bossbar .bb-bar i { position: absolute; left: 0; top: 0; bottom: 0; }
+#bossbar .bb-lag { background: #f4d7c9; transition: width .45s ease-in .3s; }
+#bossbar .bb-hp { background: var(--hp); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .25); }
+#bossbar.fury .bb-hp { background: #ff6a3d; }
+#bossbar.fury .bb-name { color: #ff9a7a; }
+/* the floor's name and the boss's fanfare come up under the gauge */
+#game.bossfight #banner { top: 58px; }
 /* in the village the banner sits under the place name and purse row, not over it */
 #game.village #banner { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 52px); }
 /* the line after you fall: where, and to what (main.js fallen) */
@@ -147,6 +173,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #pstatus:empty { display: none; }
 #pstatus .chip { font-family: var(--font-body); font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 0; background: var(--panel-2); color: var(--gold); border: 1px solid var(--line); }
 #side { background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; padding: 12px; overflow-y: auto; min-height: 0; }
+/* the panel scrolls rather than squeezing a part of it (v0.29: a long relic text ran into 소모품) */
+#side > * { flex-shrink: 0; }
 .hud-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .floor { font-family: var(--font-body); font-size: 24px; }
 .floor small { white-space: nowrap; color: var(--muted); font-family: var(--font-display); font-size: 15px; margin-left: 4px; }
@@ -164,8 +192,14 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .relic { aspect-ratio: 1; background: #0f0e15; border: 1px solid var(--line); border-radius: 0; position: relative; display: grid; place-items: center; padding: 0; container-type: inline-size; }
 /* icons stay whole multiples of their 16 pixels: 1x, 2x or 3x, whichever fits the slot */
 .relic canvas { width: 16px; height: 16px; }
+/* a fused relic: its two halves overlapping, the second lower down and in front, each as big as the slot
+   lets it be (v0.29: they were stuck at 8 pixels, the rule below the slot sizes won) */
+.fused-icon { position: relative; width: 16px; height: 16px; display: block; }
+.relic .fused-icon canvas { position: absolute; width: 8px; height: 8px; }
+.relic .fused-icon canvas:first-child { left: 0; top: 0; }
+.relic .fused-icon canvas + canvas { right: 0; bottom: 0; filter: drop-shadow(-1px -1px 0 #0f0e15); }
 @container (min-width: 36px) { .relic canvas { width: 32px; height: 32px; } .relic .fused-icon { width: 32px; height: 32px; } .relic .fused-icon canvas { width: 16px; height: 16px; } }
-@container (min-width: 52px) { .relic canvas { width: 48px; height: 48px; } .relic .fused-icon { width: 48px; height: 48px; } .relic .fused-icon canvas { width: 24px; height: 24px; } }
+@container (min-width: 52px) { .relic canvas { width: 48px; height: 48px; } .relic .fused-icon { width: 48px; height: 48px; } .relic .fused-icon canvas { width: 32px; height: 32px; } }
 .relic .lv { position: absolute; right: 2px; bottom: 0; font-family: var(--font-tiny); font-size: 10px; font-weight: 700; color: var(--fg); text-shadow: 1px 1px 0 #000; }
 .relic.evo { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
 .relic.legend { border-color: #f08c3a; box-shadow: inset 0 0 0 1px #f08c3a; }
@@ -174,11 +208,6 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .relic.ding { animation: ding .3s ease-out; }
 .relic.maxed .lv { color: var(--gold); font-family: var(--font-tiny); font-size: 10px; letter-spacing: -.3px; }
 @keyframes ding { 0% { transform: scale(1); } 35% { transform: scale(1.15); border-color: var(--gold); } 100% { transform: scale(1); } }
-/* a fused relic: its two halves overlapping, the second a little lower */
-.fused-icon { position: relative; width: 16px; height: 16px; display: block; }
-.relic .fused-icon canvas { position: absolute; width: 8px; height: 8px; }
-.relic .fused-icon canvas:first-child { left: 0; top: 0; }
-.relic .fused-icon canvas + canvas { right: 0; bottom: 0; }
 .fuse-pic { display: inline-flex; align-items: center; gap: 2px; }
 .fuse-pic canvas { width: 32px; height: 32px; }
 .relic.empty { opacity: .35; cursor: default; }
@@ -203,6 +232,9 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .recipe .rc-result.t2 { border-color: #f08c3a; }
 .recipe .rc-result.t3 { border-color: #c48cff; }
 .recipes { display: flex; flex-direction: column; gap: 2px; }
+/* a choice card's recipes, folded into one line on a phone (ui/recipe.js foldRecipes); always open on a
+   wide screen, where the line is not shown */
+.rc-fold-head { display: none; }
 .recipe-book { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin-bottom: 8px; }
 .recipe-cell { display: flex; flex-direction: column; gap: 3px; padding: 6px; background: #0f0e15; border: 1px solid var(--line); border-radius: 0; }
 .recipe-cell.t1 { border-color: #4f4524; }
@@ -317,6 +349,9 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   #mStatus { flex: 1; display: flex; gap: 4px; min-width: 0; overflow: hidden; }
   #mStatus .chip { font-family: var(--font-tiny); font-size: 10px; font-weight: 700; padding: 0 6px; border-radius: 0; background: var(--panel-2); color: var(--gold); border: 1px solid var(--line); white-space: nowrap; }
   #mGold { color: var(--gold); font-weight: 400; font-family: var(--font-display); font-size: 15px; font-variant-numeric: tabular-nums; }
+  /* 설정 (v0.29): the cog at the end of the top row */
+  .mt-opt { flex: none; width: 34px; height: 28px; margin: -3px 0 -3px 2px; padding: 0; display: grid; place-items: center; background: var(--panel-2); border: 1px solid var(--line); border-radius: 0; cursor: pointer; }
+  .mt-opt canvas { width: 16px; height: 16px; image-rendering: pixelated; }
   .mt-hp { position: relative; }
   #mHp { height: 15px; border-radius: 0; }
   #mHp > i { background: var(--hp); transition: width .15s; }
@@ -382,6 +417,15 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .choice { flex-direction: row; text-align: left; align-items: center; }
   .choice > div { gap: 3px; align-items: flex-start; }
   .choice .recipe { justify-content: flex-start; }
+  .rc-fold { align-self: stretch; }
+  .rc-fold-head { display: inline-flex; align-items: center; gap: 6px; margin-top: 2px; padding: 3px 8px; background: #191723; border: 1px solid var(--line); color: var(--muted); font-family: var(--font-body); font-size: 13px; cursor: pointer; }
+  .rc-fold-pics { display: inline-flex; gap: 2px; align-items: center; }
+  .rc-fold-pics canvas { width: 16px; height: 16px; image-rendering: pixelated; }
+  .rc-fold-more { font-size: 11px; color: var(--muted); }
+  .rc-fold-arrow { transition: transform .12s; }
+  .rc-fold.open .rc-fold-arrow { transform: rotate(180deg); }
+  .rc-fold .recipes { display: none; }
+  .rc-fold.open .recipes { display: flex; }
 }
 @keyframes logfade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
 /* Phone on its side: the toolbar stands up on the right so the map keeps its height. */
@@ -529,6 +573,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* the guild's request of the day in the log, on the phone's status row, and on the summary */
 #log .quest, #mlog .quest { color: #ffe08a; }
 #mStatus .chip.req { background: rgba(244, 207, 79, 0.16); color: #ffe08a; }
+#mStatus .chip.req.done { background: rgba(143, 211, 106, 0.18); color: #b8f08f; }
 .unlock-note.req-done { color: #ffe08a; }
 /* a boss steps into view (ui/bosscard.js): a dark band slides across with the boss, its name and a line */
 .bosscard { position: absolute; inset: 0; z-index: 6; display: flex; align-items: center; background: rgba(8, 6, 14, .45); animation: bc-in .25s ease-out; cursor: pointer; }
@@ -547,7 +592,13 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* the shopkeeper's stall in the fields (Run.buy): prices in gold, greyed out when you can't pay */
 .choice .tag.price { background: #3a2e10; color: var(--gold); }
 .choice.poor { opacity: .45; cursor: not-allowed; }
-.stall-purse { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; color: var(--gold); font-weight: 700; }
+/* the settings sheet (v0.29): big buttons, one under another */
+.opt-list { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.opt-list .btn { min-height: 50px; font-size: 17px; }
+/* what you have on you, big enough to read at a glance next to the prices (v0.29) */
+.stall-purse { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 12px; padding: 6px 14px 6px 10px; background: #2a210c; border: 2px solid #8a7330; color: var(--gold); font-family: var(--font-body); font-size: 18px; }
+.stall-purse canvas { width: 32px; height: 32px; image-rendering: pixelated; }
+.stall-purse b { font-family: var(--font-display); font-size: 26px; font-weight: 400; line-height: 1; text-shadow: 2px 2px 0 #000; }
 /* the relic packed for the next run (ui/hub.js shop) */
 .pack-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; }
 .pack { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 4px; background: #0f0e15; border: 2px solid var(--line); border-radius: 0; color: var(--fg); font-family: var(--font-body); font-size: 12px; word-break: keep-all; cursor: pointer; }
@@ -574,12 +625,12 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
    screen so their words read as comfortably as on a laptop. The map scales itself (scenes/zoom.js). */
 @media (min-width: 1600px) and (min-height: 900px) and (pointer: fine) {
   #game { grid-template-columns: 1fr 348px; }
-  #side, #modal, #tip, #vhud, #hhud, #banner, .evocard, .bc-band, .st-box, .st-skip, .st-dots { zoom: 1.2; }
+  #side, #modal, #tip, #vhud, #hhud, #banner, #bossbar, .evocard, .bc-band, .st-box, .st-skip, .st-dots { zoom: 1.2; }
   /* screen units grow with the zoom too, so a sheet's height cap shrinks by it to stay on screen */
   .sheet, .sheet-box { max-height: calc((100vh - 38px) / 1.2); max-height: calc((100dvh - 38px) / 1.2); }
 }
 @media (min-width: 2400px) and (min-height: 1300px) and (pointer: fine) {
   #game { grid-template-columns: 1fr 464px; }
-  #side, #modal, #tip, #vhud, #hhud, #banner, .evocard, .bc-band, .st-box, .st-skip, .st-dots { zoom: 1.6; }
+  #side, #modal, #tip, #vhud, #hhud, #banner, #bossbar, .evocard, .bc-band, .st-box, .st-skip, .st-dots { zoom: 1.6; }
   .sheet, .sheet-box { max-height: calc((100vh - 52px) / 1.6); max-height: calc((100dvh - 52px) / 1.6); }
 }

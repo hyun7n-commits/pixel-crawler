@@ -14,11 +14,17 @@ export const localOf = floor => ((floor - 1) % FLOORS_PER_ZONE) + 1;   // 1..FLO
 // gs: a stage on that slower scale; gfl: a floor on it (the formulas below that take a floor use gfl).
 export const gs = stage => stage <= 4 ? stage : 4 + (stage - 4) / 3;
 export const gfl = floor => FLOORS_PER_ZONE * gs(stageOf(floor)) + localOf(floor);
+// v0.29: the fields pay a little less, and from the fifth stage on a good deal less (those trips were
+// buying out the village); the guild's requests (data/requests.js), three a trip, make up much of it now.
+export const GOLD_PACE = [0.85, 0.85, 0.8, 0.75, 0.68, 0.62, 0.57, 0.53, 0.5, 0.48];
+export const goldPace = stage => GOLD_PACE[Math.min(GOLD_PACE.length - 1, Math.max(0, stage))];
 
 // v0.15: level-ups come quicker, so relics grow and evolve within a run (BALL x PIT pace)
 export const xpToLevel = lvl => 3 + lvl;
 // chance a relic card turns into "both of these +1"
 export const TWIN_CHANCE = 0.35;
+// how many trips the crying chick (울보 아기새) asks you to catch the ribbon thief on
+export const GHOST_CHANCE = 0.3;
 // chance a card is the unseen other half of a recipe for a relic you are growing (nothing says so)
 export const PARTNER_CHANCE = 0.55;
 // 별사탕, BALL x PIT's fission: one candy grows this many relic levels in a row (다다다닥).
@@ -48,13 +54,21 @@ export const STAGE_UP = +(globalThis.process?.env?.STAGE_UP ?? 0);
 const FOE_UP = (globalThis.process?.env?.FOE_UP || '0,-0.08,0,0.08,0.16,0.42,0.46,0.6,0.18,0.62').split(',').map(Number);
 export const foeUp = s => FOE_UP[Math.min(s, FOE_UP.length - 1)] + 0.1 * Math.max(0, s - (FOE_UP.length - 1));
 // 출발 보급: a deeper stage is entered as a seasoned explorer, the guild sees to that. You start at a
-// higher level, a little stronger and sturdier, and pick some relics (two levels each) before the
-// first step. Tuned with the bot (relicsim) so each stage is about as hard as the first, fresh.
+// higher level, a little stronger and sturdier, and pick relics before the first step: one for each
+// stage before this one, KIT_MAX at most (one for each slot), and each comes KIT_LV levels grown, that
+// is fully. Tuned with the bot (relicsim) so each stage is about as hard as the first, fresh. (v0.29:
+// it was one and a half picks a stage at two levels each, fourteen picks in a row on the last stage,
+// and the testers asked why so many; past KIT_MAX the picks left out come as strength and health.)
 const ENV = globalThis.process?.env || {};
-export const stageKit = stage => ({
-  lvl: 1 + 2 * stage, picks: Math.round(+(ENV.KIT ?? 1.5) * stage),
-  atk: Math.round(+(ENV.KIT_ATK ?? 1.5) * stage), hp: Math.round(+(ENV.KIT_HP ?? 6) * stage),
-});
+export const KIT_MAX = +(ENV.KIT_MAX ?? 6), KIT_LV = +(ENV.KIT_LV ?? 3);
+const KIT_PAST_ATK = +(ENV.KIT_PAST_ATK ?? 1.5), KIT_PAST_HP = +(ENV.KIT_PAST_HP ?? 6);
+export const stageKit = stage => {
+  const picks = Math.round(+(ENV.KIT ?? 1) * stage), past = Math.max(0, picks - KIT_MAX);
+  return {
+    lvl: 1 + 2 * stage, picks: picks - past,
+    atk: Math.round(+(ENV.KIT_ATK ?? 1.5) * stage + KIT_PAST_ATK * past), hp: Math.round(+(ENV.KIT_HP ?? 6) * stage + KIT_PAST_HP * past),
+  };
+};
 export const enemyScale = floor => 1 + 0.15 * (localOf(floor) - 1) + STAGE_UP * stageOf(floor) + foeUp(stageOf(floor));
 export const ATK_SHARE = 1.6;
 export const POTION_CHANCE = 0.35;  // a potion lying somewhere on a floor (scarce: healing is precious)
@@ -65,6 +79,18 @@ export const POTION_CHANCE = 0.35;  // a potion lying somewhere on a floor (scar
 export const DEEP_UP = +(globalThis.process?.env?.DEEP_UP ?? 1.4);
 export const DEEP_GOLD = +(globalThis.process?.env?.DEEP_GOLD ?? 1.2);
 export const bossScale = floor => 1 + STAGE_UP * stageOf(floor) + foeUp(stageOf(floor));
+// 대장 (v0.29: bosses were too easy, the testers' biggest complaint): this many times the health and
+// the bite the table says, each its own, tuned with the bot over whole careers to come out of most fights
+// with a fifth to a third of its health (the mushroom king, whose slams are easy to sidestep, got the
+// most; the yeti, already hard, hardly anything). And past half health a boss gets angry (화남,
+// core/ai.js furyStep): it bites FURY_ATK times as hard and takes a step more every FURY_STEP turns.
+const BOSS_UP = {
+  ratking: [1.4, 1.15], skelking: [1.9, 1.3], toadking: [1.4, 1.15], octopus: [1.6, 1.25], boarchief: [1.5, 1.2],
+  queen: [1.4, 1.15], yeti: [1.05, 1], lord: [1.35, 1.15], lavaturtle: [1.5, 1.2], bigmask: [1.3, 1.1],
+};
+const bossEnv = (type, i) => +((i ? ENV.BOSS_ATK : ENV.BOSS_HP)?.split(',').find(t => t.startsWith(type + ':'))?.split(':')[1] ?? NaN);
+export const bossUp = type => [0, 1].map(i => (isNaN(bossEnv(type, i)) ? (BOSS_UP[type] || [1.4, 1.15])[i] : bossEnv(type, i)));
+export const FURY_ATK = +(ENV.FURY_ATK ?? 1.25), FURY_STEP = +(ENV.FURY_STEP ?? 2);
 // 우두머리: the crowned mid-boss that carries a caged friend's key (data/stages.js): this many times a
 // critter of its kind on that field, in health and in attack
 export const CHIEF_HP = 3, CHIEF_ATK = 1.4;
@@ -79,7 +105,23 @@ export const TOOL_CHANCE = 0.6, TOOL_MORE = 0.2;
 // 비밀 (v0.28, core/run.js hideSecrets): how often a field has a nook behind a wall, a baby asleep in a
 // bush (and how often what it leaves is a star candy); rests in a row before the doze; how big a pond
 // the spirit lives in, and what the golden tool is worth (x the stage's gold scale)
-export const NOOK_CHANCE = 0.3, BABY_CHANCE = 0.4, BABY_CANDY = 0.12, DREAM_RESTS = 12, SPIRIT_POND = 6, SPIRIT_GOLD = 30;
+// 숨은 방 (v0.29, core/run.js hideRoom): one on every field but the boss's. Hits it takes to open its
+// wall, how far each hit is heard, and what is inside it (by weight; `need`: an unlock it waits for)
+export const HIDE_HITS = 3;
+// 반짝 광맥 (v0.29, core/run.js placeSeams, prySeam): how often a field has one (and a second), the gems
+// in it, and for each one prised out: its worth (x oreGold), how far it is heard, critters drawn out
+export const SEAM_CHANCE = 0.6, SEAM_TWO = 0.25, SEAM_GEMS = 4;
+export const SEAM_PAY = [1, 2, 3, 6], SEAM_NOISE = [3, 5, 7, 10], SEAM_WAVE = [0, 0, 1, 1];
+// 머리 쿵 (v0.29): the first three bonks of a trip drop something; each 쿵 is heard this far
+export const BONK_DROPS = 3, BONK_NOISE = 4;
+export const HIDE_NOISE = { leaf: 2, rock: 4 };
+export const HIDE_ROOMS = [
+  { id: 'stash', w: 3 }, { id: 'candy', w: 2, need: 'candy' }, { id: 'vein', w: 2 }, { id: 'berry', w: 2 }, { id: 'nap', w: 1 },
+];
+export const BABY_CHANCE = 0.4, BABY_CANDY = 0.12, DREAM_RESTS = 12, SPIRIT_POND = 6, SPIRIT_GOLD = 30;
+// v0.29: rests in a row right beside a sleeper before it rolls over (자장가; a sleeper that close would
+// wake on the next one, core/ai.js), and what roasted pine nuts heal
+export const LULL_RESTS = 2, ROAST_HEAL = 0.25;
 // zones whose walls are rock (a knock, not a rustle); zones whose rooms have bushes a baby can sleep in
 export const ROCKY = new Set(['rock', 'cave', 'snow', 'volcano', 'ruins', 'sea']);
 export const BABY_ZONES = new Set(['meadow', 'forest', 'marsh', 'garden']);
@@ -138,8 +180,9 @@ export const REGEN_TURNS = 15;
 // gold for the n-th one in a row (n × (stage + 1) × this)
 export const COMBO_TURNS = 2, COMBO_GOLD = 1;
 // 마법사's wand (v0.23): how far a spark reaches, how many the wand holds, and how many turns each one
-// takes to come back
-export const WAND_RANGE = 4, WAND_CHARGES = 3, WAND_RECHARGE = 4, WAND_POWER = 1.5;
+// takes to come back (v0.29: three, every four turns, was too much: the testers' mage won every fight
+// from four tiles off before it came close)
+export const WAND_RANGE = 4, WAND_CHARGES = +(ENV.WAND_CHARGES ?? 2), WAND_RECHARGE = +(ENV.WAND_RECHARGE ?? 5), WAND_POWER = +(ENV.WAND_POWER ?? 1.5);
 
 // The big ore on each floor: how many swings it takes, how far each swing is heard,
 // how much mine gas the crack beside it puffs per swing, and what it pays.
@@ -203,6 +246,7 @@ export const gimmickScale = floor => enemyScale(floor) * (1 + 0.5 * Math.floor((
 export const MIMIC_CHANCE = 0.18;      // a chest from floor 2 on is a mimic
 export const VAULT_CHANCE = 0.45;      // floor 2 on: a locked crystal vault, its key elsewhere on the floor
 export const LOCKED_CHEST_CHANCE = 0.55; // otherwise: a locked chest and its key
+export const KEY_APART = 14;            // ...the key at least this many steps' walk from what it opens (v0.29)
 export const SPECIAL_CHANCE = 0.55;    // each of grave room, statue room and trap room
 export const HIVE_CHANCE = 0.35;       // the honey stump, a little rarer
 export const DEN_CHANCE = 0.4, DEN_MIN = 4, DEN_MAX = 7;   // 낮잠 방 (v0.26): how often, and how many nap in it

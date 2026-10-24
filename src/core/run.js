@@ -22,12 +22,12 @@ import { NPC_TEXT, PEDDLER_FLOORS, STALL } from '../data/npcs.js';
 import { TAG_LINES } from '../data/lore.js';
 import { DREAMS } from '../data/secrets.js';
 import { ROUTES } from '../data/routes.js';
-import { REQUESTS, pickRequest } from '../data/requests.js';
+import { REQUESTS, takeRequests } from '../data/requests.js';
 import { isOpen, openNew, RELIC_GATES } from '../data/unlocks.js';
 import { caged, cleared, stageOpen, loopsOpen, loopFoe, loopGold, FRIENDS } from '../data/stages.js';
 import { daresOn, daresOpen, dareGold } from '../data/dares.js';
 import { homePerks } from '../data/home.js';
-import { enemyAct, rouse, awaken, angerSwarm, twist, inReach, canSee, brawl, vex } from './ai.js';
+import { enemyAct, furyStep, rouse, awaken, angerSwarm, twist, inReach, canSee, brawl, vex } from './ai.js';
 import { onEnter, explosion, envTick, waterBody, ignite, addGas, spotTraps, revealTraps, openGrave, setBurn, springTrap } from './world.js';
 
 export const zoneOf = floor => ZONES[Math.floor((floor - 1) / B.FLOORS_PER_ZONE)];
@@ -72,7 +72,8 @@ export class Run {
     // the two quest folk and the floor each one lives on
     const f0 = this.startFloor;
     this.quests = {
-      ghost: { floor: f0 + rint(0, 1), state: 'idle' },              // idle -> asked -> found -> done
+      // v0.29: the crying chick and the ribbon thief turn up on some trips only (every trip was too often)
+      ghost: { floor: Math.random() < B.GHOST_CHANCE ? f0 + rint(0, 1) : 0, state: 'idle' },   // idle -> asked -> found -> done
       smith: { floor: f0 + rint(1, 2), state: 'idle', chunk: null },  // chunk: grade of the big ore you broke there
       peddler: { met: false },
     };
@@ -85,7 +86,7 @@ export class Run {
     // the pet that comes along (data/pets.js)
     this.pet = meta.pet && meta.pets?.[meta.pet] && PETS[meta.pet] ? meta.pet : null;
     this.stall = [];
-    this.request = isOpen(meta, 'request') ? pickRequest(meta, stage) : null;   // the guild's request of the day (data/requests.js)
+    this.requests = takeRequests(meta, stage, loop);   // the guild's requests taken off the board, up to three (data/requests.js)
     this.startStats = JSON.parse(JSON.stringify(meta.stats));
     this.listeners = [];
     this.p = {
@@ -147,12 +148,12 @@ export class Run {
       this.noise(data.enemy.x, data.enemy.y, B.DARE_CALL);
       this.calling = false;
     }
-    if (this.request && !this.request.done) this.trackRequest(type, data);
+    for (const q of this.requests || []) if (!q.done) this.trackRequest(q, type, data);
   }
 
-  // the request of the day: count what it asks for, and pay the moment it is met
-  trackRequest(type, d) {
-    const q = this.request, c = REQUESTS[q.id].count(type, d, this);
+  // a request taken off the board: count what it asks for, and pay the moment it is met
+  trackRequest(q, type, d) {
+    const c = REQUESTS[q.id].count(type, d, this);
     if (!c) return;
     q.got = c.set ?? q.got + 1;
     if (q.got < q.n) { this.emit('requestStep', q); return; }
@@ -271,7 +272,7 @@ export class Run {
     this.arrival = { dir: 0 };
     this.genFloor();
     this.log(`${josa(this.char.name, '으로', '로')} ${this.zone.name}에 나왔다. 깃발 꽂힌 땅굴을 찾아 앞으로 가자.`, 'good');
-    if (this.request) this.log(`오늘의 조합 의뢰: ${this.request.text} (일당 ${this.request.pay}G)`, 'quest');
+    for (const q of this.requests) this.log(`받아 온 조합 의뢰: ${q.text} (일당 ${q.pay}G)`, 'quest');
     if (this.packed) this.log(`챙겨 온 ${RELICS[this.packed].name} Lv${this.p.relics[this.packed]}`, 'good');
     if (this.forged) this.log(`대장장이가 만들어 준 ${josa(RELICS[this.forged].name, '을', '를')} 들고 나왔다.`, 'good');
     if (this.p.homeHp) this.log(`집에서 푹 쉬고 나왔다. 최대 체력 +${this.p.homeHp}`, 'good');
@@ -474,23 +475,59 @@ export class Run {
     }
     this.zoneFeatures(rooms, open);
     this.hideSecrets(open);
-    // the quest folk, on their floors
+    this.placeSeams(open);
+    // the quest folk, on their floors, standing out of everyone's way: never by a door, never where they
+    // (or the smith's anvil) would cut the field in two, and each one where you can walk up to it
+    // (v0.29: the crying chick stood in a doorway; an anvil could shut the smith, or the peddler, in a nook)
+    const held = (x, y) => this.enemies.some(e => e.d.npc && e.x === x && e.y === y);
+    const roomy = (s, a) => {
+      // the anvil goes down for the look (it also shuts the corners beside it)
+      const was = a && map.ter[idx(a.x, a.y)];
+      if (a) map.ter[idx(a.x, a.y)] = T.ANVIL;
+      const bare = distMap(map, this.p.x, this.p.y);
+      const busy = distMap(map, this.p.x, this.p.y, { block: (x, y) => held(x, y) || x === s.x && y === s.y });
+      const all = [s, ...this.enemies.filter(e => e.d.npc)], folk = all.filter(f => f.type !== 'cage');
+      let n0 = 0, n1 = 0;
+      for (let i = 0; i < bare.length; i++) { if (bare[i] < 9999) n0++; if (busy[i] < 9999) n1++; }
+      const ok = folk.every(f => bare[idx(f.x, f.y)] < 9999) && n1 === n0 - all.filter(f => bare[idx(f.x, f.y)] < 9999).length &&
+        folk.every(f => DIRS8.some(([dx, dy]) => inMap(f.x + dx, f.y + dy) && busy[idx(f.x + dx, f.y + dy)] < 9999 && !squeeze(map, f.x + dx, f.y + dy, -dx, -dy)));
+      if (a) map.ter[idx(a.x, a.y)] = was;
+      return ok;
+    };
+    // nor next to anything you have to bump: the hidden room's way in, a seam, a sparkle rock, a lock, a grave, a hive, the well
+    const bumps = new Set([...(map.nook?.gap >= 0 ? [map.nook.gap] : []), ...map.seams.map(o => o.i), ...map.ores.flatMap(o => o.cells.map(c => idx(c.x, c.y)))]);
+    for (let i = 0; i < map.tiles.length; i++) if ([LOCKED, GRAVE, HIVE, WELL].includes(map.tiles[i])) bumps.add(i);
+    const byBump = c => DIRS8.some(([dx, dy]) => bumps.has(idx(c.x + dx, c.y + dy)));
+    const anvilAt = s => shuffle(DIRS8.map(([dx, dy]) => ({ x: s.x + dx, y: s.y + dy }))).find(t => map.tiles[idx(t.x, t.y)] === FLOOR &&
+      map.ter[idx(t.x, t.y)] === T.NONE && !this.enemyAt(t.x, t.y) && !this.pickups.some(o => o.x === t.x && o.y === t.y) && !sp.pickups.some(o => o.x === t.x && o.y === t.y));
+    const aside = (fn, anvil = false) => {
+      for (let t = 0; t < 60; t++) {
+        const s = free();
+        if (!s) break;
+        const a = anvil ? anvilAt(s) : null;
+        if (anvil && !a) continue;
+        const cells = [s, ...(a ? [a] : [])];
+        if (cells.some(c => byBump(c) || DIRS8.some(([dx, dy]) => [DOOR, STAIRS, UPSTAIRS].includes(map.tiles[idx(c.x + dx, c.y + dy)])))) continue;
+        if (!roomy(s, a)) continue;
+        fn(s, a);
+        return;
+      }
+      place(s => fn(s, null));
+    };
     const q = this.quests;
-    if (this.floor === q.ghost.floor && this.open('ghost')) place(s => { this.spawnEnemy('ghost', s.x, s.y).state = 'npc'; });
+    if (this.floor === q.ghost.floor && this.open('ghost')) aside(s => { this.spawnEnemy('ghost', s.x, s.y).state = 'npc'; });
     // the shopkeeper's stall, the floor before each boss: what's for sale, priced for the zone
     this.stall = [];
     if (this.floor === this.bossFloor - 1 && this.open('stall')) {
       this.stall = Object.entries(STALL).filter(([what]) => what !== 'tools' || this.pickTool())
         .map(([what, it]) => ({ what, price: Math.round(it.price * (B.gs(zi) + 1)), sold: false }));
-      place(s => { this.spawnEnemy('peddler', s.x, s.y).state = 'npc'; });
+      aside(s => { this.spawnEnemy('peddler', s.x, s.y).state = 'npc'; });
     }
     if (this.floor === q.smith.floor && this.open('smith')) {
-      place(s => {
+      aside((s, a) => {
         this.spawnEnemy('smith', s.x, s.y).state = 'npc';
-        const a = DIRS8.map(([dx, dy]) => ({ x: s.x + dx, y: s.y + dy }))
-          .find(t => map.tiles[idx(t.x, t.y)] === FLOOR && map.ter[idx(t.x, t.y)] === T.NONE && !this.pickups.some(o => o.x === t.x && o.y === t.y));
         if (a) map.ter[idx(a.x, a.y)] = T.ANVIL;
-      });
+      }, true);
     }
     // 갈림길: what the sign by the burrow you came down promised is here; and from here on, two ways
     if (route) this.routeBonus(route, place);
@@ -514,7 +551,8 @@ export class Run {
       const i = idx(x, y);
       if (m.tiles[i] !== FLOOR || ![T.NONE, T.GRASS].includes(m.ter[i]) || dm[i] >= 9999 || dm[i] < B.FORK_APART || d2[i] < B.FORK_APART) continue;
       if (this.enemyAt(x, y) || this.pickups.some(q => q.x === x && q.y === y)) continue;
-      if (DIRS8.some(([dx, dy]) => !inMap(x + dx, y + dy) || isTrap(m.ter[idx(x + dx, y + dy)]) || [DOOR, STAIRS, UPSTAIRS, ORE].includes(m.tiles[idx(x + dx, y + dy)]))) continue;
+      if (DIRS8.some(([dx, dy]) => !inMap(x + dx, y + dy) || isTrap(m.ter[idx(x + dx, y + dy)]) || [DOOR, STAIRS, UPSTAIRS, ORE].includes(m.tiles[idx(x + dx, y + dy)]) ||
+        m.nook?.gap === idx(x + dx, y + dy))) continue;
       const sc = Math.min(dm[i], d2[i]) + Math.random() * 4;
       if (sc > bs) { bs = sc; best = { x, y }; }
     }
@@ -540,7 +578,9 @@ export class Run {
     if (kind === 'candy') place(s => this.pickups.push({ x: s.x, y: s.y, type: 'candy', n: B.candySteps(this.floor) }));
     if (kind === 'tools') for (let k = 0; k < 2; k++) place(s => this.pickups.push({ x: s.x, y: s.y, type: this.pickTool() || 'bomb' }));
     if (kind === 'rest') {
-      place(s => this.pickups.push({ x: s.x, y: s.y, type: 'potion' }));
+      // (on the no-potion dare, a second berry bush in its place)
+      if (this.dare('nopotion')) place(s => { if (this.bareSpot(s.x, s.y)) m.ter[idx(s.x, s.y)] = T.BERRY; });
+      else place(s => this.pickups.push({ x: s.x, y: s.y, type: 'potion' }));
       place(s => { if (this.bareSpot(s.x, s.y)) m.ter[idx(s.x, s.y)] = T.BERRY; });
     }
     if (kind === 'gold') for (const o of m.ores) o.tier = Math.min(ORES.length - 1, o.tier + 1);
@@ -614,6 +654,9 @@ export class Run {
   genBossFloor() {
     const type = this.zone.boss, layout = pick(ENEMIES[type].arenas || ['pillars']);
     const spots = carveArena(this.map, layout), map = this.map;
+    // the boss's ground is lit from the moment you come down (Run.lights): it sees you and you see it,
+    // and there is nothing to find by walking round it first (v0.29)
+    map.arena = { ...spots.room };
     this.p.x = spots.start.x; this.p.y = spots.start.y;
     map.up = { ...spots.start }; // the way back opens once the boss is down
     const near = (x, y) => cheb({ x, y }, spots.start) <= 1 || cheb({ x, y }, spots.boss) <= 1;
@@ -640,7 +683,7 @@ export class Run {
     const d = ENEMIES[type];
     // the 회차 and the rival's dares make every critter tougher (not the folk you talk to)
     const k = d.npc ? 1 : loopFoe(this.loop) * (this.dare('fierce') ? B.DARE_FOE : 1);
-    const kb = d.boss && this.dare('boss') ? [B.DARE_BOSS_HP, B.DARE_BOSS_ATK] : [1, 1];
+    const kb = d.boss ? B.bossUp(type).map((v, i) => v * (this.dare('boss') ? [B.DARE_BOSS_HP, B.DARE_BOSS_ATK][i] : 1)) : [1, 1];
     const hp = Math.round(d.hp * scale * k * kb[0]);
     const e = {
       id: Run.nextId++, type, d, x, y,
@@ -753,16 +796,39 @@ export class Run {
     this.changeFloor(1);
     return true;
   }
-  // somewhere open to land, with no critter right beside it
+  // somewhere open to land, with no critter right beside it, and well away from the field's burrow down
+  // (v0.29: landing beside it made a field over before it began)
   landSpot() {
-    const m = this.map;
-    for (let t = 0; t < 400; t++) {
-      const x = rnd(m.w), y = rnd(m.h), i = idx(x, y);
-      if (m.tiles[i] !== FLOOR || ![T.NONE, T.GRASS, T.BRUSH, T.ASH].includes(m.ter[i])) continue;
+    const m = this.map, holes = [];
+    // (both burrows, when the field forks)
+    for (let i = 0; i < m.w * m.h; i++) if (m.tiles[i] === STAIRS) holes.push(distMap(m, i % m.w, (i / m.w) | 0));
+    const dm = holes.length ? holes[0].map((d, i) => Math.min(...holes.map(h => h[i]))) : null;
+    const spots = [];
+    for (let i = 0; i < m.w * m.h; i++) {
+      const x = i % m.w, y = (i / m.w) | 0;
+      if (m.tiles[i] !== FLOOR || ![T.NONE, T.GRASS, T.BRUSH, T.ASH].includes(m.ter[i]) || (dm && dm[i] >= 9999)) continue;
       if (this.enemies.some(e => e.hp > 0 && cheb(e, { x, y }) <= 2) || this.pickups.some(q => q.x === x && q.y === y)) continue;
-      return { x, y };
+      spots.push({ x, y, d: dm ? dm[i] : 0 });
     }
-    return null;
+    if (!spots.length) return null;
+    const far = Math.max(...spots.map(s => s.d));
+    return pick(spots.filter(s => s.d >= far * 0.6));
+  }
+
+  // 대장의 보물 상자 opened: the floor gives way behind it, a hole down. Stepping in asks: home with the
+  // win, or on down to 깊은 곳 (v0.29: the trip used to end at the chest)
+  bossHole(x, y) {
+    const m = this.map, d = this.lastMove || { dx: 0, dy: -1 };
+    const ok = (hx, hy) => inMap(hx, hy) && m.tiles[idx(hx, hy)] === FLOOR && !this.enemyAt(hx, hy) && !this.pickups.some(q => q.x === hx && q.y === hy && !q.taken);
+    const tries = [[d.dx, d.dy], [0, -1], [-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1], [0, 1]];
+    const at = tries.map(([dx, dy]) => ({ x: x + dx, y: y + dy })).find(q => (q.x !== x || q.y !== y) && ok(q.x, q.y)) || { x, y };
+    const i = idx(at.x, at.y);
+    m.tiles[i] = STAIRS;
+    m.ter[i] = T.NONE;
+    m.down = at;
+    m.bossHole = true;
+    this.emit('stairs', at);
+    this.log('상자 뒤로 바닥이 꺼지며 구멍이 뚫렸다. 아래에서 찬 바람이 올라온다.', 'warn');
   }
 
   // A snowball knocks you a tile back: a wall or someone stops you; over a drop you fall (at the end of
@@ -802,6 +868,7 @@ export class Run {
     for (const [i, t] of Object.entries(m.goo || {})) {
       if (this.turn < t) continue;
       delete m.goo[i];
+      if (m.gooSeen) delete m.gooSeen[i];
       if (m.ter[i] === T.SLIME || m.ter[i] === T.HONEY) { m.ter[i] = T.NONE; done.push(+i); }
     }
     if (done.length) this.emit('tiles', { list: done, soft: true });
@@ -890,7 +957,7 @@ export class Run {
     if (map.ter[i] === T.ICE || map.ter[i] === T.SLIME) this.slidePlayer(dx, dy, map.ter[i] === T.SLIME);
     const at = map.tiles[idx(p.x, p.y)];
     // 깊은 곳: a burrow down is where you either go home with what you picked up, or on down
-    if (at === STAIRS && this.depth && !this.floors[this.floor + 1]) { this.queue.push({ kind: 'deeper', burrow: true }); this.endTurn(); return true; }
+    if (at === STAIRS && (this.depth || this.banked) && !this.floors[this.floor + 1]) { this.queue.push({ kind: 'deeper', burrow: true }); this.endTurn(); return true; }
     if (at === STAIRS) { this.takeBurrow(p.x, p.y); this.changeFloor(1); return true; }
     if (at === UPSTAIRS) { this.changeFloor(-1); return true; }
     // 토끼: every few steps one is a hop, over before anyone else can move
@@ -922,7 +989,14 @@ export class Run {
     // 낮잠 꿈 (v0.28): rest long enough with nobody about and you nod off for a moment (once a trip)
     const alone = !this.enemies.some(e => e.hp > 0 && !e.d.npc && this.isVisible(e.x, e.y) && !['hide', 'stone', 'lurk'].includes(e.state));
     p.rests = alone ? (this.restAt === this.turn - 1 ? (p.rests || 0) + 1 : 1) : 0;
+    // 자장가 (v0.29): rest right beside the same sleeper, with nobody else up, and it rolls over in
+    // its sleep (once a trip); it may of course wake up instead. Not in a 낮잠 방: that heap wakes as one
+    const sleeper = this.enemies.find(e => e.hp > 0 && e.state === 'sleep' && !e.d.npc && !e.d.boss && !e.den && cheb(e, p) === 1);
+    const up = this.enemies.some(e => e.hp > 0 && !e.d.npc && e !== sleeper && !['sleep', 'hide', 'stone', 'lurk'].includes(e.state) && this.isVisible(e.x, e.y));
+    p.lull = sleeper && !up ? (this.restAt === this.turn - 1 && p.lullBy === sleeper.id ? (p.lull || 0) + 1 : 1) : 0;
+    p.lullBy = sleeper?.id;
     this.restAt = this.turn;
+    if (p.lull >= B.LULL_RESTS && !this.lulled) this.lullaby(sleeper);
     if (p.rests >= B.DREAM_RESTS && !this.dreamt) this.dream();
     this.endTurn();
     return true;
@@ -943,7 +1017,9 @@ export class Run {
   // asleep in it; and three bumps running into the same bit of wall is a bump on the head.
   bumpWall(x, y, dx, dy) {
     const map = this.map, i = idx(x, y);
-    if (map.nook?.gap === i) return this.squeeze(x, y, dx, dy);
+    if (map.nook?.gap === i) return map.nook.hits == null ? this.squeeze(x, y, dx, dy) : this.hitHidden(x, y, dx, dy);
+    const seam = map.seams?.find(o => o.i === i && o.left > 0);
+    if (seam) return this.prySeam(seam);
     const prop = !!map.props[i];
     this.emit('poke', { x, y, dx, dy, prop, kind: B.ROCKY.has(this.zone.style) ? 'rock' : 'leaf' });
     if (prop && map.baby === i) { this.babyOut(x, y); return false; }
@@ -953,20 +1029,28 @@ export class Run {
     return false;
   }
 
-  // 머리 쿵: the first time in a trip, down comes whatever was up there (one of the meadow tools, or a few
-  // coins; in the old guild's ruins, a name tag); after that only a second bump on the head
+  // 머리 쿵: the third bump running into the same bit of wall. The first three of a trip (the 3rd, 6th
+  // and 9th bump) shake something down, better each time (v0.29): a few coins or a tool (in the old
+  // guild's ruins, a name tag), then a tool or a potion, then a star candy. Every 쿵 is heard round
+  // about, so whoever was napping close by comes to see.
   bonk(x, y) {
-    const p = this.p, first = !this.bonked;
+    const p = this.p, n = this.bonks = (this.bonks || (this.bonked ? 1 : 0)) + 1;
     let drop = null;
     this.bonked = true;
-    if (first) {
-      const tool = this.pickTool(), type = this.zone.style === 'ruins' ? 'tag' : tool && Math.random() < 0.6 ? tool : 'gold';
-      this.dropNear(p.x, p.y, type === 'gold' ? { type, amount: Math.round((B.gs(this.stage) + 1) * rint(3, 6)) } : { type });
+    if (n <= B.BONK_DROPS) {
+      const tool = this.pickTool(), potion = !this.dare('nopotion');
+      const type = n === 1 ? (this.zone.style === 'ruins' ? 'tag' : tool && Math.random() < 0.5 ? tool : 'gold')
+        : n === 2 ? (tool && (!potion || Math.random() < 0.6) ? tool : potion ? 'potion' : 'gold')
+        : this.open('candy') ? 'candy' : 'gold';
+      const amount = Math.round((B.gs(this.stage) + 1) * (n === 3 ? rint(9, 13) : rint(3, 6)));
+      this.dropNear(p.x, p.y, type === 'gold' ? { type, amount } : type === 'candy' ? { type, n: B.candySteps(this.floor) } : { type });
       const at = this.pickups[this.pickups.length - 1];
       drop = { x: at.x, y: at.y, type };
     }
-    this.emit('headbonk', { x: p.x, y: p.y, from: { x, y }, drop });
-    this.log(first ? '쿵! 머리를 박았다. 혹이 났다. 위에서 뭔가 떨어졌다.' : '쿵! 또 머리를 박았다. 혹 위에 혹이 났다.', 'warn');
+    this.noise(p.x, p.y, B.BONK_NOISE);
+    this.emit('headbonk', { x: p.x, y: p.y, from: { x, y }, drop, n });
+    this.log(['쿵! 머리를 박았다. 혹이 났다. 위에서 뭔가 떨어졌다.', '쿵! 또 박았다. 혹 위에 혹이 났다. 또 뭔가 떨어졌다!',
+      '쿵!! 혹이 세 개가 됐다. 위에서 반짝이는 게 떨어졌다!'][n - 1] || '쿵! 머리가 얼얼하다. 이제 아무것도 안 떨어진다.', 'warn');
     this.secret('bonk', 700);
     this.emit('turn');
   }
@@ -999,44 +1083,200 @@ export class Run {
     return this.step(dx, dy);
   }
 
-  // Where the secrets of a field go, when it has them: a nook behind a room's top wall, three across and
-  // two deep, with a gap of light in the wall to get in by and a gold-rimmed chest inside; a baby
-  // critter asleep in one of the bushes standing in the rooms (the bush twitches now and then).
+  // Where the secrets of a field go. 숨은 방 (v0.29): every field but the boss's has a hidden room dug in
+  // behind a bit of wall that gives itself away to a sharp eye (the bushes a little parted, a crack in
+  // the rock); and now and then a baby critter asleep in one of the bushes standing in the rooms (the
+  // bush twitches now and then).
   hideSecrets(open) {
     const map = this.map;
     map.nook = null;
     map.baby = null;
     if (this.floor === this.bossFloor) return;
-    // (by the sea the walls are the sea far below, so no nook there)
-    if (this.zone.style !== 'sea' && Math.random() < B.NOOK_CHANCE) {
-      const solid = (x, y) => inMap(x, y) && map.tiles[idx(x, y)] === WALL && !map.props[idx(x, y)] && !map.lights?.some(l => l.x === x && l.y === y);
-      const spots = [];
-      for (const r of open.slice(1)) for (let x = r.x + 1; x < r.x + r.w - 1; x++) {
-        const y = r.y - 1, below = idx(x, r.y);
-        if (y < 4 || map.tiles[below] !== FLOOR || ![T.NONE, T.GRASS, T.BRUSH].includes(map.ter[below])) continue;
-        let ok = true;
-        for (let j = y - 3; j <= y && ok; j++) for (let k = x - 2; k <= x + 2 && ok; k++) if (!solid(k, j)) ok = false;
-        if (ok && !this.pickups.some(q => q.x === x && q.y === r.y)) spots.push({ x, y });
-      }
-      const g = pick(spots);
-      if (g) {
-        const cells = [];
-        for (let j = g.y - 2; j < g.y; j++) for (let k = g.x - 1; k <= g.x + 1; k++) {
-          const i = idx(k, j);
-          map.tiles[i] = FLOOR;
-          map.ter[i] = T.GRASS;
-          cells.push(i);
-        }
-        map.nook = { gap: idx(g.x, g.y), cells };
-        this.pickups.push({ x: g.x, y: g.y - 2, type: 'chest', rich: true }, { x: g.x - 1, y: g.y - 1, type: 'gold', amount: Math.round((B.gs(this.stage) + 1) * rint(8, 12)) });
-      }
-    }
+    this.hideRoom(open);
     // (only where what stands in the rooms is something growing: a shrub, a stump, reeds, a giant bud)
     if (B.BABY_ZONES.has(this.zone.style) && Math.random() < B.BABY_CHANCE) {
       const inOpen = i => open.some(r => { const x = i % map.w, y = (i / map.w) | 0; return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h; });
       const bushes = Object.keys(map.props).map(Number).filter(inOpen);
       if (bushes.length) map.baby = pick(bushes);
     }
+  }
+
+  // 숨은 방: a little room dug out behind the wall of one of the rooms, one to three across and one or two
+  // deep, walled in all round but for its entrance (the bit of wall it is behind). The top wall of a room
+  // is best (you see its face), then the sides, then the bottom; bigger first; away from where you came
+  // in. What is inside: HIDE_ROOMS.
+  hideRoom(open) {
+    const map = this.map, lm = map.landmark;
+    const solid = (x, y) => inMap(x, y) && !isBorder(x, y) && map.tiles[idx(x, y)] === WALL && !map.props[idx(x, y)]
+      && !map.lights?.some(l => l.x === x && l.y === y) && !(lm && x >= lm.x - 1 && x < lm.x + lm.w + 1 && y >= lm.y - 1 && y < lm.y + lm.h + 1);
+    const dm = distMap(map, this.p.x, this.p.y), found = [];
+    const SIDES = [[0, -1, 3], [-1, 0, 2], [1, 0, 2], [0, 1, 1]];
+    const SHAPES = [[2, 3], [2, 2], [1, 3], [1, 2], [1, 1]];   // [deep, across]
+    for (const r of open.slice(1)) {
+      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
+        const fi = idx(x, y);
+        if (map.tiles[fi] !== FLOOR || dm[fi] >= 9999 || ![T.NONE, T.GRASS, T.BRUSH].includes(map.ter[fi])) continue;
+        if (this.pickups.some(q => q.x === x && q.y === y)) continue;
+        for (const [dx, dy, pref] of SIDES) {
+          const gx = x + dx, gy = y + dy;
+          if (!solid(gx, gy)) continue;
+          for (const [deep, across] of SHAPES) {
+            const cells = [];
+            for (let k = 1; k <= deep; k++) for (let j = 0; j < across; j++) {
+              const o = j - Math.floor((across - 1) / 2);
+              cells.push({ x: gx + dx * k + dy * o, y: gy + dy * k + dx * o });
+            }
+            const set = new Set(cells.map(c => idx(c.x, c.y)));
+            let ok = cells.every(c => solid(c.x, c.y));
+            // walled in all round, but for the way in
+            for (const c of cells) for (const [ex, ey] of DIRS8) {
+              if (!ok) break;
+              const nx = c.x + ex, ny = c.y + ey, ni = idx(nx, ny);
+              if (set.has(ni) || (nx === gx && ny === gy)) continue;
+              if (!solid(nx, ny) && !(inMap(nx, ny) && map.tiles[ni] === WALL)) ok = false;
+            }
+            if (!ok) continue;
+            found.push({ gx, gy, dx, dy, cells, score: pref * 4 + cells.length * 2 + Math.min(12, dm[fi] / 3) + Math.random() * 6 });
+            break;
+          }
+        }
+      }
+    }
+    if (!found.length) return;
+    const g = found.reduce((a, b) => (b.score > a.score ? b : a));
+    const rocky = B.ROCKY.has(this.zone.style);
+    for (const c of g.cells) {
+      const i = idx(c.x, c.y);
+      map.tiles[i] = FLOOR;
+      map.ter[i] = rocky ? T.NONE : T.GRASS;
+    }
+    map.nook = { gap: idx(g.gx, g.gy), cells: g.cells.map(c => idx(c.x, c.y)), hits: 0, kind: rocky ? 'rock' : 'leaf' };
+    // what is inside, the far end first
+    const spots = g.cells.slice().sort((a, b) => cheb(b, { x: g.gx, y: g.gy }) - cheb(a, { x: g.gx, y: g.gy }));
+    const kinds = B.HIDE_ROOMS.filter(o => !o.need || this.open(o.need));
+    let roll = Math.random() * kinds.reduce((n, o) => n + o.w, 0);
+    const kind = kinds.find(o => (roll -= o.w) < 0)?.id || 'stash';
+    map.nook.what = kind;
+    const coins = () => Math.round((B.gs(this.stage) + 1) * rint(5, 8));
+    const [a, b, c] = spots;
+    if (kind === 'stash') {
+      this.pickups.push({ x: a.x, y: a.y, type: 'chest', rich: true });
+      if (b) this.pickups.push({ x: b.x, y: b.y, type: 'gold', amount: coins() });
+    } else if (kind === 'candy') {
+      this.pickups.push({ x: a.x, y: a.y, type: 'candy', n: B.candySteps(this.floor) });
+      const tool = this.pickTool();
+      if (b) this.pickups.push(tool ? { x: b.x, y: b.y, type: tool } : { x: b.x, y: b.y, type: 'gold', amount: coins() });
+    } else if (kind === 'vein') {
+      // a sparkle boulder a grade better than the field's, shut in with you: loud to break
+      map.tiles[idx(a.x, a.y)] = ORE;
+      map.ores.push({ x: a.x, y: a.y, cells: [{ x: a.x, y: a.y }], size: 1, hits: 0, tier: Math.min(ORES.length - 1, Math.floor(B.gs(this.stage)) + 1), vent: null, hidden: true });
+      if (b) this.pickups.push({ x: b.x, y: b.y, type: 'gold', amount: coins() });
+    } else if (kind === 'berry') {
+      // berry bushes and a potion: somewhere quiet to mend
+      map.ter[idx(a.x, a.y)] = T.BERRY;
+      if (b && this.dare('nopotion')) map.ter[idx(b.x, b.y)] = T.BERRY;
+      else if (b) this.pickups.push({ x: b.x, y: b.y, type: 'potion' });
+      if (c) map.ter[idx(c.x, c.y)] = T.BERRY;
+    } else if (kind === 'nap') {
+      // a big one asleep on a gold-rimmed chest
+      this.pickups.push({ x: a.x, y: a.y, type: 'chest', rich: true });
+      const type = pick(this.zone.enemies.filter(t => !ENEMIES[t].pack && !ENEMIES[t].boss)) || this.zone.enemies[0];
+      const e = this.spawnEnemy(type, (b || a).x, (b || a).y, this.foeScale);
+      Object.assign(e, { state: 'sleep', big: true, maxHp: Math.round(e.maxHp * 1.5), hp: Math.round(e.hp * 1.5), atk: e.atk + 1 });
+      if (c) this.pickups.push({ x: c.x, y: c.y, type: 'gold', amount: coins() });
+    }
+  }
+
+  // Each hit into the hidden room's wall parts the bushes (or cracks the rock) a little more, and the
+  // third opens the way in. It takes the turn, and it is not quiet: rock is louder than leaves.
+  hitHidden(x, y, dx, dy) {
+    const map = this.map, nook = map.nook, i = idx(x, y);
+    nook.hits = (nook.hits || 0) + 1;
+    const rock = nook.kind === 'rock';
+    this.noise(x, y, rock ? B.HIDE_NOISE.rock : B.HIDE_NOISE.leaf);
+    if (nook.hits < B.HIDE_HITS) {
+      this.emit('hideHit', { x, y, dx, dy, n: nook.hits, kind: nook.kind });
+      this.emit('tiles', { list: [i], soft: true });
+      if (nook.hits === 1 && !this.told.hide) { this.told.hide = true; this.log(rock ? '쩍! 바위의 금이 벌어졌다.' : '바스락! 덤불이 조금 헤쳐졌다.'); }
+      this.endTurn();
+      return true;
+    }
+    map.tiles[i] = FLOOR;
+    map.ter[i] = rock ? T.NONE : T.GRASS;
+    nook.gap = -1;
+    this.emit('tiles', { list: [i, ...nook.cells] });
+    this.emit('hideOpen', { x, y, dx, dy, kind: nook.kind });
+    this.log(rock ? '와르르! 바위가 무너지고 숨은 방이 나왔다!' : '덤불이 활짝 헤쳐지고 숨은 방이 나왔다!', 'good');
+    this.secret('nook', 600);
+    this.meta.stats.hideRooms = (this.meta.stats.hideRooms || 0) + 1;
+    this.endTurn();
+    return true;
+  }
+
+  // 반짝 광맥 (v0.29): gems set in a bit of rock wall facing a room (in a hedge, golden acorns caught in
+  // it), to prise out one at a time, each worth more than the last and each louder than the last: take
+  // one and go, or stay for the big one at the back while the field comes to see. The sparkle rock's
+  // noise for loot, in a wall.
+  placeSeams(open) {
+    const map = this.map;
+    map.seams = [];
+    const n = Math.random() < B.SEAM_CHANCE ? (Math.random() < B.SEAM_TWO ? 2 : 1) : 0;
+    if (!n) return;
+    const dm = distMap(map, this.p.x, this.p.y), lm = map.landmark, spots = [];
+    for (const r of open.slice(1)) for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
+      const fi = idx(x, y);
+      if (map.tiles[fi] !== FLOOR || dm[fi] >= 9999 || dm[fi] < 8) continue;
+      for (const [dx, dy, pref] of [[0, -1, 3], [-1, 0, 1], [1, 0, 1]]) {
+        const gx = x + dx, gy = y + dy, gi = idx(gx, gy);
+        if (!inMap(gx, gy) || isBorder(gx, gy) || map.tiles[gi] !== WALL || map.props[gi] || map.nook?.gap === gi) continue;
+        if (map.lights?.some(l => l.x === gx && l.y === gy) || (lm && gx >= lm.x - 1 && gx < lm.x + lm.w + 1 && gy >= lm.y - 1 && gy < lm.y + lm.h + 1)) continue;
+        spots.push({ x: gx, y: gy, i: gi, score: pref + Math.random() * 3 });
+      }
+    }
+    for (const sp of spots.sort((a, b) => b.score - a.score)) {
+      if (map.seams.length >= n) break;
+      if (map.seams.some(o => cheb(o, sp) < 8)) continue;
+      map.seams.push({ x: sp.x, y: sp.y, i: sp.i, left: B.SEAM_GEMS, kind: B.ROCKY.has(this.zone.style) ? 'gem' : 'acorn' });
+    }
+  }
+
+  prySeam(seam) {
+    const k = B.SEAM_GEMS - seam.left, last = seam.left === 1, p = this.p;
+    seam.left--;
+    const gold = Math.round(B.oreGold(this.payFloor) * B.SEAM_PAY[k]);
+    const r = Math.round(B.SEAM_NOISE[k] * (this.char.quiet ? 0.75 : 1));
+    this.emit('pry', { x: seam.x, y: seam.y, from: { x: p.x, y: p.y }, n: k + 1, left: seam.left, kind: seam.kind, last });
+    this.addGold(gold);
+    this.emit('tiles', { list: [seam.i], soft: true });
+    if (last) this.log(seam.kind === 'gem' ? '맨 안쪽의 커다란 보석까지 캐냈다!' : '맨 안쪽의 커다란 황금 도토리까지 털어 냈다!', 'good');
+    else if (k === 0) this.log(seam.kind === 'gem' ? '벽에 박힌 보석을 하나 캐냈다. 똑, 소리가 울린다.' : '덤불에 걸린 황금 도토리를 하나 털어 냈다. 바스락, 소리가 퍼진다.', 'good');
+    const heard = this.noise(seam.x, seam.y, r), came = [];
+    // like the sparkle rock: the louder it gets, the more crawl out of the dark toward it
+    for (let w = 0; w < (this.floor === 1 || this.char.quiet ? 0 : B.SEAM_WAVE[k]); w++) {
+      const t = this.waveSpot(seam);
+      if (!t) break;
+      const e = this.spawnEnemy(pick(this.zone.enemies), t.x, t.y, this.foeScale);
+      e.state = 'search'; e.searchT = 0; e.last = { x: seam.x, y: seam.y };
+      came.push(e);
+    }
+    if (heard.length || came.length) this.emit('heard', { x: p.x, y: p.y, list: [...heard, ...came] });
+    if (last) this.discover?.('seam_all', true);
+    this.endTurn();
+    return true;
+  }
+
+  // 자장가: the sleeper beside you rolls over with a snort and sleeps on, deeper than before, and out
+  // from under it rolls what it was lying on: a meadow tool, or a little gold
+  lullaby(e) {
+    this.lulled = true;
+    this.p.lull = 0;
+    e.wake = 0;
+    e.doze = Math.max(e.doze || 0, 3);
+    const t = this.pickTool();
+    this.dropNear(e.x, e.y, t ? { type: t } : { type: 'gold', amount: Math.round((B.gs(this.stage) + 1) * rint(4, 8)) });
+    this.emit('lull', { x: e.x, y: e.y, enemy: e });
+    this.log(`${josa(e.d.name, '이', '가')} 잠결에 데굴 돌아눕자, 깔고 자던 게 굴러 나왔다.`, 'good');
+    this.secret('sleeper', 900);
   }
 
   // 낮잠 꿈: a moment's doze and a dream of the fields (data/secrets.js DREAMS), and you wake a bit rested
@@ -1298,6 +1538,24 @@ export class Run {
       this.emit('spirit', { x, y, tool: id });
       this.queue.push({ kind: 'spirit', tool: id, x, y, delay: 1400 });
       this.secret('spirit', 600);
+      this.endTurn();
+      return true;
+    }
+    // 비밀 (v0.29): down a drop it goes, and only a long while later comes a tiny 퐁 from far below
+    const ter = this.map.ter[idx(x, y)];
+    if (ter === T.CHASM && !this.enemyAt(x, y)) {
+      this.emit('plop', { x, y });
+      this.log('절벽 아래로 떨어뜨렸다. …한참 뒤에야 아주 작게 퐁, 소리가 났다.');
+      this.secret('pebble', 2600);
+      this.endTurn();
+      return true;
+    }
+    // 비밀 (v0.29): a pinecone into the lava crackles, and roasted pine nuts pop out to you
+    if (ter === T.LAVA && id === 'pinecone' && !this.enemyAt(x, y)) {
+      this.emit('roast', { x, y });
+      this.heal(Math.ceil(this.stat().maxHp * B.ROAST_HEAL));
+      this.log('타닥타닥! 솔방울이 구워져서 잣이 톡톡 튀어나왔다. 고소하다!', 'good');
+      this.secret('roast', 1200);
       this.endTurn();
       return true;
     }
@@ -1697,9 +1955,10 @@ export class Run {
         // win, or down through the floor to 깊은 곳 (bank adds the gold either way)
         this.meta.stats.chests = (this.meta.stats.chests || 0) + 1;
         this.emit('bossChest', { x, y, gold: Math.round(B.stageBonus(this.stage) * this.goldBonus) });
-        this.log('대장의 보물 상자를 열었다!', 'good');
+        this.log('대장의 보물 상자를 열었다! 탐험 성공이다.', 'good');
         this.bossPrize();
-        this.queue.push({ kind: 'deeper' });
+        if (!this.banked) this.bank();
+        this.bossHole(x, y);
       } else if (q.type === 'lockedChest') {
         map.keyHeld = false;
         this.queue.push({ kind: 'chest', rich: true, locked: true });
@@ -1877,8 +2136,11 @@ export class Run {
   strike(e, raw, kind) {
     const L = this.levels(), dealt = Math.max(1, raw - e.def);
     this.hurt(e, dealt, kind);
-    // 피의 군주: a share of every blow comes back to you as health
-    const steal = (this.char.lifesteal || 0) + (L.bloodblade ? (L.bloodblade < 3 ? 1 : 2) : 0) + (L.bloodking ? Math.round(dealt * 0.3) : 0);
+    // 피의 군주: a share of every blow comes back to you as health; 흡혈귀's own bite, once a turn
+    // however many one swing hits (v0.29: a sweep through a crowd healed it right up, too strong)
+    const bite = this.char.lifesteal && this.bitAt !== this.turn && !e.d.npc ? this.char.lifesteal : 0;
+    if (bite) this.bitAt = this.turn;
+    const steal = bite + (L.bloodblade ? (L.bloodblade < 3 ? 1 : 2) : 0) + (L.bloodking ? Math.round(dealt * 0.3) : 0);
     if (steal && !e.d.npc) this.heal(steal);
     if (e.hp <= 0) return;
     // the flame sword always burns; the fire ring now and then, and what it catches goes on burning
@@ -2055,10 +2317,13 @@ export class Run {
     if (e.d.boss) {
       if (!stats.bosses.includes(e.type)) stats.bosses.push(e.type);
       this.log(`${josa(e.d.name, '을', '를')} 쓰러뜨렸다!`, 'good');
-      // the stage's last boss leaves a big chest; the trip is won when you open it
+      // a short fanfare and a word across the screen (v0.29)
+      this.emit('bossDown', { name: e.d.name, last: this.floor >= this.bossFloor });
+      // the stage's last boss leaves a big chest; open it, and a hole opens behind it: into the hole
+      // is home (or on down to 깊은 곳)
       if (this.floor >= this.bossFloor) {
         this.pickups.push({ x: e.x, y: e.y, type: 'bossChest' });
-        this.log('대장이 커다란 보물 상자를 남겼다! 열면 탐험 성공이다.', 'good');
+        this.log('대장이 커다란 보물 상자를 남겼다!', 'good');
       } else {
         this.map.tiles[idx(e.x, e.y)] = STAIRS;
         this.map.ter[idx(e.x, e.y)] = T.NONE;
@@ -2324,7 +2589,7 @@ export class Run {
 
   // `raw`: the amount already has the gold bonuses in it (sparkle-rock gold)
   addGold(n, raw = false) {
-    const g = Math.max(1, Math.round((raw ? n : n * this.stat().goldMult) * (this.depth ? B.DEEP_GOLD ** this.depth : 1)));
+    const g = Math.max(1, Math.round((raw ? n : n * this.stat().goldMult) * B.goldPace(this.stage) * (this.depth ? B.DEEP_GOLD ** this.depth : 1)));
     this.gold += g;
     this.emit('gold', { x: this.p.x, y: this.p.y, n: g });
   }
@@ -2416,6 +2681,7 @@ export class Run {
     this.enemyPhase = true;
     if (!quick) for (const e of this.enemies.slice()) {
       if (e.hp > 0 && p.hp > 0 && !this.pendingFall) enemyAct(this, e, dm);
+      if (e.fury && e.hp > 0 && p.hp > 0 && !this.pendingFall && this.turn % B.FURY_STEP === 0) furyStep(this, e, dm);
     }
     this.enemyPhase = false;
     this.lastMove = null;
@@ -2648,7 +2914,13 @@ export class Run {
   }
 
   // what glows on this field: the marsh's fireflies not caught yet
-  lights() { return (this.map.flies || []).map(f => ({ x: f.x, y: f.y, r: B.FLY_LIGHT })); }
+  lights() {
+    const out = (this.map.flies || []).map(f => ({ x: f.x, y: f.y, r: B.FLY_LIGHT })), a = this.map.arena;
+    // the boss's arena, lit end to end while the boss stands (not through the octopus's ink, nor on a
+    // trip taken with the small lantern)
+    if (a && this.boss?.hp > 0 && !(this.p.inked > 0) && !this.dare('dark')) out.push({ x: a.cx, y: a.cy, r: Math.ceil(Math.hypot(a.w, a.h) / 2) });
+    return out;
+  }
 
   // 반딧불 늪: walk into a firefly swarm and it goes in a jar; each jar gives a tile of sight for the trip
   catchFly(x, y) {
@@ -2669,6 +2941,18 @@ export class Run {
       book[e.type] = 0;
       (this.newCritters ||= []).push(e.type);
     }
+  }
+
+  // 화남 (v0.29): past half health a boss gets angry, once: a harder bite, and from now on a step more
+  // every other turn (Run.endTurn → ai.js furyStep). It costs no turn. Those that already have a trick of
+  // their own at half health (frogs, ink, masked workers, bats) show that instead of the plain flash.
+  enrage(e) {
+    if (e.fury || !e.d.boss || e.hp > e.maxHp / 2) return;
+    e.fury = true;
+    e.atk = Math.round(e.atk * B.FURY_ATK);
+    if (!['toadking', 'octopus', 'bigmask', 'lord'].includes(e.type)) this.emit('rage', { enemy: e });
+    this.say(e, '!!');
+    this.log(`${josa(e.d.name, '이', '가')} 단단히 화가 났다! 더 빨라지고 더 세게 문다.`, 'warn');
   }
 
   // Returns true if the boss used its whole turn on a special move.
@@ -2986,8 +3270,13 @@ export class Run {
     const q = this.queue.shift();
     if (o.kind === 'heal') this.heal(Math.round(this.stat().maxHp * 0.5));
     else if (o.kind === 'gold') this.addGold(o.amount || 25);
-    // 출발 보급 packs a relic two levels' worth
-    else if (o.kind === 'relic' && q?.kind === 'kit') { this.gainRelic(o.id); if (this.p.relics[o.id] < maxLevelOf(o.id)) this.gainRelic(o.id); }
+    // 출발 보급 packs a relic B.KIT_LV levels' worth (fully grown), and both of a twin card's
+    else if (q?.kind === 'kit' && (o.kind === 'relic' || o.kind === 'twin')) {
+      if (o.kind === 'relic') this.gainRelic(o.id);
+      for (const id of o.kind === 'twin' ? [o.a, o.b] : [o.id]) {
+        for (let k = o.kind === 'relic' ? 1 : 0; k < B.KIT_LV && this.p.relics[id] && this.p.relics[id] < maxLevelOf(id); k++) this.gainRelic(id);
+      }
+    }
     else if (o.kind === 'relic') this.gainRelic(o.id);
     else if (o.kind === 'fuse') this.fuse(o.a, o.b);
     else if (o.kind === 'swap') this.transmute(o.id);
@@ -2996,7 +3285,13 @@ export class Run {
     // home from the boss's chest or a burrow of 깊은 곳: everything comes along; on down: through the
     // hole in the boss's floor, or the burrow; or stay and look round this field a while longer
     else if (o.act === 'home') { this.cashOut = true; this.finish(true); return; }
-    else if (o.act === 'deeper' && q?.burrow) { this.takeBurrow(this.p.x, this.p.y); this.changeFloor(1); return; }
+    else if (o.act === 'deeper' && q?.burrow) {
+      this.deepest = Math.max(this.deepest || 0, 1);
+      if (!this.depth) this.log('대장 방 바닥의 구멍으로 뛰어들었다. 더 깊은 곳이다.', 'warn');
+      this.takeBurrow(this.p.x, this.p.y);
+      this.changeFloor(1);
+      return;
+    }
     else if (o.act === 'deeper') { this.goDeeper(); return; }
     else if (o.act === 'stay') return;
     // 연못 신령: the truth gets you yours back, a second one, and the golden one's worth in gold; a lie,
@@ -3027,8 +3322,8 @@ export class Run {
 
   // 깊은 곳: the stage is won here and now (bank), and you drop through a hole in the boss's floor to a
   // field below it with this stage's critters grown stronger, a rich chest lying out on each floor,
-  // and better rocks. The stairs keep going down; going home (나가기) or falling there still counts
-  // as the win, with all the gold.
+  // and better rocks. The stairs keep going down, and each burrow asks: home, or deeper. Going home by
+  // one or falling there still counts as the win.
   goDeeper() {
     if (!this.banked) this.bank();
     const p = this.p;
@@ -3160,8 +3455,8 @@ export class Run {
     if (this.banked) won = true;
     const news = this.banked || (won ? this.bank() : { stage: null, loop: 0, dares: 0 });
     if (this.depth) stats.deepest = { ...stats.deepest, [this.stage]: Math.max(stats.deepest?.[this.stage] || 0, this.depth) };
-    // what was picked up past the boss comes home only by a burrow's 돌아간다: fall, or give up from the
-    // menu, and it stays down there (the win and the rest come home)
+    // what was picked up past the boss comes home only by a burrow's 돌아간다: fall, and it stays down
+    // there (the win and the rest come home)
     if (this.deepGold && !this.cashOut) {
       this.lostDeep = this.deepGold;
       this.gold = this.goldBanked;
