@@ -10,6 +10,7 @@
 //   at its habit, { spr, tool } a critter and the tool that got it
 
 import { SECRETS } from './secrets.js';
+import { QUIRKS, quirkId } from './quirks.js';
 import { ENEMIES } from './enemies.js';
 import { VARIANTS, VARIANT_IDS, ODD_KINDS, ODD_LINES, HABITS, oddId, habitId } from './odd.js';
 import { TRICKS, TRICK_TOOLS, BOSS_TRICKS, trickId } from './tricks.js';
@@ -60,6 +61,7 @@ export const CHAPTERS = [
 
 const ENTRIES_ALL = [
   ...SECRETS.map(s => ({ id: `secret:${s.id}`, ch: 'secret', name: s.name, line: s.got, pic: SECRET_PIC[s.id] || { spr: 'door' }, secret: s.id })),
+  ...QUIRKS.map(o => ({ id: quirkId(o.id), ch: 'secret', name: o.name, line: o.line, pic: o.pic })),
   ...ODD_KINDS.flatMap(kind => VARIANT_IDS.map((v, i) => ({
     id: oddId(kind, v), ch: 'odd', name: `${VARIANTS[v].prefix}${ENEMIES[kind].name}`, line: ODD_LINES[kind][i], pic: { odd: v, spr: ENEMIES[kind].sprite }, kind, variant: v,
   }))),

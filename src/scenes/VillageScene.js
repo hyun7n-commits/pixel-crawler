@@ -37,6 +37,7 @@ import { patchNoise, scatterKey, patchKey, footKey, bloomKey, moteKeys, SCATTER_
 import { propCanvas, critterCanvas } from './village-props.js';
 import { poke, pokeKind, stillInFlowers, flutterTo, petPup } from './village-secrets.js';
 import { growthPropCanvas, stringCanvas, GROWTH_PROPS, STRING_PAD, SAILS_AT, SAIL_FRAMES } from './village-growth-art.js';
+import { placeVillageQuirks, quirkTap, quirkStep, quirkMeet, quirkTick } from './village-quirks.js';
 
 const MW = VILLAGE_MAP[0].length, MH = VILLAGE_MAP.length;
 const TOP = 3 * TILE;
@@ -298,6 +299,7 @@ export class VillageScene extends Phaser.Scene {
     this.placeLife();
     placeVillageLife(this);
     placeVillagePlay(this);
+    placeVillageQuirks(this);
     this.festival();
     this.playGrowth(arrivals);
   }
@@ -1281,6 +1283,8 @@ export class VillageScene extends Phaser.Scene {
   // a tap: walk to the spot; on a villager or a house, walk up to them and talk; on the sign, head out
   tap(x, y) {
     if (this.ps?.diving) return;
+    // 작은 장난 (scenes/village-quirks.js): the benches, and the things you can bump into five times
+    if (quirkTap(this, x, y)) return;
     // a game going on, or something to play with (scenes/village-play.js)
     if (playTap(this, x, y)) return;
     // fishing, a bug, the yard's bed (scenes/village-life.js)
@@ -1327,6 +1331,7 @@ export class VillageScene extends Phaser.Scene {
     if (this.ps?.diving || this.time.now < this.nextStep) return;
     this.nextStep = this.time.now + STEP_MS;
     const x = this.p.x + dx, y = this.p.y + dy;
+    if (quirkStep(this, x, y)) { this.path = []; return; }
     if (playStep(this, x, y, repeat)) { this.path = []; return; }
     if (lifeStep(this, x, y)) { this.path = []; return; }
     const who = this.folkAt(x, y) || this.heroAt(x, y) || this.pupAt(x, y) || (this.homeAt(x, y) && this.homeDoor) ||
@@ -1421,6 +1426,7 @@ export class VillageScene extends Phaser.Scene {
   meet(who) {
     this.path = [];
     this.pending = null;
+    if (quirkMeet(this, who)) return;
     if (who.poke) { poke(this, who.x, who.y); return; }
     if (who.life) { lifeAct(this, who); return; }
     if (who.play) { playAct(this, who); return; }
@@ -1732,5 +1738,6 @@ export class VillageScene extends Phaser.Scene {
       b.setAlpha(b.until - time < 250 ? (b.until - time) / 250 : 1);
       return true;
     });
+    quirkTick(this, time, dt);
   }
 }
