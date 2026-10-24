@@ -101,28 +101,7 @@ const POKE = {
     ripple(sc, center(x), center(y));
     sc.drops.explode(4, center(x), center(y));
     if (n % 3) return;
-    const k = sc.add.image(center(x), center(y), tex(sc, 'koi')).setDepth(D.fx).setScale(0.6);
-    const dir = sc.p.x >= x ? 1 : -1, x0 = center(x) - dir * 8, x1 = center(x) + dir * 10, y0 = center(y);
-    k.setFlipX(dir > 0).setPosition(x0, y0);
-    sc.drops.explode(10, x0, y0);
-    sc.tweens.addCounter({
-      from: 0, to: 1, duration: 620, ease: 'Linear',
-      onUpdate: tw => {
-        const u = tw.getValue();
-        k.setPosition(Math.round(x0 + (x1 - x0) * u), Math.round(y0 - 22 * Math.sin(u * Math.PI))).setAngle(dir * (-50 + 100 * u)).setScale(0.6 + 0.4 * Math.sin(u * Math.PI));
-      },
-      onComplete: () => {
-        k.destroy();
-        sc.hooks.onSound?.('splash');
-        ripple(sc, x1, y0);
-        sc.drops.explode(18, x1, y0);
-        // and some of it on you
-        sc.drops.explode(12, sc.ps.x, sc.ps.y - 14);
-        float(sc, sc.ps.x, sc.ps.y - 20, '첨벙!', '#9fd4ff');
-        face(sc, 'shock', 1100);
-        sc.time.delayedCall(500, () => sc.hooks.onSecret?.('koi'));
-      },
-    });
+    koiLeap(sc, x, y);
   },
   // the barrel rattles; the third time, a cat that was asleep in it jumps out and makes off (once a visit)
   barrel(sc, x, y, n) {
@@ -324,10 +303,37 @@ Object.assign(POKE, {
   },
 });
 
+// the big koi leaps out right in front of you and you get soaked (the third poke at the pond, or now and
+// then while fishing: scenes/village-life.js)
+export function koiLeap(sc, x, y) {
+  const k = sc.add.image(center(x), center(y), tex(sc, 'koi')).setDepth(D.fx).setScale(0.6);
+  const dir = sc.p.x >= x ? 1 : -1, x0 = center(x) - dir * 8, x1 = center(x) + dir * 10, y0 = center(y);
+  k.setFlipX(dir > 0).setPosition(x0, y0);
+  sc.drops.explode(10, x0, y0);
+  sc.tweens.addCounter({
+    from: 0, to: 1, duration: 620, ease: 'Linear',
+    onUpdate: tw => {
+      const u = tw.getValue();
+      k.setPosition(Math.round(x0 + (x1 - x0) * u), Math.round(y0 - 22 * Math.sin(u * Math.PI))).setAngle(dir * (-50 + 100 * u)).setScale(0.6 + 0.4 * Math.sin(u * Math.PI));
+    },
+    onComplete: () => {
+      k.destroy();
+      sc.hooks.onSound?.('splash');
+      ripple(sc, x1, y0);
+      sc.drops.explode(18, x1, y0);
+      // and some of it on you
+      sc.drops.explode(12, sc.ps.x, sc.ps.y - 14);
+      float(sc, sc.ps.x, sc.ps.y - 20, '첨벙!', '#9fd4ff');
+      face(sc, 'shock', 1100);
+      sc.time.delayedCall(500, () => sc.hooks.onSecret?.('koi'));
+    },
+  });
+}
+
 // Something coming up from behind a line (the top of the woods, a barrel's rim): only the part of it
 // above the line shows, `rows` of it at most; then, after `hold` ms, back down (hold 0: it stays up, all
 // of it, and is yours to move: onUp gets it).
-function emerge(sc, key, x, line, { rows = 16, ms = 260, hold = 900, onUp } = {}) {
+export function emerge(sc, key, x, line, { rows = 16, ms = 260, hold = 900, onUp } = {}) {
   const s = sc.add.image(x, line + 16, key).setOrigin(0.5, 1).setDepth(D.fx - 0.1);
   const show = () => { const r = Math.max(0, Math.min(rows, Math.round(line - (s.y - 16)))); s.setVisible(r > 0).setCrop(0, 0, 16, r); };
   show();
@@ -343,20 +349,20 @@ function emerge(sc, key, x, line, { rows = 16, ms = 260, hold = 900, onUp } = {}
 }
 
 // a ring spreading out on the water
-function ripple(sc, x, y) {
+export function ripple(sc, x, y) {
   const r = sc.add.ellipse(x, y, 8, 4).setStrokeStyle(1, 0xe6f7ff, 0.9).setDepth(D.deco + 0.65);
   sc.tweens.add({ targets: r, scale: 2.6, alpha: 0, duration: 700, ease: 'Quad.out', onComplete: () => r.destroy() });
 }
 
 // a word that pops up and drifts off (the same pixel font as out in the fields)
-function float(sc, x, y, text, color) {
+export function float(sc, x, y, text, color) {
   const t = sc.add.text(Math.round(x), Math.round(y), text, {
     fontFamily: 'Galmuri9, sans-serif', fontSize: '10px', color, stroke: '#000000', strokeThickness: 2,
   }).setOrigin(0.5, 1).setDepth(D.bubble).setResolution(sc.cameras.main.zoom || 3);
   sc.tweens.add({ targets: t, y: t.y - 10, alpha: 0, duration: 800, delay: 150, ease: 'Quad.in', onComplete: () => t.destroy() });
 }
 
-function face(sc, expr, ms) {
+export function face(sc, expr, ms) {
   sc.ps.expr = expr;
   sc.ps.exprUntil = sc.time.now + ms;
 }

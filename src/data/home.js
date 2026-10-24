@@ -11,9 +11,10 @@ import { bookCount } from './book.js';
 
 export const DECOR = [
   { id: 'flowers', name: '꽃밭', cost: 800, at: [[35, 21], [36, 21]], desc: '문 옆에 알록달록 꽃을 심는다' },
+  // v0.30: a working vegetable bed (마을 생활, data/life.js), so it comes early and cheap
+  { id: 'garden', name: '텃밭', cost: 900, at: [[41, 18], [42, 18], [41, 19], [42, 19]], desc: '씨앗을 심어 채소를 키우는 작은 밭' },
   { id: 'mailbox', name: '우편함', cost: 1400, at: [[38, 21]], desc: '이웃이 가끔 편지를 넣고 간다' },
   { id: 'pots', name: '화분', cost: 2000, at: [[34, 20]], desc: '벽 옆에 작은 화분 둘' },
-  { id: 'garden', name: '텃밭', cost: 3000, at: [[41, 18], [42, 18], [41, 19], [42, 19]], desc: '당근과 양배추가 자란다' },
   { id: 'laundry', name: '빨랫줄', cost: 4400, at: [[40, 17], [41, 17], [42, 17]], desc: '작업복이 바람에 펄럭인다' },
   { id: 'bench', name: '나무 벤치', cost: 6000, at: [[40, 22], [41, 22]], desc: '탐험 다녀와서 쉬는 자리' },
   { id: 'dog', name: '강아지 집', cost: 9000, at: [[40, 20]], desc: '강아지 한 마리가 같이 산다' },
@@ -64,7 +65,7 @@ export const FURNITURE = {
   plant:    { name: '화분', w: 1, h: 1, heart: 1, cost: 300, act: 'water', desc: '탐험을 다녀올 때마다 조금씩 자란다' },
   rug:      { name: '꽃 러그', w: 2, h: 2, heart: 3, cost: 800, rug: true, desc: '맨발로 밟으면 폭신하다' },
   lamp:     { name: '호롱 스탠드', w: 1, h: 1, heart: 2, cost: 600, act: 'lamp', desc: '노란 불빛이 방을 데운다' },
-  stove:    { name: '무쇠 난로', w: 1, h: 1, heart: 3, cost: 1800, act: 'cook', desc: '탐험 갈 때마다 꿀물 도시락을 싸 준다 (체력 물약 +1)' },
+  stove:    { name: '무쇠 난로', w: 1, h: 1, heart: 3, cost: 1800, act: 'cook', desc: '탐험 갈 때마다 꿀물 도시락을 싸 준다 (체력 물약 +1). 바구니에 든 것으로 요리도 한다' },
   shelf:    { name: '책장', w: 2, h: 1, heart: 3, cost: 1500, act: 'book', desc: '탐험 일지와 들판 동물 책이 꽂혀 있다' },
   tub:      { name: '나무 욕조', w: 2, h: 1, heart: 4, cost: 2600, act: 'bath', desc: '탐험 다녀와서 뜨끈하게' },
   sofa:     { name: '폭신 소파', w: 2, h: 1, heart: 4, cost: 3000, act: 'sit', desc: '친구들이 놀러 오면 여기 앉는다' },

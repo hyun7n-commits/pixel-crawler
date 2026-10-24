@@ -8,7 +8,7 @@ import { CHARACTERS } from '../data/characters.js';
 import { UPGRADES, PACK_COST, FORGE_COST, FORGE_LEGEND_LOOP, forgeable, forgeStock } from '../data/upgrades.js';
 import { PETS, TREATS, PET_LV, petLevel, petProgress, petNote, feedPet } from '../data/pets.js';
 import { STOCK_TOTAL, stockCount, stocked, upCap, newStock, seeStock, nextStock, goodInfo, stockSince } from '../data/shop.js';
-import { LIFE_TOOLS, CROPS, SEED_PACK, seedCost, seedId } from '../data/life.js';
+import { LIFE_TOOLS, CROPS, SEED_PACK, seedCost, seedId, sellPrice, itemName } from '../data/life.js';
 import { bookPic } from './book.js';
 import { isOpen, RELIC_GATES, BUILD } from '../data/unlocks.js';
 import { RELICS, RECIPES, recipeKey, tierOf, DISCOVERY_GOLD } from '../data/relics.js';
@@ -30,6 +30,7 @@ import { furnitureCanvas } from '../scenes/home-interior-art.js';
 import { savedRun } from '../core/suspend.js';
 import { SECRETS, secretsFound } from '../data/secrets.js';
 import { bookCount } from '../data/book.js';
+import { basketCount, bagItems, picOf } from './life.js';
 
 export function renderPanel(id, box, ctx) {
   PANELS[id](box, ctx);
@@ -45,6 +46,10 @@ export function renderVillageHud(meta, saved = savedRun()) {
   purse.innerHTML = '';
   purse.append(icon('gold', 16), el('span', null, `${meta.gold}G`));
   $('vGo').textContent = saved ? `이어서 탐험 · ${saved.label}` : `${josa(CHARACTERS[meta.sel].name, '으로', '로')} 들판에 출발`;
+  // the basket (ui/life.js), once there is something in it or a tool to fill it with
+  const nb = basketCount(meta), bag = $('vBag');
+  bag.hidden = !nb && !Object.values(meta.tools || {}).some(Boolean);
+  if (!bag.hidden) { bag.innerHTML = ''; bag.append(bookPic({ find: ['basket', 'nN'] }, 16), el('span', null, `${nb}`)); }
   // the 비밀 도감 (ui/book.js), once there is something in it
   const n = bookCount(meta), book = $('vBook');
   book.hidden = !n;
@@ -153,6 +158,7 @@ function shop(box, { meta, changed }) {
   }));
   pets(list, meta, buy, changed, badge);
   lifeGoods(list, meta, buy, badge);
+  sellGoods(list, meta, changed);
   wardrobe(list, meta, buy, changed, badge);
   // 들판에 새 유물 추가: the relics that came in
   section('들판에 새 유물 추가', Object.entries(RELICS).filter(([id, r]) => r.locked && stocked(meta, `relic:${id}`)).map(([id, r]) => {
@@ -269,6 +275,23 @@ function lifeGoods(list, meta, buy, badge) {
     const b = button('btn gold', `${cost}G`, () => buy(cost, () => { meta.bag = { ...meta.bag, [seedId(c.id)]: have + SEED_PACK }; }));
     b.disabled = meta.gold < cost;
     row.append(bookPic(c.pic, 32), main, b);
+    list.append(row);
+  }
+}
+
+// 팔기: the shop buys what you caught, picked and grew in the village (data/life.js sellPrice)
+function sellGoods(list, meta, changed) {
+  const ids = bagItems(meta).filter(id => sellPrice(id) > 0);
+  if (!ids.length) return;
+  list.append(el('h3', null, '팔기'), el('p', 'row-sub', '바구니에 든 것을 사 준다. 요리할 건 남겨 두자.'));
+  for (const id of ids) {
+    const n = meta.bag[id], p = sellPrice(id);
+    const row = el('div', 'row'), main = el('div', 'row-main');
+    main.append(el('span', 'row-name', `${itemName(id)} <small>${n}개</small>`), el('span', 'row-sub', `하나에 ${p}G`));
+    const sell = k => { meta.gold += k * p; meta.bag[id] -= k; if (!meta.bag[id]) delete meta.bag[id]; shopNote = `${itemName(id)} ${k}개를 ${k * p}G에 팔았다.`; changed(); };
+    row.append(bookPic(picOf(id), 32), main);
+    if (n > 1) row.append(button('btn', `다 (${n * p}G)`, () => sell(n)));
+    row.append(button('btn gold', `${p}G`, () => sell(1)));
     list.append(row);
   }
 }

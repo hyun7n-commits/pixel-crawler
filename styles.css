@@ -676,4 +676,23 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .bk-cell.unknown { background: #15131d; }
 .bk-cell.picked { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
 .sheet p.book-note b { display: block; font-family: var(--font-body); font-size: 12px; color: var(--gold); font-weight: 400; margin-bottom: 2px; }
-#vBook { background: rgba(20,18,26,.82); font-family: var(--font-body); font-size: 12px; display: flex; align-items: center; gap: 4px; }
+#vBook, #vBag { background: rgba(20,18,26,.82); font-family: var(--font-body); font-size: 12px; display: flex; align-items: center; gap: 4px; }
+/* v0.30 마을 생활 (ui/life.js): the basket, the seed sheet, the pot */
+.talk-body > h3 { font-weight: 400; font-family: var(--font-display); font-size: 15px; margin: 12px 0 6px; }
+.bag-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; margin-bottom: 4px; }
+.bag-cell { position: relative; display: grid; place-items: center; height: 52px; background: var(--panel); border: 1px solid var(--line); cursor: pointer; padding: 0; overflow: hidden; }
+.bag-cell.on { border-color: var(--accent); background: #2a2440; }
+.bag-cell:disabled { opacity: .35; cursor: default; }
+.bag-n { position: absolute; right: 3px; bottom: 1px; font-family: var(--font-tiny); font-size: 10px; color: var(--fg); text-shadow: 1px 1px 0 #000; }
+.bag-detail .buff, .dish-card .buff { color: #9ad86f; }
+.meal-row { border-color: #9ad86f; }
+.pot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pot-slot { display: grid; place-items: center; width: 52px; height: 52px; background: #0c0b11; border: 1px dashed var(--line); padding: 0; }
+.pot-slot.full { border-style: solid; cursor: pointer; }
+.pot-slot.result { border-color: var(--gold); }
+.pot-plus { font-family: var(--font-display); font-size: 18px; color: var(--muted); }
+.pot-name { font-family: var(--font-display); font-size: 15px; color: var(--gold); }
+.dish-card { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 12px; background: var(--panel); border: 1px solid var(--gold); }
+.dish-card b { font-family: var(--font-display); font-weight: 400; font-size: 20px; color: var(--gold); }
+.dish-card p { margin: 0; }
+.dish-buttons { display: flex; gap: 8px; flex-wrap: wrap; }

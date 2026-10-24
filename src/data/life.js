@@ -235,3 +235,87 @@ const BUFF_WORDS = {
 export const buffText = buff => Object.entries(buff || {}).map(([k, v]) => BUFF_WORDS[k]?.(v)).filter(Boolean).join(' · ');
 // 정체불명 스튜: what it turns out to do, decided when it is eaten
 export const MYSTERY = [{ hp: 6 }, { atk: 1 }, { gold: 0.1 }, { sight: 1 }, { luck: 0.3 }, { regen: 1 }, {}];
+
+
+// ---------- a village day ----------
+// A day passes with every trip (main.js, when one ends): the garden grows (twice as much on a day it was
+// watered), and the fish, the bugs and the wild things come back (the village rolls those when you walk
+// in on a new day: scenes/village-life.js, rollDay).
+// The 텃밭 the carpenter makes has GARDEN_BASE plots; 텃밭 넓히기 two more (data/home.js DECOR garden).
+export const GARDEN_BASE = 4;
+export const plotCount = meta => (meta.tools?.plots >= 2 ? GARDEN_BASE + 2 : GARDEN_BASE);
+export function passDay(meta) {
+  meta.day = (meta.day || 0) + 1;
+  for (const p of meta.garden || []) {
+    if (!p?.crop) continue;
+    p.grown = (p.grown || 0) + (p.wet ? 2 : 1);
+    p.wet = false;
+  }
+}
+export const ripe = p => !!p?.crop && p.grown >= CROPS[p.crop].days;
+// how far along a plot is: -1 empty, 0 just sown, 1 sprouting, 2 nearly there, 3 ready to pull up
+export const cropStage = p => (!p?.crop ? -1 : ripe(p) ? 3 : Math.min(2, Math.floor((3 * (p.grown || 0)) / CROPS[p.crop].days)));
+// the days still to go (0 when ready); watering today takes one more off
+export const daysLeft = p => Math.max(0, CROPS[p.crop].days - (p.grown || 0));
+
+// one of a list by how often each turns up (`w`; 1 when not given)
+function weighted(list, rnd) {
+  const total = list.reduce((n, o) => n + (o.w ?? 1), 0);
+  let r = rnd() * total;
+  for (const o of list) if ((r -= o.w ?? 1) < 0) return o;
+  return list[list.length - 1];
+}
+// What bites at a spot ('pond' or 'creek') with the rod you have; `P`: how grown the village is (the
+// 등불 물고기 comes once the pond's lanterns are up)
+export const LANTERNS_P = 29;
+export function fishFor(where, rod, P, rnd = Math.random) {
+  const can = Object.values(FISH).filter(f => (f.where === where || f.where === 'both') && f.rod <= rod && (f.need !== 'lanterns' || P >= LANTERNS_P));
+  return weighted(can, rnd);
+}
+// A new village day: today's bites, BUGS_A_DAY bugs and FORAGE_A_DAY wild things, each on a free spot
+// of its kind (`bugAt`, `wildAt`: { flower, tree, grass, pond, hive } lists of cells, from the village as
+// it is: a bug's tree is the tree itself, a wild thing's the grass under one), never two on one cell.
+export function rollDay(meta, bugAt, wildAt, rnd = Math.random) {
+  const used = new Set(), out = { bugs: [], forage: [] };
+  const place = (spots, where, id, into) => {
+    const free = (spots[where] || []).filter(c => !used.has(`${c.x},${c.y}`));
+    if (!free.length) return false;
+    const c = free[Math.floor(rnd() * free.length)];
+    used.add(`${c.x},${c.y}`);
+    into.push({ id, x: c.x, y: c.y });
+    return true;
+  };
+  const bugs = Object.values(BUGS).filter(b => (bugAt[b.where] || []).length);
+  for (let k = 0, tries = 0; k < BUGS_A_DAY && bugs.length && tries < 40; tries++) {
+    const b = weighted(bugs, rnd);
+    if (place(bugAt, b.where, b.id, out.bugs)) k++;
+  }
+  const wild = Object.values(FORAGE).filter(f => (wildAt[f.where] || []).length).map(f => ({ ...f, w: f.rare ? 0.4 : f.where === 'hive' ? 1.5 : 2 }));
+  for (let k = 0, tries = 0; k < FORAGE_A_DAY && wild.length && tries < 40; tries++) {
+    const f = weighted(wild, rnd);
+    if (place(wildAt, f.where, f.id, out.forage)) k++;
+  }
+  meta.life = { day: meta.day || 0, bites: { ...BITES }, bugs: out.bugs, forage: out.forage };
+  return meta.life;
+}
+
+// ---------- the basket ----------
+export const bagCount = (meta, id) => meta.bag?.[id] || 0;
+export function addToBag(meta, id, n = 1) {
+  meta.bag ||= {};
+  meta.bag[id] = (meta.bag[id] || 0) + n;
+  if (meta.bag[id] <= 0) delete meta.bag[id];
+}
+// What the shop pays for one (ui/hub.js 팔기): by how often it turns up and the rod or net it takes;
+// junk next to nothing; a crop half again what its seed cost. Dishes and seeds are not for selling.
+export function sellPrice(id) {
+  const it = ITEM[id];
+  if (!it || it.cat === 'dish') return 0;
+  if (TAGS.junk.includes(id)) return id === 'bottle' ? 20 : 1;
+  if (it.cat === 'crop') return Math.round((seedCost(it.days) / SEED_PACK) * 1.5);
+  if (it.cat === 'forage') return it.rare ? 40 : id === 'honey' ? 14 : 5;
+  const need = it.rod || it.net || 1;
+  return Math.round(2 + (12 / Math.sqrt(it.w)) * need);
+}
+// the book's page for one (data/book.js): `fish:minnow`, `dish:kimchi`...
+export const lifeEntry = id => (ITEM[id] ? `${ITEM[id].cat}:${id}` : null);

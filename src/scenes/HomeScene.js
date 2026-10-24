@@ -422,6 +422,8 @@ export class HomeScene extends Phaser.Scene {
         this.hooks.onSound?.('sizzle');
         this.steam.explode(8, it.img.x - 0.5, top.y + 1);
         this.tweens.add({ targets: it.glow, alpha: 1, scale: 1.8, duration: 160, yoyo: true });
+        // something in the basket to cook (v0.30, ui/life.js): the pot comes out
+        if (this.hooks.onCook?.()) break;
         this.time.delayedCall(450, () => this.happy(pick(['보글보글… 꿀물 도시락 완성!', '탐험 갈 때 챙겨 가야지.', '난로 앞은 따뜻하다.'])));
         break;
       case 'book': this.hooks.onBook?.(); break;

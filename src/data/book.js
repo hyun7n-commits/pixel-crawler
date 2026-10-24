@@ -19,6 +19,7 @@ import { HAPPENINGS, happenId } from './happen.js';
 import { DREAMS, dreamId } from './dreams.js';
 import { FEATS, featId } from './feats.js';
 import { ROOMS, ROOM_KINDS, ROOM_PIC, roomId } from './rooms.js';
+import { FISH, BUGS, CROPS, FORAGE, DISHES } from './life.js';
 
 // the hand-made secrets' little pictures
 const SECRET_PIC = {
@@ -42,6 +43,12 @@ export const CHAPTERS = [
   { id: 'happen', name: '들판의 일', pic: { spr: 'butterfly' }, note: '들판에서 가끔 일어나는 일' },
   { id: 'dream', name: '꿈', pic: { spr: 'pillow' }, note: '깜빡 잠들었을 때 꾼 꿈' },
   { id: 'feat', name: '해낸 일', pic: { spr: 'crown' }, note: '나도 모르게 해낸 일들' },
+  // v0.30 마을 생활 (data/life.js)
+  { id: 'fish', name: '물고기', pic: { find: ['fish', 'YNz'] }, note: '마을 연못과 개울에서 낚은 것' },
+  { id: 'bug', name: '곤충', pic: { find: ['bfly', 'zX'] }, note: '마을에서 잠자리채로 잡은 것' },
+  { id: 'crop', name: '텃밭', pic: { find: ['carrot', 'og'] }, note: '집 마당 텃밭에서 키운 것' },
+  { id: 'forage', name: '들에서 난 것', pic: { find: ['rasp', 'rg'] }, note: '마을 여기저기서 주운 것' },
+  { id: 'dish', name: '요리', pic: { find: ['bowl', 'ow'] }, note: '집 난로에서 만든 것' },
 ];
 
 const ENTRIES_ALL = [
@@ -63,6 +70,7 @@ const ENTRIES_ALL = [
   ...HAPPENINGS.map(h => ({ id: happenId(h.id), ch: 'happen', name: h.name, line: h.line, pic: h.pic, zone: h.zone })),
   ...DREAMS.map(d => ({ id: dreamId(d.id), ch: 'dream', name: d.name, line: d.line, pic: { spr: d.pic } })),
   ...FEATS.map(f => ({ id: featId(f.id), ch: 'feat', name: f.name, line: f.line, pic: f.pic })),
+  ...[FISH, BUGS, CROPS, FORAGE, DISHES].flatMap(t => Object.values(t).map(it => ({ id: `${it.cat}:${it.id}`, ch: it.cat, name: it.name, line: it.line, pic: it.pic }))),
 ];
 
 export const ENTRIES = ENTRIES_ALL;

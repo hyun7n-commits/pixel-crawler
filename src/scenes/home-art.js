@@ -2,6 +2,8 @@
 // tile), bottom row on the ground. Also the puppy that comes with the dog house, drawn at the heroes'
 // finer 32-pixel scale.
 
+import { bedCanvas } from './village-life-art.js';
+
 const PAL = {
   k: '#1b1424', w: '#f4f0e8', W: '#d8d0c4', r: '#d9454a', R: '#a3142f', p: '#f29bb2', y: '#f4cf4f', Y: '#c99a2b',
   o: '#f08c3a', O: '#b8612a', g: '#6fbf4e', G: '#3f8a3a', n: '#a0703f', N: '#6e4a2a', d: '#8a6a44', D: '#6b4f30',
@@ -65,40 +67,6 @@ const ART = {
     '..kOOOOOk.koook.',
     '...kkkkk...kkk..',
     '................',
-  ],
-  garden: [
-    'kk..kk..kk..kk..kk..kk..kk..kk..',
-    'knkkknkkknkkknkkknkkknkkknkkknk.',
-    'knknnnnnnnnnnnnnnnnnnnnnnnnnknk.',
-    'knkdddddddddddddddddddddddddknk.',
-    'knkdkgkddkgkddkgkddkgkddkgkdknk.',
-    'knkkglgkkglgkkglgkkglgkkglgkknk.',
-    'knkdkokddkokddkokddkokddkokdknk.',
-    'knkdkOkddkOkddkOkddkOkddkOkdknk.',
-    'knkdDkDddDkDddDkDddDkDddDkDdknk.',
-    'knkdddddddddddddddddddddddddknk.',
-    'knkdkkkddkkkddkkkddkkkddkkkdknk.',
-    'knkkglgkkglgkkglgkkglgkkglgkknk.',
-    'knkkgGlkkgGlkkgGlkkgGlkkgGlkknk.',
-    'knkkglgkkglgkkglgkkglgkkglgkknk.',
-    'knkdkkkddkkkddkkkddkkkddkkkdknk.',
-    'knkdDddddDddddDddddDddddDdddknk.',
-    'knkdkgkddkgkddkgkddkgkddkgkdknk.',
-    'knkkglgkkglgkkglgkkglgkkglgkknk.',
-    'knkdkokddkokddkokddkokddkokdknk.',
-    'knkdkOkddkOkddkOkddkOkddkOkdknk.',
-    'knkdDkDddDkDddDkDddDkDddDkDdknk.',
-    'knkdddddddddddddddddddddddddknk.',
-    'knkdkkkddkkkddkkkddkkkddkkkdknk.',
-    'knkkglgkkglgkkglgkkglgkkglgkknk.',
-    'knkkgGlkkgGlkkgGlkkgGlkkgGlkknk.',
-    'knkkglgkkglgkkglgkkglgkkglgkknk.',
-    'knkdkkkddkkkddkkkddkkkddkkkdknk.',
-    'knkdDddddDddddDddddDddddDdddknk.',
-    'knknnnnnnnnnnnnnnnnnnnnnnnnnknk.',
-    'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk.',
-    '................................',
-    '................................',
   ],
   laundry: [
     '..kkk..........................................kkk..',
@@ -268,5 +236,6 @@ function paint(rows) {
   return c;
 }
 
-export const decorCanvas = id => paint(ART[id]);
+// (the 텃밭 is the working vegetable bed of 마을 생활, v0.30: scenes/village-life-art.js)
+export const decorCanvas = id => (id === 'garden' ? bedCanvas(2) : paint(ART[id]));
 export const pupCanvas = (frame = 0) => paint(PUP[frame] || PUP[0]);

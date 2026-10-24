@@ -28,6 +28,10 @@ import { DECOR, hasDecor, LETTERS, houseLevel } from '../data/home.js';
 import { decorCanvas, pupCanvas } from './home-art.js';
 import { setEmote, drawEmote } from './emotes.js';
 import { newStock } from '../data/shop.js';
+import { plotCount, GARDEN_BASE } from '../data/life.js';
+import {
+  placeVillageLife, lifeTap, lifeStep, lifeAct, lifeStepOn, lifeDescribe, lifeTick, lifeMarks, plantSeeds, drawBed, GARDEN_MORE, bedArt,
+} from './village-life.js';
 import { patchNoise, scatterKey, patchKey, footKey, bloomKey, moteKeys, SCATTER_VARIANTS, PATCH_VARIANTS, FOOT_VARIANTS, BLOOM_VARIANTS, FOOT_UP } from './field-decor.js';
 import { propCanvas, critterCanvas } from './village-props.js';
 import { poke, pokeKind, stillInFlowers, flutterTo, petPup } from './village-secrets.js';
@@ -291,6 +295,7 @@ export class VillageScene extends Phaser.Scene {
     this.cameras.main.centerOn(center(start.x), foot(start.y) - TILE / 2);
     this.hideFinds(2 + Math.floor(Math.random() * 2));
     this.placeLife();
+    placeVillageLife(this);
     this.festival();
     this.playGrowth(arrivals);
   }
@@ -649,11 +654,13 @@ export class VillageScene extends Phaser.Scene {
     if (!ownsHome(this.meta)) return;
     for (const d of DECOR) {
       if (!hasDecor(this.meta, d.id) || this.decor[d.id]) continue;
-      const key = `decor_${d.id}`;
-      if (!this.textures.exists(key)) this.textures.addCanvas(key, decorCanvas(d.id));
-      const x0 = Math.min(...d.at.map(a => a[0])), y1 = Math.max(...d.at.map(a => a[1]));
+      // (the 텃밭 grows a column with 텃밭 넓히기: scenes/village-life.js)
+      const wide = d.id === 'garden' && plotCount(this.meta) > GARDEN_BASE, at = wide ? [...d.at, ...GARDEN_MORE] : d.at;
+      const key = wide ? 'decor_garden_wide' : `decor_${d.id}`;
+      if (!this.textures.exists(key)) this.textures.addCanvas(key, wide ? bedArt(3) : decorCanvas(d.id));
+      const x0 = Math.min(...at.map(a => a[0])), y1 = Math.max(...at.map(a => a[1]));
       const img = this.keep(this.add.image(x0 * TILE, foot(y1), key).setOrigin(0, 1).setDepth(D.actors + y1 / 100));
-      for (const [x, y] of d.at) this.blocked[y * MW + x] = 1;
+      for (const [x, y] of at) this.blocked[y * MW + x] = 1;
       if (this.pup && d.at.some(([x, y]) => x === this.pup.x && y === this.pup.y)) this.movePup(PUP.x, PUP.y);
       if (this.p && d.at.some(([x, y]) => x === this.p.x && y === this.p.y)) {
         const door = doorOf(HOME);
@@ -663,6 +670,7 @@ export class VillageScene extends Phaser.Scene {
       this.decor[d.id] = img;
       if (d.id === 'statue') this.tweens.add({ targets: img, alpha: 0.82, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
       if (d.id === 'dog') this.placePup();
+      if (d.id === 'garden' && this.plots) drawBed(this);
       if (d.id === fresh) {
         const cx = img.x + img.width / 2, cy = img.y - img.height / 2;
         this.spark.explode(30, cx, cy);
@@ -770,8 +778,20 @@ export class VillageScene extends Phaser.Scene {
     }
   }
 
+  // seeds in from the seed sheet (ui/life.js)
+  plantSeeds(crop, idxs) { return plantSeeds(this, crop, idxs); }
+  // the shop sold you 텃밭 넓히기: the bed takes in its new column
+  widenBed() {
+    const img = this.decor?.garden;
+    if (!img || img.texture.key === 'decor_garden_wide' || plotCount(this.meta) <= GARDEN_BASE) return;
+    img.destroy();
+    delete this.decor.garden;
+    this.placeDecor('garden');
+  }
+
   // after the guild changed who goes out today, or took someone new on
   resync() {
+    this.widenBed();
     if (!this.ps || (this.p.id === this.meta.sel && this.heroes.length === Object.keys(this.meta.chars).filter(c => this.meta.chars[c]).length - 1)) return;
     this.heroes.forEach(h => h.s.destroy());
     this.heroes = [];
@@ -816,6 +836,12 @@ export class VillageScene extends Phaser.Scene {
     this.pokes = { key: null, n: 0, t: 0 };
     this.catOut = this.doorOpen = this.cookieGiven = false;
     this.pets = this.still = 0;
+    // 마을 생활 (scenes/village-life.js)
+    this.fishing = null;
+    this.lifeBugs = [];
+    this.lifeWild = [];
+    this.plots = [];
+    this.petS = null;
   }
 
   keep(o) { this.objs.push(o); return o; }
@@ -1221,6 +1247,8 @@ export class VillageScene extends Phaser.Scene {
   }
 
   describe(x, y) {
+    const life = lifeDescribe(this, x, y);
+    if (life) return life;
     const who = this.folkAt(x, y) || (this.houseAt(x, y)?.lived && this.folk.find(f => f.id === this.houseAt(x, y).id));
     if (who) return `${who.f.name}: ${who.f.tip}`;
     if (this.houseAt(x, y)) return '빈 집: 아직 아무도 안 산다.';
@@ -1244,6 +1272,8 @@ export class VillageScene extends Phaser.Scene {
   // a tap: walk to the spot; on a villager or a house, walk up to them and talk; on the sign, head out
   tap(x, y) {
     if (this.ps?.diving) return;
+    // fishing, a bug, the yard's bed (scenes/village-life.js)
+    if (lifeTap(this, x, y)) return;
     const house = this.houseAt(x, y);
     const target = this.folkAt(x, y) || (house?.lived && this.folk.find(f => f.id === house.id)) || this.heroAt(x, y) ||
       this.pupAt(x, y) || (this.homeAt(x, y) && this.homeDoor);
@@ -1284,6 +1314,7 @@ export class VillageScene extends Phaser.Scene {
     if (this.ps?.diving || this.time.now < this.nextStep) return;
     this.nextStep = this.time.now + STEP_MS;
     const x = this.p.x + dx, y = this.p.y + dy;
+    if (lifeStep(this, x, y)) { this.path = []; return; }
     const who = this.folkAt(x, y) || this.heroAt(x, y) || this.pupAt(x, y) || (this.homeAt(x, y) && this.homeDoor) ||
       (this.mail && this.decorAt(x, y)?.id === 'mailbox' && this.mailbox);
     this.path = [];
@@ -1349,6 +1380,7 @@ export class VillageScene extends Phaser.Scene {
     this.hooks.onStep?.(ps.stepFrame === 1);
     const find = this.finds.find(f => f.x === x && f.y === y);
     if (find) this.time.delayedCall(STEP_MS - 20, () => this.pickUp(find));
+    lifeStepOn(this, x, y);
     if (this.ch(x, y) === '>') { this.path = []; this.time.delayedCall(STEP_MS, () => this.dive()); }
   }
 
@@ -1369,6 +1401,7 @@ export class VillageScene extends Phaser.Scene {
     this.path = [];
     this.pending = null;
     if (who.poke) { poke(this, who.x, who.y); return; }
+    if (who.life) { lifeAct(this, who); return; }
     // your own door: in you go (main.js showHome, scenes/HomeScene.js)
     if (who.home) {
       const ps = this.ps;
@@ -1465,6 +1498,7 @@ export class VillageScene extends Phaser.Scene {
     if (!this.ps) return;
     stillInFlowers(this, time, Math.min(delta || 16, 50));
     this.moveLife(time, Math.min(delta || 16, 50));
+    lifeTick(this, time, Math.min(delta || 16, 50));
     // the big tree's crown goes see-through while you are under it
     if (this.bigTree) {
       const want = this.underBigTree(this.p.x, this.p.y) && this.p.y < BIG_TREE.y ? 0.45 : 1;
@@ -1601,6 +1635,7 @@ export class VillageScene extends Phaser.Scene {
     mk.clear();
     for (const s of all) drawEmote(mk, s, s.x, s.y - TILE - (s.hop || 0) - 3, time);
     if (pup) drawEmote(mk, pup.s, pup.s.x, pup.s.y - 13 - (pup.s.hop || 0), time);
+    lifeMarks(this, mk, time);
     if (this.mail && this.decor.mailbox) {
       if (time > this.mailNext) { this.mailNext = time + 2400; setEmote(this.mailMark, '!', time, 1600); }
       drawEmote(mk, this.mailMark, center(this.mailbox.x), foot(this.mailbox.y) - 21, time);

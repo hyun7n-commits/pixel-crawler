@@ -33,6 +33,8 @@ import { CHARACTERS } from './data/characters.js';
 import { describeTile } from './ui/tip.js';
 import { secretOf } from './data/secrets.js';
 import { record, bookCount } from './data/book.js';
+import { passDay, addToBag, lifeEntry } from './data/life.js';
+import { renderBasket, renderSeeds, renderCook, renderDish, hasCookable } from './ui/life.js';
 import { toast } from './ui/toast.js';
 import { renderBook } from './ui/book.js';
 import { $, el, button, icon } from './ui/dom.js';
@@ -324,6 +326,8 @@ const homeHooks = {
   onSecret: id => foundSecret(id),
   onEntry: id => foundEntry(id),
   onCoins: n => { meta.gold += n; saveMeta(meta); sfx.play('nugget'); homeHud(); },
+  // the stove: cooking, when there is something to cook (ui/life.js)
+  onCook: () => { if (!hasCookable(meta)) return false; openCook(); return true; },
   // the 비밀 상자: the 비밀 도감, every odd thing found so far (ui/book.js)
   onSecrets: () => openBook('비밀 상자'),
   // the bookshelf: the trip records and the critter book
@@ -391,6 +395,15 @@ const villageHooks = {
   onSecret: id => foundSecret(id),
   onEntry: id => foundEntry(id),
   found: id => !!meta.secrets[id],
+  // 마을 생활 (scenes/village-life.js): a catch goes in the basket, and in the book the first time
+  onCatch: (id, n = 1) => {
+    addToBag(meta, id, n);
+    foundEntry(lifeEntry(id));
+    saveMeta(meta);
+    renderVillageHud(meta);
+  },
+  onLife: () => saveMeta(meta),
+  onPlant: (i, empties) => openSeeds(i, empties),
 };
 
 // 비밀 (data/secrets.js): the first time one turns up, a chime, a banner, and its page in the 비밀 도감.
@@ -432,6 +445,46 @@ function openBook(name = '비밀 도감') {
   showTalk({
     who: CHARACTERS[meta.sel].sprite, name, line: bookCount(meta) ? '찾아낸 것마다 한 칸씩 채워 둔다. 아직 빈칸이 많다.' : '아직 아무것도 없다. 이상한 걸 보면 여기 적어 두자.',
     build: (box, redraw) => renderBook(box, meta, { changed: () => { saveMeta(meta); sfx.play('buy'); redraw(); renderVillageHud(meta); if (inHome) homeHud(); } }),
+  });
+}
+
+// ---------- 마을 생활: the basket, the seed sheet, the stove (ui/life.js) ----------
+function openBasket() {
+  sfx.play('pluck');
+  showVillageTip('');
+  showTalk({
+    who: CHARACTERS[meta.sel].sprite, name: '바구니', line: '마을에서 잡은 것, 주운 것, 키운 것.',
+    build: (box, redraw) => renderBasket(box, meta, {
+      changed: what => { saveMeta(meta); if (what === 'eat') sfx.play('candy'); redraw(); renderVillageHud(meta); },
+    }),
+  });
+}
+function openSeeds(i, empties) {
+  sfx.play('pluck');
+  showVillageTip('');
+  showTalk({
+    who: CHARACTERS[meta.sel].sprite, name: '텃밭', line: '무엇을 심을까?',
+    build: box => renderSeeds(box, meta, {
+      i, empties,
+      onPlant: (crop, idxs) => { closeTalk(); village().plantSeeds(crop, idxs); saveMeta(meta); renderVillageHud(meta); },
+    }),
+  });
+}
+function openCook() {
+  sfx.play('sizzle');
+  showVillageTip('');
+  let dish = null;
+  showTalk({
+    who: CHARACTERS[meta.sel].sprite, name: '무쇠 난로', line: '냄비에 한두 가지를 넣고 보글보글.',
+    build: (box, redraw) => (dish
+      ? renderDish(box, meta, dish, {
+        changed: () => { dish = null; saveMeta(meta); redraw(); },
+        onEat: () => { saveMeta(meta); sfx.play('candy'); closeTalk(); home()?.happy?.('냠냠. 든든하다!'); },
+      })
+      : renderCook(box, meta, {
+        changed: () => redraw(),
+        onCooked: d => { dish = d; saveMeta(meta); sfx.play('pop'); foundEntry(lifeEntry(d.id)); redraw(); },
+      })),
   });
 }
 
@@ -486,6 +539,8 @@ function onRunEvent(type, d) {
     // at home meanwhile: the plant grew a little, and maybe a friend dropped in (one who is still
     // waiting with a present stays)
     if (placed(meta).plant) meta.house.plant = (meta.house.plant || 0) + 1;
+    // a village day goes by: the garden grows, the fish and bugs come back (data/life.js)
+    passDay(meta);
     if (!(meta.house.visit?.gift > 0)) meta.house.visit = ownsHome(meta) ? rollVisitor(meta, villageP(meta), meta.sel) : null;
     saveMeta(meta);
     hud.update(run);
@@ -838,6 +893,7 @@ $('mOpt').append(icon('gear'));
 $('mOpt').addEventListener('click', showOptions);
 $('vSound').addEventListener('click', toggleSound);
 $('vBook').addEventListener('click', () => { if (inVillage && !modalOpen()) openBook(); });
+$('vBag').addEventListener('click', () => { if (inVillage && !modalOpen()) openBasket(); });
 // 32px or 16px characters: the textures are built once, so switching reloads the page (the save is kept)
 $('vGo').addEventListener('click', () => chooseStage());
 // (the button lets go of the focus, so Enter and the arrows go on working the room)

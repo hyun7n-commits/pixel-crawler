@@ -359,6 +359,17 @@ export const LIFE_SHAPES = {
     '...55.55..',
   ] },
   // ---- tools ----
+  // the basket (the village's top bar)
+  basket: { d: 'nN', rows: [
+    '...6666...',
+    '..6....6..',
+    '.6......6.',
+    '5555555555',
+    '5656565656',
+    '.56565656.',
+    '.55555555.',
+    '..555555..',
+  ] },
   // a fishing rod: the pole, the line and its bobber
   rod: { d: 'lr', rows: [
     '........55.',
