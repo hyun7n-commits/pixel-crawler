@@ -5,7 +5,7 @@
 /* global Phaser */
 import { setEmote, drawEmote } from './emotes.js';
 import { pixEllipse, pixDisc, pixLine, pixDiamond, pixArrow } from './pix.js';
-import { TILE, buildTextures, oddKey, findKey, dressKey, wallKey, waterKey, roundedWater, seamKey, SEAM_SPOTS, chasmKey, seaKey, bridgeKey, GRASS_PAL, shadeKey, floorKey, oreFrame, oreTall, dropKey, chipKey, pebbleKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
+import { TILE, buildTextures, oddKey, findKey, shapeKey, dressKey, wallKey, waterKey, roundedWater, seamKey, SEAM_SPOTS, chasmKey, seaKey, bridgeKey, GRASS_PAL, shadeKey, floorKey, oreFrame, oreTall, dropKey, chipKey, pebbleKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
 import { CHARACTERS } from '../data/characters.js';
 import { PETS } from '../data/pets.js';
 import { ITEMS } from '../data/items.js';
@@ -16,7 +16,8 @@ import { WAKE_AT } from '../core/ai.js';
 import { BOMB_RANGE } from '../core/run.js';
 import { ORE_HITS, HEAR_STEPS, BELL_RANGE, SNEEZE_NOISE, oreGold } from '../data/balance.js';
 import { ORES } from '../data/ores.js';
-import { cheb } from '../core/util.js';
+import { cheb, pick } from '../core/util.js';
+import { ENEMIES } from '../data/enemies.js';
 import { faceKey } from '../data/faces.js';
 import { tierOf } from '../data/relics.js';
 import { baseZoom } from './zoom.js';
@@ -33,7 +34,7 @@ const D = { tiles: 0, ter: 1, fire: 2, gas: 3, telegraph: 4, pickups: 5, enemies
 // two coins, three, a stack, a heap, a sack
 const goldTex = (n, floor) => { const u = oreGold(floor); return n <= 1.5 * u ? 'gold_1' : n <= 3 * u ? 'gold_2' : n <= 6 * u ? 'gold' : n <= 12 * u ? 'gold_4' : 'gold_5'; };
 // what a pickup looks like on the floor (items use their own sprite)
-const PICKUP_TEX = { gold: 'gold', chest: 'chest', lockedChest: 'lockedChest', bossChest: 'bossChest', key: 'key', cageKey: 'cageKey', necklace: 'necklace', tag: 'workertag', candy: 'candy', crystal: 'pedestal', glint: 'glintDirt' };
+const PICKUP_TEX = { gold: 'gold', chest: 'chest', lockedChest: 'lockedChest', bossChest: 'bossChest', key: 'key', cageKey: 'cageKey', necklace: 'necklace', tag: 'workertag', candy: 'candy', crystal: 'pedestal', glint: 'glintDirt', cairn: 'cairn' };
 // 버릇 (v0.30, data/odd.js HABITS): the bits that fly off a critter at its habit
 const HABIT_FX = { bubble: 'splash', sparkle: 'spark', dust: 'dust', snow: 'fluff', flame: 'ember', spark: 'spark', petal: 'berry', spore: 'spore' };
 // critters on the wing, who never wade
@@ -46,6 +47,21 @@ const WADE = 0.13;
 // how far above the bottom of its tile the front rim of a burrow's mouth is (sprites.js stairs, upStairs)
 const HOLE_LIP = { on: 2, back: 3 };
 const center = v => v * TILE + TILE / 2;
+// 들판의 일 (v0.30, data/happen.js): what drifts over a field in a shower, by its `fx`: colours, how fast
+// it goes (1: a gentle fall), how far it sways, whether it twinkles, rain's streaks
+const SHOWER = {
+  fluff: { tint: [0xffffff, 0xf4f0e8, 0xe8e1d4], speed: 0.6, sway: 8 },
+  leaf: { tint: [0x6cc45a, 0xb5e08a, 0xf4cf4f, 0x2f7a43], speed: 0.8, sway: 10 },
+  firefly: { tint: [0xe6ff9a, 0xc8f07a], speed: 0.35, sway: 6, blink: true },
+  spore: { tint: [0xc49aff, 0xf4f0e8, 0x9a5fd1], speed: 0.5, sway: 6, blink: true },
+  splash: { tint: [0x8fd8f0, 0xffffff], speed: 2.6, sway: 1, streak: true },
+  dust: { tint: [0x7d8398, 0xb8bccb, 0xc9c2b6], speed: 0.7, sway: 4 },
+  magic: { tint: [0x9a5fd1, 0x6fe0e0], speed: 0.3, sway: 4, blink: true },
+  berry: { tint: [0xf29bb2, 0xffd1dc, 0xd9454a, 0xfbf8f2], speed: 0.7, sway: 12 },
+  ember: { tint: [0xf08c3a, 0xf4cf4f], speed: 0.8, sway: 6, blink: true },
+  steam: { tint: [0xffffff, 0xc9c2b6], speed: 0.4, sway: 5, size: 2 },
+};
+const RAINBOW_BANDS = [0xd9454a, 0xf08c3a, 0xf4cf4f, 0x6cc45a, 0x4f8de0, 0x9a5fd1];
 // a sparkle rock's glow: its grade's light colour (the rainbow stone a warm white)
 const oreTint = tier => Phaser.Display.Color.HexStringToColor(ORES[tier].vein ? ORES[tier].vein[0] : '#fff4e0').color;
 const foot = v => v * TILE + TILE;
@@ -1345,6 +1361,12 @@ export class DungeonScene extends Phaser.Scene {
       }
       case 'flower': this.fx.berry.explode(10, center(d.x), center(d.y) - 6); break;
       case 'gift': this.giftArc(d); break;
+      case 'happen': this.happening(d); break;
+      case 'cairn':
+        this.fx.heal.explode(16, center(d.x), center(d.y) - 4);
+        this.fx.spark.explode(8, center(d.x), center(d.y) - 10);
+        this.face('sparkle', 1400);
+        break;
       case 'cower': {
         const s = this.enemySprites[d.enemy.id];
         if (s && this.run.isVisible(d.enemy.x, d.enemy.y)) this.emote(s, 'sweat', 700);
@@ -2747,6 +2769,199 @@ export class DungeonScene extends Phaser.Scene {
         this.tweens.add({ targets: img, alpha: 0, y: ty - 8, duration: 300, delay: 250, onComplete: () => img.destroy() });
       },
     });
+  }
+
+  // ---------- 들판의 일 (v0.30, data/happen.js, core/wonders.js happen) ----------
+  // Something small going on in the field: never in the way, gone in a few seconds.
+  happening({ h, at, spots }) {
+    if (['glints', 'parade', 'prints'].includes(h.kind) ? !spots?.length : ['sound', 'peek', 'fish', 'bubble'].includes(h.kind) && !at) return;
+    switch (h.kind) {
+      case 'sound': for (let k = 0; k < (h.n || 1); k++) this.float(at.x, at.y, h.text, h.color, k * 650, 11); break;
+      case 'shower': this.drift(h); break;
+      case 'flyby': this.flyby(h); break;
+      case 'peek': this.peekOut(h, at); break;
+      case 'fish': this.fishJump(at); break;
+      case 'bubble': this.lavaBubble(at); break;
+      case 'glow': this.skyGlow(h, at); break;
+      case 'glints':
+        spots.forEach((c, k) => this.time.delayedCall(k * 170 + Math.random() * 200, () => this.glint(center(c.x) + Math.round((Math.random() - 0.5) * 8), center(c.y) - 2 + Math.round((Math.random() - 0.5) * 8), D.fx)));
+        break;
+      case 'parade': this.parade(h, spots); break;
+      case 'prints': this.footprints(spots); break;
+    }
+  }
+
+  // bits drifting across the whole view for a few seconds, a handful at a time: falling, rising (`up`)
+  // or blown across (`wind`)
+  drift(h) {
+    const S = SHOWER[h.fx] || SHOWER.fluff, cam = this.cameras.main, dir = h.up ? -1 : h.wind ? 0 : 1;
+    for (let k = 0; k < 34; k++) this.time.delayedCall(k * 80 + Math.random() * 120, () => {
+      const v = cam.worldView;
+      const x0 = h.wind ? v.x - 4 : v.x + Math.random() * v.width;
+      const y0 = dir > 0 ? v.y + Math.random() * v.height * 0.55 : dir < 0 ? v.y + v.height * (0.35 + Math.random() * 0.65) : v.y + Math.random() * v.height;
+      const img = this.add.image(Math.round(x0), Math.round(y0), 'px').setDepth(D.fx).setTint(pick(S.tint));
+      const px = S.size || (Math.random() < 0.5 ? 2 : 1);
+      img.setScale(px, S.streak ? 3 : px);
+      const life = 1600 + Math.random() * 1400, dist = S.speed * (30 + Math.random() * 30), ph = Math.random() * 6, wide = v.width;
+      this.tweens.addCounter({
+        from: 0, to: 1, duration: life,
+        onUpdate: tw => {
+          const t = tw.getValue();
+          const dx = h.wind ? t * wide * 0.9 : Math.sin(t * 6 + ph) * S.sway;
+          const dy = h.wind ? Math.sin(t * 8 + ph) * 3 : dir * t * dist;
+          let a = t < 0.15 ? t / 0.15 : t > 0.75 ? (1 - t) / 0.25 : 1;
+          if (S.blink) a *= 0.55 + 0.45 * Math.sin(t * 22 + ph);
+          img.setPosition(Math.round(x0 + dx), Math.round(y0 + dy)).setAlpha(a);
+        },
+        onComplete: () => img.destroy(),
+      });
+    });
+  }
+
+  // `n` of something crossing the view high up, one after another (a big one is only its shadow)
+  flyby(h) {
+    const cam = this.cameras.main, key = h.find ? shapeKey(this, h.spr, 'w') : h.spr;
+    const ltr = Math.random() < 0.5, high = 0.24 + Math.random() * 0.22;
+    for (let k = 0; k < (h.n || 1); k++) {
+      const img = this.add.image(-99, -99, key).setDepth(h.big ? D.ter + 0.6 : D.fx).setAlpha(0);
+      img.setScale(texScale(img) * (h.big ? 2.4 : h.small ? 0.6 : h.find ? 1 : 0.9));
+      img.setFlipX(ltr ? LEFT_ART.has(key) : !LEFT_ART.has(key));
+      if (h.tint) img.setTint(h.tint);
+      const dur = (h.big ? 2400 : 3000) + Math.random() * 600, dy = (k ? (k % 2 ? 7 : -5) * Math.ceil(k / 2) : 0) + Math.random() * 4, ph = Math.random() * 6;
+      this.tweens.addCounter({
+        from: 0, to: 1, duration: dur, delay: k * 230,
+        onUpdate: tw => {
+          const t = tw.getValue(), v = cam.worldView;
+          const x = ltr ? v.x - 20 + t * (v.width + 40) : v.right + 20 - t * (v.width + 40);
+          const y = v.y + v.height * high + dy + (h.big ? 0 : Math.sin(t * 14 + ph) * 2);
+          img.setPosition(Math.round(x), Math.round(y)).setAlpha(h.big ? 0.28 : 1);
+          if (h.find) img.setRotation(Math.sin(t * 9 + ph) * 0.5);
+        },
+        onComplete: () => img.destroy(),
+      });
+    }
+  }
+
+  // a head pokes up out of the bush (or over the rock), looks, and ducks back
+  peekOut(h, at) {
+    const spr = h.spr || ENEMIES[pick(this.run.zone.enemies)]?.sprite || 'rat';
+    const img = this.add.image(center(at.x), 0, spr).setOrigin(0.5, 0).setDepth(D.enemies + at.y / 1000);
+    const sc = texScale(img), fh = img.frame.height, base = at.y * TILE + 7;
+    img.setScale(sc).setFlipX((this.run.p.x < at.x) === !LEFT_ART.has(spr));
+    this.tweens.addCounter({
+      from: 0, to: 1, duration: 2300,
+      onUpdate: tw => {
+        const t = tw.getValue(), k = t < 0.18 ? t / 0.18 : t < 0.78 ? 1 : t < 0.86 ? (0.86 - t) / 0.08 : 0;
+        const shown = Math.max(0, Math.round(fh * 0.55 * k));
+        img.setCrop(0, 0, img.frame.width, shown);
+        img.y = base - shown * sc;
+      },
+      onComplete: () => img.destroy(),
+    });
+    this.time.delayedCall(700, () => { if (img.active) this.fx.leaf.explode(4, center(at.x), base); });
+  }
+
+  // a little fish leaps out of the pond and back in
+  fishJump(at) {
+    const x0 = center(at.x) - 6, y0 = center(at.y) + 2;
+    const img = this.add.image(x0, y0, 'minnow').setDepth(D.fx).setScale(0.7);
+    this.fx.splash.explode(10, x0, y0);
+    this.tweens.addCounter({
+      from: 0, to: 1, duration: 720,
+      onUpdate: tw => { const t = tw.getValue(); img.setPosition(Math.round(x0 + t * 12), Math.round(y0 - Math.sin(t * Math.PI) * 14)).setRotation((t - 0.5) * 1.6); },
+      onComplete: () => { this.fx.splash.explode(10, x0 + 12, y0); img.destroy(); },
+    });
+  }
+
+  // a bubble swells on the lava and bursts
+  lavaBubble(at) {
+    const x = center(at.x), y = center(at.y) + 2, g = this.add.graphics().setDepth(D.fx);
+    this.tweens.addCounter({
+      from: 0, to: 1, duration: 1300, ease: 'Sine.out',
+      onUpdate: tw => {
+        const r = 1 + tw.getValue() * 4.5;
+        g.clear().fillStyle(0x8e2433, 1);
+        pixDisc(g, x, y, r + 1);
+        g.fillStyle(0xf08c3a, 1);
+        pixDisc(g, x, y, r);
+        g.fillStyle(0xfff3b0, 1).fillRect(Math.round(x - r / 2), Math.round(y - r / 2), 1, 1);
+      },
+      onComplete: () => {
+        g.destroy();
+        this.fx.ember.explode(14, x, y - 2);
+        this.fx.fire.explode(8, x, y);
+        this.float(at.x, at.y, '퐁', '#ffb062', 0, 10);
+      },
+    });
+  }
+
+  // a wash of colour over the field (mist, a warm glow), a rainbow, or the aurora: it comes and goes
+  skyGlow(h, at) {
+    const cam = this.cameras.main, v = cam.worldView;
+    if (h.color === 'rainbow' || h.color === 'aurora') {
+      const g = this.add.graphics().setDepth(D.overlay - 0.05).setAlpha(0);
+      const draw = t => {
+        const w = cam.worldView;
+        g.clear();
+        if (h.color === 'rainbow') {
+          const side = this.rainbowSide ??= Math.random() < 0.5 ? -1 : 1;
+          const cx = w.centerX + side * w.width * 0.22, cy = w.y + w.height * 0.5, r0 = Math.min(w.width * 0.2, 70);
+          RAINBOW_BANDS.forEach((c, i) => {
+            g.fillStyle(c, 1);
+            const r = r0 - i * 2;
+            for (let a = Math.PI * 1.08; a <= Math.PI * 1.92; a += 0.6 / r) g.fillRect(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r * 0.8), 2, 2);
+          });
+        } else {
+          [0x6cc45a, 0x6fe0e0, 0xb5e08a].forEach((c, i) => {
+            g.fillStyle(c, 1);
+            for (let x = w.x; x < w.right; x += 2) {
+              const y = w.y + w.height * (0.08 + i * 0.05) + Math.sin(x / 23 + t * 3 + i) * 5 + Math.sin(x / 9 + t * 5) * 2;
+              g.fillRect(Math.round(x), Math.round(y), 2, 3 + i);
+            }
+          });
+        }
+      };
+      this.tweens.addCounter({
+        from: 0, to: 1, duration: 4200,
+        onUpdate: tw => { const t = tw.getValue(); draw(t); g.setAlpha((t < 0.25 ? t / 0.25 : t > 0.7 ? (1 - t) / 0.3 : 1) * (h.color === 'rainbow' ? 0.3 : 0.35)); },
+        onComplete: () => { g.destroy(); this.rainbowSide = null; },
+      });
+      return;
+    }
+    // (big enough to cover the view while you walk on)
+    const mist = h.color === 0xe8f0f0;
+    const r = this.add.rectangle(v.centerX, v.centerY, v.width * 3, v.height * 3, h.color).setDepth(D.overlay - 0.05).setAlpha(0);
+    if (!mist) r.setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({ targets: r, alpha: mist ? 0.2 : 0.16, duration: 1200, yoyo: true, hold: 1600, ease: 'Sine.inOut', onComplete: () => r.destroy() });
+    if (at) for (let k = 0; k < 3; k++) this.time.delayedCall(300 + k * 500, () => this.fx.spark.explode(8, center(at.x), center(at.y) - 8));
+  }
+
+  // little ones trotting past in a line, sideways
+  parade(h, spots) {
+    const a = spots[0], b = spots[spots.length - 1];
+    for (let k = 0; k < (h.n || 3); k++) {
+      const img = this.add.image(center(a.x), center(a.y) + 5, h.spr).setOrigin(0.5, 1).setDepth(D.enemies + a.y / 1000).setAlpha(0);
+      img.setScale(texScale(img) * 0.5);
+      this.tweens.addCounter({
+        from: 0, to: 1, duration: 2600, delay: k * 380,
+        onUpdate: tw => {
+          const t = tw.getValue();
+          img.setPosition(Math.round(center(a.x) + (center(b.x) - center(a.x)) * t), Math.round(center(a.y) + 5 - Math.abs(Math.sin(t * 20 + k)) * 2));
+          img.setAlpha(t < 0.1 ? t * 10 : t > 0.9 ? (1 - t) * 10 : 1);
+        },
+        onComplete: () => img.destroy(),
+      });
+    }
+  }
+
+  // a line of little footprints, as if someone just went by; they fade after a while
+  footprints(spots) {
+    spots.forEach((c, k) => this.time.delayedCall(k * 160, () => {
+      const g = this.add.graphics().setDepth(D.ter + 0.5).fillStyle(0x7d8398, 0.9);
+      const side = k % 2 ? 2 : -2, x = center(c.x) + side, y = center(c.y) + 1;
+      g.fillRect(x - 1, y, 2, 2).fillRect(x - 1, y - 3, 1, 1).fillRect(x + 1, y - 3, 1, 1);
+      this.tweens.add({ targets: g, alpha: 0, duration: 1500, delay: 6000, onComplete: () => g.destroy() });
+    }));
   }
 
   // what a critter looks like (v0.30: an odd one has a picture of its own, data/odd.js)

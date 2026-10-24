@@ -117,7 +117,11 @@ export const BONK_DROPS = 3, BONK_NOISE = 4;
 export const HIDE_NOISE = { leaf: 2, rock: 4 };
 export const HIDE_ROOMS = [
   { id: 'stash', w: 3 }, { id: 'candy', w: 2, need: 'candy' }, { id: 'vein', w: 2 }, { id: 'berry', w: 2 }, { id: 'nap', w: 1 },
+  // v0.30 (data/rooms.js)
+  { id: 'camp', w: 2 }, { id: 'shrine', w: 1 }, { id: 'pantry', w: 2 },
 ];
+// how much likelier a kind of hidden room the zone has not shown you yet is
+export const ROOM_NEW = 3;
 export const BABY_CHANCE = 0.4, BABY_CANDY = 0.12, DREAM_RESTS = 12, SPIRIT_POND = 6, SPIRIT_GOLD = 30;
 // v0.29: rests in a row right beside a sleeper before it rolls over (자장가; a sleeper that close would
 // wake on the next one, core/ai.js), and what roasted pine nuts heal
@@ -298,3 +302,6 @@ export const FLOWER_HEAL = 0.2, BABY_TRINKET = 0.25;
 export const HABIT_CHANCE = 0.2, HABIT_GAP = 5;
 export const GLINT_CHANCE = 0.55, GLINT_MORE = 0.15, CHEST_TRINKET = 0.2;
 export const SLEEPY_RESTS = 2;
+// 들판의 일 (v0.30, core/wonders.js happen): the chance a turn, once you have been on a field a while
+// (and nobody is after you), that something goes on in it; one a field at most
+export const HAPPEN_CHANCE = 0.015, HAPPEN_AFTER = 12;

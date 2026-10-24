@@ -9,9 +9,12 @@ import { VARIANTS, VARIANT_IDS, ODD_KINDS, HABITS, oddId, habitId } from '../dat
 import { TRICK_OF, trickId } from '../data/tricks.js';
 import { TRINKETS_BY_ZONE, TRINKET, trinketId, DUP_GOLD } from '../data/trinkets.js';
 import { ITEMS } from '../data/items.js';
+import { HAPPENINGS, happenId } from '../data/happen.js';
+import { DREAMS, dreamId } from '../data/dreams.js';
 import { has } from '../data/book.js';
-import { idx, FLOOR } from './dungeon.js';
-import { rint, shuffle, cheb, josa, DIRS8 } from './util.js';
+import { T } from '../data/terrain.js';
+import { idx, inMap, FLOOR, WALL } from './dungeon.js';
+import { rint, pick, shuffle, cheb, josa, DIRS8 } from './util.js';
 
 // one of `opts` by weight (`w`)
 function weighted(opts) {
@@ -124,7 +127,10 @@ export function oddDown(run, e) {
 export function lookAbout(run) {
   if (!run.wonders) return;
   for (const e of run.enemies) {
-    if (e.hp > 0 && e.odd && run.isVisible(e.x, e.y) && !run.shaded(e)) run.find(oddId(e.type, e.odd), 350);
+    if (!(e.hp > 0 && e.odd && run.isVisible(e.x, e.y) && !run.shaded(e))) continue;
+    run.find(oddId(e.type, e.odd), 350);
+    const seen = run.oddSeen ||= new Set();
+    if (!seen.has(e.odd)) { seen.add(e.odd); run.emit('oddSeen', { n: seen.size }); }
   }
   if ((run.habitAt || 0) > run.turn || Math.random() > B.HABIT_CHANCE) return;
   const can = run.enemies.filter(e => e.hp > 0 && HABITS[e.type] && e.state === 'wander' && !e.habitT && e.foe == null && !(e.grump > 0) && !(e.fear > 0) &&
@@ -173,6 +179,7 @@ export function takeTrinket(run, id, delay = 200) {
   if (run.find(trinketId(id), delay)) run.log(`${josa(t.name, '을', '를')} 주웠다.`, 'good');
   else {
     const g = DUP_GOLD(run.stage);
+    run.emit('dupe', { id });
     run.addGold(g);
     run.log(`${t.name}: 이미 있는 거다. 조합에서 ${g}골드로 바꿔 준다.`);
   }
@@ -195,6 +202,81 @@ export function digGlint(run, q) {
 // 보물 상자: now and then one of the zone's little things is in with the relics
 export function chestTrinket(run, x, y) {
   if (run.wonders && Math.random() < B.CHEST_TRINKET) run.dropNear(x, y, { type: 'trinket', id: trinketFor(run) });
+}
+
+// ---------- 들판의 일 (data/happen.js) ----------
+// Now and then, while nobody is after you, something small goes on in the field: a sound from
+// somewhere, bits drifting over, something flying past. One a field at most, never in the first few
+// turns of one; the zone's ones not seen yet come first. Where it is: `at` (a tile in sight) and
+// `spots` (tiles), for scenes/DungeonScene.js happening.
+export function happen(run) {
+  if (!run.wonders || run.happened === run.floor || run.floor === run.bossFloor || run.turn - (run.fieldAt ?? run.turn) < B.HAPPEN_AFTER) return;
+  if (Math.random() > B.HAPPEN_CHANCE) return;
+  if (run.enemies.some(e => e.hp > 0 && !e.d.npc && ['hunt', 'search'].includes(e.state) && run.isVisible(e.x, e.y))) return;
+  const opts = [];
+  for (const h of HAPPENINGS) {
+    if (h.zone !== run.stage) continue;
+    const where = placeHappening(run, h);
+    if (where) opts.push({ h, where, w: has(run.meta, happenId(h.id)) ? 1 : 4 });
+  }
+  if (!opts.length) return;
+  const { h, where } = weighted(opts);
+  run.happened = run.floor;
+  run.emit('happen', { h, ...where });
+  run.log(h.line);
+  run.find(happenId(h.id), 1400);
+}
+
+// where in sight it goes on (null: it cannot, here)
+function placeHappening(run, h) {
+  const m = run.map, p = run.p, seen = [];
+  for (let y = Math.max(0, p.y - 9); y <= Math.min(m.h - 1, p.y + 9); y++) for (let x = Math.max(0, p.x - 9); x <= Math.min(m.w - 1, p.x + 9); x++) {
+    if (m.visible[idx(x, y)]) seen.push({ x, y });
+  }
+  const ter = t => seen.filter(c => m.ter[idx(c.x, c.y)] === t);
+  const open = c => m.tiles[idx(c.x, c.y)] === FLOOR && !run.enemyAt(c.x, c.y) && !(c.x === p.x && c.y === p.y);
+  const wallByFloor = c => m.tiles[idx(c.x, c.y)] === WALL && [[0, 1], [1, 0], [-1, 0], [0, -1]].some(([dx, dy]) => inMap(c.x + dx, c.y + dy) && m.tiles[idx(c.x + dx, c.y + dy)] === FLOOR && m.visible[idx(c.x + dx, c.y + dy)]);
+  const far = (list, d = 3) => { const f = list.filter(c => cheb(c, p) >= d); return f.length ? f : list; };
+  if (h.need === 'water' && !ter(T.WATER).length) return null;
+  if (h.need === 'lava' && !ter(T.LAVA).length) return null;
+  if (h.need === 'landmark') {
+    const lm = m.landmark;
+    if (!lm || !seen.some(c => c.x >= lm.x && c.x < lm.x + lm.w && c.y >= lm.y && c.y < lm.y + lm.h)) return null;
+    return { at: { x: lm.x + (lm.w >> 1), y: lm.y + (lm.h >> 1) } };
+  }
+  switch (h.kind) {
+    case 'sound': { const f = far(seen, 4); return { at: f.length ? pick(f) : { x: p.x, y: p.y } }; }
+    case 'fish': {
+      // out in the pond, not at its edge, where it can be had
+      const w = ter(T.WATER), deep = w.filter(c => DIRS8.every(([dx, dy]) => inMap(c.x + dx, c.y + dy) && m.ter[idx(c.x + dx, c.y + dy)] === T.WATER));
+      return { at: pick(deep.length ? deep : w) };
+    }
+    case 'bubble': return { at: pick(ter(T.LAVA)) };
+    case 'peek': { const f = far(seen.filter(wallByFloor), 3).filter(c => cheb(c, p) <= 7); return f.length ? { at: pick(f) } : null; }
+    case 'glints': { const f = shuffle(seen.filter(wallByFloor)).slice(0, 10); return f.length >= 3 ? { spots: f } : null; }
+    case 'parade': case 'prints': {
+      // a line of open ground (across, for the crabs' sidestep; any way for the prints)
+      const dirs = h.kind === 'parade' ? [[1, 0]] : [[1, 0], [0, 1], [1, 1], [1, -1]];
+      for (const s of shuffle(far(seen.filter(open), 2))) for (const [dx, dy] of shuffle(dirs.slice())) {
+        const line = [];
+        for (let k = 0; k < 7; k++) {
+          const c = { x: s.x + dx * k, y: s.y + dy * k };
+          if (!inMap(c.x, c.y) || !m.visible[idx(c.x, c.y)] || !open(c)) break;
+          line.push(c);
+        }
+        if (line.length >= 4) return { spots: line };
+      }
+      return null;
+    }
+    default: return {};
+  }
+}
+
+// ---------- 꿈 (data/dreams.js) ----------
+// what you dream when you nod off: one not dreamt yet, while there are any
+export function dreamFor(meta) {
+  const left = DREAMS.filter(d => !has(meta, dreamId(d.id)));
+  return pick(left.length ? left : DREAMS);
 }
 
 // the tip line for an odd one

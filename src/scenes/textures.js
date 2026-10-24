@@ -397,6 +397,13 @@ export function findKey(scene, id) {
   return key;
 }
 
+// one of the little finds' shapes on its own (a sheet of paper on the wind, data/happen.js)
+export function shapeKey(scene, shape, pal) {
+  const key = `shape_${shape}_${pal}`;
+  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, spriteCanvas(findIcon(shape, pal)));
+  return key;
+}
+
 // Small deterministic noise so tiles look hand-drawn but never flicker.
 function noise(seed) {
   let s = seed * 9301 + 49297;

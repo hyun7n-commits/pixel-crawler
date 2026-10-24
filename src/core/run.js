@@ -20,9 +20,11 @@ import { placeSpecials, SET_PIECES } from './specials.js';
 import { carveChasms, fillPools } from './cliffs.js';
 import { NPC_TEXT, PEDDLER_FLOORS, STALL } from '../data/npcs.js';
 import { TAG_LINES } from '../data/lore.js';
-import { DREAMS } from '../data/secrets.js';
-import { record } from '../data/book.js';
-import { oddOut, pat, rollOver, oddDown, lookAbout, takeTrinket, buryTrinkets, digGlint, chestTrinket, trick } from './wonders.js';
+import { record, has } from '../data/book.js';
+import { ROOMS, roomId } from '../data/rooms.js';
+import { oddOut, pat, rollOver, oddDown, lookAbout, takeTrinket, buryTrinkets, digGlint, chestTrinket, trick, happen, dreamFor, trinketFor } from './wonders.js';
+import { dreamId } from '../data/dreams.js';
+import { watchFeats } from './feats.js';
 import { ROUTES } from '../data/routes.js';
 import { REQUESTS, takeRequests } from '../data/requests.js';
 import { isOpen, openNew, RELIC_GATES } from '../data/unlocks.js';
@@ -155,6 +157,7 @@ export class Run {
       this.calling = false;
     }
     for (const q of this.requests || []) if (!q.done) this.trackRequest(q, type, data);
+    watchFeats(this, type, data);
   }
 
   // a request taken off the board: count what it asks for, and pay the moment it is met
@@ -336,6 +339,7 @@ export class Run {
       if (!this.told.dawnstar) { this.told.dawnstar = true; this.log('새벽별이 떠올라 구역이 환히 밝았다.', 'evo'); }
     } else if (this.lv('nightowl') && !this.told.nightowl) { this.told.nightowl = true; this.log('밤의 눈이 뜨였다. 벽 너머의 적까지 모두 보인다.', 'evo'); }
     if (this.lv('eclipse') && !this.told.eclipse) { this.told.eclipse = true; this.log('해가 가려졌다. 적들은 두 칸 앞도 잘 못 본다.', 'evo'); }
+    this.fieldAt = this.turn;
     // `dir`: 1 down a burrow to the next field, -1 back, 0 the first field; `from`: the hole you went into
     this.emit('floor', this.arrival || {});
     if (this.routeSaid) { this.log(`표지판대로, 이 들판엔 ${ROUTES[this.routeSaid].sign}.`, 'good'); this.routeSaid = null; }
@@ -797,7 +801,7 @@ export class Run {
   // next field. A shortcut, if you can take the knock.
   leap(knocked) {
     const p = this.p;
-    this.emit('fall', { x: p.x, y: p.y });
+    this.emit('fall', { x: p.x, y: p.y, knocked: !!knocked });
     this.log(knocked ? '떠밀려서 낭떠러지 아래로 떨어졌다!' : '에잇! 낭떠러지 아래로 뛰어내렸다!', 'warn');
     this.hurtPlayer(Math.max(3, Math.round(this.stat().maxHp * B.FALL_HURT)), '낭떠러지에서 떨어졌다', 'fall');
     if (p.hp <= 0) { this.afterTurn(); return true; }
@@ -1019,6 +1023,7 @@ export class Run {
     if (sleeper?.deep && !sleeper.gave && p.lull >= B.SLEEPY_RESTS) rollOver(this, sleeper);
     else if (p.lull >= B.LULL_RESTS && !this.lulled) this.lullaby(sleeper);
     if (p.rests >= B.DREAM_RESTS && !this.dreamt) this.dream();
+    this.emit('rest', { x: p.x, y: p.y });
     this.endTurn();
     return true;
   }
@@ -1109,6 +1114,7 @@ export class Run {
     this.emit('tiles', { list: [i, ...nook.cells], soft: true });
     this.emit('squeeze', { x, y });
     this.log(B.ROCKY.has(this.zone.style) ? '바위 틈으로 비집고 들어갔다. 이런 곳이 있었다니!' : '덤불 틈으로 비집고 들어갔다. 이런 곳이 있었다니!', 'good');
+    this.roomFound();
     this.secret('nook', 600);
     return this.step(dx, dy);
   }
@@ -1183,9 +1189,11 @@ export class Run {
     map.nook = { gap: idx(g.gx, g.gy), cells: g.cells.map(c => idx(c.x, c.y)), hits: 0, kind: rocky ? 'rock' : 'leaf' };
     // what is inside, the far end first
     const spots = g.cells.slice().sort((a, b) => cheb(b, { x: g.gx, y: g.gy }) - cheb(a, { x: g.gx, y: g.gy }));
+    // (v0.30: the zone's kinds not found yet come up more often)
     const kinds = B.HIDE_ROOMS.filter(o => !o.need || this.open(o.need));
-    let roll = Math.random() * kinds.reduce((n, o) => n + o.w, 0);
-    const kind = kinds.find(o => (roll -= o.w) < 0)?.id || 'stash';
+    const w = o => o.w * (this.wonders && !has(this.meta, roomId(this.stage, o.id)) ? B.ROOM_NEW : 1);
+    let roll = Math.random() * kinds.reduce((n, o) => n + w(o), 0);
+    const kind = kinds.find(o => (roll -= w(o)) < 0)?.id || 'stash';
     map.nook.what = kind;
     const coins = () => Math.round((B.gs(this.stage) + 1) * rint(5, 8));
     const [a, b, c] = spots;
@@ -1212,9 +1220,41 @@ export class Run {
       this.pickups.push({ x: a.x, y: a.y, type: 'chest', rich: true });
       const type = pick(this.zone.enemies.filter(t => !ENEMIES[t].pack && !ENEMIES[t].boss)) || this.zone.enemies[0];
       const e = this.spawnEnemy(type, (b || a).x, (b || a).y, this.foeScale);
-      Object.assign(e, { state: 'sleep', big: true, maxHp: Math.round(e.maxHp * 1.5), hp: Math.round(e.hp * 1.5), atk: e.atk + 1 });
+      Object.assign(e, { state: 'sleep', big: true, hid: true, maxHp: Math.round(e.maxHp * 1.5), hp: Math.round(e.hp * 1.5), atk: e.atk + 1 });
       if (c) this.pickups.push({ x: c.x, y: c.y, type: 'gold', amount: coins() });
+    } else if (kind === 'camp') {
+      // somebody's old camp: the ashes of a fire, something left behind, a few coins
+      map.ter[idx(a.x, a.y)] = T.ASH;
+      if (b) this.pickups.push(this.wonders ? { x: b.x, y: b.y, type: 'trinket', id: trinketFor(this) } : { x: b.x, y: b.y, type: 'gold', amount: coins() });
+      if (c) this.pickups.push({ x: c.x, y: c.y, type: 'gold', amount: coins() });
+    } else if (kind === 'shrine') {
+      // a cairn: put your hands together before it and your strength comes back (prayCairn)
+      this.pickups.push({ x: a.x, y: a.y, type: 'cairn' });
+      if (b) this.pickups.push({ x: b.x, y: b.y, type: 'gold', amount: coins() });
+    } else if (kind === 'pantry') {
+      // a critter's store: a meadow tool or two (or coins where there are none yet)
+      for (const t of [a, b, c].filter(Boolean)) {
+        const tool = this.pickTool();
+        this.pickups.push(tool ? { x: t.x, y: t.y, type: tool } : { x: t.x, y: t.y, type: 'gold', amount: coins() });
+      }
     }
+  }
+
+  // what the hidden room turns out to be, in its zone's way (data/rooms.js); its page in the book the
+  // first time
+  roomFound() {
+    const what = this.map.nook?.what, r = what && ROOMS[this.stage]?.[what];
+    if (!r) return;
+    this.log(r[1], 'good');
+    if (this.wonders) this.find(roomId(this.stage, what), 900);
+  }
+
+  // 돌탑: once a trip each, it fills you back up
+  prayCairn(q) {
+    q.used = true;
+    this.heal(this.stat().maxHp);
+    this.emit('cairn', { x: q.x, y: q.y });
+    this.log('돌탑 앞에 두 손을 모았다. 기운이 가득 차오른다.', 'good');
   }
 
   // Each hit into the hidden room's wall parts the bushes (or cracks the rock) a little more, and the
@@ -1237,6 +1277,7 @@ export class Run {
     this.emit('tiles', { list: [i, ...nook.cells] });
     this.emit('hideOpen', { x, y, dx, dy, kind: nook.kind });
     this.log(rock ? '와르르! 바위가 무너지고 숨은 방이 나왔다!' : '덤불이 활짝 헤쳐지고 숨은 방이 나왔다!', 'good');
+    this.roomFound();
     this.secret('nook', 600);
     this.meta.stats.hideRooms = (this.meta.stats.hideRooms || 0) + 1;
     this.endTurn();
@@ -1309,15 +1350,18 @@ export class Run {
     this.secret('sleeper', 900);
   }
 
-  // 낮잠 꿈: a moment's doze and a dream of the fields (data/secrets.js DREAMS), and you wake a bit rested
+  // 낮잠 꿈: a moment's doze and a dream (data/dreams.js: one not dreamt yet, while there are any), and
+  // you wake a bit rested
   dream() {
     this.dreamt = true;
     this.p.rests = 0;
     this.heal(Math.ceil(this.stat().maxHp * 0.3));
     this.emit('dream', { x: this.p.x, y: this.p.y });
     this.log('한참 쉬다가 깜빡 잠이 들었다…', 'good');
-    this.queue.push({ kind: 'dream', text: pick(DREAMS), delay: 900 });
+    const d = dreamFor(this.meta);
+    this.queue.push({ kind: 'dream', text: d.line, pic: d.pic, delay: 900 });
     this.secret('dream', 1600);
+    this.find(dreamId(d.id), 2400);
   }
 
   // Bump a locked door: the floor's key opens it.
@@ -1523,8 +1567,9 @@ export class Run {
     const p = this.p;
     p.items[id]--;
     p.blend = false;
-    if (id === 'dandelion') { this.blowAway(); (this.toolUse ||= {}).dandelion = (this.toolUse.dandelion || 0) + 1; }
+    if (id === 'dandelion') { (this.toolUse ||= {}).dandelion = (this.toolUse.dandelion || 0) + 1; this.blowAway(); }
     if (id === 'potion') {
+      this.emit('drink', { x: p.x, y: p.y });
       this.heal(Math.round(this.stat().maxHp * B.POTION_HEAL));
       this.log('체력 물약을 마셨다.', 'good');
     }
@@ -1984,6 +2029,7 @@ export class Run {
     const map = this.map;
     for (const q of this.pickups.filter(q => q.x === x && q.y === y)) {
       if (q.type === 'lockedChest' && !map.keyHeld) { this.log('잠긴 상자다. 이 구역 어딘가에 열쇠가 있을 것이다.'); continue; }
+      if (q.type === 'cairn') { if (!q.used) this.prayCairn(q); continue; }
       this.pickups.splice(this.pickups.indexOf(q), 1);
       this.emit('pickup', { x, y, type: q.type });
       if (q.type === 'gold' && q.stolen) { this.gold += q.amount; this.emit('gold', { x, y, n: q.amount }); }
@@ -2951,6 +2997,7 @@ export class Run {
     computeFOV(this.map, this.p.x, this.p.y, this.stat().sight, this.lights());
     this.meetCritters();
     lookAbout(this);
+    happen(this);
     // 낮잠 방: a word the first time you see into it
     const den = this.map.den;
     if (den && !this.map.denSeen && this.isVisible(den.x, den.y)) {

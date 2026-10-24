@@ -22,6 +22,7 @@ const PICKUP = {
   tag: () => '낡은 일꾼 명찰: 조합 명찰이다. 이름 자리가 긁혀 있다.',
   candy: (q, run) => `별사탕: 먹으면 가진 유물들이 한꺼번에 ${q.n || candySteps(run.floor)}번 자란다.`,
   glint: () => '반짝이는 흙: 뭔가 묻혀 있다.',
+  cairn: q => q.used ? '돌탑: 누가 소원을 빌며 쌓아 둔 돌탑이다.' : '돌탑: 누가 소원을 빌며 쌓아 둔 돌탑이다. 왠지 마음이 편안해진다.',
   trinket: q => `${TRINKET[q.id]?.name || '작은 것'}: 누가 떨어뜨렸을까.`,
   crystal: (q, run) => {
     const lv = (run.p.relics[q.relic] || 0) + 1;

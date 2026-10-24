@@ -15,6 +15,10 @@ import { VARIANTS, VARIANT_IDS, ODD_KINDS, ODD_LINES, HABITS, oddId, habitId } f
 import { TRICKS, TRICK_TOOLS, BOSS_TRICKS, trickId } from './tricks.js';
 import { ITEMS } from './items.js';
 import { TRINKETS, trinketId } from './trinkets.js';
+import { HAPPENINGS, happenId } from './happen.js';
+import { DREAMS, dreamId } from './dreams.js';
+import { FEATS, featId } from './feats.js';
+import { ROOMS, ROOM_KINDS, ROOM_PIC, roomId } from './rooms.js';
 
 // the hand-made secrets' little pictures
 const SECRET_PIC = {
@@ -34,6 +38,10 @@ export const CHAPTERS = [
   { id: 'habit', name: '버릇', pic: { spr: 'snail', mark: 'z' }, note: '아무도 안 볼 때 하는 일' },
   { id: 'trick', name: '도구 장난', pic: { spr: 'seal', tool: 'pinecone' }, note: '도구를 받은 친구들이 한 일' },
   { id: 'trinket', name: '주운 것', pic: { find: ['button', 'y'] }, note: '들판에 떨어져 있던 작은 것들' },
+  { id: 'room', name: '숨은 방', pic: { spr: 'cairn' }, note: '벽 너머에 숨어 있던 방들' },
+  { id: 'happen', name: '들판의 일', pic: { spr: 'butterfly' }, note: '들판에서 가끔 일어나는 일' },
+  { id: 'dream', name: '꿈', pic: { spr: 'pillow' }, note: '깜빡 잠들었을 때 꾼 꿈' },
+  { id: 'feat', name: '해낸 일', pic: { spr: 'crown' }, note: '나도 모르게 해낸 일들' },
 ];
 
 const ENTRIES_ALL = [
@@ -51,6 +59,10 @@ const ENTRIES_ALL = [
     id: trickId(tool, boss), ch: 'trick', name: `${toolName(tool)} · ${name}`, line, pic: { spr: ENEMIES[boss].sprite, tool: ITEMS[tool]?.sprite || tool }, kind: boss, boss: true,
   })),
   ...TRINKETS.map(t => ({ id: trinketId(t.id), ch: 'trinket', name: t.name, line: t.line, pic: { find: [t.shape, t.pal] }, zone: t.zone })),
+  ...ROOMS.flatMap((zone, z) => ROOM_KINDS.map(kind => ({ id: roomId(z, kind), ch: 'room', name: zone[kind][0], line: zone[kind][1], pic: ROOM_PIC[kind], zone: z }))),
+  ...HAPPENINGS.map(h => ({ id: happenId(h.id), ch: 'happen', name: h.name, line: h.line, pic: h.pic, zone: h.zone })),
+  ...DREAMS.map(d => ({ id: dreamId(d.id), ch: 'dream', name: d.name, line: d.line, pic: { spr: d.pic } })),
+  ...FEATS.map(f => ({ id: featId(f.id), ch: 'feat', name: f.name, line: f.line, pic: f.pic })),
 ];
 
 export const ENTRIES = ENTRIES_ALL;

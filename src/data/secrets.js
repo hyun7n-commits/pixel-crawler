@@ -36,13 +36,5 @@ export const SECRETS = [
 export const secretOf = id => SECRETS.find(s => s.id === id);
 export const secretsFound = m => SECRETS.filter(s => m.secrets?.[s.id]).length;
 
-// what the dozing worker dreams about out in the fields (core/run.js): the hidden story, never more
-// than a glimpse
-export const DREAMS = [
-  '꿈속에서 작업복을 입은 들쥐가 반짝 바위를 캐고 있었다. 이쪽을 보더니 손을 흔들었다.',
-  '꿈속에서 누가 내 이름을 불렀다. 돌아보니 조합 게시판만 덩그러니 서 있었다.',
-  '꿈속에서 일꾼들이 줄지어 땅굴로 들어갔다. 나오는 일꾼은 하나도 없었다.',
-  '꿈속에서 들판 친구들이 모닥불에 둘러앉아 조합 출근 노래를 불렀다.',
-  '꿈속에서 커다란 가면이 웃었다. 깨어 보니 볼이 젖어 있었다.',
-  '꿈속에서 우리 집 문을 두드리는 소리가 났다. 문을 열었더니 명찰 하나만 떨어져 있었다.',
-];
+// (what the dozing worker dreams about: data/dreams.js since v0.30)
+

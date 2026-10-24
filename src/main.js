@@ -540,7 +540,7 @@ function nextChoice() {
   // 낮잠 꿈 (v0.28): a glimpse of something in a dream, and waking up
   if (q.kind === 'dream') {
     showChoice({
-      title: '꿈', sub: q.text, run, onPick, who: CHARACTERS[run.charId].sprite,
+      title: '꿈', sub: q.text, run, onPick, who: q.pic || CHARACTERS[run.charId].sprite,
       opts: [{ kind: 'ok', act: 'wake', name: '눈을 뜬다', desc: '…꿈이었다. 한숨 자고 나니 몸이 개운하다.' }],
     });
     return;
