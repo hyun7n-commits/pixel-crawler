@@ -1,6 +1,6 @@
 // The guild's notice board (조합 의뢰): small goals for a trip to the fields, paid in full the moment you
 // meet one (a flat fee: gold relics do not touch it). Since v0.29 the board holds five and you take up to
-// three of them with you (ui/board.js), which is where much of a trip's money comes from now that the
+// three of them with you (ui/prep.js, the 출발 준비 sheet), which is where much of a trip's money comes from now that the
 // fields pay less; the fee grows with the stage and the 회차 so it stays worth it all the way down.
 // Each one is a little past what you usually manage, so it pulls you to try something: dig, fight,
 // grab, evolve, or reach the boss. `n(meta, stage)`: how many; `count(type, d, run)`: how much an event adds;

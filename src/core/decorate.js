@@ -124,16 +124,16 @@ function placeOre(map, r, keep, start, floor) {
 }
 
 // Returns { has, themes }: what this floor contains and each room's theme.
-export function decorate(map, rooms, { start, stairs, floor = 1, style = 'meadow' }) {
+export function decorate(map, rooms, { start, stairs, floor = 1, style = 'meadow', ores = 0 }) {
   const wet = style === 'marsh' ? 0.45 : 0.25;
   const has = new Set(), themes = [];
   const keep = (x, y) => (Math.abs(x - start.x) <= 1 && Math.abs(y - start.y) <= 1) || (x === stairs.x && y === stairs.y);
 
   // the ores go in the biggest rooms that are neither the start nor the stairs room
-  // (a room too cramped for one passes it on to the next biggest)
+  // (a room too cramped for one passes it on to the next biggest); `ores`: more on a 금빛 날 (data/weather.js)
   const oreRooms = new Set();
   for (const r of rooms.slice(1).filter(r => !inRoom(r, stairs.x, stairs.y)).sort((a, b) => b.w * b.h - a.w * a.h)) {
-    if (oreRooms.size >= ORES_PER_FLOOR) break;
+    if (oreRooms.size >= ORES_PER_FLOOR + ores) break;
     if (placeOre(map, r, keep, start, floor)) oreRooms.add(r);
   }
 

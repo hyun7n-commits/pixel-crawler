@@ -13,13 +13,13 @@
 export const PER_TRIP = 2;
 // The release a save last opened in (meta.seenBuild); goes up with each release that adds unlocks, see
 // sinceUpdate.
-export const BUILD = 31;
+export const BUILD = 32;
 
 const broken = m => Object.values(m.ores || {}).reduce((a, b) => a + b, 0);
 const beat = (m, boss) => m.stats.bosses.includes(boss);
 
 export const UNLOCKS = [
-  { id: 'request', icon: 'guildBoss', what: '조합 의뢰', desc: '나갈 때마다 조합 게시판에서 의뢰를 세 개까지 받아 간다. 해내면 그 자리에서 일당을 준다', when: m => m.stats.runs >= 1 },
+  { id: 'request', icon: 'guildBoss', what: '조합 의뢰', desc: '나갈 때마다 출발 준비에서 조합 의뢰를 세 개까지 받아 간다. 해내면 그 자리에서 일당을 준다', when: m => m.stats.runs >= 1 },
   { id: 'fang', relic: 'fang', when: m => m.stats.runs >= 1 },
   { id: 'weeds', icon: 'weed', what: '풀뽑기 밭', desc: '들판에 잡초 밭이 생긴다. 한 포기씩 뽑으면 일당. 가끔 뭔가 소리를 지른다', when: m => m.stats.maxFloor >= 2 || m.stats.runs >= 2 },
   { id: 'hammer', relic: 'hammer', when: m => m.stats.maxFloor >= 2 || m.stats.runs >= 2 },

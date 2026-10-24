@@ -22,7 +22,7 @@ import { showChoice, showSummary, showTalk, closeTalk, closeModal, modalOpen, sh
 import { sinceUpdate, isOpen } from './data/unlocks.js';
 import { stockSince } from './data/shop.js';
 import { showStages } from './ui/stages.js';
-import { showBoard } from './ui/board.js';
+import { showPrep, needsPrep } from './ui/prep.js';
 import { showEvolve } from './ui/evo.js';
 import { showsLeft } from './ui/beat.js';
 import { speed, pace, nextSpeed } from './ui/speed.js';
@@ -197,14 +197,17 @@ function chooseStage() {
   if (left) { startRun(left); return; }
   sfx.play('talk');
   showVillageTip('');
-  // the stage, then the guild's board (ui/board.js) once requests are open, then out
+  // the stage, then 출발 준비 (ui/prep.js: the weather, relics to pack, the smith's order, the guild's
+  // requests) once any of it is open, then out
   showStages({
     meta,
     onGo: () => {
       saveMeta(meta);
-      if (!isOpen(meta, 'request')) { startRun(); return; }
-      showBoard({ meta, onGo: () => { saveMeta(meta); startRun(); }, onBack: () => { saveMeta(meta); chooseStage(); } });
+      if (!needsPrep(meta)) { startRun(); return; }
+      showPrep({ meta, onGo: () => { saveMeta(meta); startRun(); }, onBack: () => { saveMeta(meta); chooseStage(); } });
     },
+    // (what was packed and paid for at 출발 준비 stays packed: the purse up top shows what is left)
+    onClose: () => renderVillageHud(meta),
   });
 }
 
@@ -631,10 +634,39 @@ function onRunEvent(type, d) {
     if (!(meta.house.visit?.gift > 0)) meta.house.visit = ownsHome(meta) ? rollVisitor(meta, villageP(meta), meta.sel) : null;
     saveMeta(meta);
     hud.update(run);
-    const summary = () => showSummary({ won: d.won, run, rescued: d.rescued, news: d.news, opened: d.opened, stocked: d.stocked, pet: d.pet, onClose: () => { scene.detach(); run = null; afterRunStory(); } });
+    const near = nearMiss(d.won);
+    saveMeta(meta);
+    const summary = () => showSummary({
+      won: d.won, run, meta, near, rescued: d.rescued, news: d.news, opened: d.opened, stocked: d.stocked, pet: d.pet,
+      onClose: again => { scene.detach(); run = null; afterRunStory(); if (again) goAgainSoon(); },
+    });
     if (d.won && !d.fell) summary();
     else fallen(summary);
   }
+}
+
+// A trip that ended before the boss fell (v0.32): how far it got, the boss's health left if it came to
+// that, and whether that is the furthest this stage has been got at this 회차 (meta.tries). Null on a win.
+function nearMiss(won) {
+  if (won || run.depth) return null;
+  const key = `${run.stage}:${run.loop}`, local = run.floor - run.startFloor + 1, b = run.boss;
+  const boss = run.floor === run.bossFloor && b && b.hp > 0 ? { name: b.d.name, hp: b.hp, max: b.maxHp } : null;
+  const score = local + (boss ? 1 - boss.hp / boss.max : 0), prev = meta.tries?.[key] || 0;
+  meta.tries = { ...meta.tries, [key]: Math.max(prev, score) };
+  return { boss, left: run.bossFloor - run.floor, best: prev > 0 && score > prev };
+}
+
+// 바로 다시 출발 (the summary's second button): back in the village, the stage select comes up as soon as
+// the village has finished showing what came of the trip and nothing else is open
+function goAgainSoon() {
+  let n = 0;
+  const tick = () => {
+    if (run || ++n > 60) return;
+    const v = village();
+    if (inVillage && !inHome && v.sys.isActive() && !v.showing && $('modal').hidden) { chooseStage(); return; }
+    setTimeout(tick, 400);
+  };
+  setTimeout(tick, 900);
 }
 
 // Down: the field turns grey and quiet, then one line says where and to what ("초원 2 · 들쥐에게 당했다"),

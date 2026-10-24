@@ -125,10 +125,10 @@ export class Hud {
 
   update(run) {
     const s = run.stat(), p = run.p;
-    // the zone, how far into the trip (the last field is its boss), the 회차 and the dares taken
+    // the zone, how far into the trip (the last field is its boss), the 회차, today's weather and the dares taken
     const boss = run.floor === run.bossFloor, local = run.floor - run.startFloor + 1;
     const where = run.depth ? `깊은 곳 ${run.depth}` : boss ? '대장' : `${local}/${run.bossFloor - run.startFloor}`;
-    const extra = `${run.loop}회차${run.dares.length ? ` · 내기 ${run.dares.length}` : ''}`;
+    const extra = [`${run.loop}회차`, run.weather && run.wx.name, run.dares.length && `내기 ${run.dares.length}`].filter(Boolean).join(' · ');
     $('floorLabel').innerHTML = `${run.zone.name} ${where}<small>${extra}</small>`;
     // 깊은 곳: the gold picked up down there apart, in orange (a burrow's 돌아간다 takes it home)
     const deep = run.deepGold, purse = deep ? `${run.gold - deep}G<small class="risk">+${deep}G</small>` : `${run.gold}G`;

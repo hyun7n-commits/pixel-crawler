@@ -5,12 +5,12 @@
 
 import { $, el, button, icon } from './dom.js';
 import { CHARACTERS } from '../data/characters.js';
-import { UPGRADES, PACK_COST, FORGE_COST, FORGE_LEGEND_LOOP, forgeable, forgeStock } from '../data/upgrades.js';
+import { UPGRADES, PACK_COST, PACK_MAX, FORGE_COST, FORGE_LEGEND_LOOP, forgeable, forgeStock } from '../data/upgrades.js';
 import { PETS, TREATS, PET_LV, petLevel, petProgress, petNote, feedPet } from '../data/pets.js';
 import { STOCK_TOTAL, stockCount, stocked, upCap, newStock, seeStock, nextStock, goodInfo, stockSince } from '../data/shop.js';
 import { LIFE_TOOLS, CROPS, SEED_PACK, seedCost, seedId, sellPrice, itemName } from '../data/life.js';
 import { bookPic } from './book.js';
-import { isOpen, RELIC_GATES, BUILD } from '../data/unlocks.js';
+import { isOpen, BUILD } from '../data/unlocks.js';
 import { RELICS, RECIPES, recipeKey, tierOf, DISCOVERY_GOLD } from '../data/relics.js';
 import { freshMeta, saveMeta } from '../core/save.js';
 import { josa } from '../core/util.js';
@@ -60,10 +60,11 @@ export function renderVillageHud(meta, saved = savedRun()) {
 const startButton = (meta, onStart) => {
   const saved = savedRun();
   const b = button('btn primary enter', saved ? `이어서 탐험 · ${saved.label}` : `${josa(CHARACTERS[meta.sel].name, '으로', '로')} 들판으로 출발`, onStart);
-  if (!meta.pack && !meta.forge) return b;
-  // what you packed at the shop, and what the smith made to order, go out with you
+  const packs = Object.keys(meta.packs || {});
+  if (!packs.length && !meta.forge) return b;
+  // what you packed at 출발 준비 (ui/prep.js) and what the smith made to order go out with you
   const wrap = el('div', 'go-wrap'), note = el('span', 'packed-note');
-  for (const id of [meta.forge, meta.pack].filter(Boolean)) note.append(icon(id, 16), el('span', null, `${RELICS[id].name} 챙김`));
+  for (const id of [meta.forge, ...packs].filter(Boolean)) note.append(icon(id, 16), el('span', null, `${RELICS[id].name}${meta.packs[id] ? ` Lv${meta.packs[id]}` : ''} 챙김`));
   wrap.append(note, b);
   return wrap;
 };
@@ -171,27 +172,10 @@ function shop(box, { meta, changed }) {
     row.append(icon(id, 32), main, b);
     return row;
   }));
-  // one basic relic to take on the next run: paid each time, swap or put back for free
+  // basic relics to take on the trip: packed at 출발 준비 now, right before setting off (v0.32, ui/prep.js)
   if (stocked(meta, 'svc:pack') && isOpen(meta, 'shelf')) {
-    list.append(badge(el('h3', null, '다음 판에 챙겨 갈 유물'), 'svc:pack'));
-    list.append(el('p', 'row-sub', `${PACK_COST}G를 내면 기본 유물 하나를 Lv1로 들고 나간다(이미 있으면 +1). 한 판만. 궁금한 조합을 시험해 보기 좋다.`));
-    const grid = el('div', 'pack-grid');
-    const pick = Object.keys(RELICS).filter(id => !tierOf(id) && (RELICS[id].locked ? meta.relicUnlock[id] : !RELIC_GATES[id] || isOpen(meta, RELIC_GATES[id])));
-    for (const id of pick) {
-      const on = meta.pack === id;
-      const b = button(`pack${on ? ' on' : ''}`, null, () => {
-        if (on) { meta.gold += PACK_COST; meta.pack = null; }        // put it back: money back
-        else if (meta.pack) meta.pack = id;                            // swap: already paid
-        else { meta.gold -= PACK_COST; meta.pack = id; }
-        changed();
-      });
-      b.append(icon(id, 32), el('span', null, RELICS[id].name));
-      b.title = RELICS[id].desc(1);
-      b.disabled = !meta.pack && meta.gold < PACK_COST;
-      grid.append(b);
-    }
-    list.append(grid);
-    if (meta.pack) list.append(el('p', 'row-sub', `${RELICS[meta.pack].name} 챙김. 다시 누르면 내려놓고 골드를 돌려받는다.`));
+    list.append(badge(el('h3', null, '챙겨 갈 유물'), 'svc:pack'));
+    list.append(el('p', 'row-sub', `스테이지를 고르면 나오는 출발 준비에서 기본 유물을 ${PACK_MAX}개까지 챙겨 갈 수 있다. 누를 때마다 한 레벨씩 오르고, 값은 ${PACK_COST}G부터 점점 비싸진다. 한 판만.`));
   }
   // what comes in next: only its shadow
   const nx = nextStock(meta);

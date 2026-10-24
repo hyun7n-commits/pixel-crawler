@@ -1,6 +1,6 @@
 // Pop-up sheets: relic choice (level up / chest), the end-of-run summary, and talking in the village.
 
-import { $, el, button, icon } from './dom.js';
+import { $, el, button, icon, weatherPic } from './dom.js';
 import { RELICS, recipeKey, tierOf, maxLevelOf } from '../data/relics.js';
 import { recipeFor, foldRecipes } from './recipe.js';
 import { josa } from '../core/util.js';
@@ -11,6 +11,11 @@ import { CHARACTERS } from '../data/characters.js';
 import { goodInfo } from '../data/shop.js';
 import { PETS, petNote } from '../data/pets.js';
 import { bookPic } from './book.js';
+import { UPGRADES } from '../data/upgrades.js';
+import { upCap, stocked as onShelf } from '../data/shop.js';
+import { isOpen } from '../data/unlocks.js';
+import { WEATHER, weatherFor } from '../data/weather.js';
+import { FRIENDS } from '../data/stages.js';
 
 // the level a relic grows to, MAX when that is its top (as the bag shows it)
 const lvTo = (id, n) => (n >= maxLevelOf(id) ? 'MAX' : `Lv${n}`);
@@ -193,7 +198,27 @@ export function showUpdateNews(opened, stocked = []) {
   });
 }
 
-export function showSummary({ won, run, rescued = [], news = {}, opened = [], stocked = [], pet = null, onClose }) {
+// 다음엔 (v0.32): after a trip, what is next within reach: what the gold buys now (or how much more it
+// takes), and this stage's weather on the next trip out.
+function nextUp(meta, run) {
+  const lines = [];
+  const ups = Object.entries(UPGRADES).filter(([id, u]) => (!u.open || isOpen(meta, u.open)) && (meta.up[id] || 0) < upCap(meta, id))
+    .map(([id, u]) => ({ name: u.name, lv: (meta.up[id] || 0) + 1, cost: u.costs[meta.up[id] || 0] })).sort((a, b) => a.cost - b.cost);
+  const can = ups.filter(u => u.cost <= meta.gold).pop(), cheap = ups[0];
+  if (can) lines.push({ text: `가진 골드 ${meta.gold}G. 가게에서 ${can.name} Lv${can.lv}(${can.cost}G)를 살 수 있다.` });
+  else if (cheap) lines.push({ text: `가진 골드 ${meta.gold}G. ${cheap.cost - meta.gold}G 더 모으면 가게에서 ${cheap.name} Lv${cheap.lv}를 살 수 있다.` });
+  else if (onShelf(meta, 'svc:pack') && isOpen(meta, 'shelf')) lines.push({ text: `가진 골드 ${meta.gold}G. 출발 준비에서 유물을 챙겨 더 세게 나갈 수 있다.` });
+  const w = weatherFor(meta, run.stage, run.loop);
+  if (w) lines.push({ text: `다음 판 ${run.zone.name}: ${WEATHER[w].name} · ${WEATHER[w].short}`, pic: w });
+  // the friend still locked up here at this 회차
+  const fid = isOpen(meta, 'cage') && FRIENDS[run.stage]?.[run.loop - 1];
+  if (fid && CHARACTERS[fid] && !meta.chars[fid]) lines.push({ text: `${run.zone.name}에는 아직 누군가 갇혀 있다. 왕관 쓴 우두머리가 열쇠를 갖고 있다.` });
+  return lines;
+}
+
+// `near` (a trip that ended short of the boss's fall, main.js nearMiss): how far it got, and the boss's
+// health left if it came to that. `onClose(again)`: again when 바로 다시 출발 was pressed.
+export function showSummary({ won, run, meta, near = null, rescued = [], news = {}, opened = [], stocked = [], pet = null, onClose }) {
   openSheet(sh => {
     const zone = run.zone.name, boss = run.boss?.d?.name || ENEMIES[run.zone.boss].name;
     sh.append(el('h2', null, won ? `${zone} ${run.loop}회차 돌파!` : '쓰러졌다'));
@@ -210,6 +235,19 @@ export function showSummary({ won, run, rescued = [], news = {}, opened = [], st
       sum.append(s);
     }
     sh.append(sum);
+    // so close: the boss's health left, or how many fields short of it (and whether it was the furthest yet)
+    if (near) {
+      const box = el('div', 'near');
+      if (near.boss) {
+        const f = near.boss.hp / near.boss.max, bar = el('div', 'near-bar'), fill = el('i');
+        fill.style.width = `${Math.max(2, Math.round(f * 100))}%`;
+        bar.append(fill);
+        box.append(el('span', null, `대장 ${near.boss.name} 체력 ${near.boss.hp} / ${near.boss.max}`), bar);
+        if (f <= 0.35) box.append(el('b', null, '조금만 더 했으면 됐다!'));
+      } else box.append(el('span', null, near.left ? `대장까지 들판 ${near.left}개 남았다.` : '대장 방 앞까지 왔다.'));
+      if (near.best) box.append(el('b', 'near-best', '이 스테이지에서 가장 멀리 왔다!'));
+      sh.append(box);
+    }
     // the heroes let out of their cages this trip: they are waiting in the village
     for (const id of rescued) {
       const c = CHARACTERS[id], row = el('div', 'unlock-note rescued');
@@ -253,8 +291,21 @@ export function showSummary({ won, run, rescued = [], news = {}, opened = [], st
     if (news.stage != null) sh.append(el('div', 'unlock-note req-done', `새 스테이지 열림: ${ZONES[news.stage].name}`));
     if (news.loop) sh.append(el('div', 'unlock-note req-done', `${news.loop}회차 열림! 모든 스테이지가 더 사나워진 대신 골드를 더 준다. 새 친구들도 갇혀 있다.`));
     if (news.dares) sh.append(el('div', 'unlock-note', '라이벌이 새 내기를 걸어 왔다. 라이벌 집에서 볼 수 있다.'));
+    // 다음엔: what is in reach now
+    const next = meta ? nextUp(meta, run) : [];
+    if (next.length) {
+      const box = el('div', 'next-up');
+      box.append(el('b', null, '다음엔'));
+      for (const l of next) {
+        const row = el('span', 'next-line');
+        if (l.pic) row.append(weatherPic(l.pic, 16));
+        row.append(el('span', null, l.text));
+        box.append(row);
+      }
+      sh.append(box);
+    }
     const foot = el('div', 'sheet-foot');
-    foot.append(button('btn primary', '마을로 돌아가기', () => { closeModal(); onClose(); }));
+    foot.append(button('btn', '마을로 돌아가기', () => { closeModal(); onClose(false); }), button('btn primary', '바로 다시 출발', () => { closeModal(); onClose(true); }));
     sh.append(foot);
   });
 }

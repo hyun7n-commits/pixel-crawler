@@ -32,6 +32,7 @@ import { REQUESTS, takeRequests } from '../data/requests.js';
 import { isOpen, openNew, RELIC_GATES } from '../data/unlocks.js';
 import { caged, cleared, stageOpen, loopsOpen, loopFoe, loopGold, FRIENDS } from '../data/stages.js';
 import { daresOn, daresOpen, dareGold } from '../data/dares.js';
+import { WEATHER, weatherFor } from '../data/weather.js';
 import { homePerks } from '../data/home.js';
 import { enemyAct, furyStep, rouse, awaken, angerSwarm, twist, inReach, canSee, brawl, vex } from './ai.js';
 import { onEnter, explosion, envTick, waterBody, ignite, addGas, spotTraps, revealTraps, openGrave, setBurn, springTrap } from './world.js';
@@ -61,6 +62,8 @@ export class Run {
     this.bossFloor = this.startFloor + B.FLOORS_PER_ZONE - 1;
     this.floor = this.startFloor;
     this.dares = daresOn(meta);
+    // 오늘의 들판 (data/weather.js): this stage's weather on this trip, as the stage select showed it
+    this.weather = weatherFor(meta, stage, loop);
     this.turn = 0;
     this.gold = 0;
     this.kills = 0;
@@ -119,13 +122,19 @@ export class Run {
       // 마법사's wand: sparks left, and turns since the last one came back
       charges: this.char.wand ? B.WAND_CHARGES : 0, wandT: 0,
     };
-    // the relic packed in town for this run (paid for already)
-    if (meta.pack && RELICS[meta.pack] && !tierOf(meta.pack)) {
-      const id = meta.pack;
-      this.p.relics[id] = Math.min(maxLevelOf(id), (this.p.relics[id] || 0) + 1);
-      this.packed = id;
-      meta.pack = null;
+    // the relics packed at 출발 준비 for this trip (ui/prep.js, paid for already), at the levels paid for
+    // (a single meta.pack from before v0.32 is one level)
+    const packs = { ...meta.packs };
+    if (meta.pack && !packs[meta.pack]) packs[meta.pack] = 1;
+    this.packed = [];
+    for (const [id, n] of Object.entries(packs)) {
+      if (!RELICS[id] || tierOf(id) || !n) continue;
+      if (!this.p.relics[id] && Object.keys(this.p.relics).length >= this.slots - (meta.forge ? 1 : 0)) continue;   // (room kept for the smith's)
+      this.p.relics[id] = Math.min(maxLevelOf(id), (this.p.relics[id] || 0) + n);
+      this.packed.push(id);
     }
+    meta.packs = {};
+    meta.pack = null;
     // what the smith made to order (ui/hub.js): out of the forge at Lv1, already paid for
     if (meta.forge && RELICS[meta.forge] && [1, 2].includes(tierOf(meta.forge))) {
       this.p.relics[meta.forge] = 1;
@@ -158,7 +167,9 @@ export class Run {
   // is this rival's dare on for the trip (data/dares.js)
   dare(id) { return this.dares.includes(id); }
   // gold from everything picked up: the 회차 and the dares taken pay more
-  get goldBonus() { return loopGold(this.loop) * dareGold(this.dares.length); }
+  get goldBonus() { return loopGold(this.loop) * dareGold(this.dares.length) * (this.wx.gold || 1); }
+  // what today's weather does (data/weather.js), {} on a plain day
+  get wx() { return WEATHER[this.weather] || {}; }
 
   // ---------- events ----------
   on(fn) { this.listeners.push(fn); }
@@ -216,7 +227,7 @@ export class Run {
         0.25 * (up.sneak || 0) + (meal.sneak || 0),
       sight: Math.min(B.SIGHT + 6, B.SIGHT + lv('lantern') + f('dreamlamp', 1, 1) + f('owleye', 1, 1) + f('headlamp', 1, 1) + f('sunlamp', 1, 1) + lv('nightowl')) - (this.dare('dark') ? B.DARE_DARK : 0) -
         (this.zone.style === 'marsh' ? B.MARSH_DARK : 0) + Math.min(B.FLY_MAX, this.flies || 0) + (ch.sight || 0) + (pet.sight || 0) + (up.sight || 0) + (meal.sight || 0) -
-        (this.p?.inked > 0 ? 3 : 0),
+        (this.p?.inked > 0 ? 3 : 0) + (this.wx.sight || 0),
       oreMult: best(1 + 0.5 * lv('pick'), f('goldrush', 1.5, 0.5), f('headlamp', 1.5, 0.5)),
       // extra chance a swing finds a better grade
       oreRise: best(0.05 * lv('pick'), f('goldrush', 0.1, 0.05), f('headlamp', 0.1, 0.05)) + (on('minecrown') ? 0.15 : 0),
@@ -296,8 +307,9 @@ export class Run {
     this.arrival = { dir: 0 };
     this.genFloor();
     this.log(`${josa(this.char.name, '으로', '로')} ${this.zone.name}에 나왔다. 깃발 꽂힌 땅굴을 찾아 앞으로 가자.`, 'good');
+    if (this.weather) this.log(`오늘은 ${this.wx.name}. ${this.wx.rule}.`, 'quest');
     for (const q of this.requests) this.log(`받아 온 조합 의뢰: ${q.text} (일당 ${q.pay}G)`, 'quest');
-    if (this.packed) this.log(`챙겨 온 ${RELICS[this.packed].name} Lv${this.p.relics[this.packed]}`, 'good');
+    if (this.packed?.length) this.log(`챙겨 온 유물: ${this.packed.map(id => `${RELICS[id].name} Lv${this.p.relics[id]}`).join(', ')}`, 'good');
     if (this.forged) this.log(`대장장이가 만들어 준 ${josa(RELICS[this.forged].name, '을', '를')} 들고 나왔다.`, 'good');
     if (this.p.homeHp) this.log(`집에서 푹 쉬고 나왔다. 최대 체력 +${this.p.homeHp}`, 'good');
     if (this.lunch) this.log('난로가 싸 준 꿀물 도시락(체력 물약)을 챙겼다.', 'good');
@@ -312,7 +324,7 @@ export class Run {
       this.log(`조합이 출발 보급을 챙겨 줬다. 유물 ${this.kit}개를 고른다.`, 'good');
     }
     this.newField();
-    this.emit('banner', { text: this.floorName() });
+    this.emit('banner', { text: this.floorName() + (this.weather ? ` · ${this.wx.name}` : '') });
     this.afterTurn();
   }
 
@@ -440,7 +452,7 @@ export class Run {
     // the zone's own numbers (깊은 곳 too: it is the same zone, further down)
     const zi = this.stage;
     const stairs = { x: far.cx, y: far.cy };
-    const deco = decorate(map, rooms, { start: this.p, stairs, floor: this.floor, style: this.zone.style });
+    const deco = decorate(map, rooms, { start: this.p, stairs, floor: this.floor, style: this.zone.style, ores: this.wx.ores || 0 });
     this.has = deco.has;
     const sp = placeSpecials(map, rooms, deco, {
       floor: this.payFloor, start: this.p, stairs, open: id => this.open(id),
@@ -497,12 +509,13 @@ export class Run {
       return null;
     };
     const place = (fn) => { const s = free(); if (s) fn(s); };
-    const scale = this.foeScale;
+    // (a 별똥별 밤 makes them a little fiercer, a 북적이는 날 brings more, a 보름달 밤 keeps more asleep)
+    const scale = this.foeScale * (this.wx.foes || 1), wx = this.wx;
     // about half of them start asleep
-    for (let i = 0; i < this.crowd - Math.floor((sp.den || 0) / 2); i++) {
+    for (let i = 0; i < this.crowd + (wx.crowd || 0) - Math.floor((sp.den || 0) / 2); i++) {
       place(s => {
         // nothing awake near where you come in: the first steps of a field are yours to look around
-        const type = pick(this.zone.enemies), state = cheb(s, this.p) < B.CALM_START || Math.random() < B.START_ASLEEP ? 'sleep' : 'wander';
+        const type = pick(this.zone.enemies), state = cheb(s, this.p) < B.CALM_START || Math.random() < B.START_ASLEEP + (wx.sleep || 0) ? 'sleep' : 'wander';
         const e = this.spawnEnemy(type, s.x, s.y, scale);
         e.state = state;
         // pack animals bring friends, curled up right beside them
@@ -520,6 +533,7 @@ export class Run {
     for (let i = 0, n = rint(2, 4); i < n; i++) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'gold', amount: Math.round((B.gs(zi) + 1) * rint(3, 7)) }));
     place(s => this.addChest(s.x, s.y));
     if (this.floor === 1) place(s => this.addChest(s.x, s.y));
+    for (let k = 0; k < (wx.chests || 0); k++) place(s => this.addChest(s.x, s.y));
     // 깊은 곳: a locked-chest's worth of loot lying open on every floor, for the build to keep growing
     if (this.depth) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'chest', rich: true }));
     if (!this.dare('nopotion') && Math.random() < B.POTION_CHANCE) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'potion' }));
@@ -528,6 +542,7 @@ export class Run {
     // 들판 도구: one of the meadow tools opened so far, lying in the grass
     if (this.pickTool() && Math.random() < B.TOOL_CHANCE) place(s => this.pickups.push({ x: s.x, y: s.y, type: this.pickTool() }));
     if (this.pickTool() && Math.random() < B.TOOL_MORE) place(s => this.pickups.push({ x: s.x, y: s.y, type: this.pickTool() }));
+    for (let k = 0; k < (wx.tools || 0) && this.pickTool(); k++) place(s => this.pickups.push({ x: s.x, y: s.y, type: this.pickTool() }));
     // now and then an old worker's name tag in the grass; in the ruins, a few on every floor
     for (let i = 0, n = B.tagsPerFloor(this.stage); i < n; i++) place(s => this.pickups.push({ x: s.x, y: s.y, type: 'tag' }));
 
@@ -2780,7 +2795,7 @@ export class Run {
   }
 
   gainXp(n) {
-    const p = this.p, k = 1 + 0.1 * (this.meta.up.xp || 0) + (this.petFx.xp || 0) + (this.meal?.buff.xp || 0);
+    const p = this.p, k = (1 + 0.1 * (this.meta.up.xp || 0) + (this.petFx.xp || 0) + (this.meal?.buff.xp || 0)) * (this.wx.xp || 1);
     // what the upgrades and the pet add on top comes in whole points, the bits kept for next time
     const raw = n * k + (p.xpBits || 0);
     p.xpBits = raw - Math.floor(raw);
@@ -3417,7 +3432,7 @@ export class Run {
 
   offers(n = 3) {
     // 행운의 여신: one card more to choose from
-    n += (this.char.choices || 3) - 3 + (this.lv('fortune') ? 1 : 0);
+    n += (this.char.choices || 3) - 3 + (this.lv('fortune') ? 1 : 0) + (this.wx.choices || 0);
     const rl = this.p.relics, full = Object.keys(rl).length >= this.slots, known = this.meta.recipes, have = this.levels();
     const pool = Object.keys(RELICS).filter(id => {
       if (rl[id]) return rl[id] < maxLevelOf(id);

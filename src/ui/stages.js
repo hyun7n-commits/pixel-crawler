@@ -3,7 +3,7 @@
 // been beaten at this 회차, what the guild sends you off with (출발 보급), and the friend waiting there (a dark shape until rescued). Stages not open
 // yet show only as a locked shape, one more opening each time the one before is beaten.
 
-import { el, button, icon } from './dom.js';
+import { el, button, icon, weatherPic } from './dom.js';
 import { openSheet, closeModal } from './modal.js';
 import { ZONES, ENEMIES } from '../data/enemies.js';
 import { CHARACTERS } from '../data/characters.js';
@@ -11,8 +11,9 @@ import { FRIENDS, LOOPS, loopsOpen, stageOpen, cleared, loopFoe, loopGold } from
 import { daresOn, dareGold, DARE_BY_ID } from '../data/dares.js';
 import { josa } from '../core/util.js';
 import { isOpen } from '../data/unlocks.js';
-import { stageKit } from '../data/balance.js';
+import { stageKit, FLOORS_PER_ZONE } from '../data/balance.js';
 import { RELICS } from '../data/relics.js';
+import { WEATHER, weatherFor } from '../data/weather.js';
 
 // a small view of the zone's ground: a strip of its wall over its floor, a pool in the corner
 function swatch(z, open) {
@@ -54,11 +55,11 @@ export function showStages({ meta, onGo, onClose }) {
     } else if (LOOPS > 1) sh.append(el('p', 'loop-note', '열 스테이지를 다 깨면 더 어려운 2회차가 열린다.'));
     const dares = daresOn(meta);
     if (dares.length) sh.append(el('p', 'loop-note dare-note', `라이벌 내기 ${dares.length}개: ${dares.map(id => DARE_BY_ID[id].name).join(', ')} · 골드 ×${dareGold(dares.length).toFixed(1)}`));
-    // what the shop packed and the smith made to order go out with you, whichever stage it is
-    const bag = [meta.forge, meta.pack].filter(Boolean);
+    // what was packed and what the smith made to order go out with you, whichever stage it is
+    const bag = [meta.forge, ...Object.keys(meta.packs || {})].filter(Boolean);
     if (bag.length) {
       const note = el('p', 'loop-note packed-note');
-      for (const id of bag) note.append(icon(id, 16), el('span', null, `${RELICS[id].name} 챙김`));
+      for (const id of bag) note.append(icon(id, 16), el('span', null, `${RELICS[id].name}${meta.packs?.[id] ? ` Lv${meta.packs[id]}` : ''} 챙김`));
       sh.append(note);
     }
 
@@ -72,6 +73,11 @@ export function showStages({ meta, onGo, onClose }) {
       const boss = ENEMIES[z.boss], met = meta.critters?.[z.boss];
       info.append(el('span', 'stage-sub', !open ? '앞 스테이지를 깨면 열린다'
         : won ? `${loop}회차 깼다 · 대장 ${boss.name}` : met ? `대장 ${boss.name}` : '대장: ???'));
+      // not beaten yet at this 회차: how far it has been got (main.js nearMiss, meta.tries)
+      const best = open && !won && meta.tries?.[`${s}:${loop}`];
+      if (best) info.append(el('span', 'stage-sub best', best > FLOORS_PER_ZONE
+        ? `가장 멀리: 대장 체력 ${Math.max(1, Math.round((FLOORS_PER_ZONE + 1 - best) * 100))}% 남기고 쓰러짐`
+        : best >= FLOORS_PER_ZONE ? '가장 멀리: 대장 방까지' : `가장 멀리: 들판 ${Math.floor(best)}/${FLOORS_PER_ZONE - 1}`));
       // 출발 보급: what the guild sends you off with into a deeper stage
       const kit = stageKit(s);
       if (open && kit.picks) info.append(el('span', 'stage-sub kit', `출발 보급: 다 자란 유물 ${kit.picks}개, 공격 +${kit.atk}, 체력 +${kit.hp}`));
@@ -88,6 +94,13 @@ export function showStages({ meta, onGo, onClose }) {
         const go = button('btn primary', '출발', () => { meta.stage = s; meta.loop = loop; closeModal(); onGo(); });
         card.append(go);
         card.classList.add('can');
+      }
+      // 오늘의 들판 (data/weather.js): the weather here on this trip, along the bottom of the card
+      const w = open && weatherFor(meta, s, loop);
+      if (w) {
+        const line = el('div', 'stage-weather');
+        line.append(weatherPic(w, 16), el('b', null, WEATHER[w].name), el('span', null, WEATHER[w].short));
+        card.append(line);
       }
       list.append(card);
     });

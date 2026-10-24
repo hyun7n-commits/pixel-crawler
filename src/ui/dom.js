@@ -1,4 +1,5 @@
-import { spriteForDom } from '../scenes/textures.js';
+import { spriteForDom, rowsCanvas } from '../scenes/textures.js';
+import { WEATHER } from '../data/weather.js';
 
 export const $ = id => document.getElementById(id);
 
@@ -23,5 +24,13 @@ export function icon(name, size) {
   c.width = src.width; c.height = src.height; c.className = 'pix';
   c.getContext('2d').drawImage(src, 0, 0);
   if (size) { c.style.width = `${size}px`; c.style.height = `${size}px`; }
+  return c;
+}
+
+// today's weather's picture (data/weather.js), drawn at `size`
+export function weatherPic(id, size = 32) {
+  const c = rowsCanvas(WEATHER[id].icon);
+  c.className = 'pix';
+  c.style.width = c.style.height = `${size}px`;
   return c;
 }

@@ -9,6 +9,14 @@ import { loopsOpen } from './stages.js';
 // What it costs to pack one basic relic (Lv1) for the next run; paid again every run, so gold
 // always has a use, and it's how you try out a pairing you have a hunch about (ui/hub.js shop).
 export const PACK_COST = 300;
+// v0.32 출발 준비 (ui/prep.js): up to PACK_MAX basic relics packed for the trip, each tap one level more
+// (up to Lv3), every level dearer than the one before, paid again every trip. The first is as cheap as
+// the old single pack; the last few cost a late stage's whole haul, so however much gold piles up, a
+// trip can always be set off a little stronger with it (or it goes on a legend from the smith).
+export const PACK_PRICES = [PACK_COST, 600, 1000, 1500, 2200, 3000, 4000, 5500, 7500];
+export const PACK_MAX = 3;
+export const packLevels = packs => Object.values(packs || {}).reduce((a, b) => a + b, 0);
+export const packCost = n => PACK_PRICES.slice(0, n).reduce((a, b) => a + b, 0);
 // 두더지 대장장이's 주문 제작 (ui/hub.js books): an evolved relic whose recipe is in your book, made for
 // the next run and carried out at Lv1; from the second 회차 on, a legend too. Paid again every time,
 // so the late fields' gold always has somewhere to go, and a run can be planned round the legend

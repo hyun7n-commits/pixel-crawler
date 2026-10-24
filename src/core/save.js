@@ -24,7 +24,8 @@ export function freshMeta() {
                                         // ({ P, arr }: how far grown, who lived there), see data/village.js
     lastRun: null,          // how the last run went, for the village gossip
     story: {},              // picture-book scenes already shown: intro, ratking, skelking, ending (ui/story.js)
-    pack: null,             // a basic relic paid for in the shop to take on the next run (data/upgrades.js PACK_COST)
+    pack: null,             // (before v0.32) a basic relic paid for in the shop to take on the next run
+    packs: {},              // basic relics packed at 출발 준비 for the next trip, id -> levels paid for (data/upgrades.js PACK_PRICES)
     forge: null,            // an evolved relic (or a legend) the smith makes for the next run (FORGE_COST)
     clears: {},             // stage -> the highest 회차 it has been beaten at (data/stages.js)
     stage: 0, loop: 1,      // what the stage select has picked for the next trip
@@ -59,6 +60,7 @@ export function freshMeta() {
     games: {},              // the village games' best scores (data/play.js)
     today: null,            // what is going on in the village today, and how far it has got (data/play.js DAYS)
     boon: null,             // a wish at the fountain for the next trip: { luck, gold } (data/play.js WISHES)
+    tries: {},              // v0.32: how far each stage has been got at each 회차, 'stage:loop' -> score (main.js nearMiss)
   };
 }
 
@@ -124,6 +126,10 @@ export function loadMeta() {
         games: { ...m.games },
         today: m.today || null,
         boon: m.boon || null,
+        tries: { ...m.tries },
+        // v0.32: the one relic packed in the shop before is packed at its one level
+        packs: m.packs ? { ...m.packs } : m.pack ? { [m.pack]: 1 } : {},
+        pack: null,
       };
     }
   } catch (e) { /* storage blocked or corrupt: start fresh */ }

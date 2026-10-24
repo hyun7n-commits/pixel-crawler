@@ -923,6 +923,8 @@ export class DungeonScene extends Phaser.Scene {
     // slime or honey laid while you were not looking appears when you see that spot
     for (const i of Object.keys(map.goo || {})) if (map.visible[i] && map.gooSeen?.[i] !== map.goo[i]) this.buildTile(i % W, (i / W) | 0);
     const sight = run.stat().sight;
+    // today's weather tints the whole field a little (data/weather.js): warm on a 금빛 날, blue on a moonlit night
+    const gr = run.wx?.grade || [1, 1, 1];
     if (this.fogSeen?.length !== n) { this.fogSeen = new Uint8Array(n); this.fogCol = new Float32Array(n * 3); this.fogCorner = new Float32Array((W + 1) * (H + 1) * 3); }
     const seenA = this.fogSeen, col = this.fogCol, cor = this.fogCorner;
     // the inside of a thick wall has no line of sight of its own: it shows, a shade darker, once a tile
@@ -966,7 +968,7 @@ export class DungeonScene extends Phaser.Scene {
       // walls sit a shade under the ground you walk on (deeper in, deeper still), so the way through a
       // field always reads first, as in Shattered Pixel Dungeon (v0.28)
       const k = L * (seen === 2 ? 40 : 60), dim = map.tiles[i] === WALL ? (this.tileImgs[i].deep ? 0.74 : 0.87) : this.tileImgs[i].deep ? 0.8 : 1;
-      col[i * 3] = (r + k + L * 22) * dim; col[i * 3 + 1] = (v + k) * dim; col[i * 3 + 2] = (b + k - L * 34) * dim;
+      col[i * 3] = (r + k + L * 22) * dim * gr[0]; col[i * 3 + 1] = (v + k) * dim * gr[1]; col[i * 3 + 2] = (b + k - L * 34) * dim * gr[2];
     }
     // the light at each corner is the mean of the tiles that meet there, and each picture is tinted from
     // its corners, so light and fog shade smoothly across the ground instead of in squares
