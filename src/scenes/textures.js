@@ -131,11 +131,12 @@ function setPiece(g, px) {
 }
 const blank = (W, H) => ({ ch: Array.from({ length: H }, () => Array(W).fill('.')), hue: Array.from({ length: H }, () => Array(W).fill(0)), n: 0 });
 // the test for a lumpy egg of rock w across and h tall standing on row `base` about column cx: a round
-// top leaning a little, a flatter foot, its edge wobbling in and out, now and then a side sliced flat
-function lumpyRock(rnd, cx, base, w, h) {
+// top leaning a little, a flatter foot, its edge wobbling in and out, now and then (unless `plain`) a side
+// sliced flat
+function lumpyRock(rnd, cx, base, w, h, plain = false) {
   const my = base + 1 - h / 2, ry = h / 2, rx = w / 2, tilt = (rnd() - 0.5) * 0.6;
   const ph = [rnd() * 6.3, rnd() * 6.3, rnd() * 6.3], amp = [0.05 + rnd() * 0.07, 0.04 + rnd() * 0.05, 0.02 + rnd() * 0.03];
-  const slice = rnd() < 0.35 ? { a: -Math.PI / 2 + (rnd() - 0.5) * 2.2, d: 0.72 + rnd() * 0.14 } : null;
+  const slice = rnd() < 0.35 && !plain ? { a: -Math.PI / 2 + (rnd() - 0.5) * 2.2, d: 0.72 + rnd() * 0.14 } : null;
   return (px, py) => {
     const dy = (py + 0.5 - my) / ry, dx = (px + 0.5 - cx) / rx + tilt * Math.min(0, dy);
     if (slice && dx * Math.cos(slice.a) + dy * Math.sin(slice.a) > slice.d) return false;
@@ -217,7 +218,8 @@ const hueColor = (grade, hue) => {
   };
 };
 // one look of a grade's one-tile rock: { rows, recolor, box } (box: where the rock is in its tile, so
-// the cracks of each swing land on it)
+// the cracks of each swing land on it). Look -1 is its portrait for the HUD and the cards: a plain round
+// rock in the middle with its pieces on top.
 const boulders = new Map();
 function boulder(grade, v) {
   const id = `${grade.id}_${v}`;
@@ -225,7 +227,7 @@ function boulder(grade, v) {
   const rnd = seeded(ORES.indexOf(grade) * 7919 + v * 104729 + 17);
   const W = TILE, H = TILE + ORE_TALL, g = blank(W, H);
   let R, main;
-  if (rnd() < 0.3) {
+  if (v >= 0 && rnd() < 0.3) {
     // a boulder with a smaller stone sitting against its side, in front of it
     const side = rnd() < 0.5 ? -1 : 1, w = 12 + Math.floor(rnd() * 2), sw = 7 + Math.floor(rnd() * 2);
     const cx = side < 0 ? W - w / 2 : w / 2, sx = side < 0 ? sw / 2 : W - sw / 2;
@@ -233,8 +235,8 @@ function boulder(grade, v) {
     const small = shadeRock(g, lumpyRock(rnd, sx, H - 1, sw, 6 + Math.floor(rnd() * 3)), rnd, 0);
     R = (x, y) => main(x, y) || small(x, y);
   } else {
-    const w = 14 + Math.floor(rnd() * 3), cx = W / 2 + (rnd() - 0.5) * (W - w);
-    R = main = shadeRock(g, lumpyRock(rnd, cx, H - 1, w, 11 + Math.floor(rnd() * 5)), rnd, 1 + Math.floor(rnd() * 2));
+    const w = v < 0 ? 15 : 14 + Math.floor(rnd() * 3), cx = v < 0 ? W / 2 : W / 2 + (rnd() - 0.5) * (W - w);
+    R = main = shadeRock(g, lumpyRock(rnd, cx, H - 1, w, v < 0 ? 12 : 11 + Math.floor(rnd() * 5), v < 0), rnd, 1 + Math.floor(rnd() * 2));
   }
   let x0 = W, x1 = 0, y0 = H, y1 = 0, m0 = W, m1 = 0;
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -253,7 +255,7 @@ const oreVariant = ({ x, y }) => ((Math.imul(x, 73856093) ^ Math.imul(y, 1934966
 export const oreBox = (ore, tier = ore.tier) => boulder(ORES[tier], oreVariant(ore.cells?.[0] || ore)).box;
 // the grade's picture for the HUD, the cards and the stories
 function oreCanvas(grade) {
-  const b = boulder(grade, 3);
+  const b = boulder(grade, -1);
   return spriteCanvas(b.rows, b.recolor);
 }
 // 반짝돌 왕관's pebble: the small lump with two of the grade's smallest pieces in it
