@@ -20,6 +20,8 @@ import { DREAMS, dreamId } from './dreams.js';
 import { FEATS, featId } from './feats.js';
 import { ROOMS, ROOM_KINDS, ROOM_PIC, roomId } from './rooms.js';
 import { FISH, BUGS, CROPS, FORAGE, DISHES } from './life.js';
+import { PLAY_LIST, playId, WISH_LIST, wishId, DAYS, dayId, HIDE_LINES, HIDE_IDS, hideId, TREASURES, FOGS, treasureId } from './play.js';
+import { CHARACTERS } from './characters.js';
 
 // the hand-made secrets' little pictures
 const SECRET_PIC = {
@@ -49,6 +51,11 @@ export const CHAPTERS = [
   { id: 'crop', name: '텃밭', pic: { find: ['carrot', 'og'] }, note: '집 마당 텃밭에서 키운 것' },
   { id: 'forage', name: '들에서 난 것', pic: { find: ['rasp', 'rg'] }, note: '마을 여기저기서 주운 것' },
   { id: 'dish', name: '요리', pic: { find: ['bowl', 'ow'] }, note: '집 난로에서 만든 것' },
+  // v0.30 마을 놀이 (data/play.js)
+  { id: 'play', name: '놀이', pic: { find: ['ribbon', 'r'] }, note: '마을에서 놀다가 해낸 것' },
+  { id: 'day', name: '마을의 하루', pic: { find: ['star', 'y'] }, note: '어느 날 마을에서 있었던 일' },
+  { id: 'hide', name: '숨바꼭질', pic: { find: ['leaf', 'g'] }, note: '숨바꼭질에서 찾아낸 친구들' },
+  { id: 'treasure', name: '마을 보물', pic: { find: ['map', 'c'] }, note: '마을 땅속과 안개 속에서 찾은 것' },
 ];
 
 const ENTRIES_ALL = [
@@ -71,6 +78,11 @@ const ENTRIES_ALL = [
   ...DREAMS.map(d => ({ id: dreamId(d.id), ch: 'dream', name: d.name, line: d.line, pic: { spr: d.pic } })),
   ...FEATS.map(f => ({ id: featId(f.id), ch: 'feat', name: f.name, line: f.line, pic: f.pic })),
   ...[FISH, BUGS, CROPS, FORAGE, DISHES].flatMap(t => Object.values(t).map(it => ({ id: `${it.cat}:${it.id}`, ch: it.cat, name: it.name, line: it.line, pic: it.pic }))),
+  ...PLAY_LIST.map(([id, name, line, pic]) => ({ id: playId(id), ch: 'play', name, line, pic })),
+  ...WISH_LIST.map(([id, name, line]) => ({ id: wishId(id), ch: 'play', name: `분수 소원 · ${name}`, line, pic: { find: ['coin', id === 'wish' ? 'z' : 'Y'] } })),
+  ...DAYS.map(o => ({ id: dayId(o.id), ch: 'day', name: o.name, line: o.line, pic: o.pic })),
+  ...HIDE_IDS.map(id => ({ id: hideId(id), ch: 'hide', name: CHARACTERS[id].name, line: HIDE_LINES[id], pic: { spr: CHARACTERS[id].sprite } })),
+  ...[...Object.values(TREASURES), ...FOGS].map(t => ({ id: treasureId(t.id), ch: 'treasure', name: t.name, line: t.line, pic: t.pic })),
 ];
 
 export const ENTRIES = ENTRIES_ALL;

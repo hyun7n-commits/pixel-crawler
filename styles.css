@@ -696,3 +696,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .dish-card b { font-family: var(--font-display); font-weight: 400; font-size: 20px; color: var(--gold); }
 .dish-card p { margin: 0; }
 .dish-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+/* v0.30 마을 놀이 (ui/life.js, ui/hub.js): a treasure map in the basket, the rival's race */
+.bag-map { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px; background: var(--panel); border: 1px solid var(--line); margin-bottom: 4px; }
+.bag-map canvas { max-width: 100%; height: auto !important; aspect-ratio: 64 / 48; }
+.race-row { border-color: #b48ade; margin-bottom: 8px; }

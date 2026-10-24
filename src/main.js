@@ -34,6 +34,7 @@ import { describeTile } from './ui/tip.js';
 import { secretOf } from './data/secrets.js';
 import { record, bookCount } from './data/book.js';
 import { passDay, addToBag, lifeEntry } from './data/life.js';
+import { mapToFind, mapId } from './data/play.js';
 import { renderBasket, renderSeeds, renderCook, renderDish, hasCookable } from './ui/life.js';
 import { toast } from './ui/toast.js';
 import { renderBook } from './ui/book.js';
@@ -252,6 +253,8 @@ function talkTo(id, line) {
       onFurniture: () => sfx.play('buy'),
       onExtend: () => { closeTalk(); sfx.play('levelup'); hud.banner(`집이 넓어졌다! ${roomOf(meta).name}`); village().showHomeGrow(); },
       onGoHome: ownsHome(meta) ? () => { closeTalk(); showHome(); } : null,
+      // the rival's race (scenes/village-play.js)
+      onRace: () => { closeTalk(); village().startRace(); },
     }),
   });
 }
@@ -399,10 +402,27 @@ const villageHooks = {
   onCatch: (id, n = 1) => {
     addToBag(meta, id, n);
     foundEntry(lifeEntry(id));
+    // a bottle out of the creek with a treasure map rolled up in it, when there is one to be had
+    const map = id === 'bottle' && n > 0 && mapToFind(meta);
+    if (map) { addToBag(meta, mapId(map.id), 1); setTimeout(() => { hud.banner('병 속에 보물 지도가 들어 있었다!'); sfx.play('letter'); }, 900); }
     saveMeta(meta);
     renderVillageHud(meta);
   },
   onLife: () => saveMeta(meta),
+  // 마을 놀이 (scenes/village-play.js): a coin spent (false: not enough), a wish for the next trip
+  onGold: n => {
+    if (meta.gold + n < 0) return false;
+    meta.gold += n;
+    saveMeta(meta);
+    if (n < 0) sfx.play('gold');
+    renderVillageHud(meta);
+    return true;
+  },
+  onBoon: b => {
+    const was = meta.boon || {};
+    meta.boon = { luck: Math.max(was.luck || 0, b.luck || 0), gold: Math.max(was.gold || 0, b.gold || 0) };
+    saveMeta(meta);
+  },
   onPlant: (i, empties) => openSeeds(i, empties),
 };
 
@@ -712,8 +732,10 @@ document.addEventListener('keydown', ev => {
   }
   // in the village: walk a step, or bump whoever is there; Enter heads out
   if (inVillage) {
-    if (KEYS[k]) { ev.preventDefault(); village().step(...KEYS[k]); }
-    if (k === 'Enter' && document.activeElement === document.body) chooseStage();
+    if (KEYS[k]) { ev.preventDefault(); village().step(...KEYS[k], ev.repeat); }
+    // Space: a game's button (scenes/village-play.js)
+    if (k === ' ' && document.activeElement === document.body && village().playKey(ev.repeat)) ev.preventDefault();
+    if (k === 'Enter' && document.activeElement === document.body && !village().play) chooseStage();
     if (k === 'm') toggleSound();
     return;
   }

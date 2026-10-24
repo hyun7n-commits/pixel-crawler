@@ -65,6 +65,19 @@ const RAINBOW_BANDS = [0xd9454a, 0xf08c3a, 0xf4cf4f, 0x6cc45a, 0x4f8de0, 0x9a5fd
 // a sparkle rock's glow: its grade's light colour (the rainbow stone a warm white)
 const oreTint = tier => Phaser.Display.Color.HexStringToColor(ORES[tier].vein ? ORES[tier].vein[0] : '#fff4e0').color;
 const foot = v => v * TILE + TILE;
+// 숨은 방 (v0.30): the ground right in front of a hidden room's way in, as the way from it to the way
+// in ({i, dx, dy}), and how far a picture drawn facing north turns to face that way
+function nookFront(map) {
+  const n = map.nook;
+  if (!n || n.gap < 0 || n.hits == null) return null;
+  const gx = n.gap % map.w, gy = (n.gap / map.w) | 0;
+  for (const [dx, dy] of [[0, 1], [-1, 0], [1, 0], [0, -1]]) {
+    const x = gx + dx, y = gy + dy, i = idx(x, y);
+    if (inMap(x, y) && map.tiles[i] !== WALL && !n.cells.includes(i)) return { i, dx: -dx, dy: -dy };
+  }
+  return null;
+}
+const TURN = { '0,-1': 0, '1,0': 90, '0,1': 180, '-1,0': -90 };
 
 // 버릇 (v0.30, data/odd.js HABITS): how a critter moves at its habit, `t` ms into it and `len` long.
 // Takes and returns the numbers pose() goes on with.
@@ -575,7 +588,11 @@ export class DungeonScene extends Phaser.Scene {
       if (!open) imgs.deep = true;
       // 틈 너머 비밀 터: light leaking through a narrow gap in the wall's face
       // (v0.29) a hidden room's way in: the bushes a little parted or a crack in the rock, more at each hit
-      if (map.nook?.gap === i) add(map.nook.hits == null ? 't_gap' : `t_hide_${map.nook.kind}${Math.min(2, map.nook.hits)}`, D.tiles + 0.6);
+      // (v0.30) turned to face the ground you would come at it from
+      if (map.nook?.gap === i) {
+        const im = add(map.nook.hits == null ? 't_gap' : `t_hide_${map.nook.kind}${Math.min(2, map.nook.hits)}`, D.tiles + 0.6), f = nookFront(map);
+        if (f) Object.assign(im.setOrigin(0.5).setPosition(center(x), center(y)).setAngle(TURN[`${f.dx},${f.dy}`]), { nook: true, out: { dx: -f.dx, dy: -f.dy } });
+      }
       // 반짝 광맥 (v0.29): the gems (or golden acorns) still in this bit of wall
       const seam = map.seams?.find(o => o.i === i);
       if (seam?.left > 0) add(seamKey(this, seam.kind, seam.left), D.tiles + 0.6);
@@ -623,6 +640,9 @@ export class DungeonScene extends Phaser.Scene {
         const shade = around(wall) & (N | E | W_ | NE | NW);
         if (shade) add(shadeKey(this, shade));
         this.decorate(x, y, add);
+        // 숨은 방 (v0.30): what has spilled out of the way into a hidden room, on the ground in front of it
+        const f = map.nook?.gap >= 0 && nookFront(map);
+        if (f?.i === i) add(`t_hide_${map.nook.kind}_litter`, D.ter + 0.15).setOrigin(0.5).setPosition(center(x), center(y)).setAngle(TURN[`${f.dx},${f.dy}`]);
       }
       // a snail's slime or the queen's honey shows once you have seen it lying there, so a trail laid
       // out of sight does not light up ground you only remember (v0.29)
@@ -2149,6 +2169,20 @@ export class DungeonScene extends Phaser.Scene {
     this.tweens.add({ targets: img, x: x0 + 1, duration: 70, yoyo: true, repeat: n, ease: 'Sine.inOut', onComplete: () => { img.x = x0; img.swaying = false; } });
   }
 
+  // 숨은 방 (v0.30): the bushes in its way in stir, and a leaf or two drop out on the side you would
+  // come at it from (grit and a chip off rock)
+  stirNook(nook, at) {
+    const im = (this.tileImgs[nook.gap] || []).find(o => o.nook), out = im?.out || { dx: 0, dy: 1 };
+    if (im && !im.swaying) {
+      im.swaying = true;
+      const x0 = im.x;
+      this.tweens.add({ targets: im, x: x0 + 1, duration: 70, yoyo: true, repeat: 1, ease: 'Sine.inOut', onComplete: () => { im.x = x0; im.swaying = false; } });
+    }
+    const x = center(at.x) + out.dx * 6, y = center(at.y) + out.dy * 6 + 2;
+    if (nook.kind === 'rock') { this.fx.dust.explode(3, x, y); this.fx.rock.explode(2, x, y); }
+    else this.fx.leaf.explode(4, x, y);
+  }
+
   // 덤불 속 아기: out of the bush it tumbles, startled, drops what it was hugging and scampers off
   babyOut(d) {
     this.sway(idx(d.x, d.y), 4);
@@ -2430,6 +2464,14 @@ export class DungeonScene extends Phaser.Scene {
     if (gap >= 0 && map.visible[gap] && time > (this.gapMote || 0)) {
       this.gapMote = time + 1400 + Math.random() * 1800;
       this.fx.firefly.explode(1, center(gap % map.w), ((gap / map.w) | 0) * TILE + 11);
+    }
+    // 숨은 방 (v0.30): its way in gives itself away now and then (the leaves stir and one or two drop out,
+    // or grit and a chip off the rock), and the first time you come within two steps of it you wonder
+    const nook = map.nook;
+    if (nook?.hits != null && nook.gap >= 0 && map.visible[nook.gap]) {
+      const at = { x: nook.gap % map.w, y: (nook.gap / map.w) | 0 };
+      if (this.nookSeen !== nook && !this.busy() && cheb(p, at) <= 2) { this.nookSeen = nook; this.emote(this.playerSprite, '?', 1300); this.nookStir = 0; }
+      if (time > (this.nookStir || 0)) { this.nookStir = time + 2600 + Math.random() * 2200; this.stirNook(nook, at); }
     }
     // 반짝 광맥: one of the gems (acorns) still in the wall winks now and then
     for (const sm of map.seams || []) {

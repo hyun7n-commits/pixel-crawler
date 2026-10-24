@@ -55,7 +55,9 @@ export function freshMeta() {
     meal: null,             // a dish eaten for the next trip (data/life.js DISHES)
     hearts: {},             // how close you are with each villager and friend (data/affinity.js)
     bonds: {},              // how close the villagers are with each other, by pair
-    games: {},              // the village games' best scores
+    games: {},              // the village games' best scores (data/play.js)
+    today: null,            // what is going on in the village today, and how far it has got (data/play.js DAYS)
+    boon: null,             // a wish at the fountain for the next trip: { luck, gold } (data/play.js WISHES)
   };
 }
 
@@ -118,6 +120,8 @@ export function loadMeta() {
         hearts: { ...m.hearts },
         bonds: { ...m.bonds },
         games: { ...m.games },
+        today: m.today || null,
+        boon: m.boon || null,
       };
     }
   } catch (e) { /* storage blocked or corrupt: start fresh */ }

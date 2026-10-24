@@ -94,7 +94,7 @@ export const CROP_LIST = [
 ];
 
 // ---------- 들에서 나는 것 ----------
-// [id, name, line, shape, pal, where (grass · tree · flower · hive)]
+// [id, name, line, shape, pal, where (grass · tree · flower · hive · none: never lying about)]
 export const FORAGE_LIST = [
   ['rasp', '산딸기', '덤불 사이에 빨갛게 숨어 있었다. 새콤달콤.', 'rasp', 'rg', 'tree'],
   ['shroom', '버섯', '갓이 동그란 갈색 버섯. 먹어도 되는 쪽이다.', 'shroom', 'nJa', 'tree'],
@@ -106,6 +106,9 @@ export const FORAGE_LIST = [
   ['rose', '들장미', '향기가 좋다. 가시를 조심하자.', 'flower', 'q', 'flower'],
   ['pinemush', '송이버섯', '솔향이 난다. 아주 귀한 버섯이다.', 'shroom', 'JIa', 'tree', { rare: true }],
   ['honey', '벌집 꿀', '꿀벌 통 옆에 떨어진 벌집 조각. 꿀벌들이 나눠 준 걸로 하자.', 'comb', 'yY', 'hive'],
+  // not lying about: what a village day gives you (data/play.js DAYS), `price` at the shop
+  ['egg', '달걀', '병아리들을 찾아 줬더니 엄마 닭이 낳아 준 달걀. 아직 따뜻하다.', 'egg', 'w', 'none', { price: 12 }],
+  ['giantturnip', '커다란 순무', '다 같이 영차영차 뽑은 순무. 혼자서는 들 수도 없다.', 'turnip', 'wGP', 'none', { price: 300 }],
 ];
 
 // ---------- 요리 ----------
@@ -117,6 +120,7 @@ export const FORAGE_LIST = [
 //   regen: health back on each new field · sneak: harder surprise blows · luck: odd things more often
 //   (core/wonders.js) · tool: a meadow tool in the pocket
 export const DISH_LIST = [
+  ['turnipfeast', '순무 잔치', '커다란 순무 하나로 온 마을이 배불리 먹었다.', 'pot', 'wg', { hp: 12, regen: 1 }, ['giantturnip']],
   ['goldfeast', '임금님 수라상', '황금빛 생선 요리가 한 상 가득. 먹기 아깝다.', 'plate', 'yr', { hp: 10, atk: 2, gold: 0.1 }, ['king']],
   ['pinerice', '송이 솥밥', '솥뚜껑을 여니 솔향이 확 퍼진다.', 'pot', 'Jw', { hp: 10, atk: 1 }, ['pinemush', 'any']],
   ['kimchi', '배추김치', '맵고 시원하다. 힘이 불끈 난다.', 'bowl', 'rv', { atk: 1, hp: 3 }, ['cabbage', 'pepper']],
@@ -147,6 +151,7 @@ export const DISH_LIST = [
   ['flowertea', '꽃차', '찻잔에 꽃이 피었다. 왠지 좋은 일이 생길 것 같다.', 'cup', 'q', { luck: 0.3 }, ['flower', 'any']],
   ['hotpot', '버섯전골', '버섯이 잔뜩. 보글보글 끓여 다 같이 먹는 요리.', 'pot', 'n', { hp: 7 }, ['mushroom', 'mushroom']],
   ['berrytart', '산딸기 타르트', '바삭한 과자 위에 산딸기가 소복하다.', 'pie', 'r', { hp: 4, gold: 0.05 }, ['fruit', 'nut']],
+  ['eggroll', '달걀말이', '도톰하게 말았다. 채소가 알록달록 박혀 있다.', 'plate', 'y', { hp: 4, def: 1 }, ['egg', 'veg']],
   ['grilledfish', '생선구이', '노릇노릇 구웠다. 소금만 뿌려도 맛있다.', 'skewer', 'L', { hp: 3 }, ['fish']],
   ['steamveg', '찐 채소', '푹 쪘다. 몸에 좋은 맛이다.', 'plate', 'g', { hp: 2, regen: 1 }, ['veg']],
   ['grillmush', '버섯구이', '불에 구우니 향이 확 올라온다.', 'skewer', 'n', { hp: 2, def: 1 }, ['mushroom']],
@@ -154,6 +159,10 @@ export const DISH_LIST = [
   ['namul', '나물무침', '조물조물 무쳤다. 향긋하다.', 'plate', 'G', { hp: 2, xp: 0.05 }, ['herb']],
   ['roastnut', '군밤', '호호 불어 가며 까먹는다.', 'cookie', 'N', { hp: 2, gold: 0.05 }, ['nut']],
   ['honeywater', '꿀물', '달다. 힘이 난다.', 'cup', 'y', { regen: 1 }, ['honey']],
+  ['steamegg', '달걀찜', '보들보들 부풀어 올랐다. 숟가락이 쏙 들어간다.', 'bowl', 'y', { hp: 5 }, ['egg']],
+  // not cooked: given to you on a village day (data/play.js DAYS moon, picnic)
+  ['mooncookie', '달 과자', '큰 나무 작은 문 안에서 받은 과자. 달처럼 동그랗고 노랗다.', 'cookie', 'z', { sight: 1, luck: 0.2 }, null],
+  ['picnicbox', '소풍 도시락', '소풍에서 나눠 받은 도시락. 김밥이 가지런하다.', 'onigiri', 'gw', { hp: 4, regen: 1 }, null],
   ['mystery', '정체불명 스튜', '무엇을 넣었는지 기억나지 않는다. 먹으면… 어떻게 될까?', 'pot', 'X', { mystery: true }, null],
 ];
 
@@ -167,6 +176,7 @@ export const TAGS = {
   nut: ['acorn', 'chestnut'],
   flower: ['rose', 'sunflower', 'dandelion'],
   honey: ['honey'],
+  egg: ['egg'],
   eel: ['eel', 'loach'],
   king: ['goldcarp', 'lord'],
   bug: BUG_LIST.map(b => b[0]),
@@ -275,7 +285,9 @@ export function fishFor(where, rod, P, rnd = Math.random) {
 // A new village day: today's bites, BUGS_A_DAY bugs and FORAGE_A_DAY wild things, each on a free spot
 // of its kind (`bugAt`, `wildAt`: { flower, tree, grass, pond, hive } lists of cells, from the village as
 // it is: a bug's tree is the tree itself, a wild thing's the grass under one), never two on one cell.
-export function rollDay(meta, bugAt, wildAt, rnd = Math.random) {
+// `mods`: what the day's goings-on add (data/play.js DAY_LIFE): bites in each water, more bugs, so many
+// of one bug or wild thing on top.
+export function rollDay(meta, bugAt, wildAt, rnd = Math.random, mods = null) {
   const used = new Set(), out = { bugs: [], forage: [] };
   const place = (spots, where, id, into) => {
     const free = (spots[where] || []).filter(c => !used.has(`${c.x},${c.y}`));
@@ -286,16 +298,19 @@ export function rollDay(meta, bugAt, wildAt, rnd = Math.random) {
     return true;
   };
   const bugs = Object.values(BUGS).filter(b => (bugAt[b.where] || []).length);
-  for (let k = 0, tries = 0; k < BUGS_A_DAY && bugs.length && tries < 40; tries++) {
+  for (let k = 0, tries = 0; k < BUGS_A_DAY + (mods?.bugs || 0) && bugs.length && tries < 60; tries++) {
     const b = weighted(bugs, rnd);
     if (place(bugAt, b.where, b.id, out.bugs)) k++;
   }
+  for (const [id, n] of Object.entries(mods?.only || {})) for (let k = 0; k < n; k++) place(bugAt, BUGS[id].where, id, out.bugs);
+  for (const [id, n] of Object.entries(mods?.forage || {})) for (let k = 0; k < n; k++) place(wildAt, FORAGE[id].where, id, out.forage);
   const wild = Object.values(FORAGE).filter(f => (wildAt[f.where] || []).length).map(f => ({ ...f, w: f.rare ? 0.4 : f.where === 'hive' ? 1.5 : 2 }));
   for (let k = 0, tries = 0; k < FORAGE_A_DAY && wild.length && tries < 40; tries++) {
     const f = weighted(wild, rnd);
     if (place(wildAt, f.where, f.id, out.forage)) k++;
   }
-  meta.life = { day: meta.day || 0, bites: { ...BITES }, bugs: out.bugs, forage: out.forage };
+  const bites = Object.fromEntries(Object.entries(BITES).map(([w, n]) => [w, n + (mods?.bites || 0)]));
+  meta.life = { day: meta.day || 0, bites, bugs: out.bugs, forage: out.forage };
   return meta.life;
 }
 
@@ -311,6 +326,7 @@ export function addToBag(meta, id, n = 1) {
 export function sellPrice(id) {
   const it = ITEM[id];
   if (!it || it.cat === 'dish') return 0;
+  if (it.price) return it.price;
   if (TAGS.junk.includes(id)) return id === 'bottle' ? 20 : 1;
   if (it.cat === 'crop') return Math.round((seedCost(it.days) / SEED_PACK) * 1.5);
   if (it.cat === 'forage') return it.rare ? 40 : id === 'honey' ? 14 : 5;

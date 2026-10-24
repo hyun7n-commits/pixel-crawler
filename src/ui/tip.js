@@ -11,6 +11,12 @@ import { josa } from '../core/util.js';
 import { TRINKET } from '../data/trinkets.js';
 import { oddName, oddTip } from '../core/wonders.js';
 
+// 숨은 방 (v0.30): the way into a hidden room, untouched and after each hit
+const NOOK_TIP = {
+  leaf: ['덤불이 살짝 헤쳐져 있다. 틈으로 바람이 솔솔 새어 나온다.', '덤불이 반쯤 헤쳐졌다. 안쪽이 휑하다.', '덤불이 거의 다 헤쳐졌다. 한 번만 더!'],
+  rock: ['바위에 금이 가 있다. 틈으로 바람이 새어 나온다.', '금이 쩍 벌어졌다. 두드리면 안쪽에서 텅 빈 소리가 난다.', '바위가 금방이라도 무너질 것 같다. 한 번만 더!'],
+};
+
 const CHEST = '보물 상자: 열면 유물을 하나 고른다.';
 const PICKUP = {
   chest: q => (q.rich ? '금테 상자: 좋은 상자다. 열면 유물을 넷 중 하나 고른다.' : CHEST),
@@ -116,6 +122,9 @@ export function describeTile(run, x, y, always = false) {
   const bell = map.bells?.find(o => o.x === x && o.y === y && o.frog == null);
   if (bell) lines.push(`방울: 딸랑딸랑 울리는 중 (${bell.t}턴 더). 나를 못 보는 적은 이리로 온다. 다 울리면 주울 수 있다.`);
   if (map.flies?.some(o => o.x === x && o.y === y)) lines.push(`${TILE_INFO.fly.name}: ${TILE_INFO.fly.tip}`);
+  // 숨은 방 (v0.30): what a sharp eye makes of its way in (never what is behind it)
+  const nook = map.nook;
+  if (nook?.gap === i && nook.hits != null) lines.push(`${run.zone.wallName}: ${NOOK_TIP[nook.kind][Math.min(2, nook.hits)]}`);
   const seam = map.seams?.find(o => o.i === i && o.left > 0);
   if (seam) lines.push(seam.kind === 'gem' ? `반짝 광맥: 벽에 보석이 ${seam.left}개 박혀 있다. 부딪쳐서 하나씩 캔다. 캘수록 값지고, 소리도 커진다.`
     : `황금 도토리: 덤불에 ${seam.left}개 걸려 있다. 부딪쳐서 하나씩 털어 낸다. 털수록 값지고, 소리도 커진다.`);

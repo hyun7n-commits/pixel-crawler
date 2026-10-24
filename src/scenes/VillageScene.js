@@ -32,6 +32,7 @@ import { plotCount, GARDEN_BASE } from '../data/life.js';
 import {
   placeVillageLife, lifeTap, lifeStep, lifeAct, lifeStepOn, lifeDescribe, lifeTick, lifeMarks, plantSeeds, drawBed, GARDEN_MORE, bedArt,
 } from './village-life.js';
+import { placeVillagePlay, playTap, playStep, playAct, playStepOn, playDescribe, playTick, playKey, startRace } from './village-play.js';
 import { patchNoise, scatterKey, patchKey, footKey, bloomKey, moteKeys, SCATTER_VARIANTS, PATCH_VARIANTS, FOOT_VARIANTS, BLOOM_VARIANTS, FOOT_UP } from './field-decor.js';
 import { propCanvas, critterCanvas } from './village-props.js';
 import { poke, pokeKind, stillInFlowers, flutterTo, petPup } from './village-secrets.js';
@@ -296,6 +297,7 @@ export class VillageScene extends Phaser.Scene {
     this.hideFinds(2 + Math.floor(Math.random() * 2));
     this.placeLife();
     placeVillageLife(this);
+    placeVillagePlay(this);
     this.festival();
     this.playGrowth(arrivals);
   }
@@ -780,6 +782,9 @@ export class VillageScene extends Phaser.Scene {
 
   // seeds in from the seed sheet (ui/life.js)
   plantSeeds(crop, idxs) { return plantSeeds(this, crop, idxs); }
+  // the rival's race (from the rival's sheet), and Space for the games (main.js)
+  startRace() { return startRace(this); }
+  playKey(repeat) { return !this.showing && !!this.ps && playKey(this, repeat); }
   // the shop sold you 텃밭 넓히기: the bed takes in its new column
   widenBed() {
     const img = this.decor?.garden;
@@ -842,6 +847,8 @@ export class VillageScene extends Phaser.Scene {
     this.lifeWild = [];
     this.plots = [];
     this.petS = null;
+    // 마을 놀이 (scenes/village-play.js)
+    this.play = this.stones = this.swingRest = null;
   }
 
   keep(o) { this.objs.push(o); return o; }
@@ -1247,6 +1254,8 @@ export class VillageScene extends Phaser.Scene {
   }
 
   describe(x, y) {
+    const play = playDescribe(this, x, y);
+    if (play) return play;
     const life = lifeDescribe(this, x, y);
     if (life) return life;
     const who = this.folkAt(x, y) || (this.houseAt(x, y)?.lived && this.folk.find(f => f.id === this.houseAt(x, y).id));
@@ -1272,6 +1281,8 @@ export class VillageScene extends Phaser.Scene {
   // a tap: walk to the spot; on a villager or a house, walk up to them and talk; on the sign, head out
   tap(x, y) {
     if (this.ps?.diving) return;
+    // a game going on, or something to play with (scenes/village-play.js)
+    if (playTap(this, x, y)) return;
     // fishing, a bug, the yard's bed (scenes/village-life.js)
     if (lifeTap(this, x, y)) return;
     const house = this.houseAt(x, y);
@@ -1308,12 +1319,15 @@ export class VillageScene extends Phaser.Scene {
     this.pending = null;
   }
 
-  // keyboard: one step, or bump whoever is there
-  step(dx, dy) {
+  // keyboard: one step, or bump whoever is there (`repeat`: the key held down; in a game a held key
+  // is one press)
+  step(dx, dy, repeat) {
     if (this.showing) { this.skipShow(); return; }
+    if (this.play) { playStep(this, this.p.x + dx, this.p.y + dy, repeat); return; }
     if (this.ps?.diving || this.time.now < this.nextStep) return;
     this.nextStep = this.time.now + STEP_MS;
     const x = this.p.x + dx, y = this.p.y + dy;
+    if (playStep(this, x, y, repeat)) { this.path = []; return; }
     if (lifeStep(this, x, y)) { this.path = []; return; }
     const who = this.folkAt(x, y) || this.heroAt(x, y) || this.pupAt(x, y) || (this.homeAt(x, y) && this.homeDoor) ||
       (this.mail && this.decorAt(x, y)?.id === 'mailbox' && this.mailbox);
@@ -1353,6 +1367,12 @@ export class VillageScene extends Phaser.Scene {
 
   // the shortest walk to a tile beside someone; 0 when already beside them, null when there is no way
   near(who) {
+    // the skipping stones: onto them, not beside them
+    if (who.onto) {
+      if (this.p.x === who.x && this.p.y === who.y) return 0;
+      const r = this.walkable(who.x, who.y) ? this.route(who.x, who.y) : [];
+      return r.length ? r : null;
+    }
     if (who.home) {
       // the house: step up to its door, so nothing gets put up where you are standing
       if (this.p.x === who.x && this.p.y === who.y + 1) return 0;
@@ -1381,6 +1401,7 @@ export class VillageScene extends Phaser.Scene {
     const find = this.finds.find(f => f.x === x && f.y === y);
     if (find) this.time.delayedCall(STEP_MS - 20, () => this.pickUp(find));
     lifeStepOn(this, x, y);
+    playStepOn(this, x, y);
     if (this.ch(x, y) === '>') { this.path = []; this.time.delayedCall(STEP_MS, () => this.dive()); }
   }
 
@@ -1402,6 +1423,7 @@ export class VillageScene extends Phaser.Scene {
     this.pending = null;
     if (who.poke) { poke(this, who.x, who.y); return; }
     if (who.life) { lifeAct(this, who); return; }
+    if (who.play) { playAct(this, who); return; }
     // your own door: in you go (main.js showHome, scenes/HomeScene.js)
     if (who.home) {
       const ps = this.ps;
@@ -1499,6 +1521,7 @@ export class VillageScene extends Phaser.Scene {
     stillInFlowers(this, time, Math.min(delta || 16, 50));
     this.moveLife(time, Math.min(delta || 16, 50));
     lifeTick(this, time, Math.min(delta || 16, 50));
+    playTick(this, time, Math.min(delta || 16, 50));
     // the big tree's crown goes see-through while you are under it
     if (this.bigTree) {
       const want = this.underBigTree(this.p.x, this.p.y) && this.p.y < BIG_TREE.y ? 0.45 : 1;
@@ -1534,6 +1557,7 @@ export class VillageScene extends Phaser.Scene {
 
     // villagers breathe and turn to look at you when you come close; the first time, they say hello
     for (const one of this.folk) {
+      if (one.busy) continue;
       const d = Math.max(Math.abs(one.x - this.p.x), Math.abs(one.y - this.p.y));
       if (d <= 3) one.s.setFlipX(this.p.x < one.x);
       if (d <= 2 && !one.greeted) {
@@ -1545,7 +1569,7 @@ export class VillageScene extends Phaser.Scene {
     // a few villagers stroll round the loop, keeping on the way they were going; they stop for a
     // chat when you come close, and wait for you once you are on your way to them
     for (const one of this.folk) {
-      if (!one.f.stroll || time < one.next || one === this.pending || one.s.alpha < 1) continue;
+      if (!one.f.stroll || time < one.next || one === this.pending || one.s.alpha < 1 || one.busy) continue;
       one.next = time + one.f.stroll * (0.8 + Math.random() * 0.5);
       if (Math.max(Math.abs(one.x - this.p.x), Math.abs(one.y - this.p.y)) <= 2) continue;
       const ok = ([dx, dy]) => this.ch(one.x + dx, one.y + dy) === ':' && this.walkable(one.x + dx, one.y + dy) && this.canCut(one.x, one.y, dx, dy);
@@ -1563,7 +1587,7 @@ export class VillageScene extends Phaser.Scene {
     }
     // the heroes at home amble about on the grass
     for (const h of this.heroes) {
-      if (time < h.next || h === this.pending) continue;
+      if (time < h.next || h === this.pending || h.busy) continue;
       h.next = time + 1200 + Math.random() * 2600;
       const [dx, dy] = DIRS[Math.floor(Math.random() * 4)];
       const x = h.x + dx, y = h.y + dy;
@@ -1599,11 +1623,11 @@ export class VillageScene extends Phaser.Scene {
     for (const one of this.folk) {
       if (time < (one.habitAt || 0)) continue;
       one.habitAt = time + 5500 + Math.random() * 4500;
-      if (one.s.alpha < 1 || one === this.pending || Math.max(Math.abs(one.x - this.p.x), Math.abs(one.y - this.p.y)) > 7) continue;
+      if (one.s.alpha < 1 || one === this.pending || one.busy || Math.max(Math.abs(one.x - this.p.x), Math.abs(one.y - this.p.y)) > 7) continue;
       this.habit(one.id, one.s, time);
     }
     for (const h of this.heroes) {
-      if (time < (h.habitAt || 0)) continue;
+      if (time < (h.habitAt || 0) || h.busy) continue;
       h.habitAt = time + (this.fest ? 2200 + Math.random() * 2000 : 6000 + Math.random() * 5000);
       if (Math.max(Math.abs(h.x - this.p.x), Math.abs(h.y - this.p.y)) <= 7) this.habit(this.fest ? 'dance' : h.id, h.s, time);
     }
@@ -1628,6 +1652,7 @@ export class VillageScene extends Phaser.Scene {
       // down the burrow or in at the door: no shadow left on the grass
       if (s.diving) return;
       s.setScale(k * (s.sx || 1), k * breathe * (s.sy || 1)).setOrigin(0.5, 1 + (s.hop || 0) / TILE);
+      if (s.noShadow) return;
       g.fillStyle(0x000000, 0.28);
       pixEllipse(g, s.x, s.y - 1.5, 11, 4);
     });

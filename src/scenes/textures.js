@@ -1204,9 +1204,11 @@ function flatGrass(variant, pal) {
 // glint, darker at its edge, so the ground shows through it (v0.29)
 const GLAZE = { goo: { A: 'rgba(196,236,216,0.26)', D: 'rgba(10,22,18,0.22)', w: 'rgba(255,255,255,0.85)' } };
 // the way into a hidden room (sprites.js hide_*): shadow and light laid over the zone's own hedge or rock
-const LEAF_GAP = { k: 'rgba(8,14,10,0.88)', x: 'rgba(8,14,10,0.42)', w: 'rgba(240,255,200,0.42)' };
-const ROCK_GAP = { k: 'rgba(22,16,26,0.86)', x: 'rgba(22,16,26,0.42)', w: 'rgba(255,248,232,0.5)' };
+// (v0.30: darker in the gap and brighter at its edges, so it reads at a glance)
+const LEAF_GAP = { k: 'rgba(6,12,8,0.94)', x: 'rgba(6,12,8,0.55)', w: 'rgba(240,255,200,0.7)' };
+const ROCK_GAP = { k: 'rgba(18,12,22,0.92)', x: 'rgba(18,12,22,0.52)', w: 'rgba(255,248,232,0.75)' };
 for (let n = 0; n < 3; n++) { GLAZE[`hide_leaf${n}`] = LEAF_GAP; GLAZE[`hide_rock${n}`] = ROCK_GAP; }
+GLAZE.hide_rock_litter = { x: 'rgba(18,12,22,0.45)', w: 'rgba(255,248,232,0.8)' };
 
 export function buildTextures(scene) {
   const tx = scene.textures;

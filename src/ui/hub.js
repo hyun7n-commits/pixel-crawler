@@ -546,8 +546,17 @@ function critterBook(box, meta) {
 // ---------- 라이벌: the dares (data/dares.js) ----------
 // One card per dare open so far: what it does, a switch, and the furthest stage won with it on.
 // Every dare taken adds DARE_GOLD to the gold of the trip.
-function rival(box, { meta, changed }) {
+function rival(box, { meta, changed, onRace }) {
   const open = daresOpen(meta), on = daresOn(meta);
+  // a race round the village, any time (scenes/village-play.js)
+  if (onRace) {
+    const wins = meta.games?.raceWins || 0, races = meta.games?.races || 0;
+    const row = el('div', 'row race-row'), main = el('div', 'row-main');
+    row.append(icon('rival', 32));
+    main.append(el('span', 'row-name', '달리기 시합'), el('span', 'row-sub', races ? `${races}번 달려서 ${wins}번 이겼다.` : '깃발까지 누가 먼저 가나.'));
+    row.append(main, button('btn primary', '한판 붙자', onRace));
+    box.append(row);
+  }
   box.append(el('p', 'say', on.length
     ? `흥, 내기 ${on.length}개라고? 골드는 ×${dareGold(on.length).toFixed(1)}로 받겠네. 어디 해 봐.`
     : '나랑 내기할래? 하나 걸 때마다 골드를 더 받는다. 겁나면 말고.'));

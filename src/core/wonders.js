@@ -34,7 +34,7 @@ export function oddOut(run) {
   if (!run.wonders || run.floor === run.bossFloor) return;
   // (네잎클로버 from the shop: more often)
   // (the shop's 네잎클로버, and a cup of 꽃차 before setting off)
-  const charm = 0.15 * (run.meta.up.charm || 0) + (run.meal?.buff.luck || 0);
+  const charm = 0.15 * (run.meta.up.charm || 0) + (run.meal?.buff.luck || 0) + (run.boon?.luck || 0);
   const n = (Math.random() < B.ODD_CHANCE + charm ? 1 : 0) + (Math.random() < B.ODD_MORE + charm ? 1 : 0);
   for (let k = 0; k < n; k++) {
     const can = run.enemies.filter(e => e.hp > 0 && !e.odd && !e.mum && !e.d.boss && !e.d.npc && !e.chief && !e.den && !e.d.quest &&

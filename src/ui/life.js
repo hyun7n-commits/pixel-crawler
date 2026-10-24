@@ -9,16 +9,19 @@ import {
   bagCount, lifeEntry,
 } from '../data/life.js';
 import { has } from '../data/book.js';
+import { isMap, MAP_PIC } from '../data/play.js';
+import { mapCanvas } from '../scenes/village-play-art.js';
 import { josa } from '../core/util.js';
 
 const SEED_PIC = { find: ['seed', 'n'] };
-const picOf = id => (isSeed(id) ? SEED_PIC : ITEM[id]?.pic);
+const picOf = id => (isSeed(id) ? SEED_PIC : isMap(id) ? MAP_PIC : ITEM[id]?.pic);
+const nameOf = id => (isMap(id) ? '보물 지도' : itemName(id));
 // the order things are listed in: as the tables have them
 const ORDER = Object.fromEntries([...DISH_LIST, ...FISH_LIST, ...BUG_LIST, ...CROP_LIST, ...FORAGE_LIST].map((r, i) => [r[0], i]));
 const byOrder = (a, b) => (ORDER[a.replace('seed:', '')] ?? 999) - (ORDER[b.replace('seed:', '')] ?? 999) || (isSeed(a) - isSeed(b));
-const GROUPS = [['dish', '요리'], ['fish', '물고기'], ['bug', '곤충'], ['crop', '텃밭'], ['forage', '들에서 난 것'], ['seed', '씨앗']];
-const groupOf = id => (isSeed(id) ? 'seed' : ITEM[id]?.cat);
-const owned = meta => Object.keys(meta.bag || {}).filter(id => meta.bag[id] > 0 && (ITEM[id] || isSeed(id))).sort(byOrder);
+const GROUPS = [['map', '보물 지도'], ['dish', '요리'], ['fish', '물고기'], ['bug', '곤충'], ['crop', '텃밭'], ['forage', '들에서 난 것'], ['seed', '씨앗']];
+const groupOf = id => (isSeed(id) ? 'seed' : isMap(id) ? 'map' : ITEM[id]?.cat);
+const owned = meta => Object.keys(meta.bag || {}).filter(id => meta.bag[id] > 0 && (ITEM[id] || isSeed(id) || isMap(id))).sort(byOrder);
 export const bagItems = owned;
 export { picOf };
 
@@ -36,7 +39,7 @@ function mealRow(meta) {
 function cell(id, n, on, onTap) {
   const b = button('bag-cell' + (on ? ' on' : ''), null, onTap);
   b.append(bookPic(picOf(id), 48), el('span', 'bag-n', `${n}`));
-  b.title = itemName(id);
+  b.title = nameOf(id);
   return b;
 }
 
@@ -61,6 +64,13 @@ export function renderBasket(box, meta, { changed }) {
 }
 function detail(meta, id, changed) {
   const it = ITEM[id], row = el('div', 'row bag-detail'), main = el('div', 'row-main');
+  // a treasure map: the drawing itself, big enough to find the place by
+  if (isMap(id)) {
+    const box = el('div', 'bag-map'), c = mapCanvas(meta, id.slice(4));
+    if (c) { c.className = 'pix'; c.style.width = `${c.width * 3}px`; c.style.height = `${c.height * 3}px`; box.append(c); }
+    box.append(el('span', 'row-sub', '마을 어딘가를 그린 지도. 빨간 X 표시가 있다.'));
+    return box;
+  }
   if (isSeed(id)) {
     const c = CROPS[id.slice(5)];
     main.append(el('span', 'row-name', itemName(id)), el('span', 'row-sub', `텃밭에 심으면 ${c.days}일 만에 ${josa(c.name, '이', '가')} 자란다.`));

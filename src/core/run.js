@@ -98,6 +98,9 @@ export class Run {
     const dish = meta.meal && DISHES[meta.meal];
     this.meal = dish ? { id: dish.id, name: dish.name, buff: dish.buff.mystery ? pick(MYSTERY) : dish.buff } : null;
     meta.meal = null;
+    // a wish at the fountain (data/play.js WISHES): a little luck or gold for this trip
+    this.boon = meta.boon || null;
+    meta.boon = null;
     this.stall = [];
     this.requests = takeRequests(meta, stage, loop);   // the guild's requests taken off the board, up to three (data/requests.js)
     this.startStats = JSON.parse(JSON.stringify(meta.stats));
@@ -203,7 +206,7 @@ export class Run {
         f('ironheart', 10, 5) + f('pillow', 16, 4) + f('giantfist', 12, 4) + 10 * lv('guardian') + (on('bloodking') ? 20 : 0) +
         (this.p.lvl - 1) * B.HP_PER_LEVEL + (this.p.honey || 0),
       goldMult: (1 + 0.4 * lv('coin') + f('goldbolt', 0.75, 0.25) + 0.25 * lv('goldstorm') + (on('minecrown') ? 0.5 : 0) + 0.1 * up.greed +
-        f('luckycharm', 1, 0.25) + f('goldfang', 0.8, 0.2) + 0.25 * lv('fortune') + (on('dawnstar') ? 0.5 : 0) + (pet.greed || 0) + (meal.gold || 0)) * this.goldBonus,
+        f('luckycharm', 1, 0.25) + f('goldfang', 0.8, 0.2) + 0.25 * lv('fortune') + (on('dawnstar') ? 0.5 : 0) + (pet.greed || 0) + (meal.gold || 0) + (this.boon?.gold || 0)) * this.goldBonus,
       // never more than 60%: something always gets through
       dodge: Math.min(0.6, (ch.dodge || 0) + (wet ? 0.25 : 0) + (pet.swim && this.inWater() ? pet.swim : 0) + 0.08 * lv('cloak') + f('shadow', 0.15, 0.05) + 0.05 * lv('phantom') +
         f('luckycharm', 0.2, 0.05) + f('spikecloak', 0.2, 0.05) + 0.05 * lv('fortune') + (on('dawnstar') ? 0.1 : 0)),
@@ -299,6 +302,7 @@ export class Run {
     if (this.p.homeHp) this.log(`집에서 푹 쉬고 나왔다. 최대 체력 +${this.p.homeHp}`, 'good');
     if (this.lunch) this.log('난로가 싸 준 꿀물 도시락(체력 물약)을 챙겼다.', 'good');
     if (this.meal) this.log(`든든하게 ${josa(this.meal.name, '을', '를')} 먹고 나왔다.`, 'good');
+    if (this.boon) this.log('분수에 빈 소원이 따라 나온 것 같다.', 'good');
     // 도구 주머니 (village upgrade): a meadow tool or two to start with
     const pouch = [];
     for (let k = 0; k < (this.meta.up.tool || 0); k++) { const t = this.pickTool(); if (t) { this.p.items[t]++; pouch.push(ITEMS[t].name); } }

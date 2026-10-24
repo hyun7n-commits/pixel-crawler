@@ -107,23 +107,27 @@ const PROPS = {
     for (let k = 0; k < 14; k++) { const x = r() < 0.5 ? 4 + Math.floor(r() * 6) : 38 + Math.floor(r() * 6), y = 16 + Math.floor(r() * 22); if (p.get(x, y)) p.set(x, y, [FLOWER.pink, FLOWER.rose, FLOWER.white][k % 3]); }
   }, { front: (p, w, h) => { tufts(p, 2, 11, h - 1, 34, { gap: 0.3 }); tufts(p, 36, 45, h - 1, 35, { gap: 0.3 }); } }),
 
-  // a swing set: an A-frame of poles, two seats on ropes
-  swings: () => pic(32, 32, p => {
+  // a swing set: an A-frame of poles, two seats on ropes (`v` 1: the left seat is out swinging, drawn
+  // on its own by scenes/village-play.js)
+  swings: (v = 0) => pic(32, 32, p => {
     for (const [x0, x1] of [[2, 6], [29, 25]]) { p.line(x0, 31, (x0 + x1) / 2, 3, (k) => WOOD[k % 4 ? 2 : 3]); p.line(x1, 31, (x0 + x1) / 2, 3, (k) => WOOD[k % 4 ? 1 : 2]); }
     planks(p, [3, 2, 28, 4], null, WOOD_WARM, (x, y) => (y === 2 ? -0.6 : 0.5) + (x - 3) / 25 * 0.6, { pw: 3, vert: false });
     for (const [x, sx] of [[10, 0], [20, 1]]) {
+      if (v === 1 && !sx) continue;
       for (let y = 5; y < 23; y++) { p.set(x, y, '#d8c49c'); p.set(x + 4, y, '#c9b088'); }
       p.rect(x - 1, 23, 7, 2, (px, py, i, j) => tone(sx ? ramp('#5a8fd8') : ramp('#e0646e'), j ? 3 : 1.2, px, py));
     }
   }, { shadow: [2, 30, 3, 4], front: (p, w, h) => tufts(p, 1, w - 2, h - 1, 41, { gap: 0.4 }) }),
 
-  // a seesaw: a plank on a red pivot, one end down in the grass
-  seesaw: () => pic(32, 16, p => {
+  // a seesaw: a plank on a red pivot, one end down in the grass (`v`: how far over it has tipped, 0 the
+  // left end down to SEESAW_TILT the right end down)
+  seesaw: (v = 0) => pic(32, 16, p => {
+    const yl = 12 - 2 * v, yr = 4 + 2 * v, at = x => yl + (yr - yl) * (x - 1) / 29;
     p.poly([[12, 15], [16, 8], [20, 15]], (x, y) => tone(ramp('#d9454a'), 2 + (x - 16) / 4 * 0.9, x, y));
-    p.line(1, 12, 30, 4, (k, n) => PINE[1]);
-    p.line(1, 13, 30, 5, (k, n) => PINE[3]);
-    p.line(2, 14, 30, 6, (k, n) => PINE[4]);
-    for (const [x, y] of [[5, 9], [26, 3]]) { p.rect(x, y, 1, 3, IRON[1]); p.rect(x - 1, y, 3, 1, IRON[2]); }
+    p.line(1, yl, 30, yr, (k, n) => PINE[1]);
+    p.line(1, yl + 1, 30, yr + 1, (k, n) => PINE[3]);
+    p.line(2, yl + 2, 30, yr + 2, (k, n) => PINE[4]);
+    for (const x of [5, 26]) { const y = Math.round(at(x)) - 2; p.rect(x, y, 1, 3, IRON[1]); p.rect(x - 1, y, 3, 1, IRON[2]); }
   }, { shadow: [1, 30, 3, 3], front: (p, w, h) => tufts(p, 1, w - 2, h - 1, 42, { gap: 0.5, tall: 2 }) }),
 
   // an apple tree in the orchard: a short trunk, a round crown hung with red apples
@@ -357,6 +361,8 @@ function pondlantern(v) {
   return p.canvas();
 }
 
+// the seesaw's steps from one end down to the other
+export const SEESAW_TILT = 4;
 const FRAMES = { bridge, sails, flag, maypole, pondlantern };
 // every kind of picture here, the ones with frames too
 export const GROWTH_PROPS = Object.fromEntries([...Object.keys(PROPS), ...Object.keys(FRAMES)].map(k => [k, true]));
