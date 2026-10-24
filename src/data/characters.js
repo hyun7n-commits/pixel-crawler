@@ -28,15 +28,15 @@ export const CHARACTERS = {
   },
   mage: {
     name: '마법사', kind: '양', sprite: 'mage', hp: 25, atk: 3, def: 0, choices: 4, wand: true,
-    start: {}, note: '멀리 있는 적을 누르면 지팡이로 마법 화살을 쏜다 (세 발, 쉬면서 다시 찬다). 유물을 고를 때 하나 더 본다',
+    start: {}, note: '멀리 있는 적을 누르면 지팡이로 마법 화살을 쏜다 (두 발, 다섯 턴에 한 발씩 다시 찬다). 유물을 고를 때 하나 더 본다',
   },
   knight: {
     name: '기사', kind: '강아지', sprite: 'knightP', hp: 32, atk: 3, def: 1, block: 0.17,
     start: { shield: 1 }, note: '여섯 번에 한 번꼴로 공격을 방패로 막아 낸다',
   },
   vamp: {
-    name: '흡혈귀', kind: '박쥐', sprite: 'vamp', hp: 31, atk: 4, def: 0, lifesteal: 1, noRegen: true,
-    start: { fang: 1 }, note: '때릴 때마다 체력 +1, 대신 가만히 있어서는 낫지 않는다',
+    name: '흡혈귀', kind: '박쥐', sprite: 'vamp', hp: 28, atk: 4, def: 0, lifesteal: 1, noRegen: true,
+    start: { fang: 1 }, note: '때리는 턴마다 체력 +1, 대신 가만히 있어서는 낫지 않는다',
   },
 
   // ---------- the sixteen friends met from the second 회차 on ----------

@@ -37,6 +37,8 @@ function swatch(z, open) {
 export function showStages({ meta, onGo, onClose }) {
   const top = loopsOpen(meta);
   let loop = Math.min(meta.loop || 1, top);
+  // the 회차 you were on is all beaten and a new one is open: the board opens on the new one (v0.29)
+  if (loop < top && ZONES.every((z, s) => cleared(meta, s) >= loop)) loop = top;
   const draw = sh => {
     sh.innerHTML = '';
     sh.append(el('h2', null, '어디로 갈까?'));
@@ -72,7 +74,7 @@ export function showStages({ meta, onGo, onClose }) {
         : won ? `${loop}회차 깼다 · 대장 ${boss.name}` : met ? `대장 ${boss.name}` : '대장: ???'));
       // 출발 보급: what the guild sends you off with into a deeper stage
       const kit = stageKit(s);
-      if (open && kit.picks) info.append(el('span', 'stage-sub kit', `출발 보급: 유물 ${kit.picks}개, 공격 +${kit.atk}, 체력 +${kit.hp}`));
+      if (open && kit.picks) info.append(el('span', 'stage-sub kit', `출발 보급: 다 자란 유물 ${kit.picks}개, 공격 +${kit.atk}, 체력 +${kit.hp}`));
       card.append(info);
       // the friend locked up here at this 회차: a dark shape until rescued
       const fid = isOpen(meta, 'cage') && FRIENDS[s]?.[loop - 1], got = fid && meta.chars[fid];

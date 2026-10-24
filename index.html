@@ -17,12 +17,12 @@
 <div id="app">
   <section id="game" hidden aria-label="들판">
     <div id="mtop" aria-hidden="true">
-      <div class="mt-row"><span id="mFloor"></span><span id="mStatus"></span><b id="mGold"></b></div>
+      <div class="mt-row"><span id="mFloor"></span><span id="mStatus"></span><b id="mGold"></b><button type="button" class="mt-opt" id="mOpt" aria-label="설정"></button></div>
       <div class="mt-hp"><div class="bar" id="mHp"><i></i></div><span id="mHpText"></span></div>
       <div class="bar" id="mXp"><i></i></div>
     </div>
-    <div id="stage"><div id="phaser"></div><div id="iris" hidden></div><div id="danger"></div><div id="banner"></div><div id="fallen" hidden></div><div id="tip" hidden></div><div id="mtray" hidden aria-label="도구"></div><div id="mlog" aria-hidden="true"></div>
-      <div id="vhud"><div class="vh-top"><span class="vh-place" id="vPlace">마을<small>v0.28</small></span><span class="purse" id="vPurse"></span><button type="button" class="btn" id="vSound">소리 켬</button></div><button type="button" class="btn primary enter" id="vGo">들판에 출발</button></div>
+    <div id="stage"><div id="phaser"></div><div id="iris" hidden></div><div id="danger"></div><div id="banner"></div><div id="bossbar" hidden aria-hidden="true"><span class="bb-pic"></span><div class="bb-body"><b class="bb-name"></b><div class="bb-bar"><i class="bb-lag"></i><i class="bb-hp"></i></div></div></div><div id="fallen" hidden></div><div id="tip" hidden></div><div id="mtray" hidden aria-label="도구"></div><div id="mlog" aria-hidden="true"></div>
+      <div id="vhud"><div class="vh-top"><span class="vh-place" id="vPlace">마을<small>v0.29</small></span><span class="purse" id="vPurse"></span><button type="button" class="btn" id="vSound">소리 켬</button></div><button type="button" class="btn primary enter" id="vGo">들판에 출발</button></div>
       <div id="hhud"><div class="vh-top"><span class="vh-place" id="hPlace">내 집</span><button type="button" class="btn" id="hHeart"></button><span class="purse" id="hPurse"></span></div><div class="hh-bottom"><div id="hTray" hidden></div><div class="hh-row"><button type="button" class="btn" id="hEdit">꾸미기</button><button type="button" class="btn primary" id="hOut">마을로 나가기</button></div></div></div>
     </div>
     <div id="mbar" aria-label="행동"></div>
@@ -39,7 +39,7 @@
       <div id="relicInfo">유물을 누르면 효과와 짝꿍 유물이 보인다.</div>
       <div class="sec-title"><span>소모품</span></div>
       <div class="items" id="items"></div>
-      <div class="actions"><button type="button" class="btn" id="waitBtn" title="한 턴 쉰다 (스페이스). 꾹 누르고 있으면 계속 쉰다">쉬기</button><button type="button" class="btn" id="lookBtn" title="누른 다음 맵을 누르면 그게 뭔지 본다 (L)">살펴보기</button><button type="button" class="btn" id="quitBtn" title="저장하고 마을로 가거나 탐험을 포기한다">나가기</button><button type="button" class="btn" id="soundBtn" title="M 키로도 켜고 끈다">소리 켬</button><button type="button" class="btn" id="speedBtn" title="F 키로도 바꾼다">배속 1x</button></div>
+      <div class="actions"><button type="button" class="btn" id="waitBtn" title="한 턴 쉰다 (스페이스). 꾹 누르고 있으면 계속 쉰다">쉬기</button><button type="button" class="btn" id="lookBtn" title="누른 다음 맵을 누르면 그게 뭔지 본다 (L)">살펴보기</button><button type="button" class="btn" id="quitBtn" title="탐험을 포기하고 마을로 돌아간다">나가기</button><button type="button" class="btn" id="soundBtn" title="M 키로도 켜고 끈다">소리 켬</button><button type="button" class="btn" id="speedBtn" title="F 키로도 바꾼다">배속 1x</button></div>
       <div id="log" aria-live="polite"></div>
     </aside>
   </section>

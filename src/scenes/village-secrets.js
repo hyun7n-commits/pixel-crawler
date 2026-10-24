@@ -23,11 +23,14 @@ const tex = (sc, name) => {
 // the trunk's middle, 6 wide, 10 high, its sill on the picture's ground line)
 const DOOR = { x0: center(BIG_TREE.x) + 3, x1: center(BIG_TREE.x) + 9, y0: foot(BIG_TREE.y) - 11, y1: foot(BIG_TREE.y) - 1 };
 
+// the odds and ends you can poke (v0.29: the well, the guild board, the scarecrow, the hives, the dummy)
+const PROP_POKE = { barrel: 'barrel', crate: 'barrel', well: 'well', board: 'board', scarecrow: 'scarecrow', hive: 'hive', dummy: 'dummy' };
+
 // what there is to poke at, if anything
 export function pokeKind(sc, x, y) {
   if (sc.bigTree && BIG_TREE.block.some(([bx, by]) => bx === x && by === y)) return 'door';
   const pr = sc.propAt(x, y);
-  if (pr) return pr.kind === 'barrel' || pr.kind === 'crate' ? 'barrel' : null;
+  if (pr) return PROP_POKE[pr.kind] || null;
   if (sc.buildingAt(x, y) || sc.houseAt(x, y) || sc.homeAt(x, y) || sc.decorAt(x, y)) return null;
   const ch = sc.ch(x, y);
   return ch === '~' ? 'water' : ch === '#' || ch === 'T' ? 'woods' : null;
@@ -38,14 +41,25 @@ export function pokeKind(sc, x, y) {
 export function poke(sc, x, y) {
   const kind = pokeKind(sc, x, y);
   if (!kind) return false;
-  const now = sc.time.now, key = kind === 'barrel' ? `${x},${y}` : kind, st = sc.pokes;
+  const pr = sc.propAt(x, y), now = sc.time.now, key = pr ? `${pr.x},${pr.y}` : kind, st = sc.pokes;
   st.n = st.key === key && now - st.t < 2600 ? st.n + 1 : 1;
   st.key = key;
   st.t = now;
   if (x !== sc.p.x) sc.ps.setFlipX(x < sc.p.x);
   lean(sc, x, y);
-  POKE[kind](sc, x, y, st.n);
+  // the first poke at one of the new ones still says what it is, as a tap on it used to
+  if (st.n === 1 && pr && kind !== 'barrel') sc.hooks.onHover?.(sc.describe(x, y), true);
+  POKE[kind](sc, x, y, st.n, pr);
   return true;
+}
+
+// a prop's picture, to shake or tip over
+const propImg = (sc, pr) => sc.props.find(o => o.pr === pr)?.imgs[0];
+function shake(img, n = 2) {
+  if (!img || img.shaking) return;
+  img.shaking = true;
+  const x0 = img.x;
+  img.scene.tweens.add({ targets: img, x: x0 + 1, duration: 45, yoyo: true, repeat: n, onComplete: () => { img.x = x0; img.shaking = false; } });
 }
 
 function lean(sc, x, y) {
@@ -179,6 +193,136 @@ const POKE = {
     });
   },
 };
+
+// v0.29: more of them
+Object.assign(POKE, {
+  // you lean over the well and call 야호; the third time, after a while, someone down there calls back
+  well(sc, x, y, n, pr) {
+    sc.hooks.onSound?.('pop');
+    float(sc, sc.ps.x, sc.ps.y - 20, '야호~', '#f4f0e8');
+    if (n < 3 || sc.echoed) return;
+    sc.echoed = true;
+    sc.time.delayedCall(1300, () => {
+      sc.hooks.onSound?.('splash');
+      float(sc, center(pr.x), foot(pr.y) - 8, '…야호?', '#9fd4ff');
+      face(sc, 'shock', 1200);
+      sc.time.delayedCall(700, () => sc.hooks.onSecret?.('echo'));
+    });
+  },
+  // the guild's board rattles; the fifth time, a yellowed old notice that was stuck behind it flutters
+  // down to your feet
+  board(sc, x, y, n, pr) {
+    sc.hooks.onSound?.('knock');
+    shake(propImg(sc, pr), 1);
+    float(sc, center(x), foot(pr.y) - 18, '덜컥', '#d8c8a8');
+    if (n < 5 || sc.noticeDown) return;
+    sc.noticeDown = true;
+    const ps = sc.ps, a = sc.add.image(center(pr.x) + 4, foot(pr.y) - 12, tex(sc, 'paper')).setDepth(D.fx);
+    sc.tweens.addCounter({
+      from: 0, to: 1, duration: 1100, ease: 'Linear',
+      onUpdate: tw => {
+        const u = tw.getValue();
+        a.setPosition(Math.round(a.x + (ps.x - a.x) * 0.06 + Math.sin(u * 9) * 0.8), Math.round(foot(pr.y) - 12 + (ps.y - 2 - foot(pr.y) + 12) * u)).setAngle(Math.sin(u * 9) * 25);
+      },
+      onComplete: () => {
+        sc.hooks.onSound?.('rustle');
+        face(sc, 'shock', 1000);
+        sc.say(ps, '…광부 구함. 돌아오면 큰 상?', 2200);
+        sc.tweens.add({ targets: a, alpha: 0, delay: 1800, duration: 400, onComplete: () => a.destroy() });
+        sc.time.delayedCall(900, () => sc.hooks.onSecret?.('notice'));
+      },
+    });
+  },
+  // the scarecrow sways; the third time its straw hat pops up and a chick that lives under it hops off
+  scarecrow(sc, x, y, n, pr) {
+    sc.hooks.onSound?.('rustle');
+    shake(propImg(sc, pr));
+    sc.fall.explode(3 + n, center(pr.x), foot(pr.y) - 12);
+    if (n < 3 || sc.chickOut) return;
+    sc.chickOut = true;
+    emerge(sc, 'pet_chick', center(pr.x), foot(pr.y) - 15, {
+      rows: 16, ms: 200, hold: 0,
+      onUp: s => {
+        sc.hooks.onSound?.('chirp');
+        float(sc, s.x, s.y - 18, '삐약!', '#f4cf4f');
+        face(sc, 'shock', 900);
+        const away = sc.p.x > pr.x ? -1 : 1;
+        s.setFlipX(away < 0);
+        sc.tweens.add({ targets: s, x: s.x + away * 12, duration: 300, ease: 'Linear' });
+        sc.tweens.add({ targets: s, y: s.y - 6, duration: 150, yoyo: true, ease: 'Quad.out', onComplete: () => {
+          s.setDepth(D.actors + (pr.y + 1) / 100);
+          sc.tweens.add({ targets: s, y: foot(pr.y + 1) - 2, duration: 180, ease: 'Quad.in' });
+          sc.tweens.add({ targets: s, x: s.x + away * 70, alpha: 0, delay: 300, duration: 1600, ease: 'Linear', onComplete: () => s.destroy() });
+        } });
+        sc.time.delayedCall(700, () => sc.hooks.onSecret?.('chick'));
+      },
+    });
+  },
+  // the hive hums louder; the third time the bees come out round your head and one stings (따끔!),
+  // but a drop of honey comes your way too
+  hive(sc, x, y, n, pr) {
+    sc.hooks.onSound?.('buzz');
+    shake(propImg(sc, pr), 1);
+    float(sc, center(pr.x), foot(pr.y) - 16, n < 3 ? '윙' : '윙윙윙!', '#f4cf4f');
+    if (n < 3 || sc.stung) return;
+    sc.stung = true;
+    const ps = sc.ps, bees = [0, 1, 2].map(k => sc.add.image(center(pr.x), foot(pr.y) - 10, 'bee').setDepth(D.fx).setScale(0.5));
+    bees.forEach((b, k) => sc.tweens.addCounter({
+      from: 0, to: 1, duration: 1400, ease: 'Linear',
+      onUpdate: tw => {
+        const u = tw.getValue(), a = u * 12 + k * 2.1, r = 10 - 4 * u, bx = ps.x + Math.cos(a) * r, by = ps.y - 16 + Math.sin(a) * r * 0.6;
+        const w = Math.min(1, u * 4);
+        b.setPosition(Math.round(b.x + (bx - b.x) * w), Math.round(b.y + (by - b.y) * w)).setFlipX(Math.cos(a) < 0);
+      },
+      onComplete: () => sc.tweens.add({ targets: b, x: center(pr.x), y: foot(pr.y) - 10, alpha: 0, duration: 600, onComplete: () => b.destroy() }),
+    }));
+    sc.time.delayedCall(1000, () => {
+      sc.hooks.onSound?.('bonk');
+      float(sc, ps.x, ps.y - 20, '따끔!', '#ff8a8a');
+      face(sc, 'hit', 1000);
+    });
+    sc.time.delayedCall(1700, () => {
+      const h = sc.add.image(center(pr.x), foot(pr.y) - 8, tex(sc, 'honey')).setDepth(D.fx);
+      sc.tweens.add({
+        targets: h, x: ps.x, y: ps.y - 18, duration: 420, ease: 'Quad.inOut',
+        onComplete: () => {
+          h.destroy();
+          sc.hooks.onSound?.('honey');
+          sc.spark.explode(8, ps.x, ps.y - 16);
+          face(sc, 'sparkle', 1200);
+          sc.hooks.onSecret?.('honey');
+        },
+      });
+    });
+  },
+  // the straw dummy takes a punch with a puff of straw; the eighth in a row and over it goes, and
+  // something that was stuffed inside rolls out
+  dummy(sc, x, y, n, pr) {
+    const img = propImg(sc, pr);
+    sc.hooks.onSound?.('hit');
+    sc.dust.explode(3, center(pr.x), foot(pr.y) - 9);
+    if (n < 8 || sc.dummyDown || !img) { shake(img, 1); return; }
+    sc.dummyDown = true;
+    const dir = sc.p.x > pr.x ? -1 : 1, a0 = img.angle;
+    sc.tweens.add({
+      targets: img, angle: dir * 90, duration: 420, ease: 'Quad.in',
+      onComplete: () => {
+        sc.hooks.onSound?.('bonk');
+        float(sc, center(pr.x), foot(pr.y) - 14, '쿵', '#d8c8a8');
+        sc.dust.explode(10, center(pr.x) + dir * 8, foot(pr.y) - 2);
+        const b = sc.add.image(center(pr.x) + dir * 10, foot(pr.y) - 3, tex(sc, 'acorn')).setDepth(D.fx);
+        sc.tweens.add({ targets: b, x: sc.ps.x, y: sc.ps.y - 16, delay: 500, duration: 360, ease: 'Quad.inOut', onComplete: () => {
+          b.destroy();
+          sc.spark.explode(8, sc.ps.x, sc.ps.y - 16);
+          face(sc, 'sparkle', 1200);
+          sc.hooks.onSecret?.('dummy');
+        } });
+        // and it rights itself after a while, a bit lopsided
+        sc.tweens.add({ targets: img, angle: a0, delay: 2600, duration: 500, ease: 'Back.out', onComplete: () => { sc.dummyDown = false; } });
+      },
+    });
+  },
+});
 
 // Something coming up from behind a line (the top of the woods, a barrel's rim): only the part of it
 // above the line shows, `rows` of it at most; then, after `hold` ms, back down (hold 0: it stays up, all

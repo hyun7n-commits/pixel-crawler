@@ -5,6 +5,7 @@ import { FACES, faceRows, faceKey } from '../data/faces.js';
 import { CHARACTERS } from '../data/characters.js';
 import { ZONES, VILLAGE_GROUND } from '../data/enemies.js';
 import { ORES, RAINBOW } from '../data/ores.js';
+import { dressRows, wearTag } from '../data/wear.js';
 
 export const TILE = 16; // world pixels per tile
 
@@ -168,11 +169,128 @@ function veinRows(cells, grade) {
   return { rows: tall.map(r => r.join('')), x0, y0 };
 }
 
+// The 2x2 jackpot (v0.29): a giant, a hill of rock with the grade's crystals bursting up out of the back
+// of it in a fan, the middle one GIANT_TALL pixels up over the row above, and gems big and small set in
+// the rock's face (nuggets for the metals). Each thing gets its own dark edge against what stands behind
+// it, so the shards read one by one. The rainbow stone's shards and gems take one colour each.
+export const GIANT_TALL = 18;
+const SET = {
+  gem: [
+    ['...k...', '..k4k..', '.k412k.', 'k11223k', '.k233k.', '..k3k..', '...k...'],
+    ['.kkk.', 'k412k', 'k123k', 'k233k', '.kkk.'],
+    ['.k.', 'k4k', 'k3k', '.k.'],
+  ],
+  metal: [
+    ['.kkkk.', 'k4122k', 'k12233', 'k2233k', '.kkkk.'],
+    ['.kkk.', 'k412k', 'k223k', '.kkk.'],
+    ['.kk.', 'k42k', '.kk.'],
+  ],
+};
+// [base x, base y, tip x, tip y, half width] from the top of the picture, back to front
+const SHARDS = [[7, 16, 1.5, 2, 2.3], [25, 16, 30.5, 0, 2.3], [11, 16, 5, -10, 3.7], [21, 16, 26.5, -13, 3.7], [16, 16, 15.5, -GIANT_TALL, 4.7]];
+const SIDE_SHARDS = [[5, 24, 0.5, 18, 1.7], [27, 22, 31, 15, 1.7]];
+// the rock's top edge, (x, y below the top of the 2x2)
+const HILL = [[0, 26], [2, 21], [4, 18], [5, 15], [7, 17], [9, 15], [11, 13], [13, 14], [16, 11], [19, 13], [21, 12], [23, 15], [25, 13], [27, 16], [28, 14], [30, 20], [32, 26]];
+function giantRows(grade, seed) {
+  const T = GIANT_TALL, W = 2 * TILE, H = 2 * TILE + T;
+  const rnd = () => ((seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff);
+  const id = Array.from({ length: H }, () => Array(W).fill(0)), hue = Array.from({ length: H }, () => Array(W).fill(0));
+  const ch = Array.from({ length: H }, () => Array(W).fill('.'));
+  const order = [];
+  const shard = ([bx, by, tx, ty, hw], name, front) => {
+    order.push(name);
+    by += T; ty += T;
+    const ax = tx - bx, ay = ty - by, len = Math.hypot(ax, ay), ux = ax / len, uy = ay / len, tip = Math.min(0.42, (hw * 2.2) / len);
+    for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
+      const vx = px + 0.5 - bx, vy = py + 0.5 - by, t = (vx * ux + vy * uy) / len, sd = vx * -uy + vy * ux;
+      const w = t < 1 - tip ? hw : hw * (1 - t) / tip;
+      if (t < -0.3 || t > 1 || Math.abs(sd) > w) continue;
+      // three faces: lit on the left with a bright edge, the ridge bright near the point, dark on the right
+      const f = sd / Math.max(1, w);
+      id[py][px] = name; hue[py][px] = order.length;
+      ch[py][px] = front ? (sd < 0 ? (t > 0.45 ? '1' : '2') : '3')
+        : f < -0.34 ? (f < -0.7 && t > 0.2 ? '1' : '2') : f <= 0.22 ? (t > 0.5 ? '1' : '2') : '3';
+    }
+  };
+  SHARDS.forEach((sh, k) => shard(sh, `s${k}`));
+  const top = x => {
+    for (let k = 0; k < HILL.length - 1; k++) {
+      const [x0, y0] = HILL[k], [x1, y1] = HILL[k + 1];
+      if (x >= x0 && x <= x1) return T + y0 + (y1 - y0) * (x - x0) / (x1 - x0);
+    }
+    return H;
+  };
+  order.push('r');
+  for (let py = 0; py < H - 1; py++) for (let px = 0; px < W; px++) {
+    if (py + 0.5 < top(px + 0.5)) continue;
+    const r = 4, cx = px < r ? r - px - 0.5 : px > W - 1 - r ? px + 0.5 - (W - r) : 0, cy = py > H - 2 - r ? py + 0.5 - (H - 1 - r) : 0;
+    if (cx * cx + cy * cy <= r * r) { id[py][px] = 'r'; ch[py][px] = 'L'; }
+  }
+  const isR = (x, y) => id[y]?.[x] === 'r';
+  for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
+    if (!isR(px, py)) continue;
+    if (!isR(px, py - 2) || !isR(px - 2, py)) ch[py][px] = rnd() < 0.8 ? 'l' : 'L';
+    if (!isR(px, py + 2) || !isR(px + 2, py) || (!isR(px + 3, py) && rnd() < 0.6)) ch[py][px] = 'd';
+  }
+  // cracks between the rock's faces, down from the dips in its top
+  for (const sx of [7, 13, 19, 23]) {
+    let x = sx, y = Math.ceil(top(sx + 0.5)) + 2;
+    for (let k = 0; k < 6 + rnd() * 6 && isR(x, y + 1); k++) {
+      if (ch[y][x] === 'L' || ch[y][x] === 'l') ch[y][x] = 'd';
+      y++;
+      if (rnd() < 0.45) x += sx < 16 ? -1 : 1;
+    }
+  }
+  // gems big and small set in its face, each wholly inside the rock
+  const face = (x, y) => isR(x, y) && 'Lld'.includes(ch[y][x]) && isR(x - 1, y) && isR(x + 1, y) && isR(x, y - 1) && isR(x, y + 1);
+  const sets = SET[grade.metal ? 'metal' : 'gem'];
+  let gems = 0;
+  for (const k of [0, 0, 1, 1, 2, 2, 2]) for (let tries = 0; tries < 300; tries++) {
+    const pat = sets[k], x0 = 1 + Math.floor(rnd() * (W - 7)), y0 = T + 14 + Math.floor(rnd() * 14);
+    if (!pat.every((r, j) => [...r].every((c, i) => c === '.' || face(x0 + i, y0 + j)))) continue;
+    gems++;
+    pat.forEach((r, j) => [...r].forEach((c, i) => { if (c !== '.') { ch[y0 + j][x0 + i] = c; hue[y0 + j][x0 + i] = 7 + gems; } }));
+    break;
+  }
+  SIDE_SHARDS.forEach((sh, k) => shard(sh, `f${k}`, true));
+  // outlines: each thing's edge against the air or against what stands behind it
+  const rank = o => order.indexOf(o), out = ch.map(r => r.slice());
+  for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
+    const me = id[py][px];
+    if (me && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const n = id[py + dy]?.[px + dx]; return !n || rank(n) < rank(me); })) out[py][px] = 'k';
+  }
+  // a glint on each big shard, white sparks on the rock
+  for (const [x, y] of [[13, 6], [6, T - 4], [24, T - 7]]) if (out[y][x] !== 'k' && out[y][x] !== '.') out[y][x] = '4';
+  for (let n = 0, tries = 0; n < 4 && tries < 300; tries++) {
+    const x = Math.floor(rnd() * W), y = T + 12 + Math.floor(rnd() * 16);
+    if (out[y][x] === 'L') { out[y][x] = 'w'; n++; }
+  }
+  const base = pieceColor(grade);
+  const recolor = grade.vein ? base : (c, i, j) => {
+    if (c < '1' || c > '3') return base(c, i, j);
+    const light = RAINBOW[hue[j][i] % RAINBOW.length], dark = mix(light, '#000000', 0.35);
+    return c === '1' ? mix(light, '#ffffff', 0.55) : c === '2' ? light : dark;
+  };
+  return { rows: out.map(r => r.join('')), recolor };
+}
+export const isGiant = ore => ore.cells?.length === 4 && new Set(ore.cells.map(c => c.x)).size === 2 && new Set(ore.cells.map(c => c.y)).size === 2;
+// how far an ore stands up over the row above it
+export const oreTall = ore => (ore.pebble ? 0 : isGiant(ore) ? GIANT_TALL : ORE_TALL);
+
 // The texture and frame for one tile of an ore: [key, frame]. One-tile ores use the plain sprite.
 export function oreFrame(scene, ore, x, y, tier = ore.tier) {
   const grade = ORES[tier];
   if (!ore.cells || ore.cells.length < 2) return [`t_ore_${grade.id}`, undefined];
   const x0 = Math.min(...ore.cells.map(c => c.x)), y0 = Math.min(...ore.cells.map(c => c.y));
+  if (isGiant(ore)) {
+    const key = `t_giant_${x0}_${y0}_${grade.id}`;
+    if (!scene.textures.exists(key)) {
+      const { rows, recolor } = giantRows(grade, x0 * 7919 + y0 * 104729 + 17);
+      const tex = scene.textures.addCanvas(key, spriteCanvas(rows, recolor));
+      for (let cy = 0; cy < 2; cy++) for (let cx = 0; cx < 2; cx++) tex.add(`${cx}_${cy}`, 0, cx * TILE, cy ? TILE + GIANT_TALL : 0, TILE, TILE + (cy ? 0 : GIANT_TALL));
+    }
+    return [key, `${x - x0}_${y - y0}`];
+  }
   const shape = ore.cells.map(c => `${c.x - x0}${c.y - y0}`).join('');
   const key = `t_vein_${x0}_${y0}_${shape}_${grade.id}`;
   const tx = scene.textures;
@@ -187,6 +305,22 @@ export function oreFrame(scene, ore, x, y, tier = ore.tier) {
   }
   return [key, `${x - x0}_${y - y0}`];
 }
+
+// 꾸미기 (data/wear.js): a hero frame (`key`: a sprite or a walk step, with or without a face, see
+// data/faces.js faceKey) with what the player wears stamped on, made the first time it is asked for.
+// Nothing worn: the frame itself.
+export function dressKey(scene, key, wear) {
+  const tag = wearTag(wear);
+  if (!tag) return key;
+  const out = `${key}^${tag}`;
+  if (scene.textures.exists(out)) return out;
+  const [name, expr] = key.split('~'), rows = SPR[name];
+  if (!rows) return key;
+  scene.textures.addCanvas(out, spriteCanvas(dressRows(expr ? faceRows(rows, expr) : rows, wear, SPR[name.replace(/_walk\d$/, '')] || rows)));
+  return out;
+}
+// the same for the shop's little pictures
+export const dressedCanvas = (sprite, wear) => spriteCanvas(dressRows(SPR[sprite], wear));
 
 // Same canvases for the DOM (HUD icons, hub cards, choice cards).
 const domCache = {};
@@ -632,7 +766,7 @@ function shadeTile(mask) {
 // Water with its shore: the bank's dark lip along the top (it stands above the water), a thin dark
 // edge on the sides, a pale rim at the bottom, and foam that drifts along every edge.
 // Bits in `mask` are the neighbours that are NOT water.
-function waterTile(z, frame, mask, kind) {
+function waterTile(z, frame, mask, kind, round = false) {
   const [c, g] = canvas();
   g.fillStyle = z.water; g.fillRect(0, 0, TILE, TILE);
   // molten rock: dark crust floating on it, bright where it cracks open
@@ -686,7 +820,65 @@ function waterTile(z, frame, mask, kind) {
   g.fillStyle = lip;
   if ((mask & SW) && !(mask & (S | W_))) g.fillRect(0, TILE - 1, 2, 1);
   if ((mask & SE) && !(mask & (S | E))) g.fillRect(TILE - 2, TILE - 1, 2, 1);
+  if (round) roundCorners(g, mask, { bank, deep, lip });
   return c;
+}
+
+// v0.29: a pool's outer corners curve round instead of meeting square. The bank (dark, two thick along
+// the top, one down the sides) and the pale near lip follow the curve, and what is outside it is left
+// clear for the ground drawn underneath. `mask`: the neighbours that are not water.
+const ROUND_R = 6;
+function roundCorners(g, mask, { bank, deep, lip }) {
+  const R = ROUND_R;
+  const corners = [[N, W_, 0, 0, 1, 1], [N, E, TILE - 1, 0, -1, 1], [S, W_, 0, TILE - 1, 1, -1], [S, E, TILE - 1, TILE - 1, -1, -1]];
+  for (const [a, b, cx, cy, sx, sy] of corners) {
+    if (!(mask & a) || !(mask & b)) continue;
+    const top = a === N;
+    for (let j = 0; j < R; j++) for (let i = 0; i < R; i++) {
+      const ux = R - i - 0.5, uy = R - j - 0.5, d = Math.hypot(ux, uy), side = ux / (ux + uy);
+      const x = cx + sx * i, y = cy + sy * j;
+      if (d > R) { g.clearRect(x, y, 1, 1); continue; }
+      // how thick the bank and the dark water under it are at this point of the curve
+      const tb = top ? 1 + (1 - side) : 1, td = top ? 1 + (1 - side) : side >= 0.5 ? 1 : 0;
+      if (d > R - tb) { g.fillStyle = !top && side < 0.5 ? lip : bank; g.fillRect(x, y, 1, 1); }
+      else if (d > R - tb - td) { g.fillStyle = deep; g.fillRect(x, y, 1, 1); }
+    }
+  }
+}
+export const roundedWater = mask => ((mask & N) && (mask & (W_ | E))) || ((mask & S) && (mask & (W_ | E)));
+
+// 반짝 광맥 (v0.29): gems set in a bit of rock wall (or golden acorns caught in a hedge), drawn over the
+// wall tile; `left` of the four are still there. The small ones come out first, the big one at the back
+// last. `kind`: 'gem' or 'acorn'.
+export const SEAM_SPOTS = [[2, 8], [10, 3], [3, 1], [8, 8]];   // top-left corner of each, the big one last
+const SEAM_ART = {
+  gem: {
+    small: ['..k..', '.kck.', 'kcwck', '.kCk.', '..k..'],
+    big: ['...k...', '..kck..', '.kcwck.', 'kcccCCk', '.kcCCk.', '..kCk..', '...k...'],
+    tints: [['#8fd8f0', '#3d8fb3'], ['#f29bb2', '#a02c3e'], ['#f4cf4f', '#c99a2b'], ['#d8f6ff', '#4f8de0']],
+  },
+  acorn: {
+    small: ['.HH.', 'HhhH', 'kyyk', 'kyYk', '.kk.'],
+    big: ['..HH..', '.HhhH.', 'HhhhhH', 'kyyyyk', 'kyzyYk', '.kyYk.', '..kk..'],
+    tints: [['#f4cf4f', '#c99a2b'], ['#f4cf4f', '#c99a2b'], ['#f4cf4f', '#c99a2b'], ['#fff3b0', '#d6a531']],
+  },
+};
+function seamCanvas(kind, left) {
+  const [c, g] = canvas(), art = SEAM_ART[kind];
+  for (let n = SEAM_ART.gem.tints.length - left; n < SEAM_SPOTS.length; n++) {
+    const rows = n === SEAM_SPOTS.length - 1 ? art.big : art.small, [x0, y0] = SEAM_SPOTS[n], [lit, dark] = art.tints[n];
+    rows.forEach((row, j) => [...row].forEach((ch, i) => {
+      if (ch === '.') return;
+      g.fillStyle = ch === 'c' || ch === 'y' ? lit : ch === 'C' || ch === 'Y' ? dark : PAL[ch];
+      g.fillRect(x0 + i, y0 + j, 1, 1);
+    }));
+  }
+  return c;
+}
+export function seamKey(scene, kind, left) {
+  const key = `seam_${kind}_${left}`;
+  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, seamCanvas(kind, left));
+  return key;
 }
 
 // A jar of fireflies hanging from the wall, and the soft glow around it.
@@ -758,10 +950,12 @@ export function wallKey(scene, zi, mask, v = 0) {
   return key;
 }
 // `warm`: a hot spring's pool, milky jade instead of the zone's blue
-export function waterKey(scene, zi, frame, mask, warm = false, kind = null) {
-  const key = `z${zi}_water${frame}_${mask}${warm ? '_warm' : ''}${kind ? '_' + kind : ''}`;
+// `round`: the pool's outer corners curve (v0.29); the caller draws ground under such a tile (roundedWater)
+export function waterKey(scene, zi, frame, mask, warm = false, kind = null, round = false) {
+  const r = round && roundedWater(mask);
+  const key = `z${zi}_water${frame}_${mask}${warm ? '_warm' : ''}${kind ? '_' + kind : ''}${r ? '_r' : ''}`;
   const z = warm ? { ...GROUNDS[zi], water: '#4f9a93', waterLight: '#a9d8ce' } : GROUNDS[zi];
-  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, waterTile(z, frame, mask, kind));
+  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, waterTile(z, frame, mask, kind, r));
   return key;
 }
 
@@ -931,6 +1125,14 @@ function flatGrass(variant, pal) {
 }
 
 
+// see-through colours for a few things lying on the ground: a snail's slime is a wet sheen with a
+// glint, darker at its edge, so the ground shows through it (v0.29)
+const GLAZE = { goo: { A: 'rgba(196,236,216,0.26)', D: 'rgba(10,22,18,0.22)', w: 'rgba(255,255,255,0.85)' } };
+// the way into a hidden room (sprites.js hide_*): shadow and light laid over the zone's own hedge or rock
+const LEAF_GAP = { k: 'rgba(8,14,10,0.88)', x: 'rgba(8,14,10,0.42)', w: 'rgba(240,255,200,0.42)' };
+const ROCK_GAP = { k: 'rgba(22,16,26,0.86)', x: 'rgba(22,16,26,0.42)', w: 'rgba(255,248,232,0.5)' };
+for (let n = 0; n < 3; n++) { GLAZE[`hide_leaf${n}`] = LEAF_GAP; GLAZE[`hide_rock${n}`] = ROCK_GAP; }
+
 export function buildTextures(scene) {
   const tx = scene.textures;
   for (const name of Object.keys(SPR)) if (!tx.exists(name)) tx.addCanvas(name, spriteCanvas(charRows(name)));
@@ -939,7 +1141,7 @@ export function buildTextures(scene) {
     if (!HEROES.has(name.replace(/_walk\d$/, ''))) continue;
     for (const expr of Object.keys(FACES)) if (!tx.exists(faceKey(name, expr))) tx.addCanvas(faceKey(name, expr), spriteCanvas(faceRows(rows, expr)));
   }
-  for (const [name, rows] of Object.entries(TER_SPR)) if (!tx.exists(`t_${name}`)) tx.addCanvas(`t_${name}`, spriteCanvas(rows));
+  for (const [name, rows] of Object.entries(TER_SPR)) if (!tx.exists(`t_${name}`)) tx.addCanvas(`t_${name}`, spriteCanvas(rows, GLAZE[name] && (ch => GLAZE[name][ch])));
   for (const grade of ORES) {
     if (!tx.exists(`t_ore_${grade.id}`)) tx.addCanvas(`t_ore_${grade.id}`, oreCanvas(grade));
     if (!tx.exists(`t_pebble_${grade.id}`)) tx.addCanvas(`t_pebble_${grade.id}`, pebbleCanvas(grade));

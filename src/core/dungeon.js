@@ -42,7 +42,8 @@ export const inMap = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
 export const passable = (map, x, y) => {
   if (!inMap(x, y)) return false;
   const i = idx(x, y), t = map.tiles[i];
-  return t !== WALL && !isBump(t) && !isGap(map.ter[i]);
+  // (the smith's anvil is a solid lump of iron: v0.29, you used to walk straight through it)
+  return t !== WALL && !isBump(t) && !isGap(map.ter[i]) && map.ter[i] !== T.ANVIL;
 };
 // what a flier can cross: anything but walls, so drops and lava too
 export const flyable = (map, x, y) => inMap(x, y) && map.tiles[idx(x, y)] !== WALL && !isBump(map.tiles[idx(x, y)]);

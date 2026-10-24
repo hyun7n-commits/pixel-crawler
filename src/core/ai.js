@@ -109,7 +109,8 @@ export function enemyAct(run, e, dmP) {
   if (e.state === 'sleep') { sleepTick(run, e); return; }
   if (d.screams) { scream(run, e, dmP); return; }
   // slow ones act every other turn; so do an unlit lump of charcoal, and a seal off the ice
-  const crawl = d.slow || (d.coal && !e.lit) || (d.slide && run.map.ter[idx(e.x, e.y)] !== T.ICE && !e.charge);
+  // (an angry boss forgets to be slow)
+  const crawl = (d.slow && !e.fury) || (d.coal && !e.lit) || (d.slide && run.map.ter[idx(e.x, e.y)] !== T.ICE && !e.charge);
   if (crawl) { e.skip = !e.skip; if (e.skip) return; }
   e.timer++;
   if (e.burn > 0 && !d.boss && Math.random() < 0.5) { randomStep(run, e); return; }
@@ -255,6 +256,7 @@ export function rouse(run, e, by, x, y) {
 
 function hunt(run, e, dm) {
   const p = run.p, d = e.d;
+  if (d.boss) run.enrage(e);
   if (run.bossSpecial(e)) return;
   if (e.backoff > 0) { e.backoff--; retreat(run, e, dm, d.hops ? 3 : d.fast ? 2 : 1); return; }
   if (d.mirror) { mirror(run, e); return; }
@@ -602,6 +604,15 @@ function randomStep(run, e) {
   for (const [dx, dy] of shuffle(DIRS8.slice())) {
     if (canStep(run, e, e.x + dx, e.y + dy)) { moveEnemy(run, e, e.x + dx, e.y + dy); return; }
   }
+}
+
+// 화난 대장 (v0.29, Run.enrage): a step more every other turn, toward you; never while it is winding
+// something up (a slam, a charge, an aimed shot, a dive, a breath), so what is painted lands where shown,
+// and never one that crawls (it has stopped crawling instead)
+export function furyStep(run, e, dm) {
+  if (e.hp <= 0 || e.stun > 0 || e.state !== 'hunt' || e.d.slow || run.touching(e, run.p)) return;
+  if (e.slam || e.charge || e.lane || e.aim || e.dive || e.diving || e.breath || e.lick) return;
+  stepToward(run, e, e.d.flies ? run.flyMap() : dm);
 }
 
 function stepToward(run, e, dm) {

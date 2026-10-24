@@ -78,6 +78,8 @@ export function resume(meta) {
     const run = Object.create(Run.prototype);
     for (const [k, v] of Object.entries(saved.run)) run[k] = dec(v);
     Object.assign(run, { meta, listeners: [], char: CHARACTERS[run.charId] });
+    // a trip left off before v0.29 had one request of the day
+    if (!run.requests) { run.requests = run.request ? [run.request] : []; delete run.request; }
     const link = s => { const id = s.boss?.$boss; if (id !== undefined) s.boss = s.enemies.find(e => e.id === id) || null; };
     link(run);
     for (const f of Object.values(run.floors || {})) link(f);

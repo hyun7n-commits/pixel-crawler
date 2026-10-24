@@ -105,6 +105,8 @@ export function placeSpecials(map, rooms, deco, ctx) {
       lockedAt = rooms[i];
     }
   }
+  let lock = null;
+  if (lockedAt) lock = [...map.tiles].reduce((b, t, i) => (t === LOCKED ? { x: i % map.w, y: Math.floor(i / map.w) } : b), null);
   if (!lockedAt && ctx.floor >= 2 && open('keys') && Math.random() < B.LOCKED_CHEST_CHANCE) {
     const i = pick(ids());
     const t = i !== undefined && pick(floorTiles(map, rooms[i]).filter(t => map.ter[idx(t.x, t.y)] !== T.WATER));
@@ -112,15 +114,21 @@ export function placeSpecials(map, rooms, deco, ctx) {
       out.pickups.push({ x: t.x, y: t.y, type: 'lockedChest' });
       deco.has.add('locked');
       lockedAt = rooms[i];
+      lock = t;
       used.add(i);
     }
   }
   if (lockedAt) {
-    // the key lies in one of the rooms farthest from the lock
+    // the key lies in one of the rooms farthest from the lock, and a good walk from it however the rooms
+    // lie (v0.29: on a cliff field two rooms ran into each other and the key lay right by the chest)
+    const dm = lock ? distMap(map, lock.x, lock.y) : null, walk = t => (dm ? dm[idx(t.x, t.y)] : cheb(t, mid(lockedAt)));
     const far = ids().sort((a, b) => cheb(mid(rooms[b]), mid(lockedAt)) - cheb(mid(rooms[a]), mid(lockedAt)));
-    const spots = far.slice(0, Math.max(1, Math.ceil(far.length / 2)))
-      .flatMap(i => floorTiles(map, rooms[i]))
-      .filter(t => map.ter[idx(t.x, t.y)] !== T.WATER && cheb(t, ctx.start) > 2);
+    const ok = t => map.ter[idx(t.x, t.y)] !== T.WATER && cheb(t, ctx.start) > 2 && walk(t) < 9999;
+    let spots = far.slice(0, Math.max(1, Math.ceil(far.length / 2))).flatMap(i => floorTiles(map, rooms[i])).filter(t => ok(t) && walk(t) >= B.KEY_APART);
+    if (!spots.length) {
+      const all = far.flatMap(i => floorTiles(map, rooms[i])).filter(ok).sort((a, b) => walk(b) - walk(a));
+      spots = all.slice(0, Math.max(1, Math.ceil(all.length / 4)));
+    }
     const k = pick(spots) || pick(floorTiles(map, rooms[0]).filter(t => cheb(t, ctx.start) >= 1));
     out.pickups.push({ x: k.x, y: k.y, type: 'key' });
     // no set piece may take over the key's room (a grave could land right on it)

@@ -199,7 +199,7 @@ export class StoryScene extends Phaser.Scene {
   // gold coins popping out of a spot and landing around it
   coins(x, y, n = 6) {
     for (let k = 0; k < n; k++) {
-      const c = this.keep(this.add.image(x * TILE + TILE / 2, y * TILE + TILE / 2, 'gold').setDepth(D.fx).setScale(0.6));
+      const c = this.keep(this.add.image(x * TILE + TILE / 2, y * TILE + TILE / 2, 'coin').setDepth(D.fx).setScale(1.2));
       const tx = c.x + (k - n / 2) * 7 + (Math.random() * 4 - 2), ty = c.y + 6 + Math.random() * 6;
       this.tweens.add({
         targets: c, x: tx, duration: 420, delay: k * 50, ease: 'Linear',

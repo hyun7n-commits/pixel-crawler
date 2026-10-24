@@ -2,7 +2,7 @@
 
 import { $, el, button, icon } from './dom.js';
 import { RELICS, recipeKey, tierOf, maxLevelOf } from '../data/relics.js';
-import { recipeFor } from './recipe.js';
+import { recipeFor, foldRecipes } from './recipe.js';
 import { josa } from '../core/util.js';
 import { DISCOVERIES } from '../data/terrain.js';
 import { STALL } from '../data/npcs.js';
@@ -50,7 +50,7 @@ export function showChoice({ title, sub, run, opts, onPick, onReroll, who }) {
     } else sh.append(el('h2', null, title), el('p', null, sub));
     if (opts.some(o => o.kind === 'buy')) {
       const purse = el('p', 'stall-purse');
-      purse.append(icon('gold', 16), el('span', null, `가진 골드 ${run.gold}G`));
+      purse.append(icon('gold', 32), el('span', null, '내 골드'), el('b', null, `${run.gold}G`));
       sh.append(purse);
     }
     const wrap = el('div', 'choices');
@@ -70,7 +70,7 @@ export function showChoice({ title, sub, run, opts, onPick, onReroll, who }) {
           el('span', 'ds', r.desc(cur + 1)),
         );
         const rc = recipeFor(run, o.id, o.id);
-        if (rc) info.append(rc);
+        if (rc) info.append(foldRecipes(rc));
       } else if (o.kind === 'swap') {
         // 소원 우물: this one goes in, and something else of its kind comes up at its level
         const lv = run.p.relics[o.id] || 1;
@@ -197,8 +197,7 @@ export function showSummary({ won, run, rescued = [], news = {}, opened = [], on
     }
     // 새로 열림: what this trip opened up (data/unlocks.js), a line or two each time
     if (opened.length) sh.append(openedBox(opened));
-    const q = run.request;
-    if (q) sh.append(el('div', 'unlock-note' + (q.done ? ' req-done' : ''), q.done ? `조합 의뢰 완료: ${q.text} · 일당 ${q.pay}G를 받았다` : `조합 의뢰 미완료: ${q.text} (${q.got}/${q.n})`));
+    for (const q of run.requests || []) sh.append(el('div', 'unlock-note' + (q.done ? ' req-done' : ''), q.done ? `조합 의뢰 완료: ${q.text} · 일당 ${q.pay}G를 받았다` : `조합 의뢰 미완료: ${q.text} (${q.got}/${q.n})`));
     if (run.newRecipes.length) {
       const made = run.newRecipes.map(k => k.split(':')[0]);
       const row = el('div', 'unlock-note new-recipes');

@@ -306,6 +306,9 @@ export const CRITTER_ART = {
   cookie: ['.kkk.', 'kuNuk', 'kuuNk', 'kNuuk', '.kkk.'],
   eyes: ['w..w', 'k..k'],
   bone: ['kk....kk', 'kwkkkkwk', 'kwwwwwwk', 'kWkkkkWk', 'kk....kk'],
+  // v0.29: the old notice from behind the guild board, and a drop of honey
+  paper: ['kkkkkkkk', 'kuuuuuuk', 'kuDDDuuk', 'kuuuuuuk', 'kuDDuDuk', 'kuuuuDuk', 'kkkkkkkk'],
+  honey: ['.k.', 'kyk', 'kyk', 'yYy', 'kYk', '.k.'],
 };
 export function critterCanvas(name, wing = 'p') {
   const rows = CRITTER_ART[name], c = document.createElement('canvas');

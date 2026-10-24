@@ -136,7 +136,7 @@ export function setMusic(name) {
   want = name || null;
   if (cur && cur.name === want) return;
   const a = audioOut();
-  if (cur && a) {
+  if (cur && a && cur.ctx === a.ctx) {
     // fade the old one out, then let it go
     const g = cur.gain;
     g.gain.cancelScheduledValues(a.ctx.currentTime);
@@ -152,7 +152,7 @@ function begin(a) {
   g.gain.setValueAtTime(0, a.ctx.currentTime);
   g.gain.linearRampToValueAtTime(off ? 0 : MUSIC_VOL, a.ctx.currentTime + 1.2);
   g.connect(a.out);
-  cur = { name: want, gain: g, i: 0, next: a.ctx.currentTime + 0.1 };
+  cur = { name: want, gain: g, i: 0, next: a.ctx.currentTime + 0.1, ctx: a.ctx };
 }
 
 function voice(a, dest, type, f, t, dur, vol) {
@@ -188,6 +188,8 @@ function drum(a, dest, kind, t) {
 function tick() {
   const a = audioOut();
   if (!a || !want) return;
+  // the sound was made anew (sfx.js unlockAudio): the tune starts over on the new one
+  if (cur && cur.ctx !== a.ctx) cur = null;
   if (!cur) begin(a);
   const T = tune(cur.name);
   // a hidden tab stops the timer: start again from now instead of rushing to catch up

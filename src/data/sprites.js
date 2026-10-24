@@ -2,6 +2,7 @@
 // Characters, enemies, things on the floor and the relic icons are 16x16 (one tile); the relic and
 // toolbar icons are drawn and shaded in data/icons.js.
 import { ICONS } from './icons.js';
+import { dressRows } from './wear.js';
 
 export const PAL = {
   k: '#1b1424', x: '#2c2536',
@@ -400,6 +401,45 @@ export const SPR = {
     '.kkkkkkkkkkkkkk.',
     '................',
   ],
+  // 골드 (v0.29): coins drawn like the v0.28 chests, crisp rims and a shine, and what lies on the floor
+  // shows how much is there: two coins, three, a stack, a heap, a sack (scenes/DungeonScene.js goldTex).
+  // `gold` (the stack) is also the purse icon, `coin` the one that flies into your pocket.
+  gold_1: [
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '.........kkk....',
+    '........kzwyk...',
+    '.......kzyyyYk..',
+    '...kkkkkzyiyYk..',
+    '..kzzyyykyiyYk..',
+    '..kyyyyYkyYYk...',
+    '..kUYYYUkkkk....',
+    '...kkkkk........',
+  ],
+  gold_2: [
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '..........kkk...',
+    '.........kzwyk..',
+    '........kzyyyYk.',
+    '....kkk.kzyiyYk.',
+    '...kzwkkkkkiyYk.',
+    '...kykzzyyykYk..',
+    '...kykyyyyYkk...',
+    '....kkUYYYUk....',
+    '......kkkkk.....',
+  ],
   gold: [
     '................',
     '................',
@@ -407,17 +447,54 @@ export const SPR = {
     '................',
     '................',
     '................',
+    '....kkkkk.......',
+    '...kzwyyyk......',
+    '...kyyyyYk......',
+    '...kUUUUUk.kkk..',
+    '...kyyyyYkkzwyk.',
+    '...kUUUUUkzyyyYk',
+    '...kyyyyYkzyiyYk',
+    '...kUUUUUkyyiyYk',
+    '...kyyyyYkkyYYk.',
+    '....kkkkk..kkk..',
+  ],
+  gold_4: [
+    '................',
+    '................',
+    '................',
+    '................',
     '................',
     '......kkkk......',
-    '.....kyyyyk.....',
-    '....kywyyyYk....',
-    '..kkkyyyyyYkkk..',
-    '.kyyykkkkkkyyyk.',
-    'kywyyYkkkkywyyYk',
-    'kyyyyYkyyyyyyyYk',
-    '.kYYYkkkYYYYYYk.',
-    '..kkk...kkkkkk..',
+    '.....kzzwyk.....',
+    '....kzyyYyyk....',
+    '...kzyYzzyYyk...',
+    '...kyYzyyYzyk...',
+    '..kzyzyyYzywYk..',
+    '..kyYyyYzyyYYk..',
+    '.kzyyYzyyYyYyYk.',
+    '.kyYYyyYYyYYUYk.',
+    '.kUYUUYUUYUUUUk.',
+    '..kkkkkkkkkkkk..',
   ],
+  gold_5: [
+    '................',
+    '................',
+    '.....kk..kk.....',
+    '....kJEk.kEk....',
+    '.....kJEkEk.....',
+    '......krrk......',
+    '.....kEJEMk.....',
+    '....kJEEEMMk....',
+    '...kJEEEEEMTk...',
+    '...kEEEyyEMTk...',
+    '..kJEEyzyYMTk...',
+    '..kEEEyiYYMTk...',
+    '..kEEEMYYMMTk.kk',
+    '..kMEMMMMMTTkkzy',
+    '...kTTTTTTTkkyYk',
+    '....kkkkkkkk.kk.',
+  ],
+  coin: ['..kkk..', '.kzwyk.', 'kzyyyYk', 'kzyiyYk', 'kyyiyYk', '.kyYYk.', '..kkk..'],
   potion: [
     '................',
     '................',
@@ -813,17 +890,30 @@ SPR.skelking = [
   '....kWWWWWWk....',
   '.....kkkkkk.....',
 ];
-// 갈림길 (v0.26): the little notice board planted behind a burrow; the picture of what the field past
-// it has (data/routes.js) is drawn on its paper (scenes/DungeonScene.js buildTile)
-SPR.routeBoard = [
-  '.kkkkkkkkkkkkkkkkkk.',
-  'kMMMMMMMMMMMMMMMMMMk',
-  ...Array(16).fill('kMaaaaaaaaaaaaaaaaNk'),
-  'kNNNNNNNNNNNNNNNNNNk',
-  '.kkkkkkkkNNkkkkkkkk.',
-  '........kNNk........',
-  '........kNNk........',
-];
+// 갈림길 (v0.29): a little wooden sign on a stake behind a burrow, with a picture of what the field past
+// it has (data/routes.js) painted on its board. v0.26's big white paper board read like a box the game
+// had drawn over the field, so this one is wood like the fences and small like a real signpost.
+const ROUTE_PICS = {
+  rest:  ['.rr.rr.', 'rqrrrrr', 'rrrrrrr', '.rrrrr.', '..rrr..', '...r...'],     // a heart: a breather
+  tools: ['..HHH..', '...H...', '.wwwww.', 'wwwwwww', 'wWwwwWw', '.WWWWW.'],     // a tied pouch of tools
+  chest: ['.HHHHH.', 'HOOOOOH', 'HHHyHHH', 'HOOyOOH', 'HOOOOOH', 'HHHHHHH'],     // a chest with its lock
+  candy: ['...y...', '..yzy..', 'yyyzyyy', '.yyyyy.', '.yy.yy.', 'y.....y'],     // a star candy
+  gold:  ['..ccc..', '.cwccc.', 'cccccCC', '.cccCC.', '..cCC..', '...C...'],     // a sparkling gem
+  chief: ['y..y..y', 'yy.y.yy', 'yyyyyyy', 'yryyyry', 'yyyyyyy', 'YYYYYYY'],     // a crown
+  den:   ['cccc...', '..c....', '.c.....', 'cccc...', '....ccc', '.....c.'],     // zz: a room asleep
+};
+for (const [kind, pic] of Object.entries(ROUTE_PICS)) {
+  SPR[`routeSign_${kind}`] = [
+    '.kkkkkkkkk.',
+    'kMMMMMMMMMk',
+    ...pic.map(r => `kn${r.replaceAll('.', 'n')}nk`),
+    'kNNNNNNNNNk',
+    '.kkkkNkkkk.',
+    '....kNk....',
+    '....kNk....',
+    '...kkNkk...',
+  ];
+}
 Object.assign(SPR, ICONS);
 
 // the field peddler is the shopkeeper; only the 32px look (sprites32.js) gives them a pack
@@ -1204,6 +1294,25 @@ export const TER_SPR = {
     '.....nnnkNkn....',
     '...nnnnnhNhnnn..',
     '..nhhhhhhNhhhhn.',
+    '.nhkkkkkkkkkkhhn',
+    '.nhkxxxxxxxxxkhn',
+    'nhkxxkkkkkkkxxkh',
+    'nhkxkkkkkkkkkxkh',
+    '.nhkxkkkkkkkxkhn',
+    '.NnhkkkkkkkkkhnN',
+    '..NNnhhhhhhhnNN.',
+    '....NNNNNNNNN...',
+  ],
+  // the same burrow without its flag: a 갈림길's sign is staked where the flag would be
+  stairsBare: [
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '.....nnnnnnn....',
+    '...nnnnnhhhnnn..',
+    '..nhhhhhhhhhhhn.',
     '.nhkkkkkkkkkkhhn',
     '.nhkxxxxxxxxxkhn',
     'nhkxxkkkkkkkxxkh',
@@ -1596,6 +1705,118 @@ Object.assign(TER_SPR, {
     '....kxzzzzxk....',
     '....kxvvvvxk....',
   ],
+  // 숨은 방 (v0.29): the bit of wall a hidden room is behind, before each of the three hits that open it.
+  // Leaves: the bushes parted a little, then more, then nearly through; rock: a crack, then a split with
+  // a chip gone, then a hole about to give. Their colours are see-through (textures.js GLAZE: k a deep
+  // shadow, x a soft one, w light catching an edge) so they sit on any zone's hedge or rock.
+  hide_leaf0: [
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '.......w........',
+    '......wxw.......',
+    '.....w.xx.......',
+    '......xkx.w.....',
+    '.....wxkkx......',
+    '......xkkxw.....',
+    '.....wxkkx......',
+    '......xkkx......',
+    '.......xx.......',
+  ],
+  hide_leaf1: [
+    '................',
+    '................',
+    '................',
+    '................',
+    '.......w........',
+    '......wxw.......',
+    '.....wxkxw......',
+    '....w.xkkx.w....',
+    '.....xkkkkx.....',
+    '....wxkkkkxw....',
+    '.....xkkkkx.....',
+    '...w.xkkkkx.w...',
+    '....wxkkkkxw....',
+    '.....xkkkkx.....',
+    '....wxkkkkxw....',
+    '.....xx..xx.....',
+  ],
+  hide_leaf2: [
+    '................',
+    '.......ww.......',
+    '......wxxw......',
+    '.....wxkkxw.....',
+    '....wxkkkkxw....',
+    '...w.xkkkkx.w...',
+    '...wxkkkkkkxw...',
+    '..w.xkkkkkkx.w..',
+    '...xkkkkkkkkx...',
+    '..wxkkkkkkkkxw..',
+    '...xkkkkkkkkx...',
+    '..wxkkkkkkkkxw..',
+    '...xkkkkkkkkx...',
+    '..wxkkkkkkkkxw..',
+    '...xkkkkkkkkx...',
+    '..ww.x....x.ww..',
+  ],
+  hide_rock0: [
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '.........k......',
+    '........kw......',
+    '........k.......',
+    '.......kw.......',
+    '.......k........',
+    '......kkw.......',
+    '.......k........',
+    '.......kw.......',
+    '......k.........',
+    '......kw........',
+    '.......k........',
+  ],
+  hide_rock1: [
+    '................',
+    '................',
+    '..........k.....',
+    '.........kw.....',
+    '.........k......',
+    '........kw..k...',
+    '........kkkkw...',
+    '.......kw.......',
+    '....k..k........',
+    '.....kkkxw......',
+    '......xkkw......',
+    '......kkx.......',
+    '.....kw.kw......',
+    '....k....k......',
+    '...kw.....kw....',
+    '..........k.....',
+  ],
+  hide_rock2: [
+    '..........k.....',
+    '.........kw.....',
+    '...k....kw..k...',
+    '....kw..k..kw...',
+    '.....kkxkkkk....',
+    '.....xkkkkkx....',
+    '..k.xkkkkkkkx...',
+    '...kxkkkkkkkxkw.',
+    '....xkkkkkkkx...',
+    '...kxkkkkkkkx...',
+    '..kw.xkkkkkx.k..',
+    '.....kxkkkxk..k.',
+    '....k..kkk...kw.',
+    '...kw..k.k......',
+    '..w...w...w.ww..',
+    '.....ww..ww.....',
+  ],
   // a lily pad with its notch
   lily0: [
     '................',
@@ -1748,20 +1969,21 @@ Object.assign(TER_SPR, {
     '..kkkkkkkkkkkk..',
     '................',
   ],
-  // a snail's slime trail: a glistening smear on the ground
+  // a snail's slime trail: a wet see-through sheen with a glint or two (its colours are made
+  // see-through in scenes/textures.js GLAZE, so it never reads as a white blot of light)
   goo: [
     '................',
     '................',
     '................',
     '................',
     '................',
-    '.....AAAA.......',
-    '...AAwAAAAAA....',
-    '..AAAAAAAwAAAA..',
-    '...AAAAAAAAAA...',
-    '......AAAAAAA...',
-    '........AAA.....',
-    '................',
+    '.....DDDD.......',
+    '...DDAAAADDD....',
+    '..DAwwAAAAAAD...',
+    '..DAAAAAAAwAD...',
+    '...DDAAAAAAD....',
+    '.....DDDAAD.....',
+    '........DD......',
     '................',
     '................',
     '................',
@@ -3297,3 +3519,5 @@ for (const name of Object.keys(SPR)) {
   }
 }
 // ---------- end of heroes and friends ----------
+// 꾸미기's picture on the end card: the worker in a ribbon and a scarf (data/wear.js)
+SPR.dressup = dressRows(SPR.adv, { head: 'ribbon', neck: 'scarf' });

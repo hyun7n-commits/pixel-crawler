@@ -4,7 +4,7 @@
 // (main.js showHome); walk out of the door to go back.
 
 /* global Phaser */
-import { TILE, texScale } from './textures.js';
+import { TILE, texScale, dressKey } from './textures.js';
 import { baseZoom } from './zoom.js';
 import { pixEllipse } from './pix.js';
 import { faceKey } from '../data/faces.js';
@@ -25,6 +25,15 @@ const mid = x => (x + 1) * TILE + TILE / 2;
 const foot = y => (y + WALL_ROWS + 1) * TILE;
 const key = (x, y) => `${x},${y}`;
 const pick = list => list[Math.floor(Math.random() * list.length)];
+
+// a little picture from rows of letters, one colour each (the leaping goldfish, the bunny's shadow)
+function rowsCanvas(rows, pal) {
+  const c = document.createElement('canvas');
+  c.width = rows[0].length; c.height = rows.length;
+  const g = c.getContext('2d');
+  rows.forEach((row, y) => [...row].forEach((ch, x) => { if (pal[ch]) { g.fillStyle = pal[ch]; g.fillRect(x, y, 1, 1); } }));
+  return c;
+}
 
 export class HomeScene extends Phaser.Scene {
   constructor(hooks) {
@@ -174,7 +183,7 @@ export class HomeScene extends Phaser.Scene {
     if (id === 'lamp') return this.meta.house.dark ? 0 : 1;
     if (id === 'map') return ZONES.filter((_, s) => cleared(this.meta, s) > 0).length;
     // the 비밀 상자 fills up: keepsakes stick out from under its lid
-    if (id === 'secretbox') { const n = secretsFound(this.meta); return n >= SECRETS.length ? 3 : n >= 7 ? 2 : n >= 3 ? 1 : 0; }
+    if (id === 'secretbox') { const n = secretsFound(this.meta); return n >= SECRETS.length ? 3 : n >= 11 ? 2 : n >= 4 ? 1 : 0; }
     return 0;
   }
   addItem(id, x, y) {
@@ -402,6 +411,11 @@ export class HomeScene extends Phaser.Scene {
         this.tweens.add({ targets: this.dim, alpha: dark ? 0.35 : 0, duration: 260 });
         this.hooks.onSound?.('pluck');
         this.hooks.onChange?.();
+        // 비밀 (v0.29): off and on and off again, six times quick, and a bunny's shadow hops along the
+        // wall, though your hands are still
+        this.flicks = this.time.now - (this.flickAt || 0) < 1800 ? (this.flicks || 0) + 1 : 1;
+        this.flickAt = this.time.now;
+        if (this.flicks >= 6 && !dark) { this.flicks = 0; this.time.delayedCall(250, () => this.bunny(it)); }
         break;
       }
       case 'cook':
@@ -439,8 +453,12 @@ export class HomeScene extends Phaser.Scene {
       case 'fish':
         this.foam.explode(5, it.img.x, top.y + 8);
         this.fishFast = this.time.now + 1500;
-        this.say(it.img, '뻐끔뻐끔', 1200);
         this.hooks.onSound?.('pop');
+        // 비밀 (v0.29): tap, tap, tap, and the goldfish leaps clean out and back in
+        this.taps = this.time.now - (this.tapAt || 0) < 2000 ? (this.taps || 0) + 1 : 1;
+        this.tapAt = this.time.now;
+        if (this.taps >= 3) { this.taps = 0; this.leap(it, top); break; }
+        this.say(it.img, '뻐끔뻐끔', 1200);
         break;
       case 'pet':
         if (it.pup) {
@@ -512,8 +530,75 @@ export class HomeScene extends Phaser.Scene {
     this.tweens.add({ targets: this.dim, alpha: this.isDark() ? 0.35 : 0, duration: 300 });
     this.tweens.add({ targets: ps, x: mid(this.p.x), y: foot(this.p.y), duration: 220, ease: 'Quad.out', onComplete: () => ps.setDepth(D.actors + this.p.y / 100) });
     this.tweens.add({ targets: ps, hop: 5, duration: 110, yoyo: true, ease: 'Quad.out' });
+    // 비밀 (v0.29): the third nap in one stay, a hand under the pillow finds a crumpled note
+    if (was === 'sleep' && (this.naps = (this.naps || 0) + 1) >= 3 && !this.noteFound) {
+      this.noteFound = true;
+      this.say(ps, '베개 밑에 쪽지가… "내일은 꼭 돌아올게."', 2600);
+      ps.expr = 'shock';
+      ps.exprUntil = this.time.now + 1400;
+      this.hooks.onSound?.('letter');
+      this.time.delayedCall(1200, () => this.hooks.onSecret?.('letter'));
+      return;
+    }
     if (was === 'sleep') this.happy(pick(['개운하다!', '잘 잤다~', '좋은 꿈 꿨다.']));
     if (was === 'bath') this.happy(pick(['뽀득뽀득!', '개운하다~', '들판 흙이 다 씻겼다.']));
+  }
+  // the goldfish leaps out of its tank in an arc and plops back in (비밀 'goldfish')
+  leap(it, top) {
+    const t = it.img, x0 = t.x - 3, y0 = top.y + 9;
+    const f = this.keep(this.add.image(x0, y0, this.fishKey()).setDepth(D.fx));
+    this.hooks.onSound?.('splash');
+    this.foam.explode(8, x0, y0);
+    this.tweens.addCounter({
+      from: 0, to: 1, duration: 640, ease: 'Linear',
+      onUpdate: tw => { const u = tw.getValue(); f.setPosition(Math.round(x0 + 6 * u), Math.round(y0 - 20 * Math.sin(u * Math.PI))).setAngle(-60 + 120 * u); },
+      onComplete: () => {
+        f.destroy();
+        this.foam.explode(10, x0 + 6, y0);
+        this.hooks.onSound?.('splash');
+        this.say(t, '뽀옥!', 1100);
+        this.ps.expr = 'sparkle';
+        this.ps.exprUntil = this.time.now + 1200;
+        this.hooks.onSecret?.('goldfish');
+      },
+    });
+  }
+  // a bunny's shadow hops across the back wall by the lamp, and nobody made it (비밀 'shadow')
+  bunny(it) {
+    const y = it.img.y - it.img.displayHeight - 6, x0 = it.img.x - 26;
+    const b = this.keep(this.add.image(x0, y, this.shadowKey()).setDepth(D.fx).setAlpha(0));
+    this.tweens.add({ targets: b, alpha: 0.55, duration: 300 });
+    for (let k = 0; k < 4; k++) this.tweens.add({ targets: b, y: y - 4, delay: 300 + k * 360, duration: 180, yoyo: true, ease: 'Quad.out' });
+    this.tweens.add({ targets: b, x: x0 + 52, delay: 300, duration: 1440, ease: 'Linear' });
+    this.tweens.add({ targets: b, alpha: 0, delay: 1800, duration: 300, onComplete: () => b.destroy() });
+    this.time.delayedCall(900, () => {
+      this.ps.expr = 'shock';
+      this.ps.exprUntil = this.time.now + 1200;
+    });
+    this.time.delayedCall(2100, () => this.hooks.onSecret?.('shadow'));
+  }
+  fishKey() {
+    if (!this.textures.exists('home_leapfish')) this.textures.addCanvas('home_leapfish', rowsCanvas([
+      '.kkk..k.',
+      'koookkok',
+      'kowoooko',
+      'koooookk',
+      '.kkkk.k.',
+    ], { k: '#1b1424', o: '#f08c3a', w: '#f4f0e8' }));
+    return 'home_leapfish';
+  }
+  shadowKey() {
+    if (!this.textures.exists('home_bunnyshadow')) this.textures.addCanvas('home_bunnyshadow', rowsCanvas([
+      '.k...k..',
+      '.k...k..',
+      '.kk.kk..',
+      '..kkk...',
+      '.kkkkk..',
+      'kkkkkkk.',
+      'kkkkkkkk',
+      '.kk..kk.',
+    ], { k: '#000000' }));
+    return 'home_bunnyshadow';
   }
   // into the tub: just your head above the bubbles for a moment
   bath(it) {
@@ -759,7 +844,7 @@ export class HomeScene extends Phaser.Scene {
     let expr = time < (ps.exprUntil || 0) ? ps.expr : '';
     if (time > (ps.nextBlink || 0)) { ps.blinkUntil = time + 130; ps.nextBlink = time + 2200 + Math.random() * 2600; }
     if (ps.sleeping || (!expr && !walking && time < ps.blinkUntil)) expr = 'blink';
-    const fk = faceKey(walking ? `${base}_walk${ps.stepFrame}` : base, expr);
+    const fk = dressKey(this, faceKey(walking ? `${base}_walk${ps.stepFrame}` : base, expr), this.meta.wear);
     if (ps.texture.key !== fk && this.textures.exists(fk)) {
       const crop = ps.isCropped ? { w: ps._crop.width, h: ps._crop.height } : null;
       ps.setTexture(fk);
