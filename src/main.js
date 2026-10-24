@@ -9,7 +9,7 @@ import { playStory } from './ui/story.js';
 import { Run, BOMB_RANGE } from './core/run.js';
 import { loadMeta, saveMeta } from './core/save.js';
 import { suspend, resume, clearSuspended, savedRun } from './core/suspend.js';
-import { pathTo, idx, isBump, isStairs } from './core/dungeon.js';
+import { pathTo, idx, isBump, isStairs, WALL } from './core/dungeon.js';
 import { ENEMIES, ZONES } from './data/enemies.js';
 import { cleared } from './data/stages.js';
 import { cheb, josa } from './core/util.js';
@@ -26,9 +26,10 @@ import { showsLeft } from './ui/beat.js';
 import { speed, pace, nextSpeed } from './ui/speed.js';
 import { bossCard } from './ui/bosscard.js';
 import { FOLK, villageP, ownsHome } from './data/village.js';
-import { placed, rollVisitor, roomOf } from './data/home.js';
+import { placed, rollVisitor, roomOf, bringIn } from './data/home.js';
 import { CHARACTERS } from './data/characters.js';
 import { describeTile } from './ui/tip.js';
+import { SECRETS, secretOf, secretsFound } from './data/secrets.js';
 import { $ } from './ui/dom.js';
 import * as sfx from './audio/sfx.js';
 import { setMusic, musicOff, setMusicOff } from './audio/music.js';
@@ -254,6 +255,8 @@ function showHome() {
   game.scene.sleep('village');
   const first = !meta.house.seen;
   meta.house.seen = true;
+  // a 비밀 상자 found before there was a house to put it in goes in the first time you are in
+  if (first && meta.house.own.secretbox && !placed(meta).secretbox) bringIn(meta, 'secretbox');
   saveMeta(meta);
   game.scene.run('home', { meta, first });
   homeHud();
@@ -304,6 +307,17 @@ const homeHooks = {
     sfx.play('nugget');
     hud.banner(`선물 +${n}G`);
     homeHud();
+  },
+  onSecret: id => foundSecret(id),
+  onCoins: n => { meta.gold += n; saveMeta(meta); sfx.play('nugget'); homeHud(); },
+  // the 비밀 상자: a keepsake for every secret found so far, the rest still "???"
+  onSecrets: () => {
+    sfx.play('pluck');
+    showVillageTip('');
+    showTalk({
+      who: CHARACTERS[meta.sel].sprite, name: '비밀 상자', line: secretsFound(meta) >= SECRETS.length ? '다 찾았다! 이제 마을에서 모르는 건 없다. …아마도.' : '찾아낸 비밀마다 기념품을 하나씩 넣어 둔다. 아직 빈자리가 있다.',
+      build: box => renderPanel('secrets', box, { meta }),
+    });
   },
   // the bookshelf: the trip records and the critter book
   onBook: () => {
@@ -366,7 +380,29 @@ const villageHooks = {
     sfx.play('nugget');
     renderVillageHud(meta);
   },
+  onSound: name => sfx.play(name),
+  onSecret: id => foundSecret(id),
+  found: id => !!meta.secrets[id],
 };
+
+// 비밀 (data/secrets.js): the first time one turns up, a chime and a banner saying how many there are
+// to find. Out in the fields the run has written it down already (core/run.js secret).
+function foundSecret(id) {
+  if (!secretOf(id) || meta.secrets[id]) return false;
+  meta.secrets[id] = Date.now();
+  announceSecret(id);
+  return true;
+}
+function announceSecret(id) {
+  // the first one brings the 비밀 상자 home, straight into the room if there is one and room in it
+  if (!meta.house.own.secretbox) {
+    meta.house.own.secretbox = true;
+    if (ownsHome(meta)) bringIn(meta, 'secretbox');
+  }
+  saveMeta(meta);
+  sfx.play('secret');
+  hud.banner(`비밀 발견! ${secretOf(id).name} (${secretsFound(meta)}/${SECRETS.length})`, 2800);
+}
 
 // The village's tip line: who someone is when the mouse rests on them, or a short note after a tap.
 let villageTipTimer = 0;
@@ -386,6 +422,7 @@ function onRunEvent(type, d) {
   // a new field's name shows once you have popped out of the burrow
   if (type === 'banner') setTimeout(() => hud.banner(d.text), Math.max(scene?.busy() ? 650 : 0, showsLeft()));
   if (type === 'discover') hud.banner(`새 발견! ${d.d.combo}`);
+  if (type === 'secret') setTimeout(() => announceSecret(d.id), d.delay || 0);
   if (type === 'request') setTimeout(() => hud.banner(`조합 의뢰 완료! +${d.pay}G`), 300);
   if (type === 'evolve') showEvolve(d);
   if (type === 'fission') hud.fission(d);
@@ -460,14 +497,54 @@ function nextChoice() {
   setAim(false);
   setBag(false);
   const q = run.queue[0];
+  // some things take a moment to come up (the pond spirit rising, nodding off): the sheet waits for them
+  if (q.delay) {
+    q.at ||= Date.now() + q.delay / pace();
+    const left = Math.min(q.delay, q.at - Date.now());
+    if (left > 20) { clearTimeout(nextChoice.wait); nextChoice.wait = setTimeout(nextChoice, left); return; }
+  }
   const onPick = o => { run.choose(o); if (run) hud.update(run); nextChoice(); };
+  // 낮잠 꿈 (v0.28): a glimpse of something in a dream, and waking up
+  if (q.kind === 'dream') {
+    showChoice({
+      title: '꿈', sub: q.text, run, onPick, who: CHARACTERS[run.charId].sprite,
+      opts: [{ kind: 'ok', act: 'wake', name: '눈을 뜬다', desc: '…꿈이었다. 한숨 자고 나니 몸이 개운하다.' }],
+    });
+    return;
+  }
+  // 연못 신령 (v0.28): up from the pond with what you threw in and a golden one, and a question
+  if (q.kind === 'spirit') {
+    const it = ITEMS[q.tool], gold = `황금 ${it.name}`;
+    showChoice({
+      title: '연못 신령', who: 'spirit', run, onPick,
+      sub: `"이 ${josa(it.name, '이', '가')} 네 것이냐? 아니면 이 ${josa(gold, '이', '가')} 네 것이냐?"`,
+      opts: [
+        { kind: 'ok', act: 'honest', icon: it.sprite, name: `그냥 ${josa(it.name, '이에요', '예요')}.`, desc: '내가 던진 건 평범한 거였다.' },
+        { kind: 'ok', act: 'greedy', icon: 'gold', name: `${josa(gold, '이에요', '예요')}!`, desc: '금으로 된 쪽이 훨씬 좋아 보인다.' },
+      ],
+    });
+    return;
+  }
   // the boss's chest is open: home with the win, or on down into 깊은 곳
-  if (q.kind === 'deeper') {
+  if (q.kind === 'deeper' && !q.burrow) {
     showChoice({
       title: '대장을 쓰러뜨렸다!', sub: `${run.zone.name} 돌파. 대장 방 바닥에 구멍이 하나 나 있다. 아래에서 찬 바람이 올라온다.`, run, onPick,
       opts: [
         { kind: 'ok', act: 'home', icon: 'gold', name: '마을로 돌아간다', desc: '탐험 성공. 모은 골드와 돌파 보너스를 들고 간다.' },
-        { kind: 'ok', act: 'deeper', icon: 'stairs', name: '더 깊이 들어간다', desc: '지금 유물 그대로 더 센 들판으로. 층마다 좋은 상자가 있다. 쓰러지면 깊은 곳에서 주운 골드는 두고 온다. 언제든 메뉴에서 돌아갈 수 있다.' },
+        { kind: 'ok', act: 'deeper', icon: 'stairs', name: '더 깊이 들어간다', desc: '한 층 내려갈 때마다 적이 훨씬 세지고 골드도 더 많이 나온다. 깊은 곳에서 주운 골드는 땅굴에서 돌아가야 들고 간다. 쓰러지면 두고 온다.' },
+      ],
+    });
+    return;
+  }
+  // a burrow down in 깊은 곳: home with all of it, or another floor down for more (and harder)
+  if (q.kind === 'deeper') {
+    const deep = run.deepGold;
+    showChoice({
+      title: `깊은 곳 ${run.depth}의 땅굴`, sub: deep ? `깊은 곳에서 ${deep}G를 주웠다. 여기서 돌아가면 다 내 것이다.` : '굴 아래에서 찬 바람이 올라온다.', run, onPick,
+      opts: [
+        { kind: 'ok', act: 'home', icon: 'gold', name: '마을로 돌아간다', desc: deep ? `주운 ${deep}G와 돌파 보너스를 다 들고 간다.` : '돌파 보너스를 들고 간다.' },
+        { kind: 'ok', act: 'deeper', icon: 'stairs', name: '더 내려간다', desc: `깊은 곳 ${run.depth + 1}: 적은 더 세지고 골드는 더 많이 나온다. 쓰러지면 깊은 곳에서 주운 골드를 모두 두고 온다.` },
+        { kind: 'ok', act: 'stay', icon: 'look', name: '조금 더 둘러본다', desc: '이 들판에 남는다. 땅굴은 그대로 있다.' },
       ],
     });
     return;
@@ -485,7 +562,7 @@ function nextChoice() {
     showChoice({ title: npc.name, sub: q.text, run, who: npc.sprite, opts: q.smithPick ? run.smithOffers() : q.opts, onPick });
     return;
   }
-  const title = q.kind === 'level' ? `레벨 ${run.p.lvl}!` : q.kind === 'kit' ? `출발 보급 ${q.k}/${q.n}` : q.sneak ? '낮잠 방 상자' : q.vein ? '바위 속 상자' : q.rich ? '잠긴 상자' : '보물 상자';
+  const title = q.kind === 'level' ? `레벨 ${run.p.lvl}!` : q.kind === 'kit' ? `출발 보급 ${q.k}/${q.n}` : q.sneak ? '낮잠 방 상자' : q.vein ? '바위 속 상자' : q.locked ? '잠긴 상자' : q.rich ? '금테 상자' : '보물 상자';
   const sub = q.kind === 'level' ? '유물을 하나 고르자.' : q.kind === 'kit' ? '조합이 챙겨 준 보급품이다. 하나 고르자.'
     : q.sneak ? '아무도 깨지 않았다. 넷 중 하나를 가져가자.' : q.rich ? '좋은 상자다. 넷 중 하나를 가져가자.' : '안에 든 유물 중 하나를 가져가자.';
   const open = () => showChoice({
@@ -641,6 +718,9 @@ function onTileClick(x, y) {
     if (near.length) { path = near.sort((a, b) => a.length - b.length)[0]; scene.path = path; }
     return;
   }
+  // a wall right beside you: a nudge at it, like walking into it (a gap of light in it, or a bush with
+  // someone asleep in it, gives itself away like that)
+  if (m.tiles[idx(x, y)] === WALL && m.explored[idx(x, y)] && cheb({ x, y }, p) === 1) { clearPath(); run.step(x - p.x, y - p.y); return; }
   if (!run.passable(x, y) || !m.explored[idx(x, y)]) return;
   path = walkTo(x, y);
   scene.path = path;
@@ -723,7 +803,29 @@ for (const ev of ['pointerdown', 'touchend', 'click', 'keydown']) document.addEv
 // iPhone Safari zooms the whole page on a pinch even over the map; the map does its own zoom
 document.addEventListener('gesturestart', ev => ev.preventDefault());
 
-$('waitBtn').addEventListener('click', restOnce);
+// 쉬기: a tap rests a turn; held down (like SPD's), it goes on resting until you let go or someone new
+// comes into view
+{
+  const btn = $('waitBtn');
+  let hold = 0, rep = 0, held = false;
+  const stop = () => { clearTimeout(hold); clearInterval(rep); hold = rep = 0; };
+  btn.addEventListener('pointerdown', () => {
+    held = false;
+    stop();
+    hold = setTimeout(() => {
+      if (!run || run.over) return;
+      held = true;
+      const seen = visibleEnemies();
+      rep = setInterval(() => {
+        if (!run || run.over || modalOpen() || visibleEnemies() > seen) { stop(); return; }
+        if (canAct()) restOnce();
+      }, 150 / pace());
+    }, 420);
+  });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) btn.addEventListener(ev, stop);
+  btn.addEventListener('contextmenu', ev => ev.preventDefault());
+  btn.addEventListener('click', () => { if (held) held = false; else restOnce(); });
+}
 $('lookBtn').addEventListener('click', () => setLook(!looking));
 $('bagClose').addEventListener('click', () => setBag(false));
 $('shade').addEventListener('click', () => setBag(false));
@@ -736,7 +838,8 @@ $('quitBtn').addEventListener('click', () => {
     title: '탐험을 멈출까?', sub: '탐험은 저절로 저장된다. 언제 꺼도 이 순간부터 이어서 할 수 있다.', run,
     opts: [
       { kind: 'ok', id: 'save', name: '저장하고 마을로', desc: '지금 이대로 두고 마을에 간다. 마을의 이어서 탐험 버튼으로 돌아온다.' },
-      run.banked ? { kind: 'ok', id: 'quit', name: '마을로 돌아가기', desc: '돌파는 이미 했다. 깊은 곳에서 모은 것까지 다 들고 간다.' }
+      run.deepGold ? { kind: 'ok', id: 'quit', name: '포기하고 돌아가기', desc: `돌파 보너스는 들고 가지만 깊은 곳에서 주운 ${run.deepGold}G는 두고 간다. 땅굴에서 돌아가면 다 들고 간다.` }
+        : run.banked ? { kind: 'ok', id: 'quit', name: '마을로 돌아가기', desc: '돌파는 이미 했다. 모은 골드를 다 들고 간다.' }
         : { kind: 'ok', id: 'quit', name: '탐험 포기', desc: '여기서 끝내고 돌아간다. 지금까지 주운 골드는 가져간다.' },
       { kind: 'ok', id: 'stay', name: '계속하기', desc: '들판으로 돌아간다.' },
     ],

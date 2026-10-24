@@ -27,6 +27,8 @@ function questLines(run) {
   if (smith.state === 'asked') {
     out.push(smith.chunk === null ? `대장장이의 부탁: ${at(smith.floor)} 반짝 바위를 끝까지 캐자` : `대장장이에게 반짝돌 덩어리를 가져가자 (${at(smith.floor)})`);
   }
+  // 깊은 곳: what is at stake (it comes home only by a burrow's 돌아간다)
+  if (run.deepGold) out.push(`깊은 곳에서 주운 ${run.deepGold}G: 땅굴에서 돌아가야 들고 간다`);
   if (run.has?.has('cage') && !run.rescued.length) {
     out.push(run.map.cageKey ? '우리 열쇠를 찾았다! 갇힌 친구에게 가자' : '이 들판 어딘가에 누가 갇혀 있다. 열쇠는 우두머리가 물고 있다');
   }
@@ -94,12 +96,12 @@ export class Hud {
     b.classList.add('ding');
   }
 
-  banner(text) {
+  banner(text, ms = 1600) {
     const b = $('banner');
     b.textContent = text;
     b.classList.add('show');
     clearTimeout(this.bannerTimer);
-    this.bannerTimer = setTimeout(() => b.classList.remove('show'), 1600);
+    this.bannerTimer = setTimeout(() => b.classList.remove('show'), ms);
   }
 
   update(run) {
@@ -109,7 +111,9 @@ export class Hud {
     const where = run.depth ? `깊은 곳 ${run.depth}` : boss ? '대장' : `${local}/${run.bossFloor - run.startFloor}`;
     const extra = `${run.loop}회차${run.dares.length ? ` · 내기 ${run.dares.length}` : ''}`;
     $('floorLabel').innerHTML = `${run.zone.name} ${where}<small>${extra}</small>`;
-    $('goldNow').textContent = `${run.gold}G`;
+    // 깊은 곳: the gold picked up down there apart, in orange (a burrow's 돌아간다 takes it home)
+    const deep = run.deepGold, purse = deep ? `${run.gold - deep}G<small class="risk">+${deep}G</small>` : `${run.gold}G`;
+    $('goldNow').innerHTML = purse;
     $('hpText').textContent = `${Math.max(0, p.hp)} / ${s.maxHp}`;
     $('hpbar').firstElementChild.style.width = `${(Math.max(0, p.hp) / s.maxHp) * 100}%`;
     // a hit or two from the end: the view's edges beat red, faster when it's really close
@@ -128,7 +132,7 @@ export class Hud {
     for (const t of questLines(run)) $('quests').append(el('div', 'quest', t));
 
     $('mFloor').innerHTML = `${run.zone.name} ${where}<small>${extra}</small>`;
-    $('mGold').textContent = `${run.gold}G`;
+    $('mGold').innerHTML = purse;
     $('mHpText').textContent = `${Math.max(0, p.hp)} / ${s.maxHp}`;
     $('mHp').firstElementChild.style.width = $('hpbar').firstElementChild.style.width;
     $('mXp').firstElementChild.style.width = $('xpbar').firstElementChild.style.width;

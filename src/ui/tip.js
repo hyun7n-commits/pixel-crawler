@@ -11,7 +11,7 @@ import { josa } from '../core/util.js';
 
 const CHEST = '보물 상자: 열면 유물을 하나 고른다.';
 const PICKUP = {
-  chest: () => CHEST,
+  chest: q => (q.rich ? '금테 상자: 좋은 상자다. 열면 유물을 넷 중 하나 고른다.' : CHEST),
   lockedChest: () => '잠긴 상자: 이 구역의 열쇠로 열면 유물을 넷 중 하나 고른다.',
   bossChest: () => '대장의 보물 상자: 열면 탐험 성공. 골드가 한가득 나오고 가방 속 유물이 모두 자란다.',
   key: () => '작은 열쇠: 이 구역의 잠긴 문이나 상자를 연다.',

@@ -9,6 +9,7 @@
 
 /* global Phaser */
 import { pixEllipse } from './pix.js';
+import { diveInto } from './burrow.js';
 import { TILE, HOME_ZI, wallKey, waterKey, shadeKey, floorKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
 import { chimneyAt } from './village-houses.js';
 import { houseCanvas, pathKey, lampPostCanvas, lotCanvas, treeKey, shrubCanvas, sunRaysCanvas, glintCanvas } from './village-art.js';
@@ -28,11 +29,12 @@ import { decorCanvas, pupCanvas } from './home-art.js';
 import { setEmote, drawEmote } from './emotes.js';
 import { patchNoise, scatterKey, patchKey, footKey, bloomKey, moteKeys, SCATTER_VARIANTS, PATCH_VARIANTS, FOOT_VARIANTS, BLOOM_VARIANTS, FOOT_UP } from './field-decor.js';
 import { propCanvas, critterCanvas } from './village-props.js';
+import { poke, pokeKind, stillInFlowers, flutterTo, petPup } from './village-secrets.js';
 import { growthPropCanvas, stringCanvas, GROWTH_PROPS, STRING_PAD, SAILS_AT, SAIL_FRAMES } from './village-growth-art.js';
 
 const MW = VILLAGE_MAP[0].length, MH = VILLAGE_MAP.length;
 const TOP = 3 * TILE;
-const D = { tiles: 0, deco: 1, house: 2, actors: 3, fx: 4, bubble: 5 };
+export const D = { tiles: 0, deco: 1, house: 2, actors: 3, fx: 4, bubble: 5 };
 const center = v => v * TILE + TILE / 2;
 const foot = v => v * TILE + TILE;
 const hash = (x, y) => {
@@ -86,6 +88,20 @@ export class VillageScene extends Phaser.Scene {
     this.leaves = this.add.particles(0, 0, 'px', {
       emitting: false, lifespan: { min: 450, max: 900 }, speed: { min: 25, max: 70 }, angle: { min: 200, max: 340 },
       scale: { start: 2, end: 0.6 }, gravityY: 110, tint: [0x5aad58, 0x3a8448, 0x7cc45a, 0xacdc86, 0x8a5634],
+    }).setDepth(D.fx);
+    // poking at things (scenes/village-secrets.js): leaves coming down out of the woods, a splash, dust
+    this.fall = this.add.particles(0, 0, 'px', {
+      emitting: false, lifespan: { min: 600, max: 1100 }, speedX: { min: -14, max: 14 }, speedY: { min: 4, max: 22 },
+      scale: { start: 1.6, end: 1 }, gravityY: 28, alpha: { start: 1, end: 0.2 }, tint: [0x5aad58, 0x3a8448, 0x7cc45a, 0xacdc86],
+      emitZone: { type: 'random', source: new Phaser.Geom.Rectangle(-7, -6, 14, 8) },
+    }).setDepth(D.fx);
+    this.drops = this.add.particles(0, 0, 'px', {
+      emitting: false, lifespan: 460, speedY: { min: -60, max: -20 }, speedX: { min: -24, max: 24 }, gravityY: 220,
+      scale: { start: 1.3, end: 0.8 }, tint: [0x9fd4ff, 0x7cc0dc, 0xe6f7ff],
+    }).setDepth(D.fx);
+    this.dust = this.add.particles(0, 0, 'px', {
+      emitting: false, lifespan: { min: 250, max: 450 }, speedY: { min: -26, max: -8 }, speedX: { min: -20, max: 20 }, gravityY: 70,
+      scale: { start: 1.4, end: 0.4 }, tint: [0xb89a6a, 0x8a6a44, 0xd8c09a],
     }).setDepth(D.fx);
     // fireworks over the village once it is all grown
     this.burst = this.add.particles(0, 0, 'px', {
@@ -769,6 +785,11 @@ export class VillageScene extends Phaser.Scene {
     this.showTimers = [];
     this.fireworks = this.fest = false;
     this.cameras.main.panEffect.reset();
+    // 비밀 (scenes/village-secrets.js): what you have been poking at, and what has already happened this visit
+    this.treeImgs = new Map();
+    this.pokes = { key: null, n: 0, t: 0 };
+    this.catOut = this.doorOpen = this.cookieGiven = false;
+    this.pets = this.still = 0;
   }
 
   keep(o) { this.objs.push(o); return o; }
@@ -969,6 +990,8 @@ export class VillageScene extends Phaser.Scene {
   moveLife(time, dt) {
     const s = dt / 1000, view = this.cameras.main.worldView;
     for (const f of this.flutters || []) {
+      // (one that has taken you for a flower comes and circles you: scenes/village-secrets.js)
+      if (flutterTo(this, f, time, s)) continue;
       // a wandering heading, a bob, and wings that beat
       f.a += (Math.sin(time / 900 + f.seed * 3) * 1.6) * s;
       f.x += Math.cos(f.a) * 14 * s; f.y += Math.sin(f.a) * 10 * s + Math.sin(time / 160 + f.seed) * 0.25;
@@ -1051,6 +1074,8 @@ export class VillageScene extends Phaser.Scene {
       const img = stand();
       // one on ground that has just opened comes up in the show
       if (this.isNew(x, y)) this.holdAt(this.cellTrig(x, y), [img]);
+      // the cells under its crown know it, to shake it when you poke them
+      for (const tx of new Set([Math.floor((px - 1) / TILE), x])) for (const ty of [y - 1, y]) this.treeImgs.set(ty * MW + tx, img);
     };
     for (let gy = -PAD.y; gy < MH + PAD.y; gy += 2) for (let gx = -PAD.x + ((gy / 2) & 1); gx < MW + PAD.x; gx += 3) {
       const h = hash(gx + 500, gy + 500), x = gx + (h % 2), y = gy + ((h >> 3) % 2);
@@ -1074,6 +1099,7 @@ export class VillageScene extends Phaser.Scene {
     for (const [x, y] of t.block) this.blocked[y * MW + x] = 1;
   }
   underBigTree(x, y) { const c = BIG_TREE.crown; return x >= c.x0 && x <= c.x1 && y >= c.y0 && y <= c.y1; }
+  treeAt(x, y) { return this.treeImgs.get(y * MW + x); }
 
   // true for a cell of a little 2x2 square of hedge standing on its own in the grass: a tree grows there instead
   grove(x, y) {
@@ -1202,6 +1228,13 @@ export class VillageScene extends Phaser.Scene {
       return;
     }
     if (d) { this.hooks.onHover?.(`${d.name}: ${d.desc}`, true); return; }
+    // the woods, the pond, a barrel, the big tree's door: go up to it and give it a poke
+    if (!target && pokeKind(this, x, y)) {
+      const it = { poke: true, x, y }, near = this.near(it);
+      if (near === 0) poke(this, x, y);
+      else if (near) { this.path = near; this.pending = it; }
+      return;
+    }
     // a building or a thing you cannot walk into: what it is
     if (!target && (this.buildingAt(x, y) || (this.propAt(x, y) && !this.walkable(x, y)))) { this.hooks.onHover?.(this.describe(x, y), true); return; }
     if (target) {
@@ -1227,6 +1260,7 @@ export class VillageScene extends Phaser.Scene {
     this.path = [];
     if (who) { this.meet(who); return; }
     if (this.walkable(x, y) && this.canCut(this.p.x, this.p.y, dx, dy)) this.moveTo(x, y);
+    else poke(this, x, y);
   }
 
   // diagonal steps may not squeeze between two blocked corners
@@ -1289,17 +1323,15 @@ export class VillageScene extends Phaser.Scene {
     if (this.ch(x, y) === '>') { this.path = []; this.time.delayedCall(STEP_MS, () => this.dive()); }
   }
 
-  // Into the burrow out to the fields: a little hop, then down the hole, then the run begins.
+  // Into the burrow out to the fields: a little hop, then down the hole behind its rim (scenes/burrow.js),
+  // then the run begins.
   dive() {
-    const ps = this.ps, k = texScale(ps), y = ps.y;
+    const ps = this.ps, k = texScale(ps), x = ps.x, y = ps.y;
     ps.diving = true;
     this.hooks.onDive?.();
-    this.tweens.add({
-      targets: ps, y: y - 5, duration: 140, ease: 'Quad.out',
-      onComplete: () => this.tweens.add({
-        targets: ps, y: y + 7, scaleX: k * 0.6, scaleY: k * 0.15, duration: 170, ease: 'Quad.in',
-        onComplete: () => this.time.delayedCall(160, () => { ps.diving = false; ps.setScale(k).setY(y); this.hooks.onLeave?.(); }),
-      }),
+    diveInto(this, ps, {
+      x: center(this.p.x), rim: foot(this.p.y) - 2, k,
+      done: () => this.time.delayedCall(160, () => { ps.diving = false; ps.setCrop().setVisible(true).setScale(k).setPosition(x, y); this.hooks.onLeave?.(); }),
     });
   }
 
@@ -1307,6 +1339,7 @@ export class VillageScene extends Phaser.Scene {
   meet(who) {
     this.path = [];
     this.pending = null;
+    if (who.poke) { poke(this, who.x, who.y); return; }
     // your own door: in you go (main.js showHome, scenes/HomeScene.js)
     if (who.home) {
       const ps = this.ps;
@@ -1324,6 +1357,8 @@ export class VillageScene extends Phaser.Scene {
     if (who.x !== this.p.x) this.ps.setFlipX(who.x < this.p.x);
     if (who.pup) {
       who.s.setFlipX(this.p.x > who.x);
+      // 비밀: five pats in a row and it does a trick
+      if (petPup(this, who)) { this.hooks.onPet?.(); return; }
       this.tweens.add({ targets: who.s, hop: 5, duration: 110, yoyo: true, repeat: 1, ease: 'Quad.out' });
       this.say(who.s, Math.random() < 0.5 ? '멍!' : '♥', 1100);
       this.ps.expr = 'sparkle';
@@ -1392,6 +1427,7 @@ export class VillageScene extends Phaser.Scene {
   // ---------- every frame ----------
   update(time, delta) {
     if (!this.ps) return;
+    stillInFlowers(this, time, Math.min(delta || 16, 50));
     this.moveLife(time, Math.min(delta || 16, 50));
     // the big tree's crown goes see-through while you are under it
     if (this.bigTree) {
@@ -1472,7 +1508,7 @@ export class VillageScene extends Phaser.Scene {
     }
     // the puppy pads round its yard, and trots over when you come by
     const pup = this.pup;
-    if (pup && time > pup.next && pup !== this.pending) {
+    if (pup && time > pup.next && pup !== this.pending && !pup.busy) {
       pup.next = time + 900 + Math.random() * 1800;
       const near = Math.max(Math.abs(pup.x - this.p.x), Math.abs(pup.y - this.p.y));
       const yard = (x, y) => x >= HOME.x - 5 && x <= HOME.x + HOME.w + 4 && y >= HOME.y - 1 && y <= HOME.y + HOME.h + 1;
@@ -1517,7 +1553,9 @@ export class VillageScene extends Phaser.Scene {
     all.forEach((s, i) => {
       const breathe = s === ps && walking ? 1 : 1 + 0.035 * Math.sin(time / 420 + i * 1.7);
       const k = texScale(s);
-      if (!s.diving) s.setScale(k * (s.sx || 1), k * breathe * (s.sy || 1)).setOrigin(0.5, 1 + (s.hop || 0) / TILE);
+      // down the burrow or in at the door: no shadow left on the grass
+      if (s.diving) return;
+      s.setScale(k * (s.sx || 1), k * breathe * (s.sy || 1)).setOrigin(0.5, 1 + (s.hop || 0) / TILE);
       g.fillStyle(0x000000, 0.28);
       pixEllipse(g, s.x, s.y - 1.5, 11, 4);
     });

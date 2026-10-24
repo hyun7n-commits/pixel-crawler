@@ -58,8 +58,12 @@ export const stageKit = stage => ({
 export const enemyScale = floor => 1 + 0.15 * (localOf(floor) - 1) + STAGE_UP * stageOf(floor) + foeUp(stageOf(floor));
 export const ATK_SHARE = 1.6;
 export const POTION_CHANCE = 0.35;  // a potion lying somewhere on a floor (scarce: healing is precious)
-// 깊은 곳: each floor down past the boss, critters this much stronger again
-export const DEEP_UP = +(globalThis.process?.env?.DEEP_UP ?? 0.25);
+// 깊은 곳 (v0.28: it was a farm): each floor down past the boss, critters this many times as strong as
+// on the floor above (it compounds, so however strong you are there is a floor that is too much), and
+// the gold this many times as much. The gold picked up down there comes home only by a burrow's
+// 돌아간다; fall, or give up from the menu, and it stays down there.
+export const DEEP_UP = +(globalThis.process?.env?.DEEP_UP ?? 1.4);
+export const DEEP_GOLD = +(globalThis.process?.env?.DEEP_GOLD ?? 1.2);
 export const bossScale = floor => 1 + STAGE_UP * stageOf(floor) + foeUp(stageOf(floor));
 // 우두머리: the crowned mid-boss that carries a caged friend's key (data/stages.js): this many times a
 // critter of its kind on that field, in health and in attack
@@ -72,6 +76,13 @@ export const GOO_TURNS = 14;
 // v0.26 들판 도구 (data/items.js): a meadow tool lies somewhere on a field this often (one of the ones
 // opened so far), and a second one now and then
 export const TOOL_CHANCE = 0.6, TOOL_MORE = 0.2;
+// 비밀 (v0.28, core/run.js hideSecrets): how often a field has a nook behind a wall, a baby asleep in a
+// bush (and how often what it leaves is a star candy); rests in a row before the doze; how big a pond
+// the spirit lives in, and what the golden tool is worth (x the stage's gold scale)
+export const NOOK_CHANCE = 0.3, BABY_CHANCE = 0.4, BABY_CANDY = 0.12, DREAM_RESTS = 12, SPIRIT_POND = 6, SPIRIT_GOLD = 30;
+// zones whose walls are rock (a knock, not a rustle); zones whose rooms have bushes a baby can sleep in
+export const ROCKY = new Set(['rock', 'cave', 'snow', 'volcano', 'ruins', 'sea']);
+export const BABY_ZONES = new Set(['meadow', 'forest', 'marsh', 'garden']);
 export const pineDamage = floor => 3 + Math.floor(gfl(floor) / 3);
 export const BELL_TURNS = 4, BELL_RANGE = 7, PINE_NOISE = 3;
 // 도토리 다람쥐 + 솔방울: turns it spends running off with the pinecone and burying it (the last two digging)

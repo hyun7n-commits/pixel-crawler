@@ -3,7 +3,7 @@
 // the tray: what is put away, to take out and put somewhere, or a place to put away the piece in hand.
 
 import { $, el, button, icon } from './dom.js';
-import { roomOf, homePerks, owned, placed, furniture, plantStage, COMFORT_STEP, COMFORT_MAX } from '../data/home.js';
+import { roomOf, homePerks, owned, placed, furniture, plantStage, heartOf, COMFORT_STEP, COMFORT_MAX } from '../data/home.js';
 import { ENEMIES } from '../data/enemies.js';
 import { furnitureCanvas } from '../scenes/home-interior-art.js';
 
@@ -36,7 +36,7 @@ export function renderHomeHud(meta, { editing = false, held = null, onPick, onAw
   const at = placed(meta), away = owned(meta).filter(id => !at[id]);
   for (const id of away) {
     const f = furniture(id), b = button('tray-item', null, () => onPick?.(id));
-    b.append(picture(meta, id, f), el('span', null, f.name), el('b', null, `♥${f.heart}`));
+    b.append(picture(meta, id, f), el('span', null, f.name), el('b', null, `♥${heartOf(meta, id)}`));
     tray.append(b);
   }
   tray.append(el('p', 'tray-note', away.length ? '눌러서 꺼낸 다음 방의 빈 곳을 누르면 놓는다. 방의 가구를 누르면 들어서 옮긴다.'

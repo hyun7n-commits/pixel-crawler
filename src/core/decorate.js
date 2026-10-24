@@ -123,7 +123,7 @@ function placeOre(map, r, keep, start, floor) {
   return true;
 }
 
-// Returns { has, themes }: what this floor contains (for overheard hints) and each room's theme.
+// Returns { has, themes }: what this floor contains and each room's theme.
 export function decorate(map, rooms, { start, stairs, floor = 1, style = 'meadow' }) {
   const wet = style === 'marsh' ? 0.45 : 0.25;
   const has = new Set(), themes = [];

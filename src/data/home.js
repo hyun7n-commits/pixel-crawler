@@ -6,6 +6,7 @@
 
 import { ENEMIES } from './enemies.js';
 import { CHARACTERS } from './characters.js';
+import { secretsFound } from './secrets.js';
 
 export const DECOR = [
   { id: 'flowers', name: '꽃밭', cost: 800, at: [[35, 21], [36, 21]], desc: '문 옆에 알록달록 꽃을 심는다' },
@@ -75,6 +76,8 @@ export const FURNITURE = {
   clock:    { name: '뻐꾸기 시계', w: 1, wall: true, heart: 2, cost: 1200, desc: '가끔 뻐꾸기가 튀어나온다' },
   garland:  { name: '꽃 줄', w: 2, wall: true, heart: 2, cost: 500, desc: '말린 꽃을 엮어 걸었다' },
   map:      { name: '들판 지도', w: 2, wall: true, heart: 3, cost: 2400, desc: '가 본 들판에 별이 붙는다' },
+  // not made to order: it turns up with the first secret you find (data/secrets.js), and fills up
+  secretbox: { name: '비밀 상자', w: 1, h: 1, heart: 1, cost: 0, act: 'secrets', desc: '찾아낸 비밀마다 기념품을 하나씩 넣어 둔다' },
 };
 // the order the carpenter shows them in
 export const CATALOG = ['table', 'plant', 'rug', 'lamp', 'garland', 'petbed', 'painting', 'clock', 'shelf', 'wardrobe', 'stove', 'map', 'tub', 'sofa', 'tank', 'musicbox', 'cloudbed'];
@@ -88,7 +91,9 @@ export function furniture(id) {
 
 // the plant grows a stage with every trip after it went in: a sprout, leaves, a bud, then flowers
 export const plantStage = m => { const n = m.house?.plant || 0; return n >= 6 ? 3 : n >= 3 ? 2 : n >= 1 ? 1 : 0; };
-const heartOf = (m, id) => (id === 'plant' ? 1 + plantStage(m) : furniture(id)?.heart || 0);
+// the 비밀 상자 gets cosier with every other secret in it
+export const boxHeart = m => 1 + Math.floor(secretsFound(m) / 2);
+export const heartOf = (m, id) => (id === 'plant' ? 1 + plantStage(m) : id === 'secretbox' ? boxHeart(m) : furniture(id)?.heart || 0);
 
 export const STARTER = { bed: [0, 0], stool: [5, 1] };
 
@@ -131,15 +136,24 @@ export function rollVisitor(m, P, hero) {
 }
 
 // ---------- arranging ----------
-// what is taken where: floor cells under furniture, under rugs, and the wall's slots (`skip`: leave
-// one piece out, the one being moved)
+// A tall piece standing against the back wall rises in front of it: how many pixels its picture goes up
+// past its back edge (scenes/home-interior-art.js), and how high off the floor each wall piece hangs at
+// its lowest. A picture never goes up where it would be mostly hidden behind a tall piece, nor a tall
+// piece in under one or in front of a window (a few pixels in front of its bottom edge is fine).
+const RISE = { bed: 8, cloudbed: 10, table: 6, plant: 6, lamp: 14, stove: 18, shelf: 20, tub: 8, sofa: 8, wardrobe: 20, tank: 12, secretbox: 4, musicbox: 6 };
+const HANG = { painting: 8, clock: 8, garland: 14, map: 4, window: 10 };   // (the clock's weights may dangle behind a sofa)
+const hides = (floorId, wallId) => (RISE[floorId] || 0) - (HANG[wallId] ?? 8) > 4;
+// what is taken where: floor cells under furniture, under rugs, and the wall's slots, and which piece
+// stands against the wall (`top`) or hangs on it (`hung`) in each column (`skip`: leave one piece out,
+// the one being moved)
 export function taken(m, skip) {
-  const out = { floor: new Set(), rug: new Set(), wall: new Set() };
+  const out = { floor: new Set(), rug: new Set(), wall: new Set(), top: new Map(), hung: new Map() };
   for (const [id, [x, y]] of Object.entries(placed(m))) {
     const f = furniture(id);
     if (!f || id === skip) continue;
-    if (f.wall) { for (let i = 0; i < f.w; i++) out.wall.add(x + i); continue; }
+    if (f.wall) { for (let i = 0; i < f.w; i++) { out.wall.add(x + i); out.hung.set(x + i, id); } continue; }
     for (let j = 0; j < f.h; j++) for (let i = 0; i < f.w; i++) (f.rug ? out.rug : out.floor).add(`${x + i},${y + j}`);
+    if (y === 0 && !f.rug) for (let i = 0; i < f.w; i++) out.top.set(x + i, id);
   }
   return out;
 }
@@ -150,8 +164,12 @@ export function fits(m, id, x, y, block = null, t = taken(m, id)) {
   if (f.wall) {
     if (y !== -1 || x < 0 || x + f.w > room.w) return false;
     const win = windowSlots(room);
-    for (let i = 0; i < f.w; i++) if (t.wall.has(x + i) || win.includes(x + i)) return false;
+    for (let i = 0; i < f.w; i++) if (t.wall.has(x + i) || win.includes(x + i) || (t.top.has(x + i) && hides(t.top.get(x + i), id))) return false;
     return true;
+  }
+  if (y === 0 && !f.rug) {
+    const win = windowSlots(room);
+    for (let i = 0; i < f.w; i++) if ((t.hung.has(x + i) && hides(id, t.hung.get(x + i))) || (win.includes(x + i) && hides(id, 'window'))) return false;
   }
   if (x < 0 || y < 0 || x + f.w > room.w || y + f.h > room.h) return false;
   for (let j = 0; j < f.h; j++) for (let i = 0; i < f.w; i++) {

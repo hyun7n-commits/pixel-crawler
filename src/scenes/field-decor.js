@@ -136,11 +136,15 @@ function mix(a, b, t) {
   return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
 }
 
-function stamp(g, z, name, x0, y0, flip = false) {
+// At night the little pictures sink part of the way into what they lie on (v0.28), so a field stays
+// full of things but they read as the ground, the way Shattered Pixel Dungeon's floors do, and only the
+// outlined things (what you can pick up, what can hurt you) stand out. The village by day keeps them bright.
+const RECEDE = 0.4;
+function stamp(g, z, name, x0, y0, flip = false, into = z.floor) {
   const rows = STAMPS[name], G = greens(z), w = rows[0].length, P = z.day ? DAY : C;
   rows.forEach((row, j) => [...row].forEach((ch, i) => {
     if (ch === '.') return;
-    g.fillStyle = G[ch] || P[ch];
+    g.fillStyle = G[ch] || (z.day ? P[ch] : mix(P[ch], into, RECEDE));
     g.fillRect(x0 + (flip ? w - 1 - i : i), y0 + j, 1, 1);
   }));
 }
@@ -269,7 +273,7 @@ function bloomCanvas(z, zi, v) {
   const [c, g] = canvas(TILE, TILE), r = rng(zi * 6151 + v * 523 + 29), list = BLOOM[z.style];
   for (let k = 0, n = 1 + Math.floor(r() * 2.5); k < n; k++) {
     const name = list[Math.floor(r() * list.length)], [w, h] = size(name);
-    stamp(g, z, name, Math.floor(r() * (TILE - w)), Math.floor(r() * (TILE - h)), r() < 0.5);
+    stamp(g, z, name, Math.floor(r() * (TILE - w)), Math.floor(r() * (TILE - h)), r() < 0.5, z.wallTop);
   }
   return c;
 }
