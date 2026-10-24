@@ -16,6 +16,7 @@ import { roomOf, doorCell, furniture, placed, plantStage, VISIT_LINES, fits, tak
 import { bookCount, BOOK_TOTAL } from '../data/book.js';
 import { roomCanvas, roomSize, WALL_ROWS, furnitureCanvas, WALL_Y, plushCushion, FRAMES, roofCanvas, yardCanvas, roofAt, yardAt } from './home-interior-art.js';
 import { pupCanvas } from './home-art.js';
+import { placeHomeQuirks, homeQuirkTap, homeQuirkStep, homeQuirkMeet, homeQuirkTick } from './home-quirks.js';
 
 const D = { room: 0, rug: 0.5, wall: 1, actors: 3, dim: 3.9, fx: 4, ghost: 4.5, bubble: 5 };
 const STEP_MS = 140;
@@ -142,6 +143,7 @@ export class HomeScene extends Phaser.Scene {
     // a word the first time in, and when someone is waiting
     if (this.visitor) this.time.delayedCall(500, () => this.say(this.visitor.s, `왔어? ${CHARACTERS[this.p.id].name}!`, 1800));
     else if (first) this.time.delayedCall(400, () => this.say(this.ps, '여기가 내 집…!', 1800));
+    placeHomeQuirks(this);
   }
 
   // the lamp switched off (only while there is a lamp in the room to switch on again)
@@ -290,6 +292,7 @@ export class HomeScene extends Phaser.Scene {
 
   tap(x, y) {
     if (this.busy) { this.wakeUp(); return; }
+    if (homeQuirkTap(this, x, y)) return;
     if (this.editing) { this.editTap(x, y); return; }
     if (this.sitting) this.standUp();
     // the door (or below it): go out
@@ -322,6 +325,7 @@ export class HomeScene extends Phaser.Scene {
     this.nextStep = this.time.now + STEP_MS;
     if (this.sitting) { this.standUp(); return; }
     const x = this.p.x + dx, y = this.p.y + dy;
+    if (homeQuirkStep(this, x, y)) return;
     this.path = [];
     if (this.p.x === this.door.x && this.p.y === this.door.y && dy > 0 && !dx) { this.goOut(); return; }
     const it = this.inRoom(x, y) && this.occ.get(key(x, y));
@@ -388,6 +392,7 @@ export class HomeScene extends Phaser.Scene {
     this.pending = null;
     const f = it.f, c = it.x + (f.w - 1) / 2;
     if (c !== this.p.x) this.ps.setFlipX(c < this.p.x);
+    if (homeQuirkMeet(this, it)) return;
     if (it.visitor) { this.talkVisitor(); return; }
     const top = { x: it.img.x, y: it.img.y - it.img.displayHeight };
     switch (f.act) {
@@ -904,5 +909,6 @@ export class HomeScene extends Phaser.Scene {
       b.setAlpha(b.until - time < 250 ? (b.until - time) / 250 : 1);
       return true;
     });
+    homeQuirkTick(this, time, delta);
   }
 }
