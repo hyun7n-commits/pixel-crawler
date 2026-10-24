@@ -17,6 +17,19 @@ export const WEAR = {
   stripe: { name: '줄무늬 목도리', slot: 'neck', cost: 4000, art: ['kbwbwbwbwk', '.kwbk.....', '.kbwk.....', '..kk......'] },
   lei:    { name: '꽃목걸이', slot: 'neck', cost: 7000, art: ['kezqezqezk', '.k.k.k.k..'] },
   rainbow: { name: '무지개 목도리', slot: 'neck', cost: 20000, art: ['kroygbprok', '..kpbk....', '..kgyk....', '...kk.....'] },
+  // v0.30: more of them, coming into the shop one at a time (data/shop.js)
+  sprout: { name: '새싹', slot: 'head', cost: 500, art: ['kk.kk', 'kgkgk', '.kGk.', '..k..'] },
+  cherry: { name: '체리 핀', slot: 'head', cost: 700, art: ['..k..', '.kGk.', 'krkrk', 'kRkRk', '.k.k.'] },
+  clover: { name: '네잎클로버 핀', slot: 'head', cost: 800, art: ['.k.k.', 'kgkgk', '.kGk.', 'kgkgk', '.k.k.'] },
+  acorn:  { name: '도토리 모자', slot: 'head', cost: 1000, art: ['..k..', '.kNk.', 'kNNNk', 'knnnk', '.kkk.'] },
+  heart:  { name: '하트 핀', slot: 'head', cost: 1400, art: ['.k.k.', 'kqkqk', 'kqeqk', '.kek.', '..k..'] },
+  bluebow: { name: '파란 리본', slot: 'head', cost: 1800, art: ['kk.kk', 'kbkbk', 'kBkBk', 'kk.kk'] },
+  moon:   { name: '달 핀', slot: 'head', cost: 3000, art: ['..kk.', '.kzyk', 'kzk..', 'kzk..', '.kzyk', '..kk.'] },
+  shroom: { name: '버섯 모자', slot: 'head', cost: 5000, art: ['.kkk.', 'krwrk', 'krrrk', '.kwk.', '.kkk.'] },
+  bandana: { name: '초록 손수건', slot: 'neck', cost: 900, art: ['kGgGgGgGgk', '...kgGk...', '....kk....'] },
+  bib:    { name: '턱받이', slot: 'neck', cost: 1300, art: ['kwwwwwwwwk', '.kwqwqwk..', '..kwwwk...', '...kkk....'] },
+  tie:    { name: '넥타이', slot: 'neck', cost: 3500, art: ['kwwwwwwwwk', '....kbk...', '....kBk...', '.....k....'] },
+  pearl:  { name: '진주 목걸이', slot: 'neck', cost: 9000, art: ['kwlwlwlwlk', '....kak...', '.....k....'] },
 };
 export const SLOTS = ['head', 'neck'];
 

@@ -27,6 +27,7 @@ import { VILLAGE_GROUND } from '../data/enemies.js';
 import { DECOR, hasDecor, LETTERS, houseLevel } from '../data/home.js';
 import { decorCanvas, pupCanvas } from './home-art.js';
 import { setEmote, drawEmote } from './emotes.js';
+import { newStock } from '../data/shop.js';
 import { patchNoise, scatterKey, patchKey, footKey, bloomKey, moteKeys, SCATTER_VARIANTS, PATCH_VARIANTS, FOOT_VARIANTS, BLOOM_VARIANTS, FOOT_UP } from './field-decor.js';
 import { propCanvas, critterCanvas } from './village-props.js';
 import { poke, pokeKind, stillInFlowers, flutterTo, petPup } from './village-secrets.js';
@@ -1604,6 +1605,9 @@ export class VillageScene extends Phaser.Scene {
       if (time > this.mailNext) { this.mailNext = time + 2400; setEmote(this.mailMark, '!', time, 1600); }
       drawEmote(mk, this.mailMark, center(this.mailbox.x), foot(this.mailbox.y) - 21, time);
     }
+    // the shop has got things in that you have not had a look at yet: a '!' over the shopkeeper now and then
+    const keeper = time > (this.shopNext || 0) && this.folk.find(f => f.id === 'shop');
+    if (keeper) { this.shopNext = time + 2600; if (newStock(this.meta).length) setEmote(keeper.s, '!', time, 1700); }
     // a friend waiting inside with a present (a heart), or a house you have not been into yet (a '!'),
     // over your door now and then
     const visit = this.meta.house?.visit?.gift > 0;

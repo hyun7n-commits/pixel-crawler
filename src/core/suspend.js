@@ -7,6 +7,7 @@
 import { Run } from './run.js';
 import { ENEMIES } from '../data/enemies.js';
 import { CHARACTERS } from '../data/characters.js';
+import { petLevel, petPower } from '../data/pets.js';
 
 const KEY = 'pixel-crawler-run-v3';   // v3: ten stages (v0.23), so a trip saved before that is not picked up
 const FORMAT = 1;   // bump when a saved run from an older build could no longer be read
@@ -80,6 +81,8 @@ export function resume(meta) {
     Object.assign(run, { meta, listeners: [], char: CHARACTERS[run.charId] });
     // a trip left off before v0.29 had one request of the day
     if (!run.requests) { run.requests = run.request ? [run.request] : []; delete run.request; }
+    // ...and before v0.30 a pet without a level
+    if (!run.petFx) { run.petLv = run.pet ? petLevel(meta, run.pet) : 0; run.petFx = run.pet ? petPower(run.pet, run.petLv) : {}; run.petFields = 0; }
     const link = s => { const id = s.boss?.$boss; if (id !== undefined) s.boss = s.enemies.find(e => e.id === id) || null; };
     link(run);
     for (const f of Object.values(run.floors || {})) link(f);

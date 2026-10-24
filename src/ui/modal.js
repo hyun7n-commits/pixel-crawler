@@ -8,6 +8,9 @@ import { DISCOVERIES } from '../data/terrain.js';
 import { STALL } from '../data/npcs.js';
 import { ENEMIES, ZONES } from '../data/enemies.js';
 import { CHARACTERS } from '../data/characters.js';
+import { goodInfo } from '../data/shop.js';
+import { PETS, petNote } from '../data/pets.js';
+import { bookPic } from './book.js';
 
 // the level a relic grows to, MAX when that is its top (as the bag shows it)
 const lvTo = (id, n) => (n >= maxLevelOf(id) ? 'MAX' : `Lv${n}`);
@@ -162,17 +165,35 @@ function openedBox(opened) {
   return box;
 }
 
-// Back in the village after an update: what opened while you were away (data/unlocks.js sinceUpdate)
-export function showUpdateNews(opened) {
+// 상점에 새 물건 (data/shop.js): what came into the shop at the end of this trip
+function stockBox(goods) {
+  const box = el('div', 'opened stocked');
+  box.append(el('h3', null, '상점에 새 물건이 들어왔다'));
+  for (const g of goods) {
+    const info = goodInfo(g.id), row = el('div', 'open-row');
+    row.append(bookPic(info.pic, 32));
+    const t = el('div');
+    t.append(el('b', null, info.name), el('span', null, info.line));
+    row.append(t);
+    box.append(row);
+  }
+  return box;
+}
+
+// Back in the village after an update: what opened while you were away (data/unlocks.js sinceUpdate),
+// and what the shop got in (data/shop.js stockSince)
+export function showUpdateNews(opened, stocked = []) {
   openSheet(sh => {
-    sh.append(el('h2', null, '그새 들판이 달라졌다'), el('p', null, '다음 탐험부터 나온다.'), openedBox(opened));
+    sh.append(el('h2', null, '그새 마을과 들판이 달라졌다'));
+    if (opened.length) sh.append(el('p', null, '다음 탐험부터 나온다.'), openedBox(opened));
+    if (stocked.length) sh.append(stockBox(stocked));
     const foot = el('div', 'sheet-foot');
     foot.append(button('btn primary', '좋아', closeModal));
     sh.append(foot);
   });
 }
 
-export function showSummary({ won, run, rescued = [], news = {}, opened = [], onClose }) {
+export function showSummary({ won, run, rescued = [], news = {}, opened = [], stocked = [], pet = null, onClose }) {
   openSheet(sh => {
     const zone = run.zone.name, boss = run.boss?.d?.name || ENEMIES[run.zone.boss].name;
     sh.append(el('h2', null, won ? `${zone} ${run.loop}회차 돌파!` : '쓰러졌다'));
@@ -197,6 +218,13 @@ export function showSummary({ won, run, rescued = [], news = {}, opened = [], on
     }
     // 새로 열림: what this trip opened up (data/unlocks.js), a line or two each time
     if (opened.length) sh.append(openedBox(opened));
+    if (stocked.length) sh.append(stockBox(stocked));
+    // the pet that came along grew
+    if (pet?.up) {
+      const row = el('div', 'unlock-note req-done pet-up');
+      row.append(icon(PETS[pet.id].sprite), el('span', null, `${josa(PETS[pet.id].name, '이', '가')} Lv${pet.lv}이 됐다! ${petNote(pet.id, pet.lv)}`));
+      sh.append(row);
+    }
     for (const q of run.requests || []) sh.append(el('div', 'unlock-note' + (q.done ? ' req-done' : ''), q.done ? `조합 의뢰 완료: ${q.text} · 일당 ${q.pay}G를 받았다` : `조합 의뢰 미완료: ${q.text} (${q.got}/${q.n})`));
     if (run.newRecipes.length) {
       const made = run.newRecipes.map(k => k.split(':')[0]);

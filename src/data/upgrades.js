@@ -39,12 +39,26 @@ export function forgeStock(meta) {
   return stock.sort(inOrder);
 }
 
+// v0.30: more of them, and none of them on sale at first: each level comes into the shop on its own as
+// its shelves fill up (data/shop.js), so the shop grows from two things to a whole wall of them.
+// `pic`: its little picture in the shop (as the 비밀 도감 draws them, ui/book.js bookPic); `open`: shown
+// once that unlock has opened.
 export const UPGRADES = {
-  hp:     { name: '튼튼한 몸',   eff: '시작 최대 체력 +3',                 costs: [150, 400, 900, 1800, 3200] },
-  atk:    { name: '날카로운 손', eff: '시작 공격력 +1',                    costs: [800, 3000] },
-  pot:    { name: '비상 물약',   eff: '체력 물약 1개 들고 시작',           costs: [900] },
-  greed:  { name: '욕심쟁이',    eff: '얻는 골드 +10%',                    costs: [200, 500, 1000, 1800, 3000] },
-  reroll: { name: '다시 뽑기',   eff: '판마다 유물 선택지 다시 뽑기 +1회', costs: [400, 1200, 2800] },
+  hp:     { name: '튼튼한 몸',   eff: '시작 최대 체력 +3',                 costs: [150, 400, 900, 1800, 3200], pic: { spr: 'heart' } },
+  greed:  { name: '욕심쟁이',    eff: '얻는 골드 +10%',                    costs: [200, 500, 1000, 1800, 3000], pic: { spr: 'coin' } },
+  pot:    { name: '비상 물약',   eff: '체력 물약 1개 들고 시작',           costs: [900], pic: { spr: 'potion' } },
+  regen:  { name: '숨 고르기',   eff: '새 들판에 들어설 때마다 체력 +2',    costs: [600, 1600, 3200], pic: { spr: 'moss' } },
+  xp:     { name: '배우는 기쁨', eff: '얻는 경험치 +10%',                  costs: [500, 1400, 3000], pic: { find: ['star', 'y'] } },
+  reroll: { name: '다시 뽑기',   eff: '판마다 유물 선택지 다시 뽑기 +1회', costs: [400, 1200, 2800], pic: { find: ['dice', 'w'] } },
+  sneak:  { name: '살금살금',    eff: '기습 공격 피해 +25%',               costs: [700, 2400], pic: { spr: 'boots' } },
+  herb:   { name: '약초 지식',   eff: '체력 물약 회복량 +10%',             costs: [600, 1800], pic: { spr: 'heal' } },
+  atk:    { name: '날카로운 손', eff: '시작 공격력 +1',                    costs: [800, 3000], pic: { spr: 'blade' } },
+  armor:  { name: '두꺼운 작업복', eff: '방어 +1',                         costs: [1500, 5000], pic: { spr: 'shield' } },
+  charm:  { name: '네잎클로버',  eff: '별난 친구를 더 자주 만난다',        costs: [900, 2500], pic: { find: ['clover', 'g'] } },
+  shovel: { name: '꼬마 삽',     eff: '흙 속 반짝이는 곳이 더 자주 보인다', costs: [800, 2200], pic: { find: ['shovel', 'Ln'] } },
+  sight:  { name: '밝은 눈',     eff: '시야 +1',                           costs: [2500], pic: { spr: 'lantern' } },
   // v0.26: shown once the first meadow tool has opened (`open`)
-  tool:   { name: '도구 주머니', eff: '들판 도구 1개 들고 시작',           costs: [700, 2200], open: 'pinecone' },
+  tool:   { name: '도구 주머니', eff: '들판 도구 1개 들고 시작',           costs: [700, 2200], open: 'pinecone', pic: { spr: 'toolpouch' } },
+  map:    { name: '지도 한 장',  eff: '지도 1장 들고 시작',                costs: [1200], open: 'map', pic: { spr: 'map' } },
+  bomb:   { name: '폭탄 하나 더', eff: '폭탄 1개 더 들고 시작',            costs: [700], open: 'bomb', pic: { spr: 'bomb' } },
 };

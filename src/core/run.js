@@ -5,7 +5,9 @@
 import * as B from '../data/balance.js';
 import { RELICS, RECIPES, MAX_LEVEL, MAX_SLOTS, DISCOVERY_GOLD, tierOf, maxLevelOf, recipeKey, recipesWith, fusedId, isFused, fusedParts, relicName } from '../data/relics.js';
 import { CHARACTERS } from '../data/characters.js';
-import { PETS, peckGold, PECKS_PER_FIELD } from '../data/pets.js';
+import { PETS, peckGold, petLevel, petPower, feedPet, PET_XP_FIELD, PET_XP_WIN } from '../data/pets.js';
+import { arriveStock, STOCK_PER_TRIP } from '../data/shop.js';
+import { DISHES, MYSTERY } from '../data/life.js';
 import { ENEMIES, ZONES } from '../data/enemies.js';
 import { ITEMS, TOOLS, ZONE_TOOL } from '../data/items.js';
 import { ORES } from '../data/ores.js';
@@ -87,8 +89,15 @@ export class Run {
     if (!CHARACTERS[this.friend]) this.friend = null;
     this.cageFloor = this.friend ? f0 + rint(1, 2) : 0;
     this.rescued = [];
-    // the pet that comes along (data/pets.js)
+    // the pet that comes along (data/pets.js), at the level it has grown to, and what it does at that level
     this.pet = meta.pet && meta.pets?.[meta.pet] && PETS[meta.pet] ? meta.pet : null;
+    this.petLv = this.pet ? petLevel(meta, this.pet) : 0;
+    this.petFx = this.pet ? petPower(this.pet, this.petLv) : {};
+    this.petFields = 0;
+    // a dish eaten before setting off (data/life.js): its help lasts the trip (정체불명 스튜: decided now)
+    const dish = meta.meal && DISHES[meta.meal];
+    this.meal = dish ? { id: dish.id, name: dish.name, buff: dish.buff.mystery ? pick(MYSTERY) : dish.buff } : null;
+    meta.meal = null;
     this.stall = [];
     this.requests = takeRequests(meta, stage, loop);   // the guild's requests taken off the board, up to three (data/requests.js)
     this.startStats = JSON.parse(JSON.stringify(meta.stats));
@@ -99,7 +108,9 @@ export class Run {
       relics: { ...this.char.start },
       // 햄스터's cheek pouch packs more potions; 펭귄 sets off with a bag of bombs
       items: {
-        potion: this.dare('nopotion') ? 0 : meta.up.pot + (this.char.pouch || 0), bomb: this.char.bombs || (isOpen(meta, 'bomb') ? 1 : 0), map: 0,
+        potion: this.dare('nopotion') ? 0 : meta.up.pot + (this.char.pouch || 0),
+        bomb: (this.char.bombs || (isOpen(meta, 'bomb') ? 1 : 0)) + (isOpen(meta, 'bomb') ? meta.up.bomb || 0 : 0),
+        map: isOpen(meta, 'map') ? meta.up.map || 0 : 0,
         ...Object.fromEntries(TOOLS.map(id => [id, 0])),
       },
       // 마법사's wand: sparks left, and turns since the last one came back
@@ -178,29 +189,30 @@ export class Run {
 
   // ---------- derived stats ----------
   stat() {
-    const L = this.levels(), ch = this.char, up = this.meta.up, pet = PETS[this.pet] || {};
+    const L = this.levels(), ch = this.char, up = this.meta.up, pet = this.petFx || {}, meal = this.meal?.buff || {};
     const lv = id => L[id] || 0, on = id => lv(id) > 0;
     // `f(id, base, per)`: nothing without the relic, else base + per × level
     const f = (id, base, per) => (on(id) ? base + per * lv(id) : 0);
     const best = (...xs) => Math.max(...xs);
     const wet = ch.swim && this.inWater();
     return {
-      atk: ch.atk + up.atk + (this.p.kitAtk || 0) + (wet ? 3 : 0) + 2 * lv('blade') + f('flamesword', 4, 2) + 2 * lv('volcano') + (on('minecrown') ? 5 : 0) +
+      atk: ch.atk + up.atk + (meal.atk || 0) + (this.p.kitAtk || 0) + (wet ? 3 : 0) + 2 * lv('blade') + f('flamesword', 4, 2) + 2 * lv('volcano') + (on('minecrown') ? 5 : 0) +
         f('bloodblade', 3, 1) + f('whirl', 4, 1) + f('dagger', 2, 1) + lv('giantfist') + 2 * lv('bloodmoon') + lv('stormlord') + lv('whirlwind') + lv('grumpclub') + (on('godhammer') ? 5 : 0),
-      def: ch.def + lv('shield') + f('fortress', 2, 1) + lv('undying') + lv('ironheart') + f('embermail', 1, 1) + lv('guardian'),
-      maxHp: ch.hp + up.hp * B.UP_HP + (this.p.kitHp || 0) + (this.p.homeHp || 0) + 8 * lv('heart') + f('bloodcrown', 15, 5) + 10 * lv('lifetree') + (on('eternity') ? 30 : 0) +
+      def: ch.def + (up.armor || 0) + (meal.def || 0) + lv('shield') + f('fortress', 2, 1) + lv('undying') + lv('ironheart') + f('embermail', 1, 1) + lv('guardian'),
+      maxHp: ch.hp + up.hp * B.UP_HP + (meal.hp || 0) + (this.p.kitHp || 0) + (this.p.homeHp || 0) + 8 * lv('heart') + f('bloodcrown', 15, 5) + 10 * lv('lifetree') + (on('eternity') ? 30 : 0) +
         f('ironheart', 10, 5) + f('pillow', 16, 4) + f('giantfist', 12, 4) + 10 * lv('guardian') + (on('bloodking') ? 20 : 0) +
         (this.p.lvl - 1) * B.HP_PER_LEVEL + (this.p.honey || 0),
       goldMult: (1 + 0.4 * lv('coin') + f('goldbolt', 0.75, 0.25) + 0.25 * lv('goldstorm') + (on('minecrown') ? 0.5 : 0) + 0.1 * up.greed +
-        f('luckycharm', 1, 0.25) + f('goldfang', 0.8, 0.2) + 0.25 * lv('fortune') + (on('dawnstar') ? 0.5 : 0) + (pet.greed || 0)) * this.goldBonus,
+        f('luckycharm', 1, 0.25) + f('goldfang', 0.8, 0.2) + 0.25 * lv('fortune') + (on('dawnstar') ? 0.5 : 0) + (pet.greed || 0) + (meal.gold || 0)) * this.goldBonus,
       // never more than 60%: something always gets through
-      dodge: Math.min(0.6, (ch.dodge || 0) + (wet ? 0.25 : 0) + 0.08 * lv('cloak') + f('shadow', 0.15, 0.05) + 0.05 * lv('phantom') +
+      dodge: Math.min(0.6, (ch.dodge || 0) + (wet ? 0.25 : 0) + (pet.swim && this.inWater() ? pet.swim : 0) + 0.08 * lv('cloak') + f('shadow', 0.15, 0.05) + 0.05 * lv('phantom') +
         f('luckycharm', 0.2, 0.05) + f('spikecloak', 0.2, 0.05) + 0.05 * lv('fortune') + (on('dawnstar') ? 0.1 : 0)),
       // damage multiplier on a surprise attack: the best of the sneaky relics, plus what legends add on top
       sneak: best(1.5 + 0.25 * lv('boots'), f('shadow', 2.25, 0.25), f('dagger', 2.5, 0.25), f('owleye', 2, 0.25)) +
-        0.5 * lv('phantom') + 0.5 * lv('nightowl') + (on('eclipse') ? 2 : 0) + (on('dawnstar') ? 1 : 0) + (ch.sneak || 0),
+        0.5 * lv('phantom') + 0.5 * lv('nightowl') + (on('eclipse') ? 2 : 0) + (on('dawnstar') ? 1 : 0) + (ch.sneak || 0) +
+        0.25 * (up.sneak || 0) + (meal.sneak || 0),
       sight: Math.min(B.SIGHT + 6, B.SIGHT + lv('lantern') + f('dreamlamp', 1, 1) + f('owleye', 1, 1) + f('headlamp', 1, 1) + f('sunlamp', 1, 1) + lv('nightowl')) - (this.dare('dark') ? B.DARE_DARK : 0) -
-        (this.zone.style === 'marsh' ? B.MARSH_DARK : 0) + Math.min(B.FLY_MAX, this.flies || 0) + (ch.sight || 0) + (pet.sight || 0) -
+        (this.zone.style === 'marsh' ? B.MARSH_DARK : 0) + Math.min(B.FLY_MAX, this.flies || 0) + (ch.sight || 0) + (pet.sight || 0) + (up.sight || 0) + (meal.sight || 0) -
         (this.p?.inked > 0 ? 3 : 0),
       oreMult: best(1 + 0.5 * lv('pick'), f('goldrush', 1.5, 0.5), f('headlamp', 1.5, 0.5)),
       // extra chance a swing finds a better grade
@@ -286,6 +298,7 @@ export class Run {
     if (this.forged) this.log(`대장장이가 만들어 준 ${josa(RELICS[this.forged].name, '을', '를')} 들고 나왔다.`, 'good');
     if (this.p.homeHp) this.log(`집에서 푹 쉬고 나왔다. 최대 체력 +${this.p.homeHp}`, 'good');
     if (this.lunch) this.log('난로가 싸 준 꿀물 도시락(체력 물약)을 챙겼다.', 'good');
+    if (this.meal) this.log(`든든하게 ${josa(this.meal.name, '을', '를')} 먹고 나왔다.`, 'good');
     // 도구 주머니 (village upgrade): a meadow tool or two to start with
     const pouch = [];
     for (let k = 0; k < (this.meta.up.tool || 0); k++) { const t = this.pickTool(); if (t) { this.p.items[t]++; pouch.push(ITEMS[t].name); } }
@@ -294,6 +307,7 @@ export class Run {
       for (let k = 1; k <= this.kit; k++) this.queue.push({ kind: 'kit', k, n: this.kit });
       this.log(`조합이 출발 보급을 챙겨 줬다. 유물 ${this.kit}개를 고른다.`, 'good');
     }
+    this.newField();
     this.emit('banner', { text: this.floorName() });
     this.afterTurn();
   }
@@ -310,6 +324,44 @@ export class Run {
     if (this.floor === this.bossFloor) this.genBossFloor();
     else this.genNormalFloor();
     this.enterFloor();
+  }
+
+  // On a field you have not been on before (start, changeFloor): 숨 고르기 (and a dish's help) gets your
+  // breath back, and the pet does what it does on arriving (data/pets.js).
+  newField() {
+    const p = this.p, pet = this.petFx, first = this.floor === this.startFloor && !this.depth;
+    if (this.pet) this.petFields++;
+    const breath = 2 * (this.meta.up.regen || 0) + (this.meal?.buff.regen || 0);
+    if (breath && !first && p.hp < this.stat().maxHp) this.heal(breath);
+    if (!this.pet) return;
+    // 짹짹이: up it flies and shows you the way out, and later the chests and the keys too
+    if (pet.scout && this.floor !== this.bossFloor && this.map.down) {
+      const m = this.map, spots = [this.map.down];
+      if (pet.scout >= 2) spots.push(...this.pickups.filter(q => ['chest', 'lockedChest'].includes(q.type) && !m.nook?.cells.includes(idx(q.x, q.y))));
+      if (pet.scout >= 3) spots.push(...this.pickups.filter(q => q.type === 'key'));
+      const list = [];
+      for (const q of spots) for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
+        const x = q.x + k, y = q.y + j;
+        if (inMap(x, y) && !m.explored[idx(x, y)]) { m.explored[idx(x, y)] = 1; list.push(idx(x, y)); }
+      }
+      this.emit('petScout', { spots: spots.map(q => ({ x: q.x, y: q.y })) });
+      if (list.length) this.emit('tiles', { list, soft: true });
+      if (!this.told.scout) { this.told.scout = true; this.log(`${josa(pet.name, '이', '가')} 높이 날아올라 이 들판을 둘러보고 왔다. 지도에 표시해 뒀다.`, 'good'); }
+    }
+    // 찍찍이: one of the field's glints is the one it sniffed out, and it shows you where on the map
+    const sniffed = pet.glint && this.pickups.find(q => q.type === 'glint' && q.sniffed);
+    if (sniffed) {
+      const m = this.map, list = [];
+      for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
+        const x = sniffed.x + k, y = sniffed.y + j;
+        if (inMap(x, y) && !m.explored[idx(x, y)]) { m.explored[idx(x, y)] = 1; list.push(idx(x, y)); }
+      }
+      if (list.length) this.emit('tiles', { list, soft: true });
+      this.emit('petSniff', { x: p.x, y: p.y, to: { x: sniffed.x, y: sniffed.y } });
+      this.log(`${josa(pet.name, '이', '가')} 킁킁, 흙 속에 뭔가 반짝이는 곳을 찾아냈다. 지도에 표시해 뒀다.`, 'good');
+    }
+    // 다람이: somewhere on this field it will turn up with a meadow tool in its mouth
+    this.fetchAt = pet.fetch && Math.random() < pet.fetch ? this.turn + rint(6, 18) : -1;
   }
 
   enterFloor() {
@@ -747,6 +799,7 @@ export class Run {
       this.genFloor();
       const fb = this.lv('firebomb'), bombs = fb ? (fb < 3 ? 1 : 2) : this.lv('bombbag') ? 1 : 0;
       if (bombs) { this.p.items.bomb += bombs; this.log('폭탄 가방에서 폭탄을 꺼냈다.', 'good'); }
+      this.newField();
     }
     this.emit('banner', { text: this.floorName() });
     this.log(dir > 0 ? `${this.floorName()}에 왔다.` : `${this.floorName()}으로 돌아왔다.`);
@@ -1570,7 +1623,7 @@ export class Run {
     if (id === 'dandelion') { (this.toolUse ||= {}).dandelion = (this.toolUse.dandelion || 0) + 1; this.blowAway(); }
     if (id === 'potion') {
       this.emit('drink', { x: p.x, y: p.y });
-      this.heal(Math.round(this.stat().maxHp * B.POTION_HEAL));
+      this.heal(Math.round(this.stat().maxHp * B.POTION_HEAL * (1 + 0.1 * (this.meta.up.herb || 0))));
       this.log('체력 물약을 마셨다.', 'good');
     }
     if (id === 'map') {
@@ -2044,6 +2097,7 @@ export class Run {
         if (sneak) this.discover('den_sneak');
         if (q.guarded) this.wakeStatues(x, y);
         chestTrinket(this, x, y);
+        this.petCoins(x, y);
       } else if (q.type === 'bossChest') {
         // the stage's prize: the gold comes out in a heap, every relic you carry grows a level (and
         // whatever that completes evolves, one after another), and then you choose: home with the
@@ -2058,6 +2112,7 @@ export class Run {
         map.keyHeld = false;
         this.queue.push({ kind: 'chest', rich: true, locked: true });
         this.log('열쇠로 잠긴 상자를 열었다!', 'good');
+        this.petCoins(x, y);
       } else if (q.type === 'cageKey') {
         map.cageKey = true;
         this.log('우리 열쇠를 주웠다! 갇힌 친구에게 가자.', 'good');
@@ -2074,6 +2129,14 @@ export class Run {
         this.log('아기새 리본을 찾았다! 울보 아기새에게 돌려주자.', 'good');
       } else { this.p.items[q.type] = (this.p.items[q.type] || 0) + 1; this.log(`${josa(ITEMS[q.type].name, '을', '를')} 주웠다.`); }
     }
+  }
+
+  // 꿀꿀이: its nose finds a few coins in every chest (more the deeper the field)
+  petCoins(x, y) {
+    const n = this.petFx.coins;
+    if (!n) return;
+    this.emit('petCoins', { x, y });
+    this.addGold(n + 2 * B.localOf(this.floor) + 2 * this.depth);
   }
 
   // An old worker's name tag: the guild pays a little for each one brought back, and asks nothing.
@@ -2611,7 +2674,19 @@ export class Run {
     if (L.ironheart && p.hp <= s.maxHp / 3) { dmg = Math.max(1, Math.ceil(dmg / 2)); this.emit('iron', { x: p.x, y: p.y }); }
     // 수호 거북: tucked into the shell after a rest, a blow is a knock on the shell (a boss's, half of it)
     if (p.guard) { dmg = src?.d?.boss ? Math.max(1, Math.ceil(dmg / 2)) : 1; this.emit('shellhit', { x: p.x, y: p.y }); }
+    // 말랑이: once every so often it takes the blow with you, soft as jelly
+    const pet = this.petFx;
+    if (pet.soft && dmg > 1 && this.turn - (this.softAt ?? -999) >= pet.soft) {
+      this.softAt = this.turn;
+      dmg = Math.max(1, Math.ceil(dmg / 2));
+      this.emit('petSoft', { x: p.x, y: p.y });
+    }
     this.hurtPlayer(dmg, this.foeCause(src), kind);
+    // 둥실이: whoever hit you may get a shock and lose its next turn
+    if (pet.zap && src?.hp > 0 && !src.d?.boss && (kind === 'melee' || kind === 'charge') && Math.random() < pet.zap) {
+      src.stun = Math.max(src.stun || 0, 1);
+      this.emit('petZap', { x: p.x, y: p.y, to: { x: src.x, y: src.y } });
+    }
     if (src && (kind === 'melee' || kind === 'charge')) {
       const thorn = (L.fortress ? 4 + 2 * L.fortress : 2 * (L.thorns || 0)) + (L.spikecloak ? 4 + 2 * L.spikecloak : 0) + (this.char.thorns || 0);
       if (thorn) this.hurt(src, thorn, 'thorns');
@@ -2646,6 +2721,13 @@ export class Run {
     if (p.sleep) { p.sleep = 0; p.wokeAt = this.turn; this.log('아파서 잠이 확 깼다!', 'warn'); }
     this.emit('phit', { x: p.x, y: p.y, dmg, kind });
     const L = this.levels(), maxHp = this.stat().maxHp;
+    // 붕붕이: down to a third, once a field, it brings you honey
+    if (this.petFx.honey && p.hp > 0 && p.hp <= maxHp / 3 && this.honeyFloor !== this.floor) {
+      this.honeyFloor = this.floor;
+      this.heal(this.petFx.honey);
+      this.emit('petHoney', { x: p.x, y: p.y, n: this.petFx.honey });
+      this.log(`${josa(this.petFx.name, '이', '가')} 꿀을 물어 왔다! 체력 +${this.petFx.honey}`, 'good');
+    }
     const relicLives = (L.eternity ? 2 : L.undying ? 1 : 0) + (L.bloodking ? 1 : 0), band = L.herbal ? 6 + 4 * L.herbal : 6 * (L.bandage || 0);
     if (p.hp <= 0 && (this.revives || 0) < relicLives + (this.char.lives || 0)) {
       this.revives = (this.revives || 0) + 1;
@@ -2694,8 +2776,11 @@ export class Run {
   }
 
   gainXp(n) {
-    const p = this.p;
-    p.xp += n;
+    const p = this.p, k = 1 + 0.1 * (this.meta.up.xp || 0) + (this.petFx.xp || 0) + (this.meal?.buff.xp || 0);
+    // what the upgrades and the pet add on top comes in whole points, the bits kept for next time
+    const raw = n * k + (p.xpBits || 0);
+    p.xpBits = raw - Math.floor(raw);
+    p.xp += Math.floor(raw);
     while (p.xp >= B.xpToLevel(p.lvl)) {
       p.xp -= B.xpToLevel(p.lvl);
       this.withMaxHpDelta(() => { p.lvl++; });
@@ -2802,11 +2887,11 @@ export class Run {
 
   // the pet's little help, once a turn
   petTick() {
-    const pet = PETS[this.pet], p = this.p;
+    const pet = this.petFx, p = this.p;
     if (pet.peck && (p.walk || 0) >= pet.peck) {
       p.walk = 0;
       const pecks = (this.pecks ||= {});
-      if ((pecks[this.floor] || 0) < PECKS_PER_FIELD) {
+      if ((pecks[this.floor] || 0) < pet.pecks) {
         pecks[this.floor] = (pecks[this.floor] || 0) + 1;
         this.emit('peck', { x: p.x, y: p.y });
         this.addGold(peckGold(this.floor));
@@ -2825,6 +2910,25 @@ export class Run {
         this.emit('tiles', { list, soft: true });
         this.emit('feel', { x: p.x, y: p.y, at: list.map(i => ({ x: i % m.w, y: (i / m.w) | 0 })) });
         this.log(`${pet.name}의 더듬이가 쫑긋! 숨은 함정을 찾았다.`, 'good');
+      }
+    }
+    // 다람이 back with something
+    if (pet.fetch && this.turn === this.fetchAt) {
+      const t = this.pickTool();
+      if (t) {
+        p.items[t]++;
+        this.emit('petFetch', { x: p.x, y: p.y, id: t });
+        this.log(`${josa(pet.name, '이', '가')} 어디선가 ${josa(ITEMS[t].name, '을', '를')} 물어 왔다!`, 'good');
+      }
+    }
+    // 깜빡이: the hidden room's wall glimmers once you are close (any distance at the top level)
+    const nook = this.map.nook;
+    if (pet.glow && nook && nook.gap >= 0 && this.glowed !== this.floor) {
+      const gx = nook.gap % this.map.w, gy = (nook.gap / this.map.w) | 0;
+      if (this.isVisible(gx, gy) && (pet.glow >= 99 || cheb({ x: gx, y: gy }, p) <= pet.glow)) {
+        this.glowed = this.floor;
+        this.emit('petGlow', { x: gx, y: gy });
+        this.log(`${josa(pet.name, '이', '가')} 벽 한 곳을 반짝반짝 비춘다.`, 'good');
       }
     }
   }
@@ -3566,7 +3670,10 @@ export class Run {
     meta.gold += this.gold;
     stats.bestGold = Math.max(stats.bestGold, this.gold);
     const opened = openNew(meta);
-    this.emit('end', { won, fell: this.p.hp <= 0, rescued: this.rescued, news, opened });
+    // the shop gets its new goods in (one more for a stage beaten), and the pet that came grows
+    const stocked = arriveStock(meta, STOCK_PER_TRIP + (won ? 1 : 0));
+    const pet = this.pet && { id: this.pet, up: feedPet(meta, this.pet, this.petFields * PET_XP_FIELD + (won ? PET_XP_WIN : 0)), lv: petLevel(meta, this.pet) };
+    this.emit('end', { won, fell: this.p.hp <= 0, rescued: this.rescued, news, opened, stocked, pet });
   }
 }
 Run.nextId = 1;

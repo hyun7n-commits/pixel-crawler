@@ -4,6 +4,7 @@
 // the find gives fewer). Other letters are drawn as they are ('k' a hole or a mark, 't' a glint).
 
 import { RAMP, make } from './icons.js';
+import { LIFE_SHAPES } from './life-art.js';
 
 const SHAPES = {
   button: { rows: [
@@ -387,6 +388,9 @@ const SHAPES = {
     '.......5555.',
   ] },
 };
+
+// (and village life's, v0.30)
+Object.assign(SHAPES, LIFE_SHAPES);
 
 // a shape's rows with a find's materials put in, centred on a 16x16 tile
 function fill(shape, pal) {

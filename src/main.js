@@ -20,6 +20,7 @@ import { renderPanel, renderVillageHud } from './ui/hub.js';
 import { renderHomeHud, heartLine } from './ui/homehud.js';
 import { showChoice, showSummary, showTalk, closeTalk, closeModal, modalOpen, showUpdateNews, openSheet } from './ui/modal.js';
 import { sinceUpdate, isOpen } from './data/unlocks.js';
+import { stockSince } from './data/shop.js';
 import { showStages } from './ui/stages.js';
 import { showBoard } from './ui/board.js';
 import { showEvolve } from './ui/evo.js';
@@ -488,7 +489,7 @@ function onRunEvent(type, d) {
     if (!(meta.house.visit?.gift > 0)) meta.house.visit = ownsHome(meta) ? rollVisitor(meta, villageP(meta), meta.sel) : null;
     saveMeta(meta);
     hud.update(run);
-    const summary = () => showSummary({ won: d.won, run, rescued: d.rescued, news: d.news, opened: d.opened, onClose: () => { scene.detach(); run = null; afterRunStory(); } });
+    const summary = () => showSummary({ won: d.won, run, rescued: d.rescued, news: d.news, opened: d.opened, stocked: d.stocked, pet: d.pet, onClose: () => { scene.detach(); run = null; afterRunStory(); } });
     if (d.won && !d.fell) summary();
     else fallen(summary);
   }
@@ -931,11 +932,11 @@ const game = new Phaser.Game({
         try { startRun(left); return; } catch (e) { clearSuspended(); run = null; console.warn('could not pick the run up again', e); }
       }
       // back after an update: the first of what has come since is open already (data/unlocks.js)
-      const news = sinceUpdate(meta);
+      const news = sinceUpdate(meta), stocked = stockSince(meta);
       saveMeta(meta);
       if (!meta.story.intro) { showStory('intro', () => showVillage()); return; }
       showVillage();
-      if (news.length) showUpdateNews(news);
+      if (news.length || stocked.length) showUpdateNews(news, stocked);
     });
   }), new VillageScene(villageHooks), new HomeScene(homeHooks), new StoryScene()],
 });

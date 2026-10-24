@@ -32,7 +32,9 @@ export const oddName = e => e.odd ? `${VARIANTS[e.odd].prefix}${e.d.name}` : e.d
 // anything special-placed (a beetle under the water, a mimic).
 export function oddOut(run) {
   if (!run.wonders || run.floor === run.bossFloor) return;
-  const n = (Math.random() < B.ODD_CHANCE ? 1 : 0) + (Math.random() < B.ODD_MORE ? 1 : 0);
+  // (네잎클로버 from the shop: more often)
+  const charm = 0.15 * (run.meta.up.charm || 0);
+  const n = (Math.random() < B.ODD_CHANCE + charm ? 1 : 0) + (Math.random() < B.ODD_MORE + charm ? 1 : 0);
   for (let k = 0; k < n; k++) {
     const can = run.enemies.filter(e => e.hp > 0 && !e.odd && !e.mum && !e.d.boss && !e.d.npc && !e.chief && !e.den && !e.d.quest &&
       ODD_KINDS.includes(e.type) && ['sleep', 'wander'].includes(e.state));
@@ -186,10 +188,12 @@ export function takeTrinket(run, id, delay = 200) {
 }
 
 // 반짝 흙: once or twice a field something glints in the dirt; step on it and you dig it up
+// (more often with the shop's 꼬마 삽; and 찍찍이 the mouse sniffs out one more now and then)
 export function buryTrinkets(run, place) {
   if (!run.wonders || run.floor === run.bossFloor) return;
-  const n = (Math.random() < B.GLINT_CHANCE ? 1 : 0) + (Math.random() < B.GLINT_MORE ? 1 : 0);
-  for (let k = 0; k < n; k++) place(s => run.pickups.push({ x: s.x, y: s.y, type: 'glint', id: trinketFor(run) }));
+  const shovel = 0.15 * (run.meta.up.shovel || 0), sniff = run.petFx?.glint && Math.random() < run.petFx.glint ? 1 : 0;
+  const n = (Math.random() < B.GLINT_CHANCE + shovel ? 1 : 0) + (Math.random() < B.GLINT_MORE + shovel ? 1 : 0) + sniff;
+  for (let k = 0; k < n; k++) place(s => run.pickups.push({ x: s.x, y: s.y, type: 'glint', id: trinketFor(run), sniffed: k === n - 1 && !!sniff }));
 }
 
 export function digGlint(run, q) {

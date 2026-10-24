@@ -6,7 +6,10 @@
 import { $, el, button, icon } from './dom.js';
 import { CHARACTERS } from '../data/characters.js';
 import { UPGRADES, PACK_COST, FORGE_COST, FORGE_LEGEND_LOOP, forgeable, forgeStock } from '../data/upgrades.js';
-import { PETS } from '../data/pets.js';
+import { PETS, TREATS, PET_LV, petLevel, petProgress, petNote, feedPet } from '../data/pets.js';
+import { STOCK_TOTAL, stockCount, stocked, upCap, newStock, seeStock, nextStock, goodInfo, stockSince } from '../data/shop.js';
+import { LIFE_TOOLS, CROPS, SEED_PACK, seedCost, seedId } from '../data/life.js';
+import { bookPic } from './book.js';
 import { isOpen, RELIC_GATES, BUILD } from '../data/unlocks.js';
 import { RELICS, RECIPES, recipeKey, tierOf, DISCOVERY_GOLD } from '../data/relics.js';
 import { freshMeta, saveMeta } from '../core/save.js';
@@ -112,69 +115,124 @@ function chars(box, { meta, onStart, changed, setMeta, onStory }) {
   box.append(button('btn quiet', '처음 이야기 다시 보기', onStory), reset);
 }
 
-// ---------- 상점 주인: upgrades and new relics ----------
+// ---------- 상점 주인: what is on the shelves (data/shop.js) ----------
+// The shop starts with two things and gets more in after every trip: lasting upgrades a level at a
+// time, pets and their treats, village-life tools and seeds, 꾸미기, relics for the fields. What came
+// in since you last looked wears NEW; what comes next is a shadow at the bottom.
+let shopNote = '';
 function shop(box, { meta, changed }) {
+  stockSince(meta);
+  // NEW stays on what was new when the shop opened, through every buy, till it is closed
+  const fresh = (box.fresh ||= new Set(newStock(meta)));
+  seeStock(meta);
   const buy = (cost, apply) => { meta.gold -= cost; apply(); changed(); };
   const list = el('div', 'shop');
-  list.append(el('h3', null, '영구 강화'));
-  for (const [id, u] of Object.entries(UPGRADES)) {
-    if (u.open && !isOpen(meta, u.open)) continue;
-    const lv = meta.up[id] || 0, max = u.costs.length;
+  if (shopNote) { list.append(el('p', 'say', shopNote)); shopNote = ''; }
+  // how full the shelves are
+  const n = stockCount(meta), head = el('div', 'stock-head'), bar = el('div', 'bar'), fill = el('i');
+  fill.style.width = `${(100 * n / STOCK_TOTAL).toFixed(1)}%`;
+  bar.append(fill);
+  head.append(el('b', null, `진열대 ${n}/${STOCK_TOTAL}`), bar, el('span', 'row-sub', n < STOCK_TOTAL ? '들판에 다녀올 때마다 새 물건이 들어온다.' : '진열대가 꽉 찼다!'));
+  list.append(head);
+  const badge = (nm, id) => { if (fresh.has(id)) nm.append(el('i', 'new-badge', 'NEW')); return nm; };
+  const section = (title, rows) => { if (rows.length) list.append(el('h3', null, title), ...rows); };
+
+  // 몸 단련: a lasting upgrade shows once its first level is in; the levels still to come are dim pips
+  section('몸 단련', Object.entries(UPGRADES).filter(([id, u]) => upCap(meta, id) && (!u.open || isOpen(meta, u.open))).map(([id, u]) => {
+    const lv = meta.up[id] || 0, max = u.costs.length, cap = upCap(meta, id);
     const row = el('div', 'row'), main = el('div', 'row-main');
     const nm = el('span', 'row-name', u.name), pips = el('span', 'pips');
-    for (let i = 0; i < max; i++) pips.append(el('i', i < lv ? 'on' : ''));
+    for (let i = 0; i < max; i++) pips.append(el('i', i < lv ? 'on' : i < cap ? '' : 'later'));
     nm.append(pips);
-    main.append(nm, el('span', 'row-sub', u.eff));
-    const b = button('btn gold', lv >= max ? '최대' : `${u.costs[lv]}G`, () => buy(u.costs[lv], () => { meta.up[id]++; }));
-    b.disabled = lv >= max || meta.gold < u.costs[lv];
-    row.append(main, b);
-    list.append(row);
-  }
-  pets(list, meta, buy, changed);
-  wardrobe(list, meta, buy, changed);
-  // the relic shelf and packing a relic come once the meadow's boss has fallen (data/unlocks.js)
-  if (!isOpen(meta, 'shelf')) { box.append(list); return; }
-  list.append(el('h3', null, '들판에 새 유물 추가'));
-  for (const [id, r] of Object.entries(RELICS).filter(([, r]) => r.locked)) {
+    badge(nm, `up:${id}:${cap}`);
+    main.append(nm, el('span', 'row-sub', lv >= cap && lv < max ? `${u.eff} · 다음 단계는 아직 안 들어왔다` : u.eff));
+    const b = button('btn gold', lv >= max ? '최대' : lv >= cap ? '입고 전' : `${u.costs[lv]}G`, () => buy(u.costs[lv], () => { meta.up[id] = lv + 1; }));
+    b.disabled = lv >= cap || meta.gold < u.costs[lv];
+    row.append(bookPic(u.pic, 32), main, b);
+    return row;
+  }));
+  pets(list, meta, buy, changed, badge);
+  lifeGoods(list, meta, buy, badge);
+  wardrobe(list, meta, buy, changed, badge);
+  // 들판에 새 유물 추가: the relics that came in
+  section('들판에 새 유물 추가', Object.entries(RELICS).filter(([id, r]) => r.locked && stocked(meta, `relic:${id}`)).map(([id, r]) => {
     const row = el('div', 'row'), main = el('div', 'row-main');
-    main.append(el('span', 'row-name', r.name), el('span', 'row-sub', `Lv1: ${r.desc(1)}`));
+    main.append(badge(el('span', 'row-name', r.name), `relic:${id}`), el('span', 'row-sub', `Lv1: ${r.desc(1)}`));
     const have = meta.relicUnlock[id];
     const b = button('btn gold', have ? '추가됨' : `${r.cost}G`, () => buy(r.cost, () => { meta.relicUnlock[id] = true; }));
     b.disabled = have || meta.gold < r.cost;
     row.append(icon(id, 32), main, b);
-    list.append(row);
-  }
+    return row;
+  }));
   // one basic relic to take on the next run: paid each time, swap or put back for free
-  list.append(el('h3', null, '다음 판에 챙겨 갈 유물'));
-  list.append(el('p', 'row-sub', `${PACK_COST}G를 내면 기본 유물 하나를 Lv1로 들고 나간다(이미 있으면 +1). 한 판만. 궁금한 조합을 시험해 보기 좋다.`));
-  const grid = el('div', 'pack-grid');
-  const pick = Object.keys(RELICS).filter(id => !tierOf(id) && (RELICS[id].locked ? meta.relicUnlock[id] : !RELIC_GATES[id] || isOpen(meta, RELIC_GATES[id])));
-  for (const id of pick) {
-    const on = meta.pack === id;
-    const b = button(`pack${on ? ' on' : ''}`, null, () => {
-      if (on) { meta.gold += PACK_COST; meta.pack = null; }        // put it back: money back
-      else if (meta.pack) meta.pack = id;                            // swap: already paid
-      else { meta.gold -= PACK_COST; meta.pack = id; }
-      changed();
-    });
-    b.append(icon(id, 32), el('span', null, RELICS[id].name));
-    b.title = RELICS[id].desc(1);
-    b.disabled = !meta.pack && meta.gold < PACK_COST;
-    grid.append(b);
+  if (stocked(meta, 'svc:pack') && isOpen(meta, 'shelf')) {
+    list.append(badge(el('h3', null, '다음 판에 챙겨 갈 유물'), 'svc:pack'));
+    list.append(el('p', 'row-sub', `${PACK_COST}G를 내면 기본 유물 하나를 Lv1로 들고 나간다(이미 있으면 +1). 한 판만. 궁금한 조합을 시험해 보기 좋다.`));
+    const grid = el('div', 'pack-grid');
+    const pick = Object.keys(RELICS).filter(id => !tierOf(id) && (RELICS[id].locked ? meta.relicUnlock[id] : !RELIC_GATES[id] || isOpen(meta, RELIC_GATES[id])));
+    for (const id of pick) {
+      const on = meta.pack === id;
+      const b = button(`pack${on ? ' on' : ''}`, null, () => {
+        if (on) { meta.gold += PACK_COST; meta.pack = null; }        // put it back: money back
+        else if (meta.pack) meta.pack = id;                            // swap: already paid
+        else { meta.gold -= PACK_COST; meta.pack = id; }
+        changed();
+      });
+      b.append(icon(id, 32), el('span', null, RELICS[id].name));
+      b.title = RELICS[id].desc(1);
+      b.disabled = !meta.pack && meta.gold < PACK_COST;
+      grid.append(b);
+    }
+    list.append(grid);
+    if (meta.pack) list.append(el('p', 'row-sub', `${RELICS[meta.pack].name} 챙김. 다시 누르면 내려놓고 골드를 돌려받는다.`));
   }
-  list.append(grid);
-  if (meta.pack) list.append(el('p', 'row-sub', `${RELICS[meta.pack].name} 챙김. 다시 누르면 내려놓고 골드를 돌려받는다.`));
+  // what comes in next: only its shadow
+  const nx = nextStock(meta);
+  if (nx) {
+    const row = el('div', 'row unknown next-stock'), main = el('div', 'row-main');
+    main.append(el('span', 'row-name', '???'), el('span', 'row-sub', nx.when(meta) ? '다음에 들어올 물건. 들판에 한 번 더 다녀오면 온다.' : '언젠가 들어올 물건. 더 멀리 가 보면 온다.'));
+    row.append(bookPic(goodInfo(nx.id).pic, 32, true), main);
+    list.append(el('h3', null, '다음 입고'), row);
+  }
   box.append(list);
 }
 
-// 펫 (data/pets.js): buy one, then pick which one comes along (tap again to leave it home)
-function pets(list, meta, buy, changed) {
+// 펫 (data/pets.js): buy one, then pick which one comes along (tap again to leave it home); each grows
+// to Lv5 by going out with you, and the shop's treats help
+function pets(list, meta, buy, changed, badge) {
+  const ids = Object.keys(PETS).filter(id => stocked(meta, `pet:${id}`));
+  if (!ids.length) return;
   list.append(el('h3', null, '펫'));
-  list.append(el('p', 'row-sub', '데려가면 뒤를 졸졸 따라다니며 조금씩 돕는다. 적은 펫을 건드리지 않는다. 한 번에 한 마리.'));
-  for (const [id, pt] of Object.entries(PETS)) {
-    const have = meta.pets?.[id], on = meta.pet === id;
-    const row = el('div', 'row' + (on ? ' owned' : '')), main = el('div', 'row-main');
-    main.append(el('span', 'row-name', `${pt.name}<small>${pt.kind}</small>`), el('span', 'row-sub', pt.note));
+  list.append(el('p', 'row-sub', '데려가면 뒤를 졸졸 따라다니며 조금씩 돕는다. 같이 다닐수록 자란다(Lv5까지). 적은 펫을 건드리지 않는다.'));
+  const treats = Object.entries(TREATS).filter(([t]) => stocked(meta, `treat:${t}`));
+  for (const id of ids) {
+    const pt = PETS[id], have = meta.pets?.[id], on = meta.pet === id, lv = petLevel(meta, id);
+    const row = el('div', 'row pet-row' + (on ? ' owned' : '')), main = el('div', 'row-main');
+    const nm = el('span', 'row-name', `${pt.name} <small>${pt.kind}${have ? ` · Lv${lv}` : ''}</small>`);
+    main.append(badge(nm, `pet:${id}`), el('span', 'row-sub', petNote(id, have ? lv : 1)));
+    if (have && lv < PET_LV) {
+      const bar = el('div', 'bar pet-bar'), fill = el('i');
+      fill.style.width = `${Math.round(100 * petProgress(meta, id))}%`;
+      bar.append(fill);
+      main.append(bar, el('span', 'row-sub', `Lv${lv + 1}: ${petNote(id, lv + 1)}`));
+    }
+    // treats: given here and now
+    if (have && lv < PET_LV && treats.length) {
+      const tr = el('div', 'treats');
+      for (const [t, T] of treats) {
+        const b = button('btn treat', null, () => {
+          meta.gold -= T.cost;
+          const up = feedPet(meta, id, T.xp);
+          shopNote = up ? `${josa(pt.name, '이', '가')} ${josa(T.name, '을', '를')} 냠냠 먹고 쑥 자랐다! Lv${petLevel(meta, id)}` : `${josa(pt.name, '이', '가')} ${josa(T.name, '을', '를')} 냠냠 먹었다.`;
+          changed();
+        });
+        b.append(bookPic(T.pic, 20), el('span', null, `${T.cost}G`));
+        b.title = `${T.name}: 경험치 +${T.xp}`;
+        b.disabled = meta.gold < T.cost;
+        tr.append(b);
+      }
+      main.append(badge(tr, `treat:${treats[treats.length - 1][0]}`));
+    }
     const b = have
       ? button('btn' + (on ? ' primary' : ''), on ? '데려감' : '데려가기', () => { meta.pet = on ? null : id; changed(); })
       : button('btn gold', `${pt.cost}G`, () => buy(pt.cost, () => { meta.pets = { ...meta.pets, [id]: true }; meta.pet = id; }));
@@ -184,16 +242,48 @@ function pets(list, meta, buy, changed) {
   }
 }
 
+// 마을 생활 (data/life.js): the rod, the net, the watering can, a bigger garden, and seeds
+function lifeGoods(list, meta, buy, badge) {
+  const tools = Object.entries(LIFE_TOOLS).filter(([id]) => stocked(meta, `life:${id}`));
+  if (tools.length) {
+    list.append(el('h3', null, '마을 생활'));
+    for (const [id, t] of tools) {
+      const got = (meta.tools?.[t.slot] || 0) >= t.lv, garden = hasDecor(meta, 'garden');
+      const row = el('div', 'row' + (got ? ' owned' : '')), main = el('div', 'row-main');
+      const needs = t.slot === 'plots' && !garden;
+      main.append(badge(el('span', 'row-name', t.name), `life:${id}`), el('span', 'row-sub', needs ? `${t.desc}. 목수에게 마당 텃밭부터 만들어 달라고 하자.` : t.desc));
+      const b = button('btn gold', got ? '있다' : `${t.cost}G`, () => buy(t.cost, () => { meta.tools = { ...meta.tools, [t.slot]: Math.max(meta.tools?.[t.slot] || 0, t.lv) }; }));
+      b.disabled = got || needs || meta.gold < t.cost;
+      row.append(bookPic(t.pic, 32), main, b);
+      list.append(row);
+    }
+  }
+  const seeds = Object.values(CROPS).filter(c => stocked(meta, `seed:${c.id}`));
+  if (!seeds.length) return;
+  list.append(el('h3', null, '씨앗'));
+  list.append(el('p', 'row-sub', hasDecor(meta, 'garden') ? `한 봉지에 ${SEED_PACK}알. 집 마당 텃밭에 심는다.` : `한 봉지에 ${SEED_PACK}알. 목수가 집 마당에 텃밭을 만들어 주면 심을 수 있다.`));
+  for (const c of seeds) {
+    const cost = seedCost(c.days), have = meta.bag?.[seedId(c.id)] || 0;
+    const row = el('div', 'row'), main = el('div', 'row-main');
+    main.append(badge(el('span', 'row-name', `${c.name} 씨앗`), `seed:${c.id}`), el('span', 'row-sub', `${c.days}일이면 자란다${have ? ` · 가진 씨앗 ${have}알` : ''}`));
+    const b = button('btn gold', `${cost}G`, () => buy(cost, () => { meta.bag = { ...meta.bag, [seedId(c.id)]: have + SEED_PACK }; }));
+    b.disabled = meta.gold < cost;
+    row.append(bookPic(c.pic, 32), main, b);
+    list.append(row);
+  }
+}
+
 // 꾸미기 (data/wear.js): one thing for the head and one for the neck; each row shows the hero you play
 // wearing it. Bought, it goes on at once; tap again to take it off, or put on another.
-function wardrobe(list, meta, buy, changed) {
-  if (!isOpen(meta, 'wear')) return;
+function wardrobe(list, meta, buy, changed, badge) {
+  const ids = Object.keys(WEAR).filter(id => stocked(meta, `wear:${id}`));
+  if (!isOpen(meta, 'wear') || !ids.length) return;
   list.append(el('h3', null, '꾸미기'));
   const hero = CHARACTERS[meta.sel].sprite;
-  for (const [id, w] of Object.entries(WEAR)) {
-    const have = meta.wardrobe?.[id], on = meta.wear?.[w.slot] === id;
+  for (const id of ids) {
+    const w = WEAR[id], have = meta.wardrobe?.[id], on = meta.wear?.[w.slot] === id;
     const row = el('div', 'row' + (on ? ' owned' : '')), main = el('div', 'row-main');
-    main.append(el('span', 'row-name', `${w.name} <small>${w.slot === 'head' ? '머리' : '목'}</small>`));
+    main.append(badge(el('span', 'row-name', `${w.name} <small>${w.slot === 'head' ? '머리' : '목'}</small>`), `wear:${id}`));
     const wearIt = () => { meta.wear = { ...meta.wear, [w.slot]: id }; };
     const b = have
       ? button('btn' + (on ? ' primary' : ''), on ? '하는 중' : '하기', () => { if (on) meta.wear = { ...meta.wear, [w.slot]: null }; else wearIt(); changed(); })

@@ -1,6 +1,8 @@
 // Progress that survives between runs (gold, upgrades, unlocks, records).
 // Stored in the browser's localStorage; the desktop build will swap this for a file.
 
+import { FIRST_STOCK } from '../data/shop.js';
+
 // v2 (v0.20): the game opens up one thing at a time now (data/unlocks.js), so it starts over from a
 // fresh save; the v1 save stays in storage untouched.
 const SAVE_KEY = 'pixel-crawler-save-v2';
@@ -8,7 +10,7 @@ const SAVE_KEY = 'pixel-crawler-save-v2';
 export function freshMeta() {
   return {
     gold: 0,
-    up: { hp: 0, atk: 0, pot: 0, greed: 0, reroll: 0, tool: 0 },
+    up: { hp: 0, atk: 0, pot: 0, greed: 0, reroll: 0, tool: 0, regen: 0, xp: 0, sneak: 0, herb: 0, armor: 0, charm: 0, shovel: 0, sight: 0, map: 0, bomb: 0 },
     relicUnlock: {},
     chars: { adv: true },
     sel: 'adv',
@@ -41,6 +43,19 @@ export function freshMeta() {
     wear: { head: null, neck: null },
     board: null,            // the guild's notice board for the next trip, until it goes (data/requests.js)
     ten: true,              // stage numbers are the ten-stage ones (v0.23)
+    // v0.30
+    stock: Object.fromEntries(FIRST_STOCK.map(id => [id, 0])),  // what the shop has on its shelves: good -> the trip it came (data/shop.js)
+    stockSeen: {},          // goods already looked at in the shop (the rest wear NEW)
+    petXp: {},              // each pet's experience (data/pets.js)
+    tools: {},              // village-life tools: rod, net (levels), can, plots (data/life.js LIFE_TOOLS)
+    bag: {},                // the basket: fish, bugs, crops, wild things, dishes, seeds -> how many (data/life.js)
+    day: 0,                 // village days gone by: one a trip
+    life: null,             // the village today: bites left, bugs and wild things about, gifts given (scenes/village-life.js)
+    garden: [],             // the yard's 텃밭 plots: { crop, at, water } (data/life.js)
+    meal: null,             // a dish eaten for the next trip (data/life.js DISHES)
+    hearts: {},             // how close you are with each villager and friend (data/affinity.js)
+    bonds: {},              // how close the villagers are with each other, by pair
+    games: {},              // the village games' best scores
   };
 }
 
@@ -90,6 +105,19 @@ export function loadMeta() {
         book: { ...m.book },
         wardrobe: { ...m.wardrobe },
         wear: { head: m.wear?.head || null, neck: m.wear?.neck || null },
+        // v0.30: a save from before has no shelves yet (data/shop.js stockSince fills them as they were)
+        stock: m.stock ? { ...m.stock } : null,
+        stockSeen: { ...m.stockSeen },
+        petXp: { ...m.petXp },
+        tools: { ...m.tools },
+        bag: { ...m.bag },
+        day: m.day || 0,
+        life: m.life || null,
+        garden: Array.isArray(m.garden) ? m.garden.map(g => ({ ...g })) : [],
+        meal: m.meal || null,
+        hearts: { ...m.hearts },
+        bonds: { ...m.bonds },
+        games: { ...m.games },
       };
     }
   } catch (e) { /* storage blocked or corrupt: start fresh */ }

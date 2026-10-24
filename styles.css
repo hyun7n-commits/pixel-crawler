@@ -99,6 +99,19 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .pips { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
 .pips i { width: 8px; height: 8px; background: #0c0b11; border: 1px solid var(--line); }
 .pips i.on { background: var(--accent); border-color: var(--accent); }
+/* v0.30 the shop's shelves (ui/hub.js shop): how full, what is new, a level not in yet */
+.pips i.later { opacity: .35; border-style: dashed; }
+.stock-head { display: flex; flex-direction: column; gap: 4px; }
+.stock-head b { font-family: var(--font-display); font-weight: 400; font-size: 15px; color: var(--gold); }
+.stock-head .bar > i { background: var(--gold); }
+.new-badge { display: inline-block; margin-left: 6px; padding: 0 4px; font-style: normal; font-family: var(--font-tiny); font-size: 10px; line-height: 14px; color: #2b2205; background: #ffd84a; vertical-align: middle; animation: newPulse 1.2s steps(2) infinite; }
+@keyframes newPulse { 50% { background: #fff3b0; } }
+.treats { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.btn.treat { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px 2px 4px; font-family: var(--font-body); font-size: 12px; }
+.pet-bar { height: 4px; margin-top: 2px; }
+.pet-bar > i { background: #ff9fb4; }
+.treats .new-badge { align-self: center; }
+.next-stock .row-name { color: var(--muted); }
 .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 0; padding: 12px; }
 .stat b { display: block; font-family: var(--font-display); font-size: 30px; font-weight: 400; font-variant-numeric: tabular-nums; }

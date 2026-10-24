@@ -1188,6 +1188,21 @@ export class DungeonScene extends Phaser.Scene {
       case 'peck': if (this.petSprite) this.fx.gold.explode(8, this.petSprite.x, this.petSprite.y - 2); break;
       case 'drizzle': if (this.petSprite) this.fx.splash.explode(8, this.petSprite.x, this.petSprite.y); break;
       case 'feel': d.at.forEach(t => this.fx.spark.explode(6, center(t.x), center(t.y))); break;
+      // v0.30 pets (data/pets.js): each does its thing with a little beat of its own
+      case 'petScout': this.petHop('!'); d.spots.forEach((t, i) => this.time.delayedCall(250 + i * 120, () => this.fx.spark.explode(8, center(t.x), center(t.y)))); break;
+      case 'petSniff': this.petHop('?'); this.time.delayedCall(600, () => { this.petHop('!'); this.fx.spark.explode(10, center(d.to.x), center(d.to.y)); }); break;
+      case 'petFetch': this.petHop('♪'); this.fx.spark.explode(10, center(d.x), center(d.y) - 4); this.face('sparkle', 900); break;
+      case 'petGlow':
+        this.petHop('!');
+        for (let k = 0; k < 4; k++) this.time.delayedCall(k * 380, () => { this.fx.firefly.explode(10, center(d.x), center(d.y)); this.fx.spark.explode(4, center(d.x), center(d.y)); });
+        break;
+      case 'petSoft':
+        if (this.petSprite) this.tweens.add({ targets: this.petSprite, scaleX: this.petSprite.scaleX * 1.25, scaleY: this.petSprite.scaleY * 0.75, duration: 90, yoyo: true });
+        this.float(d.x, d.y - 0.5, '말랑', '#a6e6cf', 0);
+        break;
+      case 'petZap': if (this.petSprite) this.lightning({ x: this.petSprite.x / TILE - 0.5, y: this.petSprite.y / TILE - 0.5 }, d.to); this.float(d.to.x, d.to.y, '찌릿', '#f4cf4f', 0); break;
+      case 'petHoney': this.petHop('♥'); if (this.petSprite) this.fx.honey.explode(12, this.petSprite.x, this.petSprite.y - 4); break;
+      case 'petCoins': this.petHop('♪'); this.fx.gold.explode(12, center(d.x), center(d.y) - 4); break;
       case 'bossChest': // the lid flies open and the stage's prize spills out
         this.fx.gold.explode(30, center(d.x), center(d.y) - 4);
         this.fx.spark.explode(20, center(d.x), center(d.y) - 6);
@@ -2350,13 +2365,21 @@ export class DungeonScene extends Phaser.Scene {
   followPet(ps, p, time) {
     const pt = this.petSprite;
     if (!pt) return;
-    const back = p.face < 0 ? 1 : -1, fly = this.run.pet === 'butterfly' || this.run.pet === 'cloud';
+    const back = p.face < 0 ? 1 : -1, fly = !!PETS[this.run.pet]?.fly;
     const tx = ps.x + back * 10, ty = ps.y - (fly ? 7 + 2 * Math.sin(time / 260) : 0) + 1;
     pt.x += (tx - pt.x) * 0.12;
     pt.y += (ty - pt.y) * 0.2;
     pt.setFlipX(p.face < 0);
     pt.setAlpha(ps.alpha);
     pt.setDepth(pt.y > ps.y ? D.player + 0.05 : D.player - 0.05);
+  }
+
+  // the pet gives a little hop, with a mark over it
+  petHop(mark) {
+    const pt = this.petSprite;
+    if (!pt) return;
+    this.tweens.add({ targets: pt, y: pt.y - 4, duration: 100, yoyo: true, ease: 'Quad.out' });
+    if (mark) this.emote(pt, mark, 1100);
   }
 
   // a heartbeat of stillness so a heavy hit lands
@@ -2700,6 +2723,7 @@ export class DungeonScene extends Phaser.Scene {
       ps.quirkAt = time;
     }
     this.drawEmote(g, ps, ps.x, ps.y - TILE - ps.hop - 3, time);
+    if (this.petSprite) this.drawEmote(g, this.petSprite, this.petSprite.x, this.petSprite.y - 13, time);
 
     // speech bubbles follow their speaker (kept on screen when the speaker stands near an edge)
     const view = this.cameras.main.worldView;

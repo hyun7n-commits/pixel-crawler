@@ -3,14 +3,17 @@
 // the book button on the top bar opens it too. Every GIFT_EVERY pages there is a present in it.
 
 import { el, button } from './dom.js';
-import { spriteForDom, oddCanvas, rowsCanvas } from '../scenes/textures.js';
+import { spriteForDom, oddCanvas, rowsCanvas, dressedCanvas } from '../scenes/textures.js';
 import { findIcon } from '../data/finds-art.js';
+import { WEAR } from '../data/wear.js';
+import { CHARACTERS } from '../data/characters.js';
 import { CHAPTERS, byChapter, has, bookCount, chapterCount, BOOK_TOTAL, GIFT_EVERY, bookGiftOf, bookGiftsDue } from '../data/book.js';
 
 // an entry's picture as a canvas (null when there is none to draw)
 function picCanvas(pic) {
   try {
     if (pic.find) return rowsCanvas(findIcon(...pic.find));
+    if (pic.wear) return dressedCanvas(CHARACTERS.adv.sprite, { [WEAR[pic.wear].slot]: pic.wear });
     if (pic.odd) return oddCanvas(pic.spr, pic.odd);
     if (pic.spr) return spriteForDom(pic.spr);
   } catch (e) { /* a picture that is not there: the cell shows its mark only */ }
