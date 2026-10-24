@@ -36,6 +36,7 @@ import { record, bookCount } from './data/book.js';
 import { passDay, addToBag, lifeEntry } from './data/life.js';
 import { mapToFind, mapId } from './data/play.js';
 import { renderBasket, renderSeeds, renderCook, renderDish, hasCookable } from './ui/life.js';
+import { renderMarket } from './ui/play.js';
 import { toast } from './ui/toast.js';
 import { renderBook } from './ui/book.js';
 import { $, el, button, icon } from './ui/dom.js';
@@ -424,6 +425,10 @@ const villageHooks = {
     saveMeta(meta);
   },
   onPlant: (i, empties) => openSeeds(i, empties),
+  // 마을의 하루 (scenes/village-days.js): the wandering peddler's mat on market day; what you buy there goes
+  // in the basket (no page of its own for where it came from)
+  onMarket: ctx => openMarket(ctx),
+  onBag: (id, n = 1) => { addToBag(meta, id, n); saveMeta(meta); renderVillageHud(meta); },
 };
 
 // 비밀 (data/secrets.js): the first time one turns up, a chime, a banner, and its page in the 비밀 도감.
@@ -488,6 +493,15 @@ function openSeeds(i, empties) {
       i, empties,
       onPlant: (crop, idxs) => { closeTalk(); village().plantSeeds(crop, idxs); saveMeta(meta); renderVillageHud(meta); },
     }),
+  });
+}
+// 장날 (ui/play.js): the peddler's mat
+function openMarket(ctx) {
+  sfx.play('talk');
+  showVillageTip('');
+  showTalk({
+    who: 'peddler', name: '떠돌이 상인', line: ctx.line, onClose: ctx.onClose,
+    build: (box, redraw) => renderMarket(box, meta, { ...ctx, changed: () => { saveMeta(meta); redraw(); renderVillageHud(meta); } }),
   });
 }
 function openCook() {

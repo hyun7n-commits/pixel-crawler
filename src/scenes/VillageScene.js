@@ -33,6 +33,9 @@ import {
   placeVillageLife, lifeTap, lifeStep, lifeAct, lifeStepOn, lifeDescribe, lifeTick, lifeMarks, plantSeeds, drawBed, GARDEN_MORE, bedArt,
 } from './village-life.js';
 import { placeVillagePlay, playTap, playStep, playAct, playStepOn, playDescribe, playTick, playKey, startRace } from './village-play.js';
+import {
+  dayToday, placeVillageDay, dayTap, dayStep, dayKey, dayAct, dayStepOn, dayMeet, dayDescribe, dayTick, dayGossip, dayFire,
+} from './village-days.js';
 import { patchNoise, scatterKey, patchKey, footKey, bloomKey, moteKeys, SCATTER_VARIANTS, PATCH_VARIANTS, FOOT_VARIANTS, BLOOM_VARIANTS, FOOT_UP } from './field-decor.js';
 import { propCanvas, critterCanvas } from './village-props.js';
 import { poke, pokeKind, stillInFlowers, flutterTo, petPup } from './village-secrets.js';
@@ -296,8 +299,12 @@ export class VillageScene extends Phaser.Scene {
     this.cameras.main.centerOn(center(start.x), foot(start.y) - TILE / 2);
     this.hideFinds(2 + Math.floor(Math.random() * 2));
     this.placeLife();
+    // what is going on today (scenes/village-days.js): rolled before the village's own life, which it has
+    // its say in, and put out after the games
+    dayToday(this);
     placeVillageLife(this);
     placeVillagePlay(this);
+    placeVillageDay(this);
     this.festival();
     this.playGrowth(arrivals);
   }
@@ -784,7 +791,9 @@ export class VillageScene extends Phaser.Scene {
   plantSeeds(crop, idxs) { return plantSeeds(this, crop, idxs); }
   // the rival's race (from the rival's sheet), and Space for the games (main.js)
   startRace() { return startRace(this); }
-  playKey(repeat) { return !this.showing && !!this.ps && playKey(this, repeat); }
+  playKey(repeat) { return !this.showing && !!this.ps && ((!this.play && dayKey(this, repeat)) || playKey(this, repeat)); }
+  // a fire of the day's to toast a marshmallow on (scenes/village-days.js, for village-play.js)
+  dayFire(x, y) { return dayFire(this, x, y); }
   // the shop sold you 텃밭 넓히기: the bed takes in its new column
   widenBed() {
     const img = this.decor?.garden;
@@ -849,6 +858,8 @@ export class VillageScene extends Phaser.Scene {
     this.petS = null;
     // 마을 놀이 (scenes/village-play.js)
     this.play = this.stones = this.swingRest = null;
+    // 마을의 하루 (scenes/village-days.js)
+    this.day = null;
   }
 
   keep(o) { this.objs.push(o); return o; }
@@ -1254,6 +1265,8 @@ export class VillageScene extends Phaser.Scene {
   }
 
   describe(x, y) {
+    const day = dayDescribe(this, x, y);
+    if (day) return day;
     const play = playDescribe(this, x, y);
     if (play) return play;
     const life = lifeDescribe(this, x, y);
@@ -1283,6 +1296,8 @@ export class VillageScene extends Phaser.Scene {
     if (this.ps?.diving) return;
     // a game going on, or something to play with (scenes/village-play.js)
     if (playTap(this, x, y)) return;
+    // what is going on today (scenes/village-days.js)
+    if (dayTap(this, x, y)) return;
     // fishing, a bug, the yard's bed (scenes/village-life.js)
     if (lifeTap(this, x, y)) return;
     const house = this.houseAt(x, y);
@@ -1328,6 +1343,7 @@ export class VillageScene extends Phaser.Scene {
     this.nextStep = this.time.now + STEP_MS;
     const x = this.p.x + dx, y = this.p.y + dy;
     if (playStep(this, x, y, repeat)) { this.path = []; return; }
+    if (dayStep(this, x, y, repeat)) { this.path = []; return; }
     if (lifeStep(this, x, y)) { this.path = []; return; }
     const who = this.folkAt(x, y) || this.heroAt(x, y) || this.pupAt(x, y) || (this.homeAt(x, y) && this.homeDoor) ||
       (this.mail && this.decorAt(x, y)?.id === 'mailbox' && this.mailbox);
@@ -1402,6 +1418,7 @@ export class VillageScene extends Phaser.Scene {
     if (find) this.time.delayedCall(STEP_MS - 20, () => this.pickUp(find));
     lifeStepOn(this, x, y);
     playStepOn(this, x, y);
+    dayStepOn(this, x, y);
     if (this.ch(x, y) === '>') { this.path = []; this.time.delayedCall(STEP_MS, () => this.dive()); }
   }
 
@@ -1424,6 +1441,7 @@ export class VillageScene extends Phaser.Scene {
     if (who.poke) { poke(this, who.x, who.y); return; }
     if (who.life) { lifeAct(this, who); return; }
     if (who.play) { playAct(this, who); return; }
+    if (who.day) { dayAct(this, who); return; }
     // your own door: in you go (main.js showHome, scenes/HomeScene.js)
     if (who.home) {
       const ps = this.ps;
@@ -1452,6 +1470,8 @@ export class VillageScene extends Phaser.Scene {
     }
     who.s.setFlipX(this.p.x < who.x);
     this.tweens.add({ targets: who.s, hop: 4, duration: 90, yoyo: true, ease: 'Quad.out' });
+    // the day may have something of its own for them (scenes/village-days.js)
+    if (dayMeet(this, who)) return;
     if (who.f) {
       const pick = who.f.lines[Math.floor(Math.random() * who.f.lines.length)];
       const line = typeof pick === 'function' ? pick(this.meta) : pick;
@@ -1522,6 +1542,7 @@ export class VillageScene extends Phaser.Scene {
     this.moveLife(time, Math.min(delta || 16, 50));
     lifeTick(this, time, Math.min(delta || 16, 50));
     playTick(this, time, Math.min(delta || 16, 50));
+    dayTick(this, time, Math.min(delta || 16, 50));
     // the big tree's crown goes see-through while you are under it
     if (this.bigTree) {
       const want = this.underBigTree(this.p.x, this.p.y) && this.p.y < BIG_TREE.y ? 0.45 : 1;
@@ -1562,7 +1583,8 @@ export class VillageScene extends Phaser.Scene {
       if (d <= 3) one.s.setFlipX(this.p.x < one.x);
       if (d <= 2 && !one.greeted) {
         one.greeted = true;
-        const line = one.f.lines[0];
+        // (the first to say hello today may let slip what is going on: scenes/village-days.js)
+        const line = dayGossip(this, one) || one.f.lines[0];
         this.say(one.s, typeof line === 'function' ? line(this.meta) : line);
       }
     }

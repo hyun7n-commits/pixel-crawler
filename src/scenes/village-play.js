@@ -99,7 +99,7 @@ export function playTarget(sc, x, y) {
   const o = gamePropAt(sc, x, y);
   if (o) { const c = reachCell(sc, o.pr); return { play: GAME_OF[o.pr.kind], x: c.x, y: c.y, pr: o.pr, img: o.imgs[0] }; }
   const fire = sc.dayFire?.(x, y);
-  if (fire) return { play: 'mallow', x: fire.x, y: fire.y, fire };
+  if (fire) return { play: 'mallow', x: fire.tx, y: fire.ty, fire };
   return null;
 }
 
@@ -542,8 +542,8 @@ function granted(sc, w, wx, wy, pl) {
   sc.time.delayedCall(300, () => { if (sc.play === pl) sc.play = null; });
   sc.hooks.onLife?.();
 }
-// a thing flying out to you, over your head, and into the basket
-function flyTo(sc, key, x0, y0, done) {
+// a thing flying out to you, over your head, and into the basket (scenes/village-days.js too)
+export function flyTo(sc, key, x0, y0, done) {
   const ps = sc.ps, img = sc.add.image(x0, y0, key).setDepth(D.bubble - 0.2);
   sc.tweens.addCounter({
     from: 0, to: 1, duration: 420,

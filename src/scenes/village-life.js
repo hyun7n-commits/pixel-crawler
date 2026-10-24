@@ -22,6 +22,7 @@ import { VILLAGE_MAP, PROPS, shownIn, villageP } from '../data/village.js';
 import { DECOR, hasDecor } from '../data/home.js';
 import { PETS, petLevel } from '../data/pets.js';
 import { has } from '../data/book.js';
+import { DAY_LIFE } from '../data/play.js';
 
 const MW = VILLAGE_MAP[0].length, MH = VILLAGE_MAP.length;
 const center = v => v * TILE + TILE / 2;
@@ -66,12 +67,13 @@ function stillThere(sc, o, kind, where) {
   if (kind === 'bug') return where === 'tree' ? ch === 'T' : where === 'pond' ? ch === '~' : where === 'flower' ? ch === '*' : ch === '.';
   return (ch === '.' || ch === '*') && !sc.blocked[o.y * MW + o.x];
 }
-// today's fish, bugs and wild things (a new day rolls them afresh)
+// today's fish, bugs and wild things (a new day rolls them afresh; what is going on today has its say:
+// data/play.js DAY_LIFE, scenes/village-days.js)
 export function today(sc) {
-  const meta = sc.meta;
+  const meta = sc.meta, t = meta.today;
   if (meta.life?.day === (meta.day || 0)) return meta.life;
   const { bug, wild } = spotsOf(sc);
-  rollDay(meta, bug, wild);
+  rollDay(meta, bug, wild, Math.random, t && t.day === (meta.day || 0) ? DAY_LIFE[t.ev] || null : null);
   sc.hooks.onLife?.();
   return meta.life;
 }
