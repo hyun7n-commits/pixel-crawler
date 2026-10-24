@@ -247,6 +247,8 @@ const SOUNDS = {
     chime([3136, 2637], 0.12, 0.06, 0.4, 0.38);
     hiss(0.4, { vol: 0.05, freq: 7000, type: 'highpass', delay: 0.3 });
   },
+  // 새로 찾은 것 (v0.30): a smaller, quicker twinkle than a secret's, for the many little finds
+  find() { chime([1568, 2093, 2637], 0.05, 0.07, 0.16); },
   // poking at things: leaves rustling, a knock on wood, a head on something hard, a cat, a squirrel
   rustle() { hiss(0.22, { vol: 0.1, freq: 3400, q: 0.6, attack: 0.01 }); hiss(0.14, { vol: 0.06, freq: 2600, q: 0.6, delay: 0.09 }); },
   knock() { tone(190, 0.07, { type: 'triangle', vol: 0.22, to: 120 }); hiss(0.04, { vol: 0.1, freq: 900 }); },

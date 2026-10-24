@@ -8,6 +8,8 @@ import { ORES } from '../data/ores.js';
 import { idx, inMap, STAIRS, DOOR, ORE, UPSTAIRS, WALL, GRAVE, LOCKED, HIVE, WEED } from '../core/dungeon.js';
 import { RELICS } from '../data/relics.js';
 import { josa } from '../core/util.js';
+import { TRINKET } from '../data/trinkets.js';
+import { oddName, oddTip } from '../core/wonders.js';
 
 const CHEST = '보물 상자: 열면 유물을 하나 고른다.';
 const PICKUP = {
@@ -19,6 +21,8 @@ const PICKUP = {
   necklace: () => '아기새 리본: 울보 아기새의 것이다.',
   tag: () => '낡은 일꾼 명찰: 조합 명찰이다. 이름 자리가 긁혀 있다.',
   candy: (q, run) => `별사탕: 먹으면 가진 유물들이 한꺼번에 ${q.n || candySteps(run.floor)}번 자란다.`,
+  glint: () => '반짝이는 흙: 뭔가 묻혀 있다.',
+  trinket: q => `${TRINKET[q.id]?.name || '작은 것'}: 누가 떨어뜨렸을까.`,
   crystal: (q, run) => {
     const lv = (run.p.relics[q.relic] || 0) + 1;
     return `유리 종 속 유물: ${RELICS[q.relic].name} Lv${lv}, ${RELICS[q.relic].desc(lv)}. 하나를 가지면 나머지 유리 종은 깨진다.`;
@@ -93,8 +97,12 @@ export function describeTile(run, x, y, always = false) {
       const cross = e.grump > 0 ? `심술 나서 옆에 있는 녀석을 무는 중 (${e.grump}턴)` : '';
       // 도토리 다람쥐 with a pinecone in its paws
       const busy = e.belly ? '배 속에서 방울이 딸랑거려 딸꾹질하는 중 (지금 치면 기습)' : e.juggle > 0 ? '코끝에 솔방울을 올리고 묘기를 부리는 중. 나는 안중에도 없다 (지금 치면 기습)' : e.bury > 0 ? '솔방울을 묻으러 가는 중. 나는 안중에도 없다 (지금 치면 기습)' : e.sweetT > 0 ? (e.toy ? '방울을 갖고 노느라 정신이 없다 (지금 치면 기습)' : '쏟아진 꿀에 정신이 팔려 있다') : '';
-      const how = [hot || stuck || cross || scrap || busy || dizzy || heap || STATE[e.state] || '', fire].filter(Boolean).join(', ');
-      lines.push(`${e.chief ? '우두머리 ' : e.big ? '기세등등한 ' : ''}${e.d.name} · 체력 ${e.hp}/${e.maxHp} · 공격 ${e.atk} · ${how}${e.d.tip ? ` · ${e.d.tip}` : ''}`);
+      // 버릇 (v0.30): caught at one of its habits
+      const habit = e.habitT > 0 && e.habitName ? `딴짓하는 중 (${e.habitName}). 나는 안중에도 없다 (지금 치면 기습)` : '';
+      const how = [hot || stuck || cross || scrap || busy || habit || dizzy || heap || oddTip(e) || STATE[e.state] || '', fire].filter(Boolean).join(', ');
+      // the gentle odd ones never fight: no numbers for those
+      if (e.meek && !e.scared) lines.push(`${oddName(e)} · ${how}`);
+      else lines.push(`${e.chief ? '우두머리 ' : e.big ? '기세등등한 ' : ''}${oddName(e)} · 체력 ${e.hp}/${e.maxHp} · 공격 ${e.atk} · ${how}${e.d.tip ? ` · ${e.d.tip}` : ''}`);
     }
   }
   const t = map.tiles[i], lm = map.landmark;

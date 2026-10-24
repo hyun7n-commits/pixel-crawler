@@ -30,7 +30,10 @@ import { FOLK, villageP, ownsHome } from './data/village.js';
 import { placed, rollVisitor, roomOf, bringIn } from './data/home.js';
 import { CHARACTERS } from './data/characters.js';
 import { describeTile } from './ui/tip.js';
-import { SECRETS, secretOf, secretsFound } from './data/secrets.js';
+import { secretOf } from './data/secrets.js';
+import { record, bookCount } from './data/book.js';
+import { toast } from './ui/toast.js';
+import { renderBook } from './ui/book.js';
 import { $, el, button, icon } from './ui/dom.js';
 import * as sfx from './audio/sfx.js';
 import { setMusic, musicOff, setMusicOff } from './audio/music.js';
@@ -318,16 +321,10 @@ const homeHooks = {
     homeHud();
   },
   onSecret: id => foundSecret(id),
+  onEntry: id => foundEntry(id),
   onCoins: n => { meta.gold += n; saveMeta(meta); sfx.play('nugget'); homeHud(); },
-  // the 비밀 상자: a keepsake for every secret found so far, the rest still "???"
-  onSecrets: () => {
-    sfx.play('pluck');
-    showVillageTip('');
-    showTalk({
-      who: CHARACTERS[meta.sel].sprite, name: '비밀 상자', line: secretsFound(meta) >= SECRETS.length ? '다 찾았다! 이제 마을에서 모르는 건 없다. …아마도.' : '찾아낸 비밀마다 기념품을 하나씩 넣어 둔다. 아직 빈자리가 있다.',
-      build: box => renderPanel('secrets', box, { meta }),
-    });
-  },
+  // the 비밀 상자: the 비밀 도감, every odd thing found so far (ui/book.js)
+  onSecrets: () => openBook('비밀 상자'),
   // the bookshelf: the trip records and the critter book
   onBook: () => {
     sfx.play('pluck');
@@ -391,26 +388,50 @@ const villageHooks = {
   },
   onSound: name => sfx.play(name),
   onSecret: id => foundSecret(id),
+  onEntry: id => foundEntry(id),
   found: id => !!meta.secrets[id],
 };
 
-// 비밀 (data/secrets.js): the first time one turns up, a chime and a banner saying how many there are
-// to find. Out in the fields the run has written it down already (core/run.js secret).
+// 비밀 (data/secrets.js): the first time one turns up, a chime, a banner, and its page in the 비밀 도감.
+// Out in the fields the run has written it down already (core/run.js secret).
 function foundSecret(id) {
-  if (!secretOf(id) || meta.secrets[id]) return false;
-  meta.secrets[id] = Date.now();
+  if (!secretOf(id) || !record(meta, `secret:${id}`)) return false;
   announceSecret(id);
   return true;
 }
 function announceSecret(id) {
-  // the first one brings the 비밀 상자 home, straight into the room if there is one and room in it
-  if (!meta.house.own.secretbox) {
-    meta.house.own.secretbox = true;
-    if (ownsHome(meta)) bringIn(meta, 'secretbox');
-  }
+  boxHome();
   saveMeta(meta);
   sfx.play('secret');
-  hud.banner(`비밀 발견! ${secretOf(id).name} (${secretsFound(meta)}/${SECRETS.length})`, 2800);
+  hud.banner(`비밀 발견! ${secretOf(id).name}`, 2800);
+  toast(meta, `secret:${id}`, () => renderVillageHud(meta));
+}
+// The first find of anything brings the 비밀 상자 home, straight into the room if there is one and room in it
+function boxHome() {
+  if (meta.house.own.secretbox) return;
+  meta.house.own.secretbox = true;
+  if (ownsHome(meta)) bringIn(meta, 'secretbox');
+}
+// 비밀 도감 (data/book.js): anything else odd turning up in the village or at home; out in the fields the
+// run writes it down (core/run.js find) and says so here (onRunEvent 'find')
+function foundEntry(id) {
+  if (!record(meta, id)) return false;
+  announceFind(id);
+  return true;
+}
+function announceFind(id) {
+  boxHome();
+  saveMeta(meta);
+  toast(meta, id, () => { sfx.play('find'); if (inVillage) renderVillageHud(meta); });
+}
+// the book itself, from the 비밀 상자 at home or the village's top bar
+function openBook(name = '비밀 도감') {
+  sfx.play('pluck');
+  showVillageTip('');
+  showTalk({
+    who: CHARACTERS[meta.sel].sprite, name, line: bookCount(meta) ? '찾아낸 것마다 한 칸씩 채워 둔다. 아직 빈칸이 많다.' : '아직 아무것도 없다. 이상한 걸 보면 여기 적어 두자.',
+    build: (box, redraw) => renderBook(box, meta, { changed: () => { saveMeta(meta); sfx.play('buy'); redraw(); renderVillageHud(meta); if (inHome) homeHud(); } }),
+  });
 }
 
 // The village's tip line: who someone is when the mouse rests on them, or a short note after a tap.
@@ -434,6 +455,7 @@ function onRunEvent(type, d) {
   // a boss down: a short fanfare and a word across the screen (v0.29)
   if (type === 'bossDown') setTimeout(() => { sfx.play('fanfare'); hud.banner(d.last ? '대장을 쓰러뜨렸다!' : `${josa(d.name, '을', '를')} 쓰러뜨렸다!`, 2400); }, 350);
   if (type === 'secret') setTimeout(() => announceSecret(d.id), d.delay || 0);
+  if (type === 'find') setTimeout(() => announceFind(d.id), d.delay || 0);
   if (type === 'request') setTimeout(() => hud.banner(`조합 의뢰 완료! +${d.pay}G`), 300);
   if (type === 'evolve') showEvolve(d);
   if (type === 'fission') hud.fission(d);
@@ -814,6 +836,7 @@ function showOptions() {
 $('mOpt').append(icon('gear'));
 $('mOpt').addEventListener('click', showOptions);
 $('vSound').addEventListener('click', toggleSound);
+$('vBook').addEventListener('click', () => { if (inVillage && !modalOpen()) openBook(); });
 // 32px or 16px characters: the textures are built once, so switching reloads the page (the save is kept)
 $('vGo').addEventListener('click', () => chooseStage());
 // (the button lets go of the focus, so Enter and the arrows go on working the room)
@@ -937,4 +960,4 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { put
 window.addEventListener('pagehide', () => { putAway(); sfx.audioAway(); });
 
 // test hook for automated play-testing; harmless in normal play
-window.__game = { get run() { return run; }, get meta() { return meta; }, get scene() { return scene; }, get village() { return village(); }, get home() { return home(); }, startRun, setAim, showVillage, showStory, showHome, leaveHome, setHomeEdit, talkTo };
+window.__game = { get run() { return run; }, get meta() { return meta; }, get scene() { return scene; }, get village() { return village(); }, get home() { return home(); }, startRun, setAim, showVillage, showStory, showHome, leaveHome, setHomeEdit, talkTo, foundEntry, openBook };

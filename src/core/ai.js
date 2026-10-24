@@ -17,6 +17,7 @@ import { NPC_TEXT } from '../data/npcs.js';
 import { MAP_W, BEE_HOME, SCREAM_RANGE } from '../data/balance.js';
 import { cheb, shuffle, josa, rint, pick, DIRS8 } from './util.js';
 import { onEnter, ignite } from './world.js';
+import { scare, slipAway } from './wonders.js';
 
 export const WAKE_AT = 10;
 // Shattered Pixel Dungeon's vault (v4.0) stealth: a wanderer barely sees what is behind its back, and
@@ -46,6 +47,10 @@ export function enemyAct(run, e, dmP) {
     return;
   }
   if (e.state === 'hide' || e.state === 'stone') return;
+  // caught at one of its habits (core/wonders.js lookAbout): it is busy with that for a turn or two
+  if (e.habitT > 0) { e.habitT--; return; }
+  // 별난 친구들 (v0.30): the gold one runs, the gentle ones never fight
+  if (e.odd && oddAct(run, e, dmP)) return;
   // v0.23 critters that are not quite themselves this turn
   if (d.inert) { pileTick(run, e); return; }
   if (e.state === 'dead') { playDeadTick(run, e); return; }
@@ -152,6 +157,8 @@ export function enemyAct(run, e, dmP) {
 }
 
 function sleepTick(run, e) {
+  // a 잠꾸러기 sleeps through anything but a blow
+  if (e.deep) { e.wake = 0; return; }
   if (run.map.gas.sleep[idx(e.x, e.y)] >= SLEEP_MIN) { e.wake = 0; return; }
   if (e.doze > 0) { e.doze--; return; }
   // 밤의 눈: you move so softly that a sleeper does not stir however close you come
@@ -171,6 +178,65 @@ function sleepTick(run, e) {
       run.emit('alert', { enemy: o });
     }
   }
+}
+
+// 별난 친구들 (v0.30, data/odd.js, core/wonders.js). A gold one runs the moment it sees you and never
+// fights; it is heavy with gold, so it has to stop for breath every other step, and out of sight a few
+// turns it is gone down a hole. The gentle ones (a baby, one with a flower, an old one) never fight
+// either: a baby keeps close to its grown-up, an old one only gets about every other turn, and hurt,
+// any of them runs off for good. Returns false to leave the turn to the usual rules (a 잠꾸러기 is a
+// critter like any other, only very soundly asleep).
+function oddAct(run, e, dm) {
+  if (e.stun > 0) { e.dazed = --e.stun === 0; return true; }
+  if (e.scared) { shy(run, e, dm, canSee(run, e, 9)); return true; }
+  if (e.odd === 'gold') {
+    if (e.state === 'sleep') { sleepTick(run, e); if (e.state !== 'sleep') bolt(run, e); return true; }
+    if (e.state !== 'flee') {
+      if (!canSee(run, e, 7)) { wander(run, e); return true; }
+      bolt(run, e);
+      return true;
+    }
+    shy(run, e, dm, canSee(run, e, 9));
+    return true;
+  }
+  if (!e.meek) return false;
+  if (e.odd === 'baby') { tagAlong(run, e); return true; }
+  if (e.odd === 'old') { e.skip = !e.skip; if (e.skip) return true; }
+  calmAct(run, e);
+  return true;
+}
+
+// it has seen you: off it goes
+export function bolt(run, e) {
+  Object.assign(e, { state: 'flee', ran: 0, pants: 0, lost: 0, wake: 0, doze: 0 });
+  run.say(e, '!');
+  run.emit('alert', { enemy: e });
+}
+
+// running off without a thought of fighting: two steps and a breath; cornered, it only cowers
+const SHY_PANT = 2, SHY_GONE = 3;
+function shy(run, e, dm, sees) {
+  e.lost = sees ? 0 : (e.lost || 0) + 1;
+  if (e.lost >= SHY_GONE && dm[idx(e.x, e.y)] >= 5) { slipAway(run, e); return; }
+  if ((e.ran || 0) >= SHY_PANT) {
+    e.ran = 0; e.pants = (e.pants || 0) + 1;
+    run.emit('pant', { enemy: e });
+    return;
+  }
+  if (fleeStep(run, e, dm)) e.ran = (e.ran || 0) + 1;
+  else run.emit('cower', { enemy: e });
+}
+
+// a baby keeps close to its grown-up: naps when it naps, toddles after it, pokes about beside it
+function tagAlong(run, e) {
+  const mum = e.mum != null && run.enemies.find(o => o.id === e.mum && o.hp > 0);
+  if (!mum) { e.mum = null; calmAct(run, e); return; }
+  if (mum.state === 'sleep') { if (e.state !== 'sleep' && Math.random() < 0.5) e.state = 'sleep'; return; }
+  if (e.state === 'sleep') { e.state = 'wander'; return; }
+  if (cheb(e, mum) > 1) { stepToward(run, e, distMap(run.map, mum.x, mum.y)); return; }
+  if (Math.random() < 0.6) return;
+  const t = shuffle(DIRS8.map(([dx, dy]) => ({ x: e.x + dx, y: e.y + dy }))).find(t => canStep(run, e, t.x, t.y) && cheb(t, mum) <= 1);
+  if (t) moveEnemy(run, e, t.x, t.y);
 }
 
 // A peaceful monster minding its own business: naps, wakes up, ambles about.
@@ -228,6 +294,16 @@ export function rouse(run, e, by, x, y) {
   if (e.state === 'hide' || e.state === 'stone') {
     if (by === 'hit') awaken(run, e);
     return false;
+  }
+  // 별난 친구들: a gentle one runs off for good; a gold one wakes up running; a 잠꾸러기 only wakes to a blow
+  if (e.meek) {
+    if (by === 'hit') scare(run, e);
+    return false;
+  }
+  if (e.odd === 'gold' && by === 'hit') { if (e.state !== 'flee') bolt(run, e); return true; }
+  if (e.deep) {
+    if (by !== 'hit') return false;
+    e.deep = false;
   }
   if (run.calm(e)) {
     if (by !== 'hit') return false; // noise doesn't bother it

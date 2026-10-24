@@ -287,3 +287,14 @@ export const graveGold = floor => (2 + Math.floor(gs(stageOf(floor)))) * (3 + Ma
 // 낡은 일꾼 명찰 (v0.23): rare from the second stage on, a few on every floor of the ruins (stage 10)
 export const TAG_GOLD = 2;
 export const tagsPerFloor = (stage) => stage === 9 ? 2 + (Math.random() < 0.5) : stage >= 1 && Math.random() < 0.15 ? 1 : 0;
+
+// 별난 것들 (v0.30, core/wonders.js): an odd critter on a field (and now and then a second); what a gold one
+// bursts into; a flower's worth of health; how often a baby hands over one of the field's little things;
+// a habit caught now and then, never two close together; a glint in the dirt (and a second); a little
+// thing in a chest; rests beside a 잠꾸러기 before it rolls over
+export const ODD_CHANCE = 0.6, ODD_MORE = 0.2;
+export const oddGold = floor => 10 + 4 * gfl(floor);
+export const FLOWER_HEAL = 0.2, BABY_TRINKET = 0.25;
+export const HABIT_CHANCE = 0.2, HABIT_GAP = 5;
+export const GLINT_CHANCE = 0.55, GLINT_MORE = 0.15, CHEST_TRINKET = 0.2;
+export const SLEEPY_RESTS = 2;

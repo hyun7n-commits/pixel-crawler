@@ -13,7 +13,7 @@ import { ENEMIES, ZONES } from '../data/enemies.js';
 import { cleared } from '../data/stages.js';
 import { setEmote, drawEmote } from './emotes.js';
 import { roomOf, doorCell, furniture, placed, plantStage, VISIT_LINES, fits, taken, ownLayout, hasDecor } from '../data/home.js';
-import { SECRETS, secretsFound } from '../data/secrets.js';
+import { bookCount, BOOK_TOTAL } from '../data/book.js';
 import { roomCanvas, roomSize, WALL_ROWS, furnitureCanvas, WALL_Y, plushCushion, FRAMES, roofCanvas, yardCanvas, roofAt, yardAt } from './home-interior-art.js';
 import { pupCanvas } from './home-art.js';
 
@@ -183,7 +183,7 @@ export class HomeScene extends Phaser.Scene {
     if (id === 'lamp') return this.meta.house.dark ? 0 : 1;
     if (id === 'map') return ZONES.filter((_, s) => cleared(this.meta, s) > 0).length;
     // the 비밀 상자 fills up: keepsakes stick out from under its lid
-    if (id === 'secretbox') { const n = secretsFound(this.meta); return n >= SECRETS.length ? 3 : n >= 11 ? 2 : n >= 4 ? 1 : 0; }
+    if (id === 'secretbox') { const n = bookCount(this.meta); return n >= 300 ? 3 : n >= 60 ? 2 : n >= 10 ? 1 : 0; }
     return 0;
   }
   addItem(id, x, y) {
@@ -273,7 +273,7 @@ export class HomeScene extends Phaser.Scene {
     const f = it.f;
     if (it.id === 'plant') return `${f.name}: ${['싹이 텄다', '잎이 났다', '꽃봉오리가 맺혔다', '꽃이 활짝 폈다'][plantStage(this.meta)]} · 탐험을 다녀올 때마다 자란다`;
     if (it.id === 'map') return `${f.name}: 가 본 들판 ${this.look('map')}곳에 별이 붙어 있다`;
-    if (it.id === 'secretbox') return `${f.name}: 찾아낸 비밀 ${secretsFound(this.meta)}/${SECRETS.length} · 부딪히면 열어 본다`;
+    if (it.id === 'secretbox') return `${f.name}: 비밀 도감 ${bookCount(this.meta)}/${BOOK_TOTAL} · 부딪히면 열어 본다`;
     return `${f.name}: ${f.desc}`;
   }
   describeAt(x, y) {

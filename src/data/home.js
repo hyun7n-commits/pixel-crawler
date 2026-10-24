@@ -7,6 +7,7 @@
 import { ENEMIES } from './enemies.js';
 import { CHARACTERS } from './characters.js';
 import { secretsFound } from './secrets.js';
+import { bookCount } from './book.js';
 
 export const DECOR = [
   { id: 'flowers', name: '꽃밭', cost: 800, at: [[35, 21], [36, 21]], desc: '문 옆에 알록달록 꽃을 심는다' },
@@ -77,7 +78,7 @@ export const FURNITURE = {
   garland:  { name: '꽃 줄', w: 2, wall: true, heart: 2, cost: 500, desc: '말린 꽃을 엮어 걸었다' },
   map:      { name: '들판 지도', w: 2, wall: true, heart: 3, cost: 2400, desc: '가 본 들판에 별이 붙는다' },
   // not made to order: it turns up with the first secret you find (data/secrets.js), and fills up
-  secretbox: { name: '비밀 상자', w: 1, h: 1, heart: 1, cost: 0, act: 'secrets', desc: '찾아낸 비밀마다 기념품을 하나씩 넣어 둔다' },
+  secretbox: { name: '비밀 상자', w: 1, h: 1, heart: 1, cost: 0, act: 'secrets', desc: '비밀 도감이 들어 있다. 찾아낸 것마다 한 칸씩 채운다' },
 };
 // the order the carpenter shows them in
 export const CATALOG = ['table', 'plant', 'rug', 'lamp', 'garland', 'petbed', 'painting', 'clock', 'shelf', 'wardrobe', 'stove', 'map', 'tub', 'sofa', 'tank', 'musicbox', 'cloudbed'];
@@ -91,8 +92,8 @@ export function furniture(id) {
 
 // the plant grows a stage with every trip after it went in: a sprout, leaves, a bud, then flowers
 export const plantStage = m => { const n = m.house?.plant || 0; return n >= 6 ? 3 : n >= 3 ? 2 : n >= 1 ? 1 : 0; };
-// the 비밀 상자 gets cosier with every other secret in it
-export const boxHeart = m => 1 + Math.floor(secretsFound(m) / 2);
+// the 비밀 상자 gets cosier with every other secret in it, and with every forty other finds (v0.30)
+export const boxHeart = m => 1 + Math.min(14, Math.floor(secretsFound(m) / 2) + Math.floor((bookCount(m) - secretsFound(m)) / 40));
 export const heartOf = (m, id) => (id === 'plant' ? 1 + plantStage(m) : id === 'secretbox' ? boxHeart(m) : furniture(id)?.heart || 0);
 
 export const STARTER = { bed: [0, 0], stool: [5, 1] };

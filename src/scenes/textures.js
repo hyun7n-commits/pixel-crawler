@@ -6,6 +6,8 @@ import { CHARACTERS } from '../data/characters.js';
 import { ZONES, VILLAGE_GROUND } from '../data/enemies.js';
 import { ORES, RAINBOW } from '../data/ores.js';
 import { dressRows, wearTag } from '../data/wear.js';
+import { findIcon } from '../data/finds-art.js';
+import { TRINKET } from '../data/trinkets.js';
 
 export const TILE = 16; // world pixels per tile
 
@@ -327,6 +329,72 @@ const domCache = {};
 export function spriteForDom(name) {
   const grade = name.startsWith('t_ore_') && ORES.find(o => `t_ore_${o.id}` === name);
   return (domCache[name] ||= grade ? oreCanvas(grade) : spriteCanvas(charRows(name)));
+}
+// a little picture made from rows that are not a sprite of their own (data/finds-art.js), for the DOM
+export const rowsCanvas = rows => spriteCanvas(rows);
+
+// 별난 친구 (v0.30, data/odd.js): a critter's picture as one of the odd ones. 황금: every colour turned to
+// gold by how light it is (the outline and the eyes stay dark); 아기: paler (and drawn smaller where it
+// stands); 꽃단장: a little garland of flowers on top of its head; 잠꾸러기: a nightcap; 꼬부랑: faded, with
+// white brows over its eyes and a walking stick.
+const GOLD_RAMP = ['#fff3b0', '#f4cf4f', '#dcb75a', '#c99a2b', '#8f6a1c'];
+const DARKS = new Set(['k', 'x']);
+const lum = c => { const n = rgbInt(c); return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; };
+const solidAt = (g, x, y) => (g[y]?.[x] ?? '.') !== '.';
+// stamps `pat` (rows; '.' leaves what is there) with its top-left at x, y, then outlines what it added
+function stamp(g, pat, x, y) {
+  const added = [];
+  pat.forEach((r, j) => [...r].forEach((ch, i) => {
+    const gx = x + i, gy = y + j;
+    if (ch === '.' || gy < 0 || gy >= g.length || gx < 0 || gx >= g[0].length) return;
+    g[gy][gx] = ch;
+    added.push([gx, gy]);
+  }));
+  for (const [ax, ay] of added) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const nx = ax + dx, ny = ay + dy;
+    if (ny >= 0 && ny < g.length && nx >= 0 && nx < g[0].length && g[ny][nx] === '.') g[ny][nx] = 'k';
+  }
+}
+export function oddRows(rows, variant) {
+  const g = rows.map(r => [...r]);
+  const top = g.findIndex(r => r.some(c => c !== '.'));
+  const xs = g.slice(top, top + 2).flatMap(r => r.map((c, i) => (c !== '.' ? i : -1)).filter(i => i >= 0));
+  const cx = Math.round(xs.reduce((a, b) => a + b, 0) / xs.length);
+  if (variant === 'flower') stamp(g, ['q.w.q', 'GqyqG'], cx - 2, Math.max(1, top - 2));
+  if (variant === 'sleepy') stamp(g, ['......w', '.....bk', '....bbk', '...bbBk', '..bbbBk', 'wwwwwww'], cx - 3, Math.max(0, top - 4));
+  if (variant === 'old') {
+    // white brows over the eyes: a dark pixel with face on both sides of it
+    for (let y = 1; y < g.length; y++) for (let x = 1; x < g[0].length - 1; x++) {
+      const face = c => c !== '.' && !DARKS.has(c);
+      if (g[y][x] === 'k' && face(g[y][x - 1]) && face(g[y][x + 1]) && face(g[y - 1][x])) g[y - 1][x] = 'w';
+    }
+    // a stick at its side, as tall as its body
+    const right = Math.max(...g.map(r => r.reduce((m, c, i) => (c !== '.' ? i : m), -1)));
+    const bottom = g.length - 1 - [...g].reverse().findIndex(r => r.some(c => c !== '.'));
+    const sx = Math.min(g[0].length - 2, right + 1), h = Math.max(4, Math.round((bottom - top) * 0.6));
+    stamp(g, ['nn', ...Array(h - 1).fill('.n')], sx - 1, bottom - h + 1);
+  }
+  return g.map(r => r.join(''));
+}
+export function oddRecolor(variant) {
+  if (variant === 'gold') return ch => { if (DARKS.has(ch) || !PAL[ch]) return null; const i = [0.85, 0.66, 0.46, 0.28].findIndex(t => lum(PAL[ch]) > t); return GOLD_RAMP[i < 0 ? 4 : i]; };
+  if (variant === 'baby') return ch => (DARKS.has(ch) || !PAL[ch] ? null : mix(PAL[ch], '#ffffff', 0.3));
+  if (variant === 'old') return ch => (DARKS.has(ch) || !PAL[ch] || ch === 'w' ? null : mix(PAL[ch], '#b8ad9e', 0.45));
+  return null;
+}
+export const oddCanvas = (name, variant) => (domCache[`${name}~odd${variant}`] ||= spriteCanvas(oddRows(charRows(name), variant), oddRecolor(variant)));
+// the same as a texture for the fields, made the first time one turns up
+export function oddKey(scene, name, variant) {
+  const key = `${name}~odd${variant}`;
+  if (!scene.textures.exists(key) && charRows(name)) scene.textures.addCanvas(key, spriteCanvas(oddRows(charRows(name), variant), oddRecolor(variant)));
+  return key;
+}
+
+// 주운 것 (v0.30, data/trinkets.js): a little thing lying in the field, as a texture
+export function findKey(scene, id) {
+  const key = `find_${id}`, t = TRINKET[id];
+  if (!scene.textures.exists(key) && t) scene.textures.addCanvas(key, spriteCanvas(findIcon(t.shape, t.pal)));
+  return key;
 }
 
 // Small deterministic noise so tiles look hand-drawn but never flicker.

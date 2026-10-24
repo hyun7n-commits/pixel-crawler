@@ -5,7 +5,7 @@
 // engraving, sparks and glow (fx pixels outside the shape get no outline).
 
 // material ramps: [lit, base, shade]
-const RAMP = {
+export const RAMP = {
   l: ['w', 'l', 'L'], L: ['l', 'L', 'd'], d: ['L', 'd', 'x'],
   y: ['z', 'y', 'Y'], Y: ['y', 'Y', 'U'], i: ['z', 'i', 'u'], z: ['t', 'z', 'y'],
   o: ['y', 'o', 'O'], O: ['o', 'O', 'H'],
@@ -36,7 +36,7 @@ function outline(rows) {
   return rows.map((row, y) => [...row].map((c, x) => (c !== '.' ? c : solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1) ? 'k' : '.')).join(''));
 }
 
-function make({ rows, fx }) {
+export function make({ rows, fx }) {
   const out = outline(shade(rows));
   return fx ? out.map((row, y) => [...row].map((c, x) => (fx[y][x] !== '.' ? fx[y][x] : c)).join('')) : out;
 }

@@ -21,6 +21,8 @@ import { carveChasms, fillPools } from './cliffs.js';
 import { NPC_TEXT, PEDDLER_FLOORS, STALL } from '../data/npcs.js';
 import { TAG_LINES } from '../data/lore.js';
 import { DREAMS } from '../data/secrets.js';
+import { record } from '../data/book.js';
+import { oddOut, pat, rollOver, oddDown, lookAbout, takeTrinket, buryTrinkets, digGlint, chestTrinket, trick } from './wonders.js';
 import { ROUTES } from '../data/routes.js';
 import { REQUESTS, takeRequests } from '../data/requests.js';
 import { isOpen, openNew, RELIC_GATES } from '../data/unlocks.js';
@@ -126,6 +128,10 @@ export class Run {
     this.lunch = home.lunch && !this.dare('nopotion');
     if (this.lunch) this.p.items.potion++;
     this.p.hp = this.stat().maxHp;
+    // the first trip out is plain; from the second on, the fields are full of odd little things to
+    // come across (data/book.js)
+    this.wonders = meta.stats.runs >= 1;
+    this.finds = [];        // pages of the 비밀 도감 filled on this trip
     meta.stats.runs++;
     meta.stats.maxFloor = Math.max(meta.stats.maxFloor, this.floor);
   }
@@ -532,6 +538,9 @@ export class Run {
     // 갈림길: what the sign by the burrow you came down promised is here; and from here on, two ways
     if (route) this.routeBonus(route, place);
     if (this.open('fork') && B.localOf(this.floor) < B.FLOORS_PER_ZONE - 1) this.fork(open);
+    // 별난 것들 (v0.30): an odd critter or two, and something glinting in the dirt
+    oddOut(this);
+    buryTrinkets(this, place);
   }
 
   // One of the meadow tools opened so far (null before any), the stage's own (ZONE_TOOL) half the time
@@ -891,8 +900,18 @@ export class Run {
     if (!inMap(nx, ny) || squeeze(map, p.x, p.y, dx, dy)) return false;
     if (dx) p.face = Math.sign(dx);
     p.blend = p.tucked = false;
-    const e = this.enemyAt(nx, ny);
+    let e = this.enemyAt(nx, ny);
     if (e && e.d.npc) { this.talk(e); return true; }
+    // a gentle odd one (core/wonders.js): a bump is a pat; once it has given you what it had, it
+    // shuffles aside and you trade places
+    if (e && e.meek && !e.scared) {
+      if (!e.gave) { pat(this, e); this.endTurn(); return true; }
+      if (p.sticky || p.held || !this.passable(nx, ny) || [T.CHASM, T.LAVA].includes(map.ter[idx(nx, ny)])) return false;
+      if (e.state === 'sleep') e.state = 'wander';
+      e.x = p.x; e.y = p.y;
+      e.face = -Math.sign(dx) || e.face;
+      e = null;
+    }
     if (e && e.state === 'hide') {
       // you reach for the chest and it bites
       awaken(this, e);
@@ -996,7 +1015,9 @@ export class Run {
     p.lull = sleeper && !up ? (this.restAt === this.turn - 1 && p.lullBy === sleeper.id ? (p.lull || 0) + 1 : 1) : 0;
     p.lullBy = sleeper?.id;
     this.restAt = this.turn;
-    if (p.lull >= B.LULL_RESTS && !this.lulled) this.lullaby(sleeper);
+    // a 잠꾸러기 (core/wonders.js) rolls over for anyone who keeps it company, every one of them once
+    if (sleeper?.deep && !sleeper.gave && p.lull >= B.SLEEPY_RESTS) rollOver(this, sleeper);
+    else if (p.lull >= B.LULL_RESTS && !this.lulled) this.lullaby(sleeper);
     if (p.rests >= B.DREAM_RESTS && !this.dreamt) this.dream();
     this.endTurn();
     return true;
@@ -1011,6 +1032,15 @@ export class Run {
     this.emit('secret', { id, delay });
     return true;
   }
+  // 비밀 도감 (v0.30, data/book.js): anything odd seen for the first time gets its page and a toast
+  // (main.js announceFind); `delay`: ms to wait for what the field shows first
+  find(id, delay = 0) {
+    if (!record(this.meta, id)) return false;
+    this.finds.push(id);
+    this.emit('find', { id, delay });
+    return true;
+  }
+
 
   // Walking into a wall takes no turn and mostly just rustles it (or knocks on the rock). But a gap of
   // light in it lets you through to a hidden nook; a bush standing in a room may have a baby critter
@@ -1589,6 +1619,7 @@ export class Run {
         this.log(`${josa(e.d.name, '이', '가')} 솔방울을 덥석 받아 들고 신나서 묻으러 간다!`, 'good');
         this.discover('pine_squirrel');
       }
+      trick(this, 'pinecone', e);
       return;
     }
     // 공벌레 curls up tight at the knock and goes rolling off like a bowling ball (rollBug)
@@ -1602,16 +1633,20 @@ export class Run {
         this.log(`${josa(e.d.name, '이', '가')} 솔방울을 코끝으로 받더니 묘기를 부리기 시작했다!`, 'good');
         this.discover('pine_seal');
       }
+      trick(this, 'pinecone', e);
       return;
     }
     if (e && e.type === 'garg' && e.hp > 0 && !e.chief) {
       this.emit('pine', { x, y, hit: true });
       this.rollBug(e);
+      trick(this, 'pinecone', e);
       return;
     }
     if (e && !e.d.npc) {
       this.emit('pine', { x, y, hit: true });
       if (this.isVisible(x, y)) this.log(`솔방울이 ${josa(e.d.name, '을', '를')} 딱 맞혔다!`, 'good');
+      // (its answer comes as it is hit, whether or not it is still standing after)
+      trick(this, 'pinecone', e);
       this.hurt(e, B.pineDamage(this.floor), 'pine');
       if (e.hp > 0 && !e.d.boss && !['hide', 'stone', 'lurk'].includes(e.state)) {
         // where it is knocked to: over a cliff edge, or onto a trap, is a thing to remember
@@ -1705,6 +1740,8 @@ export class Run {
       this.log('화난 벌들이 쏟아진 꿀로 몰려간다! 윙윙, 이제 나는 안중에도 없다.', 'good');
       if (angry.some(e => this.isVisible(e.x, e.y))) this.discover('honey_bees');
     }
+    // (the fliers it cannot stick still get a taste)
+    for (const e of this.enemies.filter(e => e.hp > 0 && !e.d.npc && cheb(e, { x, y }) <= 1 && !['hide', 'stone', 'lurk'].includes(e.state))) trick(this, 'honeyjar', e);
   }
 
   // 졸음 꽃: pops into a cloud of sleep pollen, the same as the trap. Whoever is in it nods off at once
@@ -1721,6 +1758,7 @@ export class Run {
     }
     this.emit('doze', { list: slept });
     this.log(slept.length ? `졸음 꽃이 퐁! ${slept.length > 1 ? `${slept.length}마리가` : josa(slept[0].d.name, '이', '가')} 꾸벅꾸벅 잠들었다.` : '졸음 꽃이 퐁 터지며 꽃가루가 퍼졌다.', 'good');
+    for (const e of slept) trick(this, 'sleepy', e);
   }
 
   // 매운 고추: too hot to think of anything but running (ai.js e.fear); it tires as anything running
@@ -1737,6 +1775,7 @@ export class Run {
       this.hurt(e, e.hp, 'fire');
       this.goo(e.x, e.y, T.WATER);
       if (seen) this.discover('chili_snow');
+      trick(this, 'chili', e);
       return;
     }
     // 불도마뱀 is mad about hot food: it gulps the chili down, delighted, and puffs up a size instead of
@@ -1752,6 +1791,7 @@ export class Run {
       }
       this.say(e, '♥');
       if (seen) this.discover('chili_salamander');
+      trick(this, 'chili', e);
       return;
     }
     e.fear = e.d.boss ? B.CHILI_BOSS : B.CHILI_TURNS;
@@ -1759,6 +1799,7 @@ export class Run {
     this.emit('chili', { enemy: e });
     this.say(e, pick(['헥헥!', '후아후아!', '하아하아!', '!!']));
     if (this.isVisible(e.x, e.y)) this.log(e.d.boss ? `${josa(e.d.name, '이', '가')} 매워서 펄쩍 뛰었다! 금방 정신을 차릴 것 같다.` : `${josa(e.d.name, '이', '가')} 매워서 펄쩍 뛰었다! 허둥지둥 달아난다.`, 'good');
+    trick(this, 'chili', e);
   }
 
   // 방울: it rings where it lands for a few turns (ringBells, every turn before the critters move), and
@@ -1777,6 +1818,7 @@ export class Run {
         this.log(`${josa(frog.d.name, '이', '가')} 혀를 쭉 뻗어 방울을 꿀꺽 삼켰다! 배 속에서 딸랑딸랑…`, 'good');
         this.discover('bell_frog');
       }
+      trick(this, 'bell', frog);
       return;
     }
     this.log('딸랑딸랑! 방울이 울린다.', 'good');
@@ -1831,6 +1873,12 @@ export class Run {
         Object.assign(e, { state: 'search', searchT: 0, last: { x: b.x, y: b.y }, aim: false, lured: this.turn });
       }
       if (heard.length) this.emit('heard', { x: b.x, y: b.y, list: heard });
+      // 도구 장난 (core/wonders.js): what each one that turned to it does, once a bell
+      if (!b.tricks) {
+        b.tricks = true;
+        const near = this.enemies.filter(e => e.hp > 0 && !e.d.npc && cheb(e, b) <= B.BELL_RANGE && (e.d.boss || lost.includes(e) || cats.includes(e) || e.lured === this.turn || this.calm(e)));
+        for (const e of near) trick(this, 'bell', e);
+      }
       if (--b.t <= 0) {
         bells.splice(bells.indexOf(b), 1);
         // the frog coughs it back up, out onto the ground in front of it (not under its own feet)
@@ -1949,6 +1997,7 @@ export class Run {
         this.log(sneak ? '아무도 깨지 않았다. 살금살금 상자를 열었다!' : q.rich ? '금테 상자를 열었다!' : '보물 상자를 열었다!', 'good');
         if (sneak) this.discover('den_sneak');
         if (q.guarded) this.wakeStatues(x, y);
+        chestTrinket(this, x, y);
       } else if (q.type === 'bossChest') {
         // the stage's prize: the gold comes out in a heap, every relic you carry grows a level (and
         // whatever that completes evolves, one after another), and then you choose: home with the
@@ -1972,6 +2021,8 @@ export class Run {
       } else if (q.type === 'candy') this.fission(q.n || B.candySteps(this.floor), x, y);
       else if (q.type === 'crystal') this.takeCrystal(q);
       else if (q.type === 'tag') this.takeTag();
+      else if (q.type === 'trinket') takeTrinket(this, q.id);
+      else if (q.type === 'glint') digGlint(this, q);
       else if (q.type === 'necklace') {
         this.quests.ghost.state = 'found';
         this.log('아기새 리본을 찾았다! 울보 아기새에게 돌려주자.', 'good');
@@ -2196,6 +2247,7 @@ export class Run {
     e.hp -= dmg;
     e.hitAt = this.turn;
     e.bury = 0;   // a blow brings a squirrel busy with its pinecone back to its senses
+    e.habitT = 0; // (or anyone caught at a habit, core/wonders.js)
     if (e.juggle > 0) this.dropJuggle(e);   // and ends a seal's show
     if (e.toy) { e.toy = false; e.sweetT = 0; }  // and a cat playing with a bell
     this.emit('hit', { enemy: e, x: e.x, y: e.y, dmg, kind });
@@ -2300,6 +2352,7 @@ export class Run {
     const book = this.meta.critters ||= {};
     book[e.type] = (book[e.type] || 0) + 1;
     this.emit('kill', { enemy: e });
+    oddDown(this, e);
     // 연속 처치 (v0.23): monsters knocked down one right after another (each within a couple of turns
     // of the last; a bomb or a chain of lightning does several at once) drop more gold each, and the
     // cheer climbs with the count
@@ -2762,7 +2815,8 @@ export class Run {
   }
 
   // a peaceful monster nobody has picked a fight with yet
-  calm(e) { return !!e.d.peaceful && !e.angry; }
+  // (or one of the gentle odd ones: a baby, one with a flower, an old one, core/wonders.js)
+  calm(e) { return (!!e.d.peaceful || !!e.meek) && !e.angry; }
 
   // Like Shattered Pixel Dungeon: once you thin a floor out, a new enemy wanders in now and then,
   // somewhere out of sight, and roams until it runs into you.
@@ -2896,6 +2950,7 @@ export class Run {
     this.refreshDoors();
     computeFOV(this.map, this.p.x, this.p.y, this.stat().sight, this.lights());
     this.meetCritters();
+    lookAbout(this);
     // 낮잠 방: a word the first time you see into it
     const den = this.map.den;
     if (den && !this.map.denSeen && this.isVisible(den.x, den.y)) {

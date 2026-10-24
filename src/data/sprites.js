@@ -813,6 +813,25 @@ export const SPR = {
     '................',
   ],
   // 낡은 일꾼 명찰 (v0.23): a guild name tag on a broken cord, the name scratched off
+  // 반짝 흙 (v0.30, core/wonders.js): a little heap of turned earth with something glinting in it
+  glintDirt: [
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '.........z......',
+    '........zyz.....',
+    '.........z......',
+    '.....kkkkkkk....',
+    '....kMnnynnhk...',
+    '...kMnnhnnnhHk..',
+    '...khhnHhhHHHk..',
+    '....kkkkkkkkk...',
+  ],
   workertag: [
     '................',
     '................',

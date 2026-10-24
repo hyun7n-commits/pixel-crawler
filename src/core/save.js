@@ -35,6 +35,8 @@ export function freshMeta() {
     pets: {},               // pets bought at the shop, and the one that comes along (data/pets.js)
     pet: null,
     secrets: {},            // 비밀 found round the village, the house and the fields: id -> when (data/secrets.js)
+    book: {},               // everything else in the 비밀 도감: entry id -> when (data/book.js)
+    bookBox: 0,             // the book's presents already taken (one every GIFT_EVERY pages)
     wardrobe: {},           // 꾸미기 bought at the shop, and what the hero wears now (data/wear.js)
     wear: { head: null, neck: null },
     board: null,            // the guild's notice board for the next trip, until it goes (data/requests.js)
@@ -85,6 +87,7 @@ export function loadMeta() {
         dares: { on: { ...m.dares?.on }, won: { ...m.dares?.won } },
         pets: { ...m.pets },
         secrets: { ...m.secrets },
+        book: { ...m.book },
         wardrobe: { ...m.wardrobe },
         wear: { head: m.wear?.head || null, neck: m.wear?.neck || null },
       };

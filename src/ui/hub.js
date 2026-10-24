@@ -26,6 +26,7 @@ import { WEAR } from '../data/wear.js';
 import { furnitureCanvas } from '../scenes/home-interior-art.js';
 import { savedRun } from '../core/suspend.js';
 import { SECRETS, secretsFound } from '../data/secrets.js';
+import { bookCount } from '../data/book.js';
 
 export function renderPanel(id, box, ctx) {
   PANELS[id](box, ctx);
@@ -41,6 +42,10 @@ export function renderVillageHud(meta, saved = savedRun()) {
   purse.innerHTML = '';
   purse.append(icon('gold', 16), el('span', null, `${meta.gold}G`));
   $('vGo').textContent = saved ? `이어서 탐험 · ${saved.label}` : `${josa(CHARACTERS[meta.sel].name, '으로', '로')} 들판에 출발`;
+  // the 비밀 도감 (ui/book.js), once there is something in it
+  const n = bookCount(meta), book = $('vBook');
+  book.hidden = !n;
+  if (n) { book.innerHTML = ''; book.append(icon('pillow', 16), el('span', null, `${n}`)); }
 }
 
 const startButton = (meta, onStart) => {
@@ -447,20 +452,4 @@ function rival(box, { meta, changed }) {
   box.append(list);
 }
 
-// ---------- 비밀 상자 (at home): a keepsake for every secret found, the rest "???" ----------
-function secrets(box, { meta }) {
-  const wrap = el('div', 'shop');
-  wrap.append(el('h3', null, `비밀 (${secretsFound(meta)}/${SECRETS.length})`));
-  for (const [where, label] of [['village', '마을'], ['home', '집'], ['field', '들판']]) {
-    wrap.append(el('div', 'book-tier', label));
-    for (const s of SECRETS.filter(s => s.where === where)) {
-      const got = meta.secrets?.[s.id], row = el('div', 'row' + (got ? '' : ' unknown')), main = el('div', 'row-main');
-      main.append(el('span', 'row-name', got ? s.name : '???'), el('span', 'row-sub', got ? s.got : '아직 모른다.'));
-      row.append(main);
-      wrap.append(row);
-    }
-  }
-  box.append(wrap);
-}
-
-const PANELS = { chars, shop, rumor, books, records, rival, carpenter, secrets };
+const PANELS = { chars, shop, rumor, books, records, rival, carpenter };
