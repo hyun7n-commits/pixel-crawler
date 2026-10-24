@@ -5,7 +5,7 @@
 /* global Phaser */
 import { setEmote, drawEmote } from './emotes.js';
 import { pixEllipse, pixDisc, pixLine, pixDiamond, pixArrow } from './pix.js';
-import { TILE, buildTextures, oddKey, findKey, shapeKey, dressKey, wallKey, waterKey, roundedWater, seamKey, SEAM_SPOTS, chasmKey, seaKey, bridgeKey, GRASS_PAL, shadeKey, floorKey, oreFrame, oreTall, dropKey, chipKey, pebbleKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
+import { TILE, buildTextures, oddKey, findKey, shapeKey, dressKey, wallKey, waterKey, roundedWater, seamKey, SEAM_SPOTS, chasmKey, seaKey, bridgeKey, GRASS_PAL, shadeKey, floorKey, oreFrame, oreTall, oreBox, dropKey, chipKey, pebbleKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
 import { CHARACTERS } from '../data/characters.js';
 import { PETS } from '../data/pets.js';
 import { ITEMS } from '../data/items.js';
@@ -2608,7 +2608,12 @@ export class DungeonScene extends Phaser.Scene {
       const bx = Math.min(...xs), by = Math.min(...ys), bw = Math.max(...xs) - bx + 1, bh = Math.max(...ys) - by + 1;
       const full = bw * bh === ore.cells.length;
       const corner = full ? null : ore.cells.find(c => ore.cells.filter(o => cheb(o, c) === 1 && (o.x === c.x || o.y === c.y)).length === 2);
-      const cx0 = (full ? bx : corner.x) * TILE, cy0 = (full ? by : corner.y) * TILE, sx = full ? bw : 1, sy = full ? bh : 1;
+      let cx0 = (full ? bx : corner.x) * TILE, cy0 = (full ? by : corner.y) * TILE, sx = full ? bw : 1, sy = full ? bh : 1;
+      // a one-tile rock has a shape of its own (textures.js oreBox): the cracks spread over that
+      if (ore.cells.length === 1 && !ore.pebble) {
+        const box = oreBox(ore);
+        cx0 += box.x; cy0 += box.y; sx = box.w / TILE; sy = box.h / TILE;
+      }
       g.fillStyle(0x1b1424, 0.9);
       const cracks = ore.pebble ? [[8, 7, 6, 10], [6, 10, 9, 12]] : [[8, 2, 6, 7], [6, 7, 9, 11], [3, 9, 6, 7], [9, 11, 12, 13], [10, 4, 12, 8]];
       for (let k = 0; k < ore.hits; k++) pixLine(g, cx0 + cracks[k][0] * sx, cy0 + cracks[k][1] * sy, cx0 + cracks[k][2] * sx, cy0 + cracks[k][3] * sy);

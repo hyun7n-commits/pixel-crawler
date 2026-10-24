@@ -37,7 +37,7 @@ function spriteCanvas(rows, recolor) {
 // at a glance what it is: round nuggets for copper, silver and gold, faceted crystals for diamond and
 // the gems (in every colour for the rainbow stone). Pieces use 1 highlight, 2 light, 3 dark, 4 glint.
 const NUGGETS = [['.12.', '1223', '.233'], ['.12', '123', '233'], ['12', '23']];
-const CRYSTALS = [['..4..', '.122.', '12223', '.233.', '..3..'], ['.4.', '122', '123', '233', '.3.'], ['.1.', '123', '.3.']];
+const CRYSTALS = [['.42.', '1223', '1233', '.33.'], ['.4.', '122', '123', '.3.'], ['.1.', '123', '.3.']];
 // the rock takes on a little of its grade's colour too (v0.28), so it is not one more grey stone on a
 // grey hillside: rusty for copper, warm for gold, bluish for diamond, reddish for ruby
 const ROCK = { L: true, l: true, d: true };
@@ -63,26 +63,198 @@ function stampPieces(rows, grade, n, rnd, onRock = ch => ch === 'L' || ch === 'l
   return rows;
 }
 const seeded = seed => () => ((seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff);
-// The sparkle rock (v0.28: bigger, it had too little presence): a boulder standing ORE_TALL pixels up
-// over the tile above it with its grade on show: a heap of nuggets bulging out of the top for the metals,
-// a cluster of crystals for the rest, a crack down its face where the colour shows through, and one more
-// piece low on the side (never two level with each other, or the rock looks back at you).
+// The sparkle rock (v0.28: bigger, it had too little presence; v0.30, 머랭: too sharp, and all alike):
+// every one its own shape, picked by where it lies (ORE_VARIANTS a grade): a lumpy boulder, tall or
+// squat, leaning, sometimes sliced flat on one side or with a smaller stone sitting against it, standing
+// up to ORE_TALL pixels over the tile above, with the grade's pieces chunky and blunt: round nuggets
+// bulging out of it for the metals, short thick crystals with sloping cut tops for the gems, a big one
+// with smaller ones at its side. The pieces on top get a dark edge so they read one by one; the small
+// ones set in its face sit in it without one. On the rainbow stone each piece takes a colour of its own.
 export const ORE_TALL = 4;
-const PRISMS = [[5, 1, ['..k..', '.k4k.', 'k412k', 'k123k', 'k123k', 'k123k', 'k223k']], [2, 4, ['.k.', 'k4k', 'k2k', 'k3k']], [10, 3, ['.k.', 'k4k', 'k2k', 'k3k']]];
-const HEAP = [[5, 2, ['.kkk..', 'k412k.', 'k1223k', 'k2233k']], [9, 4, ['.kk.', 'k42k', 'k23k']], [3, 5, ['.kk', 'k4k', 'k2k']]];
-const SIDE = { metal: [2, 12, ['.kk.', 'k42k', 'k23k', '.kk.']], gem: [3, 13, ['k4k', 'k2k', 'k3k']] };
-const CRACK = [[8, 9, '3'], [9, 10, '2'], [9, 11, '3'], [10, 12, '2'], [11, 13, '1'], [11, 14, '3'], [12, 15, '2']];
-const lay = (rows, x0, y0, pat) => pat.forEach((r, j) => [...r].forEach((ch, i) => {
-  if (ch !== '.' && rows[y0 + j] && rows[y0 + j][x0 + i] !== undefined) rows[y0 + j][x0 + i] = ch;
-}));
-// the cluster on top of a rock whose top edge is about 5 rows down from (x0, y0)
-const crown = (rows, grade, x0, y0) => { for (const [x, y, pat] of grade.metal ? HEAP : PRISMS) lay(rows, x0 + x, y0 + y, pat); };
+const ORE_VARIANTS = 16;
+// the pixels [x, y, shade] of a crystal standing on its foot (fx, fy): w wide, h tall, leaning `lean`
+// pixels by its top. Its top is cut off, sloping down to the right (slant 1) or the left (-1), so it is a
+// chunky prism and never a spike. Lit on the left, on its top face and along the edge between its two
+// faces, dark on the right.
+function crystalPx(fx, fy, w, h, lean, slant) {
+  const out = [], drop = w >= 3 ? Math.max(1, Math.round(w * 0.45)) : 0;
+  const ridge = slant > 0 ? Math.floor(w * 0.45) : Math.ceil(w * 0.55);
+  for (let i = 0; i < w; i++) {
+    // how tall this column stands: the high corner is taken off too, so it ends blunt
+    const t = (slant > 0 ? i : w - 1 - i) / Math.max(1, w - 1), ci = h - Math.round(drop * t) - (t === 0 && w >= 4 ? 1 : 0);
+    for (let j = 0; j < ci; j++) {
+      const x = fx - (w >> 1) + i + Math.round((lean * j) / Math.max(1, h - 1));
+      const c = j === ci - 1 ? '1' : h >= 4 && j === ci - 2 && i === 1 ? '4' : i === 0 || (w >= 5 && i === ridge - 1) ? '1' : i < ridge ? '2' : '3';
+      out.push([x, fy - j, c]);
+    }
+  }
+  return out;
+}
+// a nugget of radius r about (cx, cy), lumpy if given a `rnd`: lit at its top left with a glint, shadowed
+// at its bottom right
+function nuggetPx(cx, cy, r, rnd) {
+  const out = [], R = Math.ceil(r * 1.2);
+  const p = rnd ? [rnd() * 6.3, rnd() * 6.3, 0.06 + rnd() * 0.1, 0.04 + rnd() * 0.08] : [0, 0, 0, 0];
+  let glint = -1, best = 99;
+  for (let y = Math.floor(cy - R); y <= cy + R; y++) for (let x = Math.floor(cx - R); x <= cx + R; x++) {
+    const dx = x + 0.5 - cx, dy = y + 0.5 - cy, a = Math.atan2(dy, dx), rr = r * (1 + p[2] * Math.cos(2 * a + p[0]) + p[3] * Math.cos(3 * a + p[1]));
+    if (dx * dx + dy * dy > rr * rr) continue;
+    const t = (dx + dy) / r, d = Math.hypot(dx + r * 0.4, dy + r * 0.4);
+    out.push([x, y, t < -0.55 ? '1' : t > 0.5 ? '3' : '2']);
+    if (d < best) { best = d; glint = out.length - 1; }
+  }
+  if (glint >= 0 && r >= 1.8) out[glint][2] = '4';
+  return out;
+}
+// the little gems set in a rock's face
+const GEMLETS = [['12', '23'], ['.1.', '123', '.3.'], ['12.', '123', '.33'], ['.12.', '1223', '1233', '.33.']];
+const patPx = (pat, x, y) => pat.flatMap((r, j) => [...r].map((c, i) => [x + i, y + j, c]).filter(q => q[2] !== '.'));
+// lays a piece over what is there with a dark edge round it (none under row `foot`, where it goes into
+// the rock), noting which piece each pixel is for the rainbow stone's colours
+function layPiece(g, px, foot = 1e9) {
+  const H = g.ch.length, W = g.ch[0].length, mine = new Set(px.map(([x, y]) => y * W + x)), n = ++g.n;
+  for (const [x, y] of px) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const nx = x + dx, ny = y + dy;
+    if (nx < 0 || ny < 0 || nx >= W || ny >= H || ny > foot || mine.has(ny * W + nx)) continue;
+    g.ch[ny][nx] = 'k';
+  }
+  for (const [x, y, c] of px) if (x >= 0 && y >= 0 && x < W && y < H) { g.ch[y][x] = c; g.hue[y][x] = n; }
+}
+// sets a small piece into the rock's face: no dark edge, only the rock's shadow under its bottom right
+function setPiece(g, px) {
+  const H = g.ch.length, W = g.ch[0].length, mine = new Set(px.map(([x, y]) => y * W + x)), n = ++g.n;
+  for (const [x, y] of px) for (const [dx, dy] of [[1, 0], [0, 1]]) {
+    const nx = x + dx, ny = y + dy;
+    if (nx < W && ny < H && !mine.has(ny * W + nx) && 'Ll'.includes(g.ch[ny][nx])) g.ch[ny][nx] = 'd';
+  }
+  for (const [x, y, c] of px) { g.ch[y][x] = c; g.hue[y][x] = n; }
+}
+const blank = (W, H) => ({ ch: Array.from({ length: H }, () => Array(W).fill('.')), hue: Array.from({ length: H }, () => Array(W).fill(0)), n: 0 });
+// the test for a lumpy egg of rock w across and h tall standing on row `base` about column cx: a round
+// top leaning a little, a flatter foot, its edge wobbling in and out, now and then a side sliced flat
+function lumpyRock(rnd, cx, base, w, h) {
+  const my = base + 1 - h / 2, ry = h / 2, rx = w / 2, tilt = (rnd() - 0.5) * 0.6;
+  const ph = [rnd() * 6.3, rnd() * 6.3, rnd() * 6.3], amp = [0.05 + rnd() * 0.07, 0.04 + rnd() * 0.05, 0.02 + rnd() * 0.03];
+  const slice = rnd() < 0.35 ? { a: -Math.PI / 2 + (rnd() - 0.5) * 2.2, d: 0.72 + rnd() * 0.14 } : null;
+  return (px, py) => {
+    const dy = (py + 0.5 - my) / ry, dx = (px + 0.5 - cx) / rx + tilt * Math.min(0, dy);
+    if (slice && dx * Math.cos(slice.a) + dy * Math.sin(slice.a) > slice.d) return false;
+    const a = Math.atan2(dy, dx), r = 1 + amp[0] * Math.cos(2 * a + ph[0]) + amp[1] * Math.cos(3 * a + ph[1]) + amp[2] * Math.cos(5 * a + ph[2]);
+    return dx * dx + (dy > 0 ? Math.abs(dy) ** 3 : dy * dy) <= r * r;
+  };
+}
+// paints a rock from its test over what is there: the outline, light from the top left, shadow at the
+// bottom right, a few cracks running down from its top; returns the test bounded to the picture
+function shadeRock(g, inside, rnd, cracks) {
+  const H = g.ch.length, W = g.ch[0].length, R = (x, y) => x >= 0 && y >= 0 && x < W && y < H && inside(x, y);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!R(x, y)) continue;
+    g.ch[y][x] = !R(x - 1, y) || !R(x + 1, y) || !R(x, y - 1) || !R(x, y + 1) ? 'k'
+      : !R(x, y + 2) || !R(x + 2, y) || (!R(x + 3, y) && rnd() < 0.5) ? 'd'
+      : !R(x, y - 2) || !R(x - 2, y) ? (rnd() < 0.75 ? 'l' : 'L') : 'L';
+  }
+  const face = (x, y) => R(x, y) && g.ch[y][x] === 'L';
+  for (let n = 0; n < cracks; n++) {
+    let x = 3 + Math.floor(rnd() * (W - 6)), y = 0;
+    while (y < H && !face(x, y)) y++;
+    const slope = rnd() < 0.5 ? -1 : 1;
+    for (let k = 0; k < 3 + rnd() * 4 && face(x, y); k++) { g.ch[y][x] = 'd'; y++; if (rnd() < 0.45) x += slope; }
+  }
+  return R;
+}
+const topOf = (R, H) => x => { for (let y = 0; y < H; y++) if (R(x, y)) return y; return H; };
+// the grade's pieces coming out of the top of a rock between columns x0 and x1: for the metals two to
+// four lumpy nuggets half out of it, for the gems a thick crystal with a smaller one or two against its side
+function crownOf(g, grade, rnd, R, x0, x1) {
+  const H = g.ch.length, W = g.ch[0].length, top = topOf(R, H), mid = (x0 + x1) / 2, span = x1 - x0;
+  if (grade.metal) {
+    const k = 2 + Math.floor(rnd() * 3);
+    for (let i = 0; i < k; i++) {
+      const r = i === 0 ? 2.5 + rnd() * 0.8 : 1.5 + rnd() * 0.7;
+      const cx = i === 0 ? mid + (rnd() - 0.5) * span * 0.4 : x0 + 1 + rnd() * (span - 2);
+      layPiece(g, nuggetPx(cx, top(Math.floor(cx)) + r * (i === 0 ? 0.05 + rnd() * 0.3 : 0.3 + rnd() * 0.5), r, rnd));
+    }
+    return;
+  }
+  const w = 5 + (rnd() < 0.4 ? 1 : 0), fx = Math.round(mid + (rnd() - 0.5) * span * 0.4), fy = top(fx) + 2;
+  const slant = rnd() < 0.5 ? -1 : 1;
+  layPiece(g, crystalPx(fx, fy, w, Math.min(fy + 1, 5 + Math.floor(rnd() * 3)), Math.round((rnd() - 0.5) * 2.2), slant), fy);
+  const n = rnd() < 0.55 ? 1 : 2, first = rnd() < 0.5 ? -1 : 1;
+  for (let k = 0; k < n; k++) {
+    const side = k ? -first : first, sw = 3 + (rnd() < 0.5 ? 1 : 0), sx = fx + side * ((w >> 1) + (sw >> 1));
+    const sy = Math.min(H - 4, Math.max(top(sx), fy - 2) + 3);
+    if (sx < 1 || sx > W - 2) continue;
+    layPiece(g, crystalPx(sx, sy, sw, Math.min(sy + 1, 3 + Math.floor(rnd() * 2)), side, side), sy);
+  }
+}
+// small pieces set in the face of a rock, each wholly on it
+function facePieces(g, grade, rnd, R, n, big) {
+  const H = g.ch.length, W = g.ch[0].length;
+  const onFace = (x, y) => R(x, y) && 'Lld'.includes(g.ch[y][x]);
+  for (let k = 0, tries = 0; k < n && tries < 400; tries++) {
+    const cx = 2 + rnd() * (W - 4), cy = 2 + rnd() * (H - 4);
+    const px = grade.metal ? nuggetPx(cx, cy, big ? 1.5 + rnd() * 1.1 : 1.1 + rnd() * 0.6, rnd) : patPx(GEMLETS[Math.floor(rnd() * (big ? 4 : 3))], Math.round(cx), Math.round(cy));
+    if (!px.every(([x, y]) => [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].every(([dx, dy]) => onFace(x + dx, y + dy)))) continue;
+    setPiece(g, px);
+    k++;
+  }
+}
+// a few white sparkles on the bare rock
+function sparkles(g, rnd, R, n) {
+  const H = g.ch.length, W = g.ch[0].length;
+  for (let k = 0, tries = 0; k < n && tries < 300; tries++) {
+    const x = Math.floor(rnd() * W), y = Math.floor(rnd() * H);
+    if (R(x, y) && g.ch[y][x] === 'L') { g.ch[y][x] = 'w'; k++; }
+  }
+}
+// the grade's colours; the rainbow stone's piece by piece (`hue`: which piece each pixel belongs to)
+const hueColor = (grade, hue) => {
+  const base = pieceColor(grade);
+  return grade.vein ? base : (c, i, j) => {
+    if (c < '1' || c > '3' || !hue[j][i]) return base(c, i, j);
+    const light = RAINBOW[hue[j][i] % RAINBOW.length], dark = mix(light, '#000000', 0.35);
+    return c === '1' ? mix(light, '#ffffff', 0.55) : c === '2' ? light : dark;
+  };
+};
+// one look of a grade's one-tile rock: { rows, recolor, box } (box: where the rock is in its tile, so
+// the cracks of each swing land on it)
+const boulders = new Map();
+function boulder(grade, v) {
+  const id = `${grade.id}_${v}`;
+  if (boulders.has(id)) return boulders.get(id);
+  const rnd = seeded(ORES.indexOf(grade) * 7919 + v * 104729 + 17);
+  const W = TILE, H = TILE + ORE_TALL, g = blank(W, H);
+  let R, main;
+  if (rnd() < 0.3) {
+    // a boulder with a smaller stone sitting against its side, in front of it
+    const side = rnd() < 0.5 ? -1 : 1, w = 12 + Math.floor(rnd() * 2), sw = 7 + Math.floor(rnd() * 2);
+    const cx = side < 0 ? W - w / 2 : w / 2, sx = side < 0 ? sw / 2 : W - sw / 2;
+    main = shadeRock(g, lumpyRock(rnd, cx, H - 1, w, 12 + Math.floor(rnd() * 4)), rnd, 1);
+    const small = shadeRock(g, lumpyRock(rnd, sx, H - 1, sw, 6 + Math.floor(rnd() * 3)), rnd, 0);
+    R = (x, y) => main(x, y) || small(x, y);
+  } else {
+    const w = 14 + Math.floor(rnd() * 3), cx = W / 2 + (rnd() - 0.5) * (W - w);
+    R = main = shadeRock(g, lumpyRock(rnd, cx, H - 1, w, 11 + Math.floor(rnd() * 5)), rnd, 1 + Math.floor(rnd() * 2));
+  }
+  let x0 = W, x1 = 0, y0 = H, y1 = 0, m0 = W, m1 = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (R(x, y)) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    if (main(x, y)) { m0 = Math.min(m0, x); m1 = Math.max(m1, x); }
+  }
+  facePieces(g, grade, rnd, R, 1 + Math.floor(rnd() * 2), false);
+  crownOf(g, grade, rnd, main, m0 + 2, m1 - 2);
+  sparkles(g, rnd, R, 1 + Math.floor(rnd() * 2));
+  const out = { rows: g.ch.map(r => r.join('')), recolor: hueColor(grade, g.hue), box: { x: x0, y: y0 - ORE_TALL, w: x1 - x0 + 1, h: y1 - y0 + 1 } };
+  boulders.set(id, out);
+  return out;
+}
+const oreVariant = ({ x, y }) => ((Math.imul(x, 73856093) ^ Math.imul(y, 19349663)) >>> 0) % ORE_VARIANTS;
+// where a one-tile rock is in its tile (DungeonScene draws the cracks of each swing over it)
+export const oreBox = (ore, tier = ore.tier) => boulder(ORES[tier], oreVariant(ore.cells?.[0] || ore)).box;
+// the grade's picture for the HUD, the cards and the stories
 function oreCanvas(grade) {
-  const rows = TER_SPR.bigOre.map(r => [...r]);
-  crown(rows, grade, 0, 0);
-  for (const [x, y, ch] of CRACK) if (rows[y][x] !== 'k') rows[y][x] = ch;
-  lay(rows, ...SIDE[grade.metal ? 'metal' : 'gem']);
-  return spriteCanvas(rows.map(r => r.join('')), pieceColor(grade));
+  const b = boulder(grade, 3);
+  return spriteCanvas(b.rows, b.recolor);
 }
 // 반짝돌 왕관's pebble: the small lump with two of the grade's smallest pieces in it
 function pebbleCanvas(grade) {
@@ -165,115 +337,54 @@ function veinRows(cells, grade) {
     const px = Math.floor(rnd() * W), py = Math.floor(rnd() * H);
     if (face(px, py)) { rows[py][px] = 'w'; n++; }
   }
-  const tall = [...Array.from({ length: ORE_TALL }, () => Array(W).fill('.')), ...rows];
+  const g = { ch: [...Array.from({ length: ORE_TALL }, () => Array(W).fill('.')), ...rows], hue: [], n: 0 };
+  g.hue = g.ch.map(r => r.map(() => 0));
+  const R = (px, py) => inside(px, py - ORE_TALL);
   const tops = cells.filter(c => !has(c.x - x0, c.y - y0 - 1)).sort((a, b) => a.y - b.y || a.x - b.x);
-  for (const c of cells.length >= 3 && tops.length >= 2 ? [tops[0], tops[tops.length - 1]] : tops.slice(0, 1)) crown(tall, grade, (c.x - x0) * TILE, (c.y - y0) * TILE + 1);
-  return { rows: tall.map(r => r.join('')), x0, y0 };
+  for (const c of cells.length >= 3 && tops.length >= 2 ? [tops[0], tops[tops.length - 1]] : tops.slice(0, 1)) crownOf(g, grade, rnd, R, (c.x - x0) * TILE + 3, (c.x - x0) * TILE + 12);
+  return { rows: g.ch.map(r => r.join('')), recolor: hueColor(grade, g.hue), x0, y0 };
 }
 
-// The 2x2 jackpot (v0.29): a giant, a hill of rock with the grade's crystals bursting up out of the back
-// of it in a fan, the middle one GIANT_TALL pixels up over the row above, and gems big and small set in
-// the rock's face (nuggets for the metals). Each thing gets its own dark edge against what stands behind
-// it, so the shards read one by one. The rainbow stone's shards and gems take one colour each.
-export const GIANT_TALL = 18;
-const SET = {
-  gem: [
-    ['...k...', '..k4k..', '.k412k.', 'k11223k', '.k233k.', '..k3k..', '...k...'],
-    ['.kkk.', 'k412k', 'k123k', 'k233k', '.kkk.'],
-    ['.k.', 'k4k', 'k3k', '.k.'],
-  ],
-  metal: [
-    ['.kkkk.', 'k4122k', 'k12233', 'k2233k', '.kkkk.'],
-    ['.kkk.', 'k412k', 'k223k', '.kkk.'],
-    ['.kk.', 'k42k', '.kk.'],
-  ],
-};
-// [base x, base y, tip x, tip y, half width] from the top of the picture, back to front
-const SHARDS = [[7, 16, 1.5, 2, 2.3], [25, 16, 30.5, 0, 2.3], [11, 16, 5, -10, 3.7], [21, 16, 26.5, -13, 3.7], [16, 16, 15.5, -GIANT_TALL, 4.7]];
-const SIDE_SHARDS = [[5, 24, 0.5, 18, 1.7], [27, 22, 31, 15, 1.7]];
-// the rock's top edge, (x, y below the top of the 2x2)
-const HILL = [[0, 26], [2, 21], [4, 18], [5, 15], [7, 17], [9, 15], [11, 13], [13, 14], [16, 11], [19, 13], [21, 12], [23, 15], [25, 13], [27, 16], [28, 14], [30, 20], [32, 26]];
+// The 2x2 jackpot (v0.29, 머랭: huge, pointing up, big and small gems; v0.30 blunter, and each one its
+// own): a lumpy hill of rock across the whole 2x2 with the grade's biggest pieces heaped up out of the
+// back of it, up to GIANT_TALL pixels over the row above: a cluster of thick crystals with cut tops,
+// tall at the back and smaller to the sides and in front, for the gems; a pile of big round nuggets for
+// the metals; and smaller ones set in its face.
+export const GIANT_TALL = 12;
 function giantRows(grade, seed) {
-  const T = GIANT_TALL, W = 2 * TILE, H = 2 * TILE + T;
-  const rnd = () => ((seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff);
-  const id = Array.from({ length: H }, () => Array(W).fill(0)), hue = Array.from({ length: H }, () => Array(W).fill(0));
-  const ch = Array.from({ length: H }, () => Array(W).fill('.'));
-  const order = [];
-  const shard = ([bx, by, tx, ty, hw], name, front) => {
-    order.push(name);
-    by += T; ty += T;
-    const ax = tx - bx, ay = ty - by, len = Math.hypot(ax, ay), ux = ax / len, uy = ay / len, tip = Math.min(0.42, (hw * 2.2) / len);
-    for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
-      const vx = px + 0.5 - bx, vy = py + 0.5 - by, t = (vx * ux + vy * uy) / len, sd = vx * -uy + vy * ux;
-      const w = t < 1 - tip ? hw : hw * (1 - t) / tip;
-      if (t < -0.3 || t > 1 || Math.abs(sd) > w) continue;
-      // three faces: lit on the left with a bright edge, the ridge bright near the point, dark on the right
-      const f = sd / Math.max(1, w);
-      id[py][px] = name; hue[py][px] = order.length;
-      ch[py][px] = front ? (sd < 0 ? (t > 0.45 ? '1' : '2') : '3')
-        : f < -0.34 ? (f < -0.7 && t > 0.2 ? '1' : '2') : f <= 0.22 ? (t > 0.5 ? '1' : '2') : '3';
+  const T = GIANT_TALL, W = 2 * TILE, H = 2 * TILE + T, rnd = seeded(seed), g = blank(W, H);
+  const R = shadeRock(g, lumpyRock(rnd, W / 2 + (rnd() - 0.5) * 2, H - 1, W - 1 - Math.floor(rnd() * 2), 2 * TILE - 8 - Math.floor(rnd() * 4)), rnd, 3);
+  const top = topOf(R, H), mid = W / 2 + Math.round((rnd() - 0.5) * 4);
+  facePieces(g, grade, rnd, R, 3 + Math.floor(rnd() * 3), true);
+  if (grade.metal) {
+    // the big one at the back, the rest heaped round and in front of it
+    const heap = [[0, 5.2 + rnd() * 1.2, 0], [-1, 3.6 + rnd() * 1.1, 1], [1, 3.6 + rnd() * 1.1, 1], [-2, 2.4 + rnd() * 0.8, 3], [2, 2.4 + rnd() * 0.8, 3], [rnd() < 0.5 ? -0.5 : 0.5, 2.6 + rnd() * 0.8, 6]];
+    for (const [k, r, down] of heap) {
+      const cx = mid + k * (4.6 + rnd() * 1.6) + (rnd() - 0.5) * 2;
+      layPiece(g, nuggetPx(cx, top(Math.round(cx)) + down + (k ? r * 0.3 : -2), r, rnd));
     }
-  };
-  SHARDS.forEach((sh, k) => shard(sh, `s${k}`));
-  const top = x => {
-    for (let k = 0; k < HILL.length - 1; k++) {
-      const [x0, y0] = HILL[k], [x1, y1] = HILL[k + 1];
-      if (x >= x0 && x <= x1) return T + y0 + (y1 - y0) * (x - x0) / (x1 - x0);
+  } else {
+    // [how far out from the middle, width, height, lean, how far down its foot is]: the tall one at the
+    // back, then the rest in front of it and to the sides, their tops sloping away from the middle
+    const back = 7 + Math.floor(rnd() * 3);
+    const crowd = [[0, back, 16 + Math.floor(rnd() * 5), Math.round((rnd() - 0.5) * 2), 2],
+      [-1, 5 + Math.floor(rnd() * 2), 10 + Math.floor(rnd() * 4), -(1 + Math.floor(rnd() * 2)), 4], [1, 5 + Math.floor(rnd() * 2), 10 + Math.floor(rnd() * 4), 1 + Math.floor(rnd() * 2), 4],
+      [-2, 4 + Math.floor(rnd() * 2), 6 + Math.floor(rnd() * 3), -2, 6], [2, 4 + Math.floor(rnd() * 2), 6 + Math.floor(rnd() * 3), 2, 6]];
+    for (const [k, w, h, ln, down] of crowd) {
+      if (Math.abs(k) === 2 && rnd() < 0.3) continue;
+      const off = k === 0 ? 0 : Math.abs(k) === 1 ? (back >> 1) + (w >> 1) - 1 : (back >> 1) + w + 2 + Math.floor(rnd() * 2);
+      const fx = Math.max(3, Math.min(W - 4, mid + Math.sign(k) * off)), fy = top(fx) + down;
+      layPiece(g, crystalPx(fx, fy, w, Math.min(fy + 1, h), ln, k ? Math.sign(k) : rnd() < 0.5 ? -1 : 1), fy);
     }
-    return H;
-  };
-  order.push('r');
-  for (let py = 0; py < H - 1; py++) for (let px = 0; px < W; px++) {
-    if (py + 0.5 < top(px + 0.5)) continue;
-    const r = 4, cx = px < r ? r - px - 0.5 : px > W - 1 - r ? px + 0.5 - (W - r) : 0, cy = py > H - 2 - r ? py + 0.5 - (H - 1 - r) : 0;
-    if (cx * cx + cy * cy <= r * r) { id[py][px] = 'r'; ch[py][px] = 'L'; }
-  }
-  const isR = (x, y) => id[y]?.[x] === 'r';
-  for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
-    if (!isR(px, py)) continue;
-    if (!isR(px, py - 2) || !isR(px - 2, py)) ch[py][px] = rnd() < 0.8 ? 'l' : 'L';
-    if (!isR(px, py + 2) || !isR(px + 2, py) || (!isR(px + 3, py) && rnd() < 0.6)) ch[py][px] = 'd';
-  }
-  // cracks between the rock's faces, down from the dips in its top
-  for (const sx of [7, 13, 19, 23]) {
-    let x = sx, y = Math.ceil(top(sx + 0.5)) + 2;
-    for (let k = 0; k < 6 + rnd() * 6 && isR(x, y + 1); k++) {
-      if (ch[y][x] === 'L' || ch[y][x] === 'l') ch[y][x] = 'd';
-      y++;
-      if (rnd() < 0.45) x += sx < 16 ? -1 : 1;
+    // a little one or two out in front at its foot
+    for (const side of [-1, 1]) {
+      if (rnd() < 0.35) continue;
+      const fx = side < 0 ? 5 + Math.floor(rnd() * 4) : W - 6 - Math.floor(rnd() * 4), fy = H - 3 - Math.floor(rnd() * 3);
+      layPiece(g, crystalPx(fx, fy, 3 + (rnd() < 0.5 ? 1 : 0), 3 + Math.floor(rnd() * 2), side, side), fy);
     }
   }
-  // gems big and small set in its face, each wholly inside the rock
-  const face = (x, y) => isR(x, y) && 'Lld'.includes(ch[y][x]) && isR(x - 1, y) && isR(x + 1, y) && isR(x, y - 1) && isR(x, y + 1);
-  const sets = SET[grade.metal ? 'metal' : 'gem'];
-  let gems = 0;
-  for (const k of [0, 0, 1, 1, 2, 2, 2]) for (let tries = 0; tries < 300; tries++) {
-    const pat = sets[k], x0 = 1 + Math.floor(rnd() * (W - 7)), y0 = T + 14 + Math.floor(rnd() * 14);
-    if (!pat.every((r, j) => [...r].every((c, i) => c === '.' || face(x0 + i, y0 + j)))) continue;
-    gems++;
-    pat.forEach((r, j) => [...r].forEach((c, i) => { if (c !== '.') { ch[y0 + j][x0 + i] = c; hue[y0 + j][x0 + i] = 7 + gems; } }));
-    break;
-  }
-  SIDE_SHARDS.forEach((sh, k) => shard(sh, `f${k}`, true));
-  // outlines: each thing's edge against the air or against what stands behind it
-  const rank = o => order.indexOf(o), out = ch.map(r => r.slice());
-  for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
-    const me = id[py][px];
-    if (me && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const n = id[py + dy]?.[px + dx]; return !n || rank(n) < rank(me); })) out[py][px] = 'k';
-  }
-  // a glint on each big shard, white sparks on the rock
-  for (const [x, y] of [[13, 6], [6, T - 4], [24, T - 7]]) if (out[y][x] !== 'k' && out[y][x] !== '.') out[y][x] = '4';
-  for (let n = 0, tries = 0; n < 4 && tries < 300; tries++) {
-    const x = Math.floor(rnd() * W), y = T + 12 + Math.floor(rnd() * 16);
-    if (out[y][x] === 'L') { out[y][x] = 'w'; n++; }
-  }
-  const base = pieceColor(grade);
-  const recolor = grade.vein ? base : (c, i, j) => {
-    if (c < '1' || c > '3') return base(c, i, j);
-    const light = RAINBOW[hue[j][i] % RAINBOW.length], dark = mix(light, '#000000', 0.35);
-    return c === '1' ? mix(light, '#ffffff', 0.55) : c === '2' ? light : dark;
-  };
-  return { rows: out.map(r => r.join('')), recolor };
+  sparkles(g, rnd, R, 4);
+  return { rows: g.ch.map(r => r.join('')), recolor: hueColor(grade, g.hue) };
 }
 export const isGiant = ore => ore.cells?.length === 4 && new Set(ore.cells.map(c => c.x)).size === 2 && new Set(ore.cells.map(c => c.y)).size === 2;
 // how far an ore stands up over the row above it
@@ -282,7 +393,14 @@ export const oreTall = ore => (ore.pebble ? 0 : isGiant(ore) ? GIANT_TALL : ORE_
 // The texture and frame for one tile of an ore: [key, frame]. One-tile ores use the plain sprite.
 export function oreFrame(scene, ore, x, y, tier = ore.tier) {
   const grade = ORES[tier];
-  if (!ore.cells || ore.cells.length < 2) return [`t_ore_${grade.id}`, undefined];
+  if (!ore.cells || ore.cells.length < 2) {
+    // each one-tile rock its own look, picked by where it lies
+    const at = ore.cells?.[0] || (ore.x != null ? ore : null);
+    if (!at) return [`t_ore_${grade.id}`, undefined];
+    const v = oreVariant(at), key = `t_ore_${grade.id}_${v}`;
+    if (!scene.textures.exists(key)) { const b = boulder(grade, v); scene.textures.addCanvas(key, spriteCanvas(b.rows, b.recolor)); }
+    return [key, undefined];
+  }
   const x0 = Math.min(...ore.cells.map(c => c.x)), y0 = Math.min(...ore.cells.map(c => c.y));
   if (isGiant(ore)) {
     const key = `t_giant_${x0}_${y0}_${grade.id}`;
@@ -297,8 +415,8 @@ export function oreFrame(scene, ore, x, y, tier = ore.tier) {
   const key = `t_vein_${x0}_${y0}_${shape}_${grade.id}`;
   const tx = scene.textures;
   if (!tx.exists(key)) {
-    const { rows } = veinRows(ore.cells, grade);
-    const tex = tx.addCanvas(key, spriteCanvas(rows, pieceColor(grade)));
+    const { rows, recolor } = veinRows(ore.cells, grade);
+    const tex = tx.addCanvas(key, spriteCanvas(rows, recolor));
     // a tile with none of the rock above it takes the bit that stands up over the row above as well
     for (const c of ore.cells) {
       const top = !ore.cells.some(o => o.x === c.x && o.y === c.y - 1);
