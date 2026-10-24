@@ -421,9 +421,9 @@ export function lifeTick(sc, time, dt) {
       case 'firefly':
         b.img.setAlpha(0.55 + 0.45 * Math.abs(Math.sin(t * 1.7))).setPosition(x + Math.round(Math.sin(t * 0.7) * 2), y + Math.round(Math.sin(t * 1.3) * 1.5));
         break;
-      // a step to the side and back
+      // the shelled ones sit still where they are (a twitchy side-step read as a roach)
       default:
-        if (time > b.next) { b.next = time + 1400 + Math.random() * 2400; b.img.setFlipX(!b.img.flipX); b.img.x = x + (b.img.flipX ? -1 : 1); }
+        break;
     }
   }
   // the wild things catch the light now and then, so you notice them
