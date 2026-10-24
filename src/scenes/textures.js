@@ -35,7 +35,11 @@ function spriteCanvas(rows, recolor) {
 // the gems (in every colour for the rainbow stone). Pieces use 1 highlight, 2 light, 3 dark, 4 glint.
 const NUGGETS = [['.12.', '1223', '.233'], ['.12', '123', '233'], ['12', '23']];
 const CRYSTALS = [['..4..', '.122.', '12223', '.233.', '..3..'], ['.4.', '122', '123', '233', '.3.'], ['.1.', '123', '.3.']];
+// the rock takes on a little of its grade's colour too (v0.28), so it is not one more grey stone on a
+// grey hillside: rusty for copper, warm for gold, bluish for diamond, reddish for ruby
+const ROCK = { L: true, l: true, d: true };
 const pieceColor = grade => (ch, i, j) => {
+  if (ROCK[ch]) return mix(PAL[ch], grade.vein ? grade.vein[1] : '#9a7fd0', 0.22);
   if (ch < '1' || ch > '4') return null;
   if (ch === '4') return '#ffffff';
   const [light, dark] = grade.vein || [RAINBOW[(i + j) % RAINBOW.length], mix(RAINBOW[(i + j + 2) % RAINBOW.length], '#000000', 0.35)];
@@ -56,9 +60,25 @@ function stampPieces(rows, grade, n, rnd, onRock = ch => ch === 'L' || ch === 'l
   return rows;
 }
 const seeded = seed => () => ((seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff);
+// The sparkle rock (v0.28: bigger, it had too little presence): a boulder standing ORE_TALL pixels up
+// over the tile above it with its grade on show: a heap of nuggets bulging out of the top for the metals,
+// a cluster of crystals for the rest, a crack down its face where the colour shows through, and one more
+// piece low on the side (never two level with each other, or the rock looks back at you).
+export const ORE_TALL = 4;
+const PRISMS = [[5, 1, ['..k..', '.k4k.', 'k412k', 'k123k', 'k123k', 'k123k', 'k223k']], [2, 4, ['.k.', 'k4k', 'k2k', 'k3k']], [10, 3, ['.k.', 'k4k', 'k2k', 'k3k']]];
+const HEAP = [[5, 2, ['.kkk..', 'k412k.', 'k1223k', 'k2233k']], [9, 4, ['.kk.', 'k42k', 'k23k']], [3, 5, ['.kk', 'k4k', 'k2k']]];
+const SIDE = { metal: [2, 12, ['.kk.', 'k42k', 'k23k', '.kk.']], gem: [3, 13, ['k4k', 'k2k', 'k3k']] };
+const CRACK = [[8, 9, '3'], [9, 10, '2'], [9, 11, '3'], [10, 12, '2'], [11, 13, '1'], [11, 14, '3'], [12, 15, '2']];
+const lay = (rows, x0, y0, pat) => pat.forEach((r, j) => [...r].forEach((ch, i) => {
+  if (ch !== '.' && rows[y0 + j] && rows[y0 + j][x0 + i] !== undefined) rows[y0 + j][x0 + i] = ch;
+}));
+// the cluster on top of a rock whose top edge is about 5 rows down from (x0, y0)
+const crown = (rows, grade, x0, y0) => { for (const [x, y, pat] of grade.metal ? HEAP : PRISMS) lay(rows, x0 + x, y0 + y, pat); };
 function oreCanvas(grade) {
-  const rows = TER_SPR.bigOre.map(r => [...r.replace(/y/g, 'L').replace(/Y/g, 'l')]);
-  stampPieces(rows, grade, grade.metal ? 4 : 3, seeded(7 + ORES.indexOf(grade)));
+  const rows = TER_SPR.bigOre.map(r => [...r]);
+  crown(rows, grade, 0, 0);
+  for (const [x, y, ch] of CRACK) if (rows[y][x] !== 'k') rows[y][x] = ch;
+  lay(rows, ...SIDE[grade.metal ? 'metal' : 'gem']);
   return spriteCanvas(rows.map(r => r.join('')), pieceColor(grade));
 }
 // 반짝돌 왕관's pebble: the small lump with two of the grade's smallest pieces in it
@@ -82,8 +102,10 @@ export const dropKey = tier => `t_drop_${ORES[tier].id}`;
 export const chipKey = tier => `t_chip_${ORES[tier].id}`;
 
 // A vein spanning two to four tiles is drawn as one big rock over the whole shape, in the same
-// colours as the one-tile ore (outline k, rock L, light l, shadow d, veins y/Y, sparkle w),
-// with more veins the bigger it is. Seeded by where it lies, so it looks the same every time.
+// colours as the one-tile ore (outline k, rock L, light l, shadow d, sparkle w), with more pieces the
+// bigger it is, and like it standing ORE_TALL pixels up over the row above with the grade's crystals or
+// nuggets bursting out of the top (one cluster, two on a big one). Seeded by where it lies, so it looks
+// the same every time.
 function veinRows(cells, grade) {
   const x0 = Math.min(...cells.map(c => c.x)), y0 = Math.min(...cells.map(c => c.y));
   const bw = Math.max(...cells.map(c => c.x)) - x0 + 1, bh = Math.max(...cells.map(c => c.y)) - y0 + 1;
@@ -140,7 +162,10 @@ function veinRows(cells, grade) {
     const px = Math.floor(rnd() * W), py = Math.floor(rnd() * H);
     if (face(px, py)) { rows[py][px] = 'w'; n++; }
   }
-  return { rows: rows.map(r => r.join('')), x0, y0 };
+  const tall = [...Array.from({ length: ORE_TALL }, () => Array(W).fill('.')), ...rows];
+  const tops = cells.filter(c => !has(c.x - x0, c.y - y0 - 1)).sort((a, b) => a.y - b.y || a.x - b.x);
+  for (const c of cells.length >= 3 && tops.length >= 2 ? [tops[0], tops[tops.length - 1]] : tops.slice(0, 1)) crown(tall, grade, (c.x - x0) * TILE, (c.y - y0) * TILE + 1);
+  return { rows: tall.map(r => r.join('')), x0, y0 };
 }
 
 // The texture and frame for one tile of an ore: [key, frame]. One-tile ores use the plain sprite.
@@ -154,7 +179,11 @@ export function oreFrame(scene, ore, x, y, tier = ore.tier) {
   if (!tx.exists(key)) {
     const { rows } = veinRows(ore.cells, grade);
     const tex = tx.addCanvas(key, spriteCanvas(rows, pieceColor(grade)));
-    for (const c of ore.cells) tex.add(`${c.x - x0}_${c.y - y0}`, 0, (c.x - x0) * TILE, (c.y - y0) * TILE, TILE, TILE);
+    // a tile with none of the rock above it takes the bit that stands up over the row above as well
+    for (const c of ore.cells) {
+      const top = !ore.cells.some(o => o.x === c.x && o.y === c.y - 1);
+      tex.add(`${c.x - x0}_${c.y - y0}`, 0, (c.x - x0) * TILE, (c.y - y0) * TILE + (top ? 0 : ORE_TALL), TILE, TILE + (top ? ORE_TALL : 0));
+    }
   }
   return [key, `${x - x0}_${y - y0}`];
 }
@@ -323,7 +352,7 @@ function leafTop(fill, r, v, y1, z, hi) {
   const vx = 3 + ((v * 5) % 9);
   for (let y = 0; y < y1; y++) fill(mix(z.wallLight, '#ffffff', 0.35), vx + (y >> 2), y);
   if (r() < 0.22) {
-    const col = ['#e48aa8', '#f4cf4f', '#f4f0e8', '#c49aff'][Math.floor(r() * 4)], x = Math.floor(r() * 10), y = Math.floor(r() * Math.max(1, y1 - 5));
+    const col = mix(['#e48aa8', '#f4cf4f', '#f4f0e8', '#c49aff'][Math.floor(r() * 4)], z.wallTop, 0.4), x = Math.floor(r() * 10), y = Math.floor(r() * Math.max(1, y1 - 5));
     fill(col, x, y, 5, 3); fill(col, x + 1, y + 3, 3, 1); fill(mix(col, '#000000', 0.2), x, y + 2, 5, 1);
   }
 }
@@ -422,7 +451,9 @@ function pastureTile(z, v) {
   const fill = (col, x, y, w = 1, h = 1) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
   // uncut grass beyond the hedgerows: a touch of straw gold and tufts of tall blades,
   // so it never reads as the mown grass you walk on
-  const base = mix(mix(z.floorLight, z.wallLight, 0.3), '#a8975a', 0.3), soft = mix(base, '#0a1408', 0.22);
+  // (in the night's shade, a step darker than the mown ground you walk on, v0.28: the field you can walk
+  // is the lightest ground in sight, and the pasture past the hedge reads as beyond it)
+  const base = mix(mix(mix(z.floorLight, z.wallLight, 0.3), '#a8975a', 0.3), z.wallDark, 0.3), soft = mix(base, '#0a1408', 0.22);
   const light = mix(base, '#eef4b8', 0.2), seed = mix(base, '#efe2a0', 0.42);
   fill(base, 0, 0, TILE, TILE);
   for (let k = 0; k < 3; k++) {
@@ -445,7 +476,8 @@ function wallTile(z, zi, mask, v) {
   const face = mask & S, topH = face ? ({ forest: 7, marsh: 6, garden: 6, ruins: 4 })[z.style] || 5 : TILE;
   // the top: rows of round leaf clumps (or boulders on the mountain), lit from the top left
   fill(z.wallTop, 0, 0, TILE, topH);
-  const hi = mix(z.wallLight, '#ffffff', 0.3);
+  // (the tops kept a little quieter than they were, v0.28, so a wall reads as one mass, not as more of the ground)
+  const hi = mix(z.wallLight, '#ffffff', 0.2);
   if (z.style === 'marsh') reedTops(fill, r, v, topH, z, hi);
   else if (z.style === 'garden') leafTop(fill, r, v, topH, z, hi);
   else if (z.style === 'ruins') brickTop(fill, r, v, topH, z);
@@ -466,7 +498,8 @@ function wallTile(z, zi, mask, v) {
   if (z.style === 'cave') for (let k = 0; k < 2; k++) if (r() < 0.45) {
     const x = 1 + Math.floor(r() * 13), y = 1 + Math.floor(r() * Math.max(1, topH - 3));
     const blue = r() < 0.6;
-    fill(blue ? '#8fd8f0' : '#c49aff', x, y); fill(blue ? '#3d8fb3' : '#7a4fb0', x, y + 1); fill(blue ? '#3d8fb3' : '#7a4fb0', x + 1, y + 1);
+    const lit = mix(blue ? '#8fd8f0' : '#c49aff', z.wallTop, 0.35), deep = mix(blue ? '#3d8fb3' : '#7a4fb0', z.wallTop, 0.35);
+    fill(lit, x, y); fill(deep, x, y + 1); fill(deep, x + 1, y + 1);
   }
   // the front
   if (face) {
@@ -677,13 +710,14 @@ const LAMP = [
 ];
 // A small halo around the flame. The light on the room itself is a warm tint on the tiles the
 // lamp can see (DungeonScene.buildLamps), so it never spills through walls into the dark.
-function glowCanvas() {
-  const c = document.createElement('canvas'), R = 14;
+// a soft round light (the fireflies' and lamps' yellow-green, or white to be tinted: the sparkle rocks')
+function glowCanvas(R = 14, rgb = null) {
+  const c = document.createElement('canvas');
   c.width = c.height = R * 2;
   const g = c.getContext('2d'), grad = g.createRadialGradient(R, R, 0, R, R, R);
-  grad.addColorStop(0, 'rgba(230,255,150,0.7)');
-  grad.addColorStop(0.5, 'rgba(200,240,110,0.22)');
-  grad.addColorStop(1, 'rgba(180,230,90,0)');
+  grad.addColorStop(0, `rgba(${rgb || '230,255,150'},0.7)`);
+  grad.addColorStop(0.5, `rgba(${rgb || '200,240,110'},0.22)`);
+  grad.addColorStop(1, `rgba(${rgb || '180,230,90'},0)`);
   g.fillStyle = grad; g.fillRect(0, 0, R * 2, R * 2);
   return c;
 }
@@ -927,6 +961,8 @@ export function buildTextures(scene) {
   });
   add('t_lamp', () => spriteCanvas(LAMP));
   add('glow', glowCanvas);
+  add('oreGlow', () => glowCanvas(18, '255,255,255'));
+  add('glint', () => spriteCanvas(['...w...', '...w...', '..wWw..', 'wwWWWww', '..wWw..', '...w...', '...w...'], ch => (ch === 'W' ? '#ffffff' : '#fff6d8')));
   add('crystalShell', crystalCanvas);
   add('px', () => {
     const px = document.createElement('canvas');

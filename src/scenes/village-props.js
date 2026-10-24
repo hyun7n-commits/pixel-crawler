@@ -292,6 +292,20 @@ export const CRITTER_ART = {
   duckling: ['.kk..', 'kyyko', 'kyyyk', '.kkk.'],
   bird0: ['.kk..', 'knnko', 'kNnnk', '.kkk.', '.k.k.'],
   bird1: ['.....', '.kk..', 'knnko', 'kNnnk', '.kkk.'],
+  // 비밀 (v0.28, scenes/village-secrets.js): the pond's big koi, an acorn, the tiny door's cookie and the
+  // eyes behind it, the puppy's bone
+  koi: [
+    '...kkkk.....',
+    '.kkwwoowk.kk',
+    'kwkwoooowkok',
+    'kwwwwoowwkok',
+    '.kkwwwwwk.kk',
+    '...kkkkk....',
+  ],
+  acorn: ['..k..', '.kNk.', 'kNnNk', 'kNNNk', 'kdddk', 'kddDk', '.kDk.', '..k..'],
+  cookie: ['.kkk.', 'kuNuk', 'kuuNk', 'kNuuk', '.kkk.'],
+  eyes: ['w..w', 'k..k'],
+  bone: ['kk....kk', 'kwkkkkwk', 'kwwwwwwk', 'kWkkkkWk', 'kk....kk'],
 };
 export function critterCanvas(name, wing = 'p') {
   const rows = CRITTER_ART[name], c = document.createElement('canvas');

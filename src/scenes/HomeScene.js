@@ -13,6 +13,7 @@ import { ENEMIES, ZONES } from '../data/enemies.js';
 import { cleared } from '../data/stages.js';
 import { setEmote, drawEmote } from './emotes.js';
 import { roomOf, doorCell, furniture, placed, plantStage, VISIT_LINES, fits, taken, ownLayout, hasDecor } from '../data/home.js';
+import { SECRETS, secretsFound } from '../data/secrets.js';
 import { roomCanvas, roomSize, WALL_ROWS, furnitureCanvas, WALL_Y, plushCushion, FRAMES, roofCanvas, yardCanvas, roofAt, yardAt } from './home-interior-art.js';
 import { pupCanvas } from './home-art.js';
 
@@ -172,6 +173,8 @@ export class HomeScene extends Phaser.Scene {
     if (id === 'plant') return plantStage(this.meta);
     if (id === 'lamp') return this.meta.house.dark ? 0 : 1;
     if (id === 'map') return ZONES.filter((_, s) => cleared(this.meta, s) > 0).length;
+    // the 비밀 상자 fills up: keepsakes stick out from under its lid
+    if (id === 'secretbox') { const n = secretsFound(this.meta); return n >= SECRETS.length ? 3 : n >= 7 ? 2 : n >= 3 ? 1 : 0; }
     return 0;
   }
   addItem(id, x, y) {
@@ -261,6 +264,7 @@ export class HomeScene extends Phaser.Scene {
     const f = it.f;
     if (it.id === 'plant') return `${f.name}: ${['싹이 텄다', '잎이 났다', '꽃봉오리가 맺혔다', '꽃이 활짝 폈다'][plantStage(this.meta)]} · 탐험을 다녀올 때마다 자란다`;
     if (it.id === 'map') return `${f.name}: 가 본 들판 ${this.look('map')}곳에 별이 붙어 있다`;
+    if (it.id === 'secretbox') return `${f.name}: 찾아낸 비밀 ${secretsFound(this.meta)}/${SECRETS.length} · 부딪히면 열어 본다`;
     return `${f.name}: ${f.desc}`;
   }
   describeAt(x, y) {
@@ -410,8 +414,27 @@ export class HomeScene extends Phaser.Scene {
       case 'bath': this.bath(it); break;
       case 'peek':
         this.squash(it.img, 0.94);
-        this.say(this.ps, pick(['작업복, 작업복, 작업복…', '다 똑같은 옷이다.', '맨 안쪽에 반짝이는 옷이 있다. …언제 입지?']), 1800);
         this.hooks.onSound?.('pop');
+        // 비밀: go through every pocket (five rummages in a row) and something crinkles in the last one
+        this.peeks = this.time.now - (this.peekAt || 0) < 4000 ? (this.peeks || 0) + 1 : 1;
+        this.peekAt = this.time.now;
+        if (this.peeks >= 5) {
+          this.peeks = 0;
+          if (this.hooks.onSecret?.('pocket')) {
+            this.say(this.ps, '어? 주머니에서 꼬깃꼬깃한 골드가!', 2000);
+            this.spark.explode(14, it.img.x, top.y + 10);
+            this.hooks.onCoins?.(80);
+            this.ps.expr = 'sparkle';
+            this.ps.exprUntil = this.time.now + 1200;
+          } else this.say(this.ps, '주머니를 다 뒤졌다. 이제 텅 비었다.', 1800);
+          break;
+        }
+        this.say(this.ps, ['작업복, 작업복, 작업복…', '다 똑같은 옷이다.', '맨 안쪽에 반짝이는 옷이 있다. …언제 입지?', '주머니가 많기도 하다.'][(this.peeks - 1) % 4], 1800);
+        break;
+      case 'secrets':
+        this.squash(it.img, 0.9);
+        this.spark.explode(8, it.img.x, top.y + 4);
+        this.hooks.onSecrets?.();
         break;
       case 'fish':
         this.foam.explode(5, it.img.x, top.y + 8);
@@ -545,11 +568,13 @@ export class HomeScene extends Phaser.Scene {
       const n = house.visit.gift;
       house.visit.gift = 0;
       this.hooks.onGift?.(n);
-      this.say(v.s, VISIT_LINES[v.line % VISIT_LINES.length], 2600);
+      const b = this.say(v.s, VISIT_LINES[v.line % VISIT_LINES.length], 2600);
       this.time.delayedCall(700, () => {
         this.spark.explode(18, v.s.x, v.s.y - 12);
         const z = this.cameras.main.zoom || 3, k = this.dpr / z;
-        const t = this.keep(this.add.text(v.s.x, v.s.y - 20, `+${n}G`, {
+        // over the friend's words, not on them
+        const y = b.active ? b.y - b.displayHeight - 2 : v.s.y - 20;
+        const t = this.keep(this.add.text(v.s.x, y, `+${n}G`, {
           fontFamily: 'Galmuri14, sans-serif', fontSize: `${15 * k}px`, color: '#f4cf4f', stroke: '#1b1424', strokeThickness: 3 * k,
         }).setOrigin(0.5, 1).setDepth(D.bubble).setResolution(z));
         this.tweens.add({ targets: t, y: t.y - 12, alpha: 0, delay: 500, duration: 800, ease: 'Quad.in' });
@@ -591,7 +616,8 @@ export class HomeScene extends Phaser.Scene {
   pickUp(it, at) {
     this.removeItem(it);
     this.reindex();
-    if (it.visitor) { it.visitor.s.destroy(); this.visitor = null; }
+    // the friend on it moves over to another seat (or waits for one)
+    if (it.visitor) { it.visitor.s.destroy(); this.visitor = null; this.placeVisitor(); }
     if (it.pup) { it.pup.s.destroy(); this.pup = null; }
     this.held = { id: it.id, f: it.f, from: [it.x, it.y], dx: at ? Math.max(0, at.x - it.x) : 0, dy: at && !it.f.wall ? Math.max(0, at.y - it.y) : 0 };
     delete ownLayout(this.meta)[it.id];
@@ -707,6 +733,7 @@ export class HomeScene extends Phaser.Scene {
     b.target = target;
     b.until = this.time.now + ms;
     this.bubbles.push(b);
+    return b;
   }
 
   // ---------- every frame ----------

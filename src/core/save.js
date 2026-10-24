@@ -34,6 +34,7 @@ export function freshMeta() {
     bookGifts: 0,           // the smith's recipe-book gifts already taken (data/balance.js bookGift)
     pets: {},               // pets bought at the shop, and the one that comes along (data/pets.js)
     pet: null,
+    secrets: {},            // 비밀 found round the village, the house and the fields: id -> when (data/secrets.js)
     ten: true,              // stage numbers are the ten-stage ones (v0.23)
   };
 }
@@ -80,6 +81,7 @@ export function loadMeta() {
         clears: { ...m.clears },
         dares: { on: { ...m.dares?.on }, won: { ...m.dares?.won } },
         pets: { ...m.pets },
+        secrets: { ...m.secrets },
       };
     }
   } catch (e) { /* storage blocked or corrupt: start fresh */ }

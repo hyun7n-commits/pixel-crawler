@@ -157,7 +157,7 @@ export function openGrave(run, x, y) {
     run.log(big ? '도토리 창고 주인이 튀어나왔다! 화난 청설모다!' : '흙 속에서 화난 청설모가 튀어나왔다!', 'warn');
   }
   if (big) {
-    run.pickups.push({ x, y, type: 'chest' }, { x, y, type: 'gold', amount: B.graveGold(run.floor) * 2 }, { x, y, type: 'candy' });
+    run.pickups.push({ x, y, type: 'chest' }, { x, y, type: 'gold', amount: B.graveGold(run.payFloor) * 2 }, { x, y, type: 'candy' });
     run.log('그루터기 구멍 안에 보물 상자와 별사탕이 숨겨져 있었다!', 'good');
     if (map.stash) {
       run.pickups.push({ x, y, type: 'gold', amount: map.stash, stolen: true });
@@ -165,7 +165,7 @@ export function openGrave(run, x, y) {
       map.stash = 0;
     }
   } else if (roll >= 0.3 && roll < 0.7) {
-    run.pickups.push({ x, y, type: 'gold', amount: B.graveGold(run.floor) });
+    run.pickups.push({ x, y, type: 'gold', amount: B.graveGold(run.payFloor) });
     run.log('흙 속에서 골드가 나왔다.', 'good');
   } else if (roll >= 0.7 && roll < 0.9) {
     // a potion or a bomb; once the meadow tools are about, now and then one of those

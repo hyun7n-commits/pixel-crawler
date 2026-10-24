@@ -5,13 +5,14 @@
 /* global Phaser */
 import { setEmote, drawEmote } from './emotes.js';
 import { pixEllipse, pixDisc, pixLine, pixDiamond, pixArrow } from './pix.js';
-import { TILE, buildTextures, wallKey, waterKey, chasmKey, seaKey, bridgeKey, GRASS_PAL, shadeKey, floorKey, oreFrame, dropKey, chipKey, pebbleKey, texScale, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
+import { TILE, buildTextures, wallKey, waterKey, chasmKey, seaKey, bridgeKey, GRASS_PAL, shadeKey, floorKey, oreFrame, dropKey, chipKey, pebbleKey, texScale, ORE_TALL, N, E, S, W_, NE, SE, SW, NW } from './textures.js';
 import { CHARACTERS } from '../data/characters.js';
 import { PETS } from '../data/pets.js';
 import { ITEMS } from '../data/items.js';
 import { ROUTES } from '../data/routes.js';
 import { T, TERRAIN, GASES, GAS_KEYS, isTrap } from '../data/terrain.js';
 import { idx, inMap, lineOfSight, WALL, FLOOR, STAIRS, DOOR, ORE, UPSTAIRS, GRAVE, LOCKED, HIVE, WEED } from '../core/dungeon.js';
+import { diveInto } from './burrow.js';
 import { WAKE_AT } from '../core/ai.js';
 import { BOMB_RANGE } from '../core/run.js';
 import { ORE_HITS, HEAR_STEPS, BELL_RANGE, SNEEZE_NOISE } from '../data/balance.js';
@@ -39,6 +40,8 @@ const STEP_MS = 130, CAM_EASE_MS = 140;
 // how far above the bottom of its tile the front rim of a burrow's mouth is (sprites.js stairs, upStairs)
 const HOLE_LIP = { on: 2, back: 3 };
 const center = v => v * TILE + TILE / 2;
+// a sparkle rock's glow: its grade's light colour (the rainbow stone a warm white)
+const oreTint = tier => Phaser.Display.Color.HexStringToColor(ORES[tier].vein ? ORES[tier].vein[0] : '#fff4e0').color;
 const foot = v => v * TILE + TILE;
 const hash = (x, y) => {
   let h = (x * 374761393 + y * 668265263) | 0;
@@ -284,6 +287,8 @@ export class DungeonScene extends Phaser.Scene {
     this.pickupSprites = {};
     this.doorImgs = {};
     this.oreImgs = {};
+    (this.oreGlows || new Map()).forEach(g => g.img.destroy());
+    this.oreGlows = new Map();
     this.bubbles = [];
     this.prints = [];
     this.playerSprite = null;
@@ -315,38 +320,26 @@ export class DungeonScene extends Phaser.Scene {
     this.sync(true);
   }
 
-  // Through a burrow: you hop onto the mouth of the hole and drop in feet first, the rim swallowing you
-  // from the feet up; the view closes in a circle around you, and the next field opens as you climb up out
-  // of its hole. The rules have already moved you; this is only the show, and your next move waits for it
-  // (busy). `d.dir`: 1 on, -1 back, 0 the first field of a run.
+  // Through a burrow: you hop up and drop into the hole feet first, behind its front rim (scenes/burrow.js);
+  // the view closes in a circle around you, and the next field opens as you climb up out of its hole.
+  // The rules have already moved you; this is only the show, and your next move waits for it (busy).
+  // `d.dir`: 1 on, -1 back, 0 the first field of a run.
   arrive(d) {
     const ps = this.playerSprite;
     if (!d.dir || !ps) { this.buildFloor(); this.popOut(); this.iris(true, 420); return; }
     if (d.fell) { this.dropIn(d); return; }
     this.busyUntil = performance.now() + 1200 / pace();
     this.diving = true;
-    const hx = center(d.from.x), lip = foot(d.from.y) - (d.dir > 0 ? HOLE_LIP.on : HOLE_LIP.back), k = texScale(ps), H = ps.frame.height;
+    const hx = center(d.from.x), rim = foot(d.from.y) - (d.dir > 0 ? HOLE_LIP.on : HOLE_LIP.back);
     this.tweens.killTweensOf(ps);
     ps.dying = true; // the pose loop leaves it alone from here
-    ps.setCrop().setOrigin(0.5, 1).setScale(k).setRotation(0);
-    const x0 = ps.x, y0 = ps.y;
-    this.tweens.addCounter({
-      from: 0, to: 1, duration: 150, ease: 'Sine.out',
-      onUpdate: tw => { const f = tw.getValue(); ps.setPosition(x0 + (hx - x0) * f, y0 + (lip - y0) * f - Math.sin(f * Math.PI) * 6); },
-      onComplete: () => {
-        this.fx.dust.explode(10, hx, lip);
-        this.tweens.addCounter({
-          from: 0, to: 1, duration: 230, ease: 'Quad.in',
-          onUpdate: tw => {
-            const f = tw.getValue(), cut = Math.min(H - 1, Math.round(H * f)), sy = k * (1 + 0.1 * f);
-            ps.setCrop(0, 0, ps.frame.width, H - cut).setScale(k * (1 - 0.12 * f), sy);
-            ps.y = lip + cut * sy;
-          },
-          onComplete: () => { ps.setVisible(false); this.fx.dust.explode(6, hx, lip); },
-        });
-      },
+    ps.glide = null;
+    diveInto(this, ps, {
+      x: hx, rim, k: texScale(ps),
+      onRim: () => this.fx.dust.explode(10, hx, rim),
+      done: () => this.fx.dust.explode(6, hx, rim),
     });
-    this.later(200, () => this.iris(false, 340, () => this.later(90, () => {
+    this.later(240, () => this.iris(false, 340, () => this.later(90, () => {
       this.diving = false;
       this.buildFloor();
       this.popOut();
@@ -451,6 +444,16 @@ export class DungeonScene extends Phaser.Scene {
     return s;
   }
 
+  // 반짝 바위 shine at night (v0.28: they had too little presence): a soft glow of the grade's colour
+  // breathes on the ground round each one, and a glint winks on one now and then (update).
+  oreGlow(ore) {
+    if (this.oreGlows.get(ore)?.img.active) return;
+    const xs = ore.cells.map(c => center(c.x)), ys = ore.cells.map(c => center(c.y));
+    const mx = (Math.min(...xs) + Math.max(...xs)) / 2, my = (Math.min(...ys) + Math.max(...ys)) / 2 + 1;
+    const img = this.add.image(mx, my, 'oreGlow').setDepth(D.ter - 0.1).setBlendMode(Phaser.BlendModes.ADD).setVisible(false);
+    this.oreGlows.set(ore, { img, ore, seed: hash(ore.x, ore.y) % 1000, tier: -1 });
+  }
+
   // Miners' lamps on the walls, and how much of their warm light reaches each tile.
   buildLamps() {
     const map = this.run.map, R = 3.5;
@@ -514,6 +517,8 @@ export class DungeonScene extends Phaser.Scene {
       // (it shows once something near it has been seen; see paintFog)
       add(wallKey(this, zi, open, hash(x, y) % 3));
       if (!open) imgs.deep = true;
+      // 틈 너머 비밀 터: light leaking through a narrow gap in the wall's face
+      if (map.nook?.gap === i) add('t_gap', D.tiles + 0.6);
       // flowers, berries, cattail heads or crystals on top now and then (not on a face you look at)
       const hb = hash(x * 7 + 3, y * 11 + 5);
       if (!(open & S) && hb % 100 < 28) add(bloomKey(this, this.run.zone, zi, (hb >> 8) % BLOOM_VARIANTS), D.tiles + 0.5);
@@ -589,8 +594,11 @@ export class DungeonScene extends Phaser.Scene {
       if (t === ORE) {
         const ore = map.ores.find(o => o.cells.some(c => idx(c.x, c.y) === i));
         const [key, frame] = ore?.pebble ? [pebbleKey(ore.tier)] : ore ? oreFrame(this, ore, x, y) : ['t_ore_copper'];
-        this.oreImgs[i] = add(key, D.ter);
-        if (frame) this.oreImgs[i].setFrame(frame);
+        const im = this.oreImgs[i] = add(key, D.ter);
+        if (frame) im.setFrame(frame);
+        // a sparkle rock stands a little up over the tile above it (textures.js ORE_TALL)
+        im.setOrigin(0, 1).setY((y + 1) * TILE);
+        if (ore && !ore.pebble) this.oreGlow(ore);
       }
     }
     this.tileImgs[i] = imgs;
@@ -776,7 +784,7 @@ export class DungeonScene extends Phaser.Scene {
       keep.add(key);
       let s = this.pickupSprites[key];
       if (!s) {
-        const tex = q.type === 'gold' && q.ore != null ? dropKey(q.ore) : PICKUP_TEX[q.type] || ITEMS[q.type].sprite;
+        const tex = q.type === 'gold' && q.ore != null ? dropKey(q.ore) : q.type === 'chest' && q.rich ? 'richChest' : PICKUP_TEX[q.type] || ITEMS[q.type].sprite;
         s = this.add.image(q.x * TILE, q.y * TILE, tex).setOrigin(0).setDepth(D.pickups).setData('baseY', q.y * TILE + 14);
         if (q.type === 'bossChest') {
           // the boss's chest sits in a warm glow that breathes
@@ -790,7 +798,15 @@ export class DungeonScene extends Phaser.Scene {
             this.add.image(-3, -4, 'crystalShell').setOrigin(0),
           ]).setDepth(D.pickups + 0.1);
           this.tweens.add({ targets: s.extra, y: q.y * TILE - 4, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
-        } else this.tweens.add({ targets: s, y: q.y * TILE - 2, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.inOut', delay: (q.x * 97) % 600 });
+        } else {
+          const bob = () => this.tweens.add({ targets: s, y: q.y * TILE - 2, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.inOut', delay: (q.x * 97) % 600 });
+          // 머리 쿵: this one falls out of the leaves overhead and bounces where it lands
+          if (this.dropIn === key) {
+            this.dropIn = null;
+            s.y -= 2.5 * TILE;
+            this.tweens.add({ targets: s, y: q.y * TILE, duration: 600, ease: 'Bounce.out', onComplete: bob });
+          } else bob();
+        }
         this.pickupSprites[key] = s;
       }
       s.setVisible(!!map.explored[idx(q.x, q.y)]);
@@ -858,7 +874,9 @@ export class DungeonScene extends Phaser.Scene {
       } else { r = 50; v = 58; b = 76; }
       // lamplight warms and brightens the tiles around a lamp, even ones you only remember
       const L = this.light ? this.light[i] : 0;
-      const k = L * (seen === 2 ? 40 : 60), dim = this.tileImgs[i].deep ? 0.8 : 1;
+      // walls sit a shade under the ground you walk on (deeper in, deeper still), so the way through a
+      // field always reads first, as in Shattered Pixel Dungeon (v0.28)
+      const k = L * (seen === 2 ? 40 : 60), dim = map.tiles[i] === WALL ? (this.tileImgs[i].deep ? 0.74 : 0.87) : this.tileImgs[i].deep ? 0.8 : 1;
       col[i * 3] = (r + k + L * 22) * dim; col[i * 3 + 1] = (v + k) * dim; col[i * 3 + 2] = (b + k - L * 34) * dim;
     }
     // the light at each corner is the mean of the tiles that meet there, and each picture is tinted from
@@ -991,6 +1009,7 @@ export class DungeonScene extends Phaser.Scene {
     if (g ? g.x === tx && g.y === ty : sprite.x === tx && sprite.y === ty) return;
     this.tweens.killTweensOf(sprite);
     sprite.hop = 0;
+    if (sprite.sqx != null) sprite.sqx = sprite.sqy = 1; // a squash cut short ends with the step
     if (!dur) { sprite.glide = null; sprite.setPosition(tx, ty); return; }
     // your feet take turns: one walk frame per step, back to standing once you arrive
     if (sprite === this.playerSprite) {
@@ -1132,7 +1151,7 @@ export class DungeonScene extends Phaser.Scene {
           break;
         }
         this.fx.dust.explode(d.hit ? 10 : 6, center(d.x), center(d.y));
-        this.float(d.x, d.y, d.hit ? '딱!' : '톡', d.hit ? '#f4cf4f' : '#d8d2c0', 0, d.hit ? 12 : 9);
+        this.float(d.x, d.y, d.hit ? '콩!' : '톡', d.hit ? '#f4cf4f' : '#d8d2c0', 0, d.hit ? 12 : 9);
         if (!d.hit) this.noiseRing(d.x, d.y, 3, 0xd8d2c0);
         break;
       // 물범's show: a clap of the flippers now and then, and the pinecone dropping when it is over
@@ -1193,6 +1212,37 @@ export class DungeonScene extends Phaser.Scene {
       case 'gasboom': this.gasBoom(d.tiles); break;
       case 'puff': this.fx[d.kind].explode(30, center(d.x), center(d.y)); break;
       case 'rustle': this.fx.leaf.explode(7, center(d.x), center(d.y) + 3); break;
+      // ---- 비밀 (v0.28, core/run.js bumpWall and the rest) ----
+      // walking into a wall: a nudge and a few leaves (grit off rock); a bush in a room sways
+      case 'poke':
+        this.bump(this.playerSprite, { x: d.x - d.dx, y: d.y - d.dy }, d);
+        this.fx[d.kind === 'rock' ? 'dust' : 'leaf'].explode(d.prop ? 8 : 5, center(d.x) - d.dx * 6, center(d.y) - d.dy * 6 + 2);
+        if (d.prop) this.sway(idx(d.x, d.y));
+        break;
+      // 머리 쿵: stars round your head, and (the first time) something drops out of the leaves overhead
+      case 'headbonk':
+        this.face('hit', 1000);
+        this.float(d.x, d.y - 0.4, '쿵!', '#f4cf4f', 0, 12);
+        this.fx.spark.explode(8, this.playerSprite.x, this.playerSprite.y - TILE);
+        this.emote(this.playerSprite, 'stars', 1600);
+        if (d.drop) {
+          this.fx.leaf.explode(10, center(d.drop.x), d.drop.y * TILE - 2 * TILE);
+          this.dropIn = `${d.drop.x},${d.drop.y},${d.drop.type}`;
+        }
+        break;
+      case 'baby': this.babyOut(d); break;
+      case 'squeeze':
+        this.fx.leaf.explode(14, center(d.x), center(d.y));
+        this.float(d.x, d.y - 0.2, '쏙!', '#c9f2a8', 60, 10);
+        this.face('sparkle', 1400);
+        break;
+      case 'spirit': this.spiritUp(d); break;
+      case 'spiritGone': this.spiritDown(d); break;
+      case 'dream':
+        this.face('blink', 1800);
+        this.emote(this.playerSprite, 'z', 1800);
+        this.fx.sleep.explode(12, center(d.x), center(d.y) - 10);
+        break;
       case 'dig': this.fx.dust.explode(14, center(d.x), center(d.y)); this.fx.rock.explode(6, center(d.x), center(d.y)); break;
       case 'shatter': this.fx.crystal.explode(16, center(d.x), center(d.y)); break;
       case 'unlock': this.fx.spark.explode(14, center(d.x), center(d.y)); break;
@@ -1938,6 +1988,114 @@ export class DungeonScene extends Phaser.Scene {
     this.busyUntil = Math.max(this.busyUntil || 0, performance.now() + dur + 120);
   }
 
+  // A bush (a stump, a clump of reeds, a giant bud) standing in a room sways when bumped, and now and
+  // then on its own when a baby is asleep in it (update)
+  sway(i, n = 2) {
+    const img = (this.tileImgs[i] || []).find(o => o.texture.key.startsWith('t_prop_'));
+    if (!img || img.swaying) return;
+    img.swaying = true;
+    const x0 = img.x;
+    this.tweens.add({ targets: img, x: x0 + 1, duration: 70, yoyo: true, repeat: n, ease: 'Sine.inOut', onComplete: () => { img.x = x0; img.swaying = false; } });
+  }
+
+  // 덤불 속 아기: out of the bush it tumbles, startled, drops what it was hugging and scampers off
+  babyOut(d) {
+    this.sway(idx(d.x, d.y), 4);
+    this.fx.leaf.explode(16, center(d.x), center(d.y));
+    this.face('shock', 800);
+    const b = this.add.image(center(d.x), foot(d.y) - 3, d.sprite).setOrigin(0.5, 1).setDepth(D.enemies + 0.2);
+    const k = texScale(b) * 0.62, y0 = b.y;
+    b.setScale(k * 0.3).setFlipX(d.away < 0);
+    this.tweens.add({ targets: b, scale: k, duration: 160, ease: 'Back.out' });
+    this.tweens.add({ targets: b, y: y0 - 9, duration: 170, yoyo: true, ease: 'Quad.out' });
+    this.float(d.x, d.y - 0.5, '!', '#f4cf4f', 120, 11);
+    this.fx.spark.explode(6, center(d.to.x), center(d.to.y));
+    this.later(620, () => {
+      // hop, hop, hop, and gone
+      this.tweens.add({ targets: b, x: b.x + d.away * TILE * 3.5, duration: 720, ease: 'Linear' });
+      this.tweens.add({ targets: b, y: y0 - 4, duration: 120, yoyo: true, repeat: 2, ease: 'Quad.out' });
+      this.tweens.add({ targets: b, alpha: 0, delay: 420, duration: 300, onComplete: () => b.destroy() });
+    });
+  }
+
+  // 연못 신령: where the tool sank the water glows, and up rises the old spirit with what you threw in
+  // one hand and a golden one in the other (core/run.js; main.js puts the question)
+  spiritUp(d) {
+    this.spiritDown({ gone: true });
+    const x = center(d.x), wl = center(d.y) + 4;
+    this.fx.splash.explode(18, x, wl - 2);
+    const glow = this.add.image(x, wl - 6, 'glow').setTint(0x8fd8f0).setAlpha(0).setScale(0.5).setDepth(D.fx).setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({ targets: glow, alpha: 0.7, scale: 1.3, duration: 500, ease: 'Sine.out' });
+    const s = this.add.image(x, wl + 16, 'spirit').setOrigin(0.5, 1).setDepth(D.enemies + 0.2);
+    const crop = () => s.setCrop(0, 0, 16, Phaser.Math.Clamp(wl - (s.y - 16), 0, 16));
+    crop();
+    const sp = this.spirit = { s, glow, wl, items: [] };
+    this.tweens.add({
+      targets: s, y: wl - 3, duration: 520, delay: 150, ease: 'Quad.out', onUpdate: crop,
+      onComplete: () => {
+        if (this.spirit !== sp) return;
+        s.setCrop();
+        this.tweens.add({ targets: s, y: wl - 5, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+        // the plain one on the left, the golden one on the right, held up for you to see
+        for (const side of [-1, 1]) {
+          const tex = ITEMS[d.tool].sprite, it = this.add.image(x + side * 11, wl - 12, side > 0 ? this.goldKey(tex) : tex).setScale(0).setDepth(D.enemies + 0.3);
+          this.tweens.add({ targets: it, scale: 0.7, duration: 220, ease: 'Back.out' });
+          this.tweens.add({ targets: it, y: wl - 14, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut', delay: 220 });
+          sp.items.push(it);
+        }
+        this.fx.spark.explode(8, x + 11, wl - 14);
+      },
+    });
+  }
+
+  // a golden copy of a picture (the spirit's golden tool): each pixel onto a gold ramp by how bright it is
+  goldKey(tex) {
+    const key = `${tex}_gold`;
+    if (this.textures.exists(key)) return key;
+    const src = this.textures.get(tex).getSourceImage(), c = document.createElement('canvas');
+    c.width = src.width; c.height = src.height;
+    const g = c.getContext('2d');
+    g.drawImage(src, 0, 0);
+    const im = g.getImageData(0, 0, c.width, c.height), px = im.data;
+    const RAMP = [[124, 78, 22], [196, 136, 34], [236, 182, 56], [248, 216, 96], [255, 246, 196]];
+    for (let i = 0; i < px.length; i += 4) {
+      if (!px[i + 3]) continue;
+      const L = (0.3 * px[i] + 0.59 * px[i + 1] + 0.11 * px[i + 2]) / 255;
+      if (L < 0.14) continue;   // the outline stays
+      const [r, gr, b] = RAMP[Math.max(0, Math.min(4, Math.round((L - 0.14) / 0.55 * 4)))];
+      px[i] = r; px[i + 1] = gr; px[i + 2] = b;
+    }
+    g.putImageData(im, 0, 0);
+    this.textures.addCanvas(key, c);
+    return key;
+  }
+
+  // ...and back down into the pond: told the truth, it hands you both; told a lie, it shakes its head
+  spiritDown(d) {
+    const sp = this.spirit;
+    if (!sp) return;
+    this.spirit = null;
+    const { s, glow, wl } = sp, ps = this.playerSprite;
+    if (d.gone) { s.destroy(); glow.destroy(); sp.items.forEach(it => it.destroy()); return; }
+    this.tweens.killTweensOf(s);
+    sp.items.forEach(it => this.tweens.killTweensOf(it));
+    if (d.honest) {
+      this.face('sparkle', 1600);
+      this.fx.spark.explode(16, s.x, s.y - 8);
+      sp.items.forEach((it, k) => this.tweens.add({ targets: it, x: ps.x, y: ps.y - 8, scale: 0.3, alpha: 0, duration: 420, delay: 120 * k, ease: 'Quad.in', onComplete: () => it.destroy() }));
+    } else {
+      this.face('teary', 1600);
+      this.tweens.add({ targets: s, x: s.x + 1.5, duration: 70, yoyo: true, repeat: 3 });
+      sp.items.forEach(it => this.tweens.add({ targets: it, y: it.y + 10, alpha: 0, duration: 500, delay: 300, onComplete: () => it.destroy() }));
+    }
+    const crop = () => s.setCrop(0, 0, 16, Phaser.Math.Clamp(wl - (s.y - 16), 0, 16));
+    this.tweens.add({
+      targets: s, y: wl + 16, duration: 620, delay: 520, ease: 'Quad.in', onUpdate: crop,
+      onComplete: () => { this.fx.splash.explode(12, s.x, wl - 2); s.destroy(); },
+    });
+    this.tweens.add({ targets: glow, alpha: 0, duration: 700, delay: 520, onComplete: () => glow.destroy() });
+  }
+
   explosion(x, y, r = 1) {
     const c = this.add.circle(center(x), center(y), 3, 0xf08c3a, 0.85).setDepth(D.fx);
     this.tweens.add({ targets: c, radius: TILE * (r + 0.7), alpha: 0, duration: 280, ease: 'Quad.out', onComplete: () => c.destroy() });
@@ -2031,6 +2189,12 @@ export class DungeonScene extends Phaser.Scene {
     for (let k = 0; k < Math.min(3, d.size); k++) this.time.delayedCall(250 + k * 300, () => { const c = d.cells[k % d.cells.length]; this.shards(center(c.x), center(c.y) - 4, d.tier, 2, 0.6); });
   }
 
+  // a four-pointed glint that winks open and shut (on a sparkle rock)
+  glint(x, y) {
+    const s = this.add.image(Math.round(x), Math.round(y), 'glint').setDepth(D.pickups - 0.1).setScale(0.2).setAlpha(0.95);
+    this.tweens.add({ targets: s, scale: 1, duration: 160, yoyo: true, hold: 60, ease: 'Quad.out', onComplete: () => s.destroy() });
+  }
+
   coinFly(x, y, spread, delay, key = 'gold') {
     const c = this.add.image(x, y, key).setScale(key === 'gold' ? 0.45 : 0.9).setDepth(D.fx);
     const a = Math.random() * Math.PI * 2, dist = TILE * spread * (0.5 + Math.random() * 0.5);
@@ -2095,6 +2259,18 @@ export class DungeonScene extends Phaser.Scene {
       const a = time / 700 + f.seed;
       f.setPosition(f.home.x + Math.round(1.5 * Math.sin(a)), f.home.y + Math.round(1.5 * Math.cos(a * 1.3)));
       f.fly.setAlpha(0.55 + 0.25 * Math.sin(time / 160 + f.seed)).setScale(0.8);
+    }
+
+    // 덤불 속 아기: the bush it sleeps in stirs now and then; 틈 너머 비밀 터: a mote of light drifts out
+    // of the gap now and then
+    if (map.baby != null && map.visible[map.baby] && time > (this.babyStir || 0)) {
+      this.babyStir = time + 2000 + Math.random() * 2400;
+      this.sway(map.baby, 1);
+    }
+    const gap = map.nook?.gap;
+    if (gap >= 0 && map.visible[gap] && time > (this.gapMote || 0)) {
+      this.gapMote = time + 1400 + Math.random() * 1800;
+      this.fx.firefly.explode(1, center(gap % map.w), ((gap / map.w) | 0) * TILE + 11);
     }
 
     // lamps flicker
@@ -2222,14 +2398,24 @@ export class DungeonScene extends Phaser.Scene {
       const pips = ore.pebble ? 2 : ORE_HITS, px0 = bx * TILE + (bw * TILE) / 2 - (pips * 3 - 1) / 2;
       for (let k = 0; k < pips; k++) {
         g.fillStyle(k < ore.hits ? 0xf4cf4f : 0x2c2536, 1);
-        g.fillRect(Math.round(px0) + k * 3, by * TILE + (ore.pebble ? 3 : -3), 2, 2);
+        g.fillRect(Math.round(px0) + k * 3, by * TILE + (ore.pebble ? 3 : -ORE_TALL - 3), 2, 2);
       }
-      // a glint now and then, so it catches your eye from across the room (a big vein glitters more)
+      // a glint winks on it now and then, so it catches your eye from across the room (a big vein more often)
       const c = ore.cells[Math.floor(Math.random() * ore.cells.length)];
       if (map.visible[idx(c.x, c.y)] && time > (ore.glint || 0)) {
-        ore.glint = time + (900 + Math.random() * 900) / ore.size;
-        this.fx.spark.explode(2, c.x * TILE + 3 + Math.random() * 10, c.y * TILE + 3 + Math.random() * 9);
+        ore.glint = time + (900 + Math.random() * 1100) / ore.size;
+        this.glint(c.x * TILE + 3 + Math.random() * 10, (c.y + 1) * TILE - 4 - Math.random() * (ore.pebble ? 6 : 14));
       }
+    }
+    // their glow breathes, brighter in your light than in what you only remember
+    for (const [ore, gl] of this.oreGlows) {
+      if (!map.ores.includes(ore)) { gl.img.destroy(); this.oreGlows.delete(ore); continue; }
+      const on = ore.cells.some(c => this.tileImgs[idx(c.x, c.y)]?.shown) && this.inView(ore.x, ore.y);
+      gl.img.setVisible(on);
+      if (!on) continue;
+      if (gl.tier !== ore.tier) { gl.tier = ore.tier; gl.img.setTint(oreTint(ore.tier)); }
+      const b = 0.5 + 0.5 * Math.sin(time / 850 + gl.seed), lit = ore.cells.some(c => map.visible[idx(c.x, c.y)]) ? 1 : 0.5;
+      gl.img.setAlpha((0.6 + 0.4 * b) * lit).setScale((ore.size > 1 ? 1.7 : 1.25) * (0.92 + 0.08 * b));
     }
 
     // enemies that heard the ore but are out of sight: red arrows at the edge of the view
@@ -2501,6 +2687,8 @@ export class DungeonScene extends Phaser.Scene {
     // half out of a burrow: what is still in the hole is hidden below the rim of its mouth
     const fh = s.frame.height, sunk = s.sink > 0 ? Math.min(fh - 1, Math.round(fh * s.sink)) : 0;
     const cut = sunk || (wet ? Math.round(fh * 0.22) : 0);
+    // squeezing up out of the hole: narrow while still in it (the way you went down, scenes/burrow.js)
+    if (sunk) { sx *= 1 - 0.3 * s.sink; sy *= 1 + 0.15 * s.sink; }
     if (cut) { s.setCrop(0, 0, s.frame.width, fh - cut); hop -= cut * TILE / fh - (sunk ? s.lip : 1); } else if (s.isCropped) s.setCrop();
     s.wet = wet;
     const base = (who.d?.boss || who.chief ? 1.25 : who.big ? 1.2 : 1) * (who.small ? 0.8 : 1);

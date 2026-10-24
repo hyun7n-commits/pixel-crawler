@@ -285,6 +285,30 @@ const ART = {
     p.ell(8, 8, 7.5, 5, (x, y, nx, ny) => tone(ramp('#d9454a'), 1.2 + nx * 0.6 + ny * 0.9 + ((x + y) % 4 === 0 ? 0.6 : 0), x, y));
     p.ell(8, 7.5, 5, 3, (x, y, nx, ny) => tone(ramp('#f4ead8'), 1.6 + nx * 0.4 - ny * 0.5, x, y));
   }),
+  // the 비밀 상자: a little lavender keepsake box, gold-banded, a star on its clasp. The more secrets
+  // found, the more sticks out from under the lid (`v` 0..3): an acorn, then a feather, then a cookie
+  // and the lid can hardly shut
+  secretbox: v => pic(16, 20, p => {
+    const L = ramp('#b48ade'), G = ramp('#f4cf4f'), up = v ? 1 : 0, top = 10 - up;
+    if (v >= 1) {
+      p.rect(3, top - 2, 4, 2, (x, y, i) => tone(ramp('#d9a05a'), 1 + i * 0.7, x, y));
+      p.rect(3, top - 4, 4, 1, (x, y, i) => (i % 2 ? '#7a5234' : '#8e6440'));
+      p.rect(2, top - 3, 6, 1, (x, y, i) => (i % 2 ? '#8e6440' : '#7a5234'));
+      p.set(5, top - 5, '#5a3a24');
+    }
+    if (v >= 2) { for (let k = 0; k < 6; k++) p.set(10 + (k > 3 ? 1 : 0), top - 1 - k, k > 3 ? '#f29bb2' : '#fff7f0'); p.set(11, top - 4, '#f8b4cc'); p.set(9, top - 3, '#fff7f0'); }
+    if (v >= 3) { p.ell(7, top - 1.4, 2.2, 1.6, (x, y, nx, ny) => tone(ramp('#e6b06a'), 1.2 + nx * 0.6 + ny * 0.5, x, y)); p.set(6, top - 2, '#8a5634'); p.set(8, top - 1, '#8a5634'); }
+    // the lid, rounded on top, a gold band along its rim
+    p.fill(1, top, 13, top + 3, (x, y) => !(y === top && (x < 3 || x > 11)), (x, y, i, j) => tone(L, 0.8 + (x - 1) / 12 * 1.6 + (y === top ? -0.6 : 0), x, y));
+    p.rect(1, top + 3, 13, 1, (x, y) => tone(G, 1.2 + (x - 1) / 12 * 1.4, x, y));
+    if (up) p.rect(2, top + 4, 11, 1, '#3a2a4a');
+    // the box
+    p.rect(2, 14, 11, 5, (x, y, i, j) => tone(L, 1.6 + i / 10 * 1.6 + (j === 4 ? 1 : 0), x, y));
+    for (const x of [2, 12]) p.rect(x, 14, 1, 5, (px, py) => tone(G, x === 2 ? 1.4 : 2.8, px, py));
+    // the clasp: a gold star
+    p.stamp(5, top + 2, ['..k..', '.kkk.', 'kkkkk', '.k.k.'], { k: G[1] });
+    p.set(7, top + 3, G[0]);
+  }),
   // a music box with its lid open, a little dancer on top, a crank
   musicbox: v => pic(16, 22, p => {
     p.rect(2, 10, 12, 10, (x, y, i, j) => tone(ramp('#b48ade'), 1.4 + i / 11 * 1.2 + (j === 0 ? -0.8 : 0), x, y));
@@ -319,7 +343,9 @@ const WALL_ART = {
   }, { shadow: false }),
   // the map of the fields: a path through ten spots, a star on the ones beaten (`v`: how many)
   map: v => pic(32, 20, p => {
-    p.rect(0, 0, 32, 19, (x, y, i, j) => tone(ramp('#f1e0b8'), 1.4 + (hash(x, y, 319) < 0.15 ? 0.7 : 0) + (i === 0 || j === 0 ? -0.6 : i === 31 || j === 18 ? 1.4 : 0), x, y));
+    // in a plain wooden frame, like the painting's gold one
+    p.rect(0, 0, 32, 20, (x, y, i, j) => tone(WOOD, i === 0 || j === 0 ? 1.4 : i === 31 || j === 19 ? 3.4 : 2.4, x, y));
+    p.rect(1, 1, 30, 18, (x, y, i, j) => tone(ramp('#f1e0b8'), 1.4 + (hash(x, y, 319) < 0.15 ? 0.7 : 0) + (i === 0 || j === 0 ? 0.7 : 0), x, y));
     const spots = [[4, 14], [8, 10], [12, 13], [15, 8], [19, 11], [21, 6], [25, 9], [27, 4], [23, 3], [29, 13]];
     for (let k = 0; k + 1 < spots.length; k++) p.line(spots[k][0], spots[k][1], spots[k + 1][0], spots[k + 1][1], (s) => (s % 2 ? null : '#b8946a'));
     spots.forEach(([x, y], k) => {

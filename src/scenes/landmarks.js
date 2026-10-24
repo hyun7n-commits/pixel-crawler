@@ -522,7 +522,8 @@ export const LANDMARKS = {
 // open ground as possible so you can see it, picked by the field's own seed. Null when nothing fits.
 export function landmarkSpot(map, w, h, seed, WALL) {
   const W = map.w, H = map.h;
-  const wall = (x, y) => x >= 0 && y >= 0 && x < W && y < H && map.tiles[y * W + x] === WALL && !map.props?.[y * W + x];
+  // (never over the gap of light into a hidden nook: core/run.js hideSecrets)
+  const wall = (x, y) => x >= 0 && y >= 0 && x < W && y < H && map.tiles[y * W + x] === WALL && !map.props?.[y * W + x] && map.nook?.gap !== y * W + x;
   let best = null;
   for (let y = 0; y + h <= H; y++) for (let x = 0; x + w <= W; x++) {
     let ok = true;

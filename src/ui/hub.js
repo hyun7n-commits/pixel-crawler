@@ -23,6 +23,7 @@ import { DECOR, hasDecor, HOUSE_LEVELS, houseLevel, roomOf, FURNITURE, CATALOG, 
 import { decorCanvas } from '../scenes/home-art.js';
 import { furnitureCanvas } from '../scenes/home-interior-art.js';
 import { savedRun } from '../core/suspend.js';
+import { SECRETS, secretsFound } from '../data/secrets.js';
 
 export function renderPanel(id, box, ctx) {
   PANELS[id](box, ctx);
@@ -256,6 +257,9 @@ function rumor(box, { meta }) {
   // a hint about whoever is still to come (one at a time, in street order)
   const next = HOUSES.map(h => FOLK[h.id]).find(f => f.hint && !f.when(meta));
   if (next) talk.append(el('p', 'say hint', next.hint));
+  // once you have found a secret of your own, now and then a rumour about one still to find
+  const left = SECRETS.filter(s => !meta.secrets?.[s.id]);
+  if (secretsFound(meta) && left.length && Math.random() < 0.5) talk.append(el('p', 'say hint', `그거 알아? ${left[Math.floor(Math.random() * left.length)].hint}`));
   box.append(talk);
   const book = el('div', 'shop');
   const n = DISCOVERIES.filter(d => meta.found[d.id]).length;
@@ -420,4 +424,20 @@ function rival(box, { meta, changed }) {
   box.append(list);
 }
 
-const PANELS = { chars, shop, rumor, books, records, rival, carpenter };
+// ---------- 비밀 상자 (at home): a keepsake for every secret found, the rest "???" ----------
+function secrets(box, { meta }) {
+  const wrap = el('div', 'shop');
+  wrap.append(el('h3', null, `비밀 (${secretsFound(meta)}/${SECRETS.length})`));
+  for (const [where, label] of [['village', '마을'], ['home', '집'], ['field', '들판']]) {
+    wrap.append(el('div', 'book-tier', label));
+    for (const s of SECRETS.filter(s => s.where === where)) {
+      const got = meta.secrets?.[s.id], row = el('div', 'row' + (got ? '' : ' unknown')), main = el('div', 'row-main');
+      main.append(el('span', 'row-name', got ? s.name : '???'), el('span', 'row-sub', got ? s.got : '아직 모른다.'));
+      row.append(main);
+      wrap.append(row);
+    }
+  }
+  box.append(wrap);
+}
+
+const PANELS = { chars, shop, rumor, books, records, rival, carpenter, secrets };
