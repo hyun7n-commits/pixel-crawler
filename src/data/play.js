@@ -77,7 +77,7 @@ export function rollWish(rnd = Math.random) {
 const d = (id, name, line, pic, w, need) => ({ id, name, line, pic, w, need });
 export const DAYS = [
   d('rain', '비 온 뒤 무지개', '밤새 비가 오더니 무지개가 떴다. 무지개 끝에 가 보니 정말로 뭔가 반짝였다.', { find: ['star', 'b'] }, 3, c => c.P >= 3),
-  d('market', '장날', '장터 노점에 상점 주인이 평소엔 안 파는 물건을 늘어놓았다.', { spr: 'shopkeep' }, 2, c => c.P >= 13),
+  d('market', '장날', '떠돌이 상인이 장터에 좌판을 폈다. 상점 주인이랑 꼭 닮았다.', { spr: 'peddler' }, 2, c => c.P >= 13),
   d('stars', '별똥별 내리는 밤', '하늘을 가로지르는 별똥별에 소원을 빌었다. 빌자마자 뭔가 떨어졌다.', { find: ['star', 'y'] }, 3, c => c.day >= 3),
   d('fireflies', '반딧불이 밤', '연못가에 반딧불이가 가득했다. 하나가 손바닥에 내려앉았다.', { find: ['firefly', 'zX'] }, 2, c => c.P >= 3),
   d('turnip', '커다란 순무', '텃밭 옆에 순무가 너무 크게 자랐다. 다 같이 영차영차 뽑았다.', { find: ['turnip', 'wgp'] }, 2, c => c.garden),
@@ -96,10 +96,15 @@ export const DAYS = [
 ];
 export const DAY = Object.fromEntries(DAYS.map(o => [o.id, o]));
 export const dayId = id => `day:${id}`;
+// What a day's goings-on change in the village's own life (data/life.js rollDay `mods`): after the rain
+// the fish bite and mushrooms come up under the trees, a firefly night has more of them by the pond, and
+// when everything is in bloom there are more bugs about.
+export const DAY_LIFE = { rain: { bites: 2, forage: { shroom: 3 } }, fireflies: { only: { firefly: 3 } }, bloom: { bugs: 4 } };
 // The day's goings-on, rolled the first time you walk into the village on a new day: not before the
-// second trip, never the same two days running. meta.today keeps it, and how far it has got.
+// second trip, never the same two days running (`c.ok`: only the days the village knows how to put on,
+// scenes/village-days.js). meta.today keeps it, and how far it has got.
 export function rollToday(meta, c, rnd = Math.random) {
-  const was = meta.today?.ev, can = (meta.day || 0) >= 2 ? DAYS.filter(o => o.id !== was && o.need(c)) : [];
+  const was = meta.today?.ev, can = (meta.day || 0) >= 2 ? DAYS.filter(o => o.id !== was && o.need(c) && (!c.ok || c.ok(o.id))) : [];
   let ev = null;
   if (can.length) {
     const total = can.reduce((n, o) => n + o.w, 0);

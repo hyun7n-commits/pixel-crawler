@@ -700,3 +700,6 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .bag-map { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px; background: var(--panel); border: 1px solid var(--line); margin-bottom: 4px; }
 .bag-map canvas { max-width: 100%; height: auto !important; aspect-ratio: 64 / 48; }
 .race-row { border-color: #b48ade; margin-bottom: 8px; }
+/* v0.30 마을의 하루 (ui/play.js): the wandering peddler's mat */
+.market .row { border-left: 3px solid #5a6fb0; }
+.market .row.owned { opacity: .6; }
