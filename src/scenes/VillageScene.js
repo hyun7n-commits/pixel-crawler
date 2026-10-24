@@ -43,6 +43,7 @@ import { propCanvas, critterCanvas } from './village-props.js';
 import { poke, pokeKind, stillInFlowers, flutterTo, petPup } from './village-secrets.js';
 import { growthPropCanvas, stringCanvas, GROWTH_PROPS, STRING_PAD, SAILS_AT, SAIL_FRAMES } from './village-growth-art.js';
 import { placeVillageQuirks, quirkTap, quirkStep, quirkMeet, quirkTick } from './village-quirks.js';
+import { placeVillagePets, syncVillagePet, petOutOfHome, petStepOff, petTap, petStep, petDescribe, petTick, petMarks } from './village-pets.js';
 
 const MW = VILLAGE_MAP[0].length, MH = VILLAGE_MAP.length;
 const TOP = 3 * TILE;
@@ -310,6 +311,8 @@ export class VillageScene extends Phaser.Scene {
     placeVillageDay(this);
     placeVillageHearts(this);
     placeVillageQuirks(this);
+    // the pet you take along trots after you (scenes/village-pets.js)
+    placeVillagePets(this);
     this.festival();
     this.playGrowth(arrivals);
   }
@@ -811,6 +814,8 @@ export class VillageScene extends Phaser.Scene {
   // after the guild changed who goes out today, or took someone new on
   resync() {
     this.widenBed();
+    // 데려가기 at the shop: the pet at your heels changes, comes out or goes home
+    syncVillagePet(this);
     if (!this.ps || (this.p.id === this.meta.sel && this.heroes.length === Object.keys(this.meta.chars).filter(c => this.meta.chars[c]).length - 1)) return;
     this.heroes.forEach(h => h.s.destroy());
     this.heroes = [];
@@ -860,7 +865,7 @@ export class VillageScene extends Phaser.Scene {
     this.lifeBugs = [];
     this.lifeWild = [];
     this.plots = [];
-    this.petS = null;
+    this.pet = null;
     // 마을 놀이 (scenes/village-play.js)
     this.play = this.stones = this.swingRest = null;
     // 마을의 하루 (scenes/village-days.js)
@@ -1259,6 +1264,7 @@ export class VillageScene extends Phaser.Scene {
     ps.setFlipX(false).setAlpha(0).setPosition(center(door.x), foot(door.y) - 6).setDepth(D.actors + door.y / 100);
     this.tweens.add({ targets: ps, y: foot(door.y), alpha: 1, duration: 200, ease: 'Quad.out' });
     this.cameras.main.centerOn(center(door.x), foot(door.y) - TILE / 2);
+    petOutOfHome(this);
   }
   pupAt(x, y) { return this.pup && this.pup.x === x && this.pup.y === y ? this.pup : null; }
   buildingAt(x, y) { return this.buildings.find(b => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h); }
@@ -1272,6 +1278,8 @@ export class VillageScene extends Phaser.Scene {
   describe(x, y) {
     const day = dayDescribe(this, x, y);
     if (day) return day;
+    const pet = petDescribe(this, x, y);
+    if (pet) return pet;
     const play = playDescribe(this, x, y);
     if (play) return play;
     const life = lifeDescribe(this, x, y);
@@ -1308,6 +1316,8 @@ export class VillageScene extends Phaser.Scene {
     // what is going on today (scenes/village-days.js)
     if (dayTap(this, x, y)) return;
     // fishing, a bug, the yard's bed (scenes/village-life.js)
+    // the pet beside you: a pat (scenes/village-pets.js)
+    if (petTap(this, x, y)) return;
     if (lifeTap(this, x, y)) return;
     const house = this.houseAt(x, y);
     const target = this.folkAt(x, y) || (house?.lived && this.folk.find(f => f.id === house.id)) || this.heroAt(x, y) ||
@@ -1356,6 +1366,7 @@ export class VillageScene extends Phaser.Scene {
     if (playStep(this, x, y, repeat)) { this.path = []; return; }
     if (dayStep(this, x, y, repeat)) { this.path = []; return; }
     if (lifeStep(this, x, y)) { this.path = []; return; }
+    if (petStep(this, x, y)) { this.path = []; return; }
     const who = this.folkAt(x, y) || this.heroAt(x, y) || this.pupAt(x, y) || (this.homeAt(x, y) && this.homeDoor) ||
       (this.mail && this.decorAt(x, y)?.id === 'mailbox' && this.mailbox);
     this.path = [];
@@ -1419,6 +1430,7 @@ export class VillageScene extends Phaser.Scene {
     const ps = this.ps, cam = this.cameras.main;
     if (cam._follow !== ps) cam.startFollow(ps, true, 0.2, 0.2, 0, TILE / 2);
     if (x !== this.p.x) ps.setFlipX(x < this.p.x);
+    petStepOff(this, this.p.x, this.p.y);
     this.p.x = x; this.p.y = y;
     ps.stepFrame = ps.stepFrame === 1 ? 2 : 1;
     ps.stepUntil = this.time.now + STEP_MS + 60;
@@ -1565,6 +1577,7 @@ export class VillageScene extends Phaser.Scene {
     playTick(this, time, Math.min(delta || 16, 50));
     dayTick(this, time, Math.min(delta || 16, 50));
     heartsTick(this, time);
+    petTick(this, time, Math.min(delta || 16, 50));
     // the big tree's crown goes see-through while you are under it
     if (this.bigTree) {
       const want = this.underBigTree(this.p.x, this.p.y) && this.p.y < BIG_TREE.y ? 0.45 : 1;
@@ -1705,6 +1718,7 @@ export class VillageScene extends Phaser.Scene {
     for (const s of all) drawEmote(mk, s, s.x, s.y - TILE - (s.hop || 0) - 3, time);
     if (pup) drawEmote(mk, pup.s, pup.s.x, pup.s.y - 13 - (pup.s.hop || 0), time);
     lifeMarks(this, mk, time);
+    petMarks(this, mk, time);
     if (this.mail && this.decor.mailbox) {
       if (time > this.mailNext) { this.mailNext = time + 2400; setEmote(this.mailMark, '!', time, 1600); }
       drawEmote(mk, this.mailMark, center(this.mailbox.x), foot(this.mailbox.y) - 21, time);

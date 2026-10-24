@@ -17,8 +17,9 @@ import { bookCount, BOOK_TOTAL } from '../data/book.js';
 import { roomCanvas, roomSize, WALL_ROWS, furnitureCanvas, WALL_Y, plushCushion, FRAMES, roofCanvas, yardCanvas, roofAt, yardAt } from './home-interior-art.js';
 import { pupCanvas } from './home-art.js';
 import { placeHomeQuirks, homeQuirkTap, homeQuirkStep, homeQuirkMeet, homeQuirkTick } from './home-quirks.js';
+import { placeHomePets, settleHomePets, homePetAt, homePetTap, homePetStep, homePetMeet, homePetDescribe, homePetsTick, homePetMarks } from './home-pets.js';
 
-const D = { room: 0, rug: 0.5, wall: 1, actors: 3, dim: 3.9, fx: 4, ghost: 4.5, bubble: 5 };
+export const D = { room: 0, rug: 0.5, wall: 1, actors: 3, dim: 3.9, fx: 4, ghost: 4.5, bubble: 5 };
 const STEP_MS = 140;
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 // floor cell (x, y) sits on tile (x + 1, y + WALL_ROWS): its middle across, and its foot
@@ -139,6 +140,8 @@ export class HomeScene extends Phaser.Scene {
     this.nextStep = 0;
     this.placeVisitor();
     this.placePup();
+    // every pet you have bought lives here (scenes/home-pets.js)
+    placeHomePets(this);
     this.fit();
     // a word the first time in, and when someone is waiting
     if (this.visitor) this.time.delayedCall(500, () => this.say(this.visitor.s, `왔어? ${CHARACTERS[this.p.id].name}!`, 1800));
@@ -163,6 +166,7 @@ export class HomeScene extends Phaser.Scene {
     this.sitting = null;
     this.visitor = null;
     this.pup = null;
+    this.homePets = [];
     this.cursorG?.clear();
     this.ghost = null;
   }
@@ -281,13 +285,16 @@ export class HomeScene extends Phaser.Scene {
   describeAt(x, y) {
     if (this.editing) return '';
     if (y >= this.room.h || (x === this.door.x && y === this.door.y)) return x === this.door.x ? '문: 나가면 마을이다.' : '';
+    const pet = homePetDescribe(this, x, y);
+    if (pet) return pet;
     const it = this.itemAt(x, y);
     return it ? this.describe(it) : '';
   }
 
   // ---------- moving ----------
   inRoom(x, y) { return x >= 0 && y >= 0 && x < this.room.w && y < this.room.h; }
-  walkable(x, y) { return this.inRoom(x, y) && !this.occ.has(key(x, y)); }
+  // a pet on the floor is in the way too (bump it to pet it); one up on a piece is the piece's
+  walkable(x, y) { return this.inRoom(x, y) && !this.occ.has(key(x, y)) && !homePetAt(this, x, y); }
   canCut(x, y, dx, dy) { return !dx || !dy || this.walkable(x + dx, y) || this.walkable(x, y + dy); }
 
   tap(x, y) {
@@ -302,6 +309,8 @@ export class HomeScene extends Phaser.Scene {
       this.pending = 'door';
       return;
     }
+    // a pet: walk up to it and pet it
+    if (homePetTap(this, x, y)) return;
     const it = this.itemAt(x, y);
     if (it && (it.f.wall || it.f.rug)) {
       if (!it.f.rug || !this.walkable(x, y)) { this.hooks.onHover?.(this.describe(it), true); return; }
@@ -328,6 +337,7 @@ export class HomeScene extends Phaser.Scene {
     if (homeQuirkStep(this, x, y)) return;
     this.path = [];
     if (this.p.x === this.door.x && this.p.y === this.door.y && dy > 0 && !dx) { this.goOut(); return; }
+    if (homePetStep(this, x, y)) return;
     const it = this.inRoom(x, y) && this.occ.get(key(x, y));
     if (it) { this.meet(it); return; }
     if (this.walkable(x, y) && this.canCut(this.p.x, this.p.y, dx, dy)) this.moveTo(x, y);
@@ -392,6 +402,7 @@ export class HomeScene extends Phaser.Scene {
     this.pending = null;
     const f = it.f, c = it.x + (f.w - 1) / 2;
     if (c !== this.p.x) this.ps.setFlipX(c < this.p.x);
+    if (it.pet || (it.id === 'petbed' && it.homePet)) { homePetMeet(this, it); return; }
     if (homeQuirkMeet(this, it)) return;
     if (it.visitor) { this.talkVisitor(); return; }
     const top = { x: it.img.x, y: it.img.y - it.img.displayHeight };
@@ -711,6 +722,7 @@ export class HomeScene extends Phaser.Scene {
     // the friend on it moves over to another seat (or waits for one)
     if (it.visitor) { it.visitor.s.destroy(); this.visitor = null; this.placeVisitor(); }
     if (it.pup) { it.pup.s.destroy(); this.pup = null; }
+    settleHomePets(this);
     this.held = { id: it.id, f: it.f, from: [it.x, it.y], dx: at ? Math.max(0, at.x - it.x) : 0, dy: at && !it.f.wall ? Math.max(0, at.y - it.y) : 0 };
     delete ownLayout(this.meta)[it.id];
     this.dim.setAlpha(this.isDark() ? 0.35 : 0);
@@ -742,6 +754,7 @@ export class HomeScene extends Phaser.Scene {
     this.dim.setAlpha(this.isDark() ? 0.35 : 0);
     if (id === 'petbed') this.placePup();
     if (this.meta.house.visit && !this.visitor) this.placeVisitor();
+    settleHomePets(this);
     if (!quiet && it) {
       this.squash(it.img, 0.8);
       this.spark.explode(10, it.img.x, it.img.y - 6);
@@ -901,6 +914,7 @@ export class HomeScene extends Phaser.Scene {
     if (this.pup) drawEmote(mk, this.pup.s, this.pup.s.x + 3, this.pup.s.y - this.pup.s.displayHeight - (this.pup.s.hop || 0) - 1, time);
     this.notes = (this.notes || []).filter(n => time < n.emote.until);
     for (const n of this.notes) drawEmote(mk, n, n.x, n.y, time);
+    homePetMarks(this, mk, time);
     this.bubbles = this.bubbles.filter(b => {
       if (time > b.until || !b.target.active) { b.destroy(); return false; }
       // over a head, over the top of a piece of furniture (wall pieces hang from their top)
@@ -910,5 +924,6 @@ export class HomeScene extends Phaser.Scene {
       return true;
     });
     homeQuirkTick(this, time, delta);
+    homePetsTick(this, time, Math.min(delta || 16, 50));
   }
 }

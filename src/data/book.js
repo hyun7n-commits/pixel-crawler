@@ -33,6 +33,7 @@ const SECRET_PIC = {
   letter: { find: ['letter', 'w'] }, goldfish: { find: ['marble', 'o'] }, shadow: { spr: 'rabbit' }, bonk: { spr: 'pebble' },
   rustle: { spr: 'hide_leaf0' }, nook: { spr: 'door_forest' }, spirit: { spr: 'spirit' }, dream: { spr: 'pillow' },
   sleeper: { spr: 'napper' }, pebble: { find: ['pebble', 'L'] }, roast: { spr: 'pinecone' },
+  chase: { spr: 'pet_sparrow' }, petnap: { spr: 'pet_chick' },
 };
 
 const toolName = id => ITEMS[id]?.name || id;

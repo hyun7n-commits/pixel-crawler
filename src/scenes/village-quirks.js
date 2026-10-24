@@ -105,7 +105,7 @@ export function quirkStep(sc, x, y) {
   const qk = sc.qk;
   if (!qk) return false;
   if (qk.sit) { standUp(sc); return true; }
-  if (sc.fishing) return false;
+  if (sc.fishing || sc.play) return false;
   if (pokeKind(sc, x, y) === 'well') qk.wellAt = sc.time.now;
   if (!bumpable(sc, x, y)) return false;
   bump(sc, x, y);

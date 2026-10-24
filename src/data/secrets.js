@@ -32,6 +32,9 @@ export const SECRETS = [
   { id: 'sleeper', where: 'field', name: '자장가', got: '자는 동물 바로 옆에서 꼼짝 않고 쉬었더니, 잠결에 데굴 돌아누우면서 깔고 자던 걸 굴려 줬다.', hint: '자는 동물 옆에서 숨죽이고 있으면 돌아눕는대. 깨면 큰일이고.' },
   { id: 'pebble', where: 'field', name: '절벽 아래', got: '절벽 아래로 도구를 던졌다. 한참 뒤에야 아주 작게 퐁, 소리가 났다.', hint: '바닷가 절벽은 얼마나 깊을까? 뭘 떨어뜨려 보면 안대.' },
   { id: 'roast', where: 'field', name: '군 솔방울', got: '용암에 솔방울을 던졌더니 타닥타닥 구워져서 고소한 잣이 톡톡 튀어나왔다.', hint: '불꽃 화산에서는 솔방울도 구워 먹는대. 고소하대.' },
+  // v0.31: the pets
+  { id: 'chase', where: 'village', name: '참새 쫓기', got: '데리고 나온 펫 옆에서 가만히 있었더니, 참다 참다 참새한테 달려갔다. 참새는 벌써 날아가고 없었다.', hint: '펫이 참새를 엄청 신경 쓰더라. 옆에 가만히 서 있으면 못 참을걸.' },
+  { id: 'petnap', where: 'home', name: '다 같이 낮잠', got: '집 안의 펫들이 하나둘 꾸벅꾸벅 졸더니 다 같이 새근새근 잠들었다. 나도 하품이 나왔다.', hint: '집에 펫이 여럿이면 가만히 있어 봐. 하나둘 졸기 시작한대.' },
 ];
 export const secretOf = id => SECRETS.find(s => s.id === id);
 export const secretsFound = m => SECRETS.filter(s => m.secrets?.[s.id]).length;

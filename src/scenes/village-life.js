@@ -12,6 +12,7 @@ import { TILE, rowsCanvas } from './textures.js';
 import { D } from './VillageScene.js';
 import { setEmote, drawEmote } from './emotes.js';
 import { ripple, float, face, koiLeap } from './village-secrets.js';
+import { petCheer } from './village-pets.js';
 import { bedCanvas, wetCanvas, growCanvas, floatCanvas, MOUND_AT } from './village-life-art.js';
 import { findIcon } from '../data/finds-art.js';
 import {
@@ -94,7 +95,6 @@ export function placeVillageLife(sc) {
     sc.lifeWild.push({ ...f, img, next: 0 });
   }
   drawBed(sc);
-  placePet(sc);
 }
 
 // a bug where it sits: on a flower's head, low on a trunk, in the grass, or hovering over the water
@@ -371,40 +371,9 @@ function fishTick(sc, time) {
   sc.hooks.onLife?.();
 }
 
-// ---------- the pet ----------
-function placePet(sc) {
-  sc.petS = null;
-  const id = sc.meta.pet && sc.meta.pets?.[sc.meta.pet] && PETS[sc.meta.pet] ? sc.meta.pet : null;
-  if (!id) return;
-  const s = sc.keep(sc.add.image(sc.ps.x - 10, sc.ps.y, PETS[id].sprite).setOrigin(0.5, 1).setDepth(sc.ps.depth - 0.001));
-  s.hop = 0;
-  sc.petS = s;
-  sc.petId = id;
-}
-function petTick(sc, time) {
-  const pt = sc.petS, ps = sc.ps;
-  if (!pt) return;
-  const back = ps.flipX ? 1 : -1, fly = !!PETS[sc.petId]?.fly;
-  const tx = ps.x + back * 11, ty = ps.y - (fly ? 8 + 2 * Math.sin(time / 260) : 0) - (pt.hop || 0);
-  pt.x += (tx - pt.x) * 0.1;
-  pt.y += (ty - pt.y) * 0.18;
-  pt.setFlipX(ps.flipX);
-  pt.setAlpha(ps.alpha);
-  pt.setVisible(ps.visible && !ps.diving);
-  pt.setDepth(D.actors + (pt.y / TILE - 1) / 100 + 0.0005);
-}
-// the pet is pleased for you
-function petCheer(sc) {
-  const pt = sc.petS;
-  if (!pt) return;
-  sc.tweens.add({ targets: pt, hop: 5, duration: 120, yoyo: true, repeat: 1, ease: 'Quad.out' });
-  setEmote(pt, '♪', sc.time.now, 1100);
-}
-
 // ---------- every frame ----------
 export function lifeTick(sc, time, dt) {
   fishTick(sc, time);
-  petTick(sc, time);
   for (const b of sc.lifeBugs || []) {
     if (b.busy) continue;
     const t = time / 1000 + b.seed, x = b.base.x, y = b.base.y;
@@ -438,7 +407,6 @@ export function lifeTick(sc, time, dt) {
   for (const p of sc.plots || []) if (p.crop) p.crop.y = p.y * TILE + 11 - (Math.floor(time / 500 + p.i) % 2);
 }
 export function lifeMarks(sc, mk, time) {
-  if (sc.petS?.visible) drawEmote(mk, sc.petS, sc.petS.x, sc.petS.y - 13, time);
 }
 
 // ---------- what a tap or a bump does ----------

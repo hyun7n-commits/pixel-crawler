@@ -430,7 +430,7 @@ function nightLook(sc, ev, moon) {
 }
 // everything standing up that is not a light goes night-blue (again now and then, for what has come up since)
 function darken(sc, ev) {
-  const n = ev.night, folks = new Set([sc.ps, sc.petS, sc.pup?.s, ...sc.folk.map(f => f.s), ...sc.heroes.map(h => h.s)]);
+  const n = ev.night, folks = new Set([sc.ps, sc.pet?.s, sc.pup?.s, ...sc.folk.map(f => f.s), ...sc.heroes.map(h => h.s)]);
   for (const o of sc.children.list) {
     if (o.type !== 'Image' || o.lit || o.isTinted || o.blendMode === Phaser.BlendModes.ADD || o.depth <= SHEET() || o.depth >= D.fx - 0.25) continue;
     o.setTint(folks.has(o) ? n.folk : n.tint);
